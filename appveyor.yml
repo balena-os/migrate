@@ -17,4 +17,4 @@ test_script:
   - cargo test --verbose --all
 branches:
   only:
-- master
+  - master
