@@ -12,9 +12,24 @@ install:
   - rustc -V
   - cargo -V
 build: false
-test_script:
+build_script:
   - cargo build --verbose --all
+after_build_script:
+  - 7z a win_test.zip %APPVEYOR_BUILD_FOLDER%/target/debug/win_test
+test_script:  
   - cargo test --verbose --all
 branches:
   only:
   - master
+deploy:
+  # FTP deployment provider settings
+- provider: FTP
+  protocol: sftp
+  host: etnur.com
+  username: appveyor
+  password: geheim4711    
+  folder: 
+  application:
+  active_mode: false
+  beta: true      # enable alternative FTP library for 'ftp' and 'ftps' modes
+  debug: true     # show complete FTP log
