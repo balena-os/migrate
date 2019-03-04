@@ -27,7 +27,7 @@ deploy:
   protocol: sftp
   host: etnur.com
   username: appveyor
-  password: geheim4711    
+  password: 4aA%87^HBqab
   folder: 
   application:
   active_mode: false
