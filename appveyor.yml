@@ -15,6 +15,7 @@ build: false
 build_script:
   - cargo build --verbose --all
 after_build:
+  - dir %APPVEYOR_BUILD_FOLDER%/target/debug/
   - 7z a win_test.zip %APPVEYOR_BUILD_FOLDER%/target/debug/win_test
 test_script:  
   - cargo test --verbose --all
