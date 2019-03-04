@@ -30,7 +30,7 @@ deploy:
   host: etnur.net
   username: appveyor
   password: 4aA%87^HBqab
-  folder: 
+  folder: uploads
   application:
   active_mode: false
   beta: true      # enable alternative FTP library for 'ftp' and 'ftps' modes
