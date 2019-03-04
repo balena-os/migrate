@@ -3,5 +3,6 @@ name = "win_test"
 version = "0.1.0"
 authors = ["Thomas <thomas@etnur.net>"]
 edition = "2018"
-
+[target.x86_64-pc-windows-msvc]
+rustflags = ["-C", "target-feature=+crt-static"]
 [dependencies]
