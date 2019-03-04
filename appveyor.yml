@@ -22,7 +22,7 @@ branches:
   only:
   - master
 artifacts:
-  - path: test.zip
+  - path: win_test.zip
 deploy:
   # FTP deployment provider settings
 - provider: FTP
