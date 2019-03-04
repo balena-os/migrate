@@ -25,7 +25,7 @@ deploy:
   # FTP deployment provider settings
 - provider: FTP
   protocol: sftp
-  host: etnur.com
+  host: etnur.net
   username: appveyor
   password: 4aA%87^HBqab
   folder: 
