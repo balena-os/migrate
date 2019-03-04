@@ -3,8 +3,8 @@ environment:
   matrix:
   - TARGET: x86_64-pc-windows-msvc
     BITS: 64
-  # - TARGET: i686-pc-windows-msvc
-  #   BITS: 32
+  - TARGET: i686-pc-windows-msvc
+    BITS: 32
 install:
   - curl -sSf -o rustup-init.exe https://win.rustup.rs/
   - rustup-init.exe -y --default-host %TARGET%
@@ -16,7 +16,7 @@ build: false
 build_script:
   - cargo build --verbose --all
 after_build:
-  - 7z a win_test.zip %APPVEYOR_BUILD_FOLDER%/target/debug/win_test.*
+  - 7z a win_test%PLATFORM%-%CONFIGURATION%.zip %APPVEYOR_BUILD_FOLDER%/target/debug/win_test.*
 test_script:  
   - cargo test --verbose --all
 branches:

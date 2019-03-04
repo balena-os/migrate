@@ -1,4 +1,4 @@
 [target.x86_64-pc-windows-msvc]
 rustflags = ["-C", "target-feature=+crt-static"]
-[target.x86_32-pc-windows-msvc]
+[target.i686-pc-windows-msvc]
 rustflags = ["-C", "target-feature=+crt-static"]
