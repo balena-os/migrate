@@ -16,14 +16,14 @@ build: false
 build_script:
   - cargo build --verbose --all
 after_build:
-  - '7z a win_test-%TARGET%.zip %APPVEYOR_BUILD_FOLDER%/target/debug/win_test.*'
+  - '7z a win_test-%TARGET%-%APPVEYOR_BUILD_NUMBER%.zip %APPVEYOR_BUILD_FOLDER%/target/debug/win_test.*'
 test_script:  
   - cargo test --verbose --all
 branches:
   only:
   - master
 artifacts:
-  - path: win_test-%TARGET%.zip
+  - path: 'win_test-%TARGET%--%APPVEYOR_BUILD_NUMBER%.zip'
 deploy:
   # FTP deployment provider settings
 - provider: FTP
