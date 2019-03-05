@@ -2,13 +2,14 @@ use  crate::common::mig_error::{MigError,MigErrorCode};
 use  crate::common::SysInfo;
 
 use log::{trace,error};
-use std::error::Error;
-use std::io::prelude::*;
+// use std::error::Error;
+// use std::io::prelude::*;
+use std::collections::HashMap;
 use std::process::{Command, Stdio};
 use std::vec::Vec;
 use csv;
 
-const OS: &str = "windows";
+// const OS: &str = "windows";
 
 pub fn available() -> bool {    
     trace!("called available()");
@@ -65,10 +66,23 @@ pub fn sys_info() -> Result<SysInfo,MigError> {
         },
         Err(_why) => return Err(MigError::from_code(MigErrorCode::ErrInvParam, "no data found in output lines received from: powershell Systeminfo /FO CSV", None)) // Some(Box::new(why))))
     };
-    
+
     trace!("sys_info: headers: {:?}",headers);
     trace!("sys_info: data:    {:?}",data);
 
+    let mut sys_info_map: HashMap<String,String> = HashMap::new();  
+    let columns = headers.len();
+
+    for idx in 0..columns {
+        let data_str = match data.get(idx) {
+            Some(s) => s,
+            None => ""
+        };
+        trace!("sys_info: adding {}", headers[idx]);
+        trace!("sys_info: data   {}", data_str);
+        sys_info_map.insert(String::from(headers[idx]), String::from(data_str));
+    }
+    
     Ok(SysInfo::new("windows"))
     } else {
         Err(MigError::from_code(MigErrorCode::ErrInvOSType, "invalid OS, not windows",None))
