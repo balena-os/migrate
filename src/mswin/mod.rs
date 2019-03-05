@@ -40,9 +40,9 @@ pub fn sys_info() -> Result<SysInfo,MigError> {
 
     let records: Vec<csv::Result<csv::StringRecord>> = reader.records().collect();
     match records.len() {
-        2 => (),            
+        1 => (),            
         _ => { 
-            error!("sys_info: too many lines in command output of  powershell Systeminfo /FO CSV");
+            error!("sys_info: invalid number of records () in command output of  powershell Systeminfo /FO CSV");
             for record in records {
                 error!("sys_info: {:?}", record);
             }
@@ -50,8 +50,8 @@ pub fn sys_info() -> Result<SysInfo,MigError> {
         }
     }
 
-    let headers = &records[0];
-    let data = &records[1];
+    let headers = reader.headers();
+    let data = &records[0];
     trace!("sys_info: headers: {:?}",headers);
     trace!("sys_info: data:    {:?}",data);
 
