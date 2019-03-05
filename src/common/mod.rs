@@ -1,5 +1,6 @@
 pub mod mig_error;
 
+
 pub struct SysInfo {
     pub os_type: String
 }
