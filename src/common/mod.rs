@@ -1,6 +1,6 @@
 pub mod mig_error;
 
-
+#[derive(Debug)]
 pub struct SysInfo {
     pub os_type: String
 }

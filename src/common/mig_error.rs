@@ -7,6 +7,7 @@ pub enum MigErrorCode{
     ErrNotImpl,
     ErrExecProcess,
     ErrCmdIO,
+    ErrInvParam,
 }
 
 #[derive(Debug)]
