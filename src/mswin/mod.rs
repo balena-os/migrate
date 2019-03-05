@@ -20,23 +20,19 @@ pub fn sys_info() -> Result<SysInfo,MigError> {
     trace!("called sys_info()");
     if cfg!(windows) {
     // Spawn the command `powershell Systeminfo /FO CSV`
-    let process = match Command::new("powershell.exe")
+    let process = match Command::new("pauwershell.exe")
                                 .args(&["Systeminfo", "/FO", "CSV"])
                                 .stdout(Stdio::piped())
                                 .stderr(Stdio::piped())
                                 .spawn() {
         Err(why) => { 
-            // TODO: extract stderr & add to returned error
             return Err(MigError::from_code(MigErrorCode::ErrExecProcess, "failed to execute: powershell Systeminfo /FO CSV", Some(Box::new(why)))) },
         Ok(process) => process,
     };
 
-    // The `stdout` field also has type `Option<ChildStdout>` so must be unwrapped.
-
-    let mut reader = match process.stdout {
-        // TODO: how to return why as source source
+    let mut reader = match process.stdout {        
+        Some(std_out) => csv::Reader::from_reader(std_out),
         None => { return Err(MigError::from_code(MigErrorCode::ErrCmdIO, "failed to read command output from: powershell Systeminfo /FO CSV", None )) }
-        Some(std_out) => csv::Reader::from_reader(std_out)
         };
 
     let records: Vec<csv::Result<csv::StringRecord>> = reader.records().collect();
