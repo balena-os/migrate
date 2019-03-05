@@ -50,8 +50,22 @@ pub fn sys_info() -> Result<SysInfo,MigError> {
         }
     }
 
-    let headers = reader.headers();
-    let data = &records[0];
+    let headers = match reader.headers() {
+        Ok(sr) => { 
+            let hdrs: Vec<&str> = sr.iter().collect();
+            hdrs
+        },
+        Err(_why) => return Err(MigError::from_code(MigErrorCode::ErrInvParam, "no headers found in output lines received from: powershell Systeminfo /FO CSV", None)) // Some(Box::new(why))))
+    };
+
+    let data = match &records[0] {
+        Ok(sr) => {
+            let dt : Vec<&str> = sr.iter().collect();
+            dt
+        },
+        Err(_why) => return Err(MigError::from_code(MigErrorCode::ErrInvParam, "no data found in output lines received from: powershell Systeminfo /FO CSV", None)) // Some(Box::new(why))))
+    };
+    
     trace!("sys_info: headers: {:?}",headers);
     trace!("sys_info: data:    {:?}",data);
 
