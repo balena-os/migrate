@@ -2,6 +2,8 @@
 # get a release from the sftp server, upack it and send it to 
 set -e 
 
+## TODO: create interactive sftp shell
+
 BUILD=$1
 PROJ_NAME="win_test"
 PROG_NAME="${PROJ_NAME}.exe"

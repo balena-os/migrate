@@ -8,6 +8,7 @@ pub enum MigErrorCode{
     ErrExecProcess,
     ErrCmdIO,
     ErrInvParam,
+    ErrPgmNotFound,
 }
 
 #[derive(Debug)]

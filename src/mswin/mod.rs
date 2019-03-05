@@ -4,6 +4,8 @@ use  crate::common::SysInfo;
 use log::{trace,error};
 // use std::error::Error;
 // use std::io::prelude::*;
+
+use std::io::ErrorKind;
 use std::collections::HashMap;
 use std::process::{Command, Stdio};
 use std::vec::Vec;
@@ -25,11 +27,20 @@ pub fn sys_info() -> Result<SysInfo,MigError> {
                                 .stdout(Stdio::piped())
                                 .stderr(Stdio::piped())
                                 .spawn() {
-        Err(why) => { 
-            return Err(MigError::from_code(MigErrorCode::ErrExecProcess, "failed to execute: powershell Systeminfo /FO CSV", Some(Box::new(why)))) },
         Ok(process) => process,
-    };
+        Err(why) => { 
+            match why.kind() {
+                    ErrorKind::NotFound => {
+                        return Err(MigError::from_code(MigErrorCode::ErrPgmNotFound, "failed to execute: powershell Systeminfo /FO CSV", Some(Box::new(why)))) 
+                    },            
+                    _ => {
+                        return Err(MigError::from_code(MigErrorCode::ErrExecProcess, "failed to execute: powershell Systeminfo /FO CSV", Some(Box::new(why)))) 
+                    },
+                }
+            }
+        };
 
+        
     let mut reader = match process.stdout {        
         Some(std_out) => csv::Reader::from_reader(std_out),
         None => { return Err(MigError::from_code(MigErrorCode::ErrCmdIO, "failed to read command output from: powershell Systeminfo /FO CSV", None )) }
