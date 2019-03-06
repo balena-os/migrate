@@ -1,7 +1,7 @@
 use crate::common::mig_error::{MigError, MigErrorCode};
 use crate::common::SysInfo;
 
-use log::{error, trace};
+use log::{error, trace, info};
 // use std::error::Error;
 // use std::io::prelude::*;
 
@@ -10,6 +10,10 @@ use std::collections::HashMap;
 use std::io::ErrorKind;
 use std::process::{Command, Stdio};
 use std::vec::Vec;
+
+const POWERSHELL : &str  = "powershell.exe";
+const POWERSHELL_PARAMS : [&'static str;3] = ["Systeminfo", "/FO", "CSV"];
+
 
 // const OS: &str = "windows";
 
@@ -22,8 +26,8 @@ pub fn sys_info() -> Result<SysInfo, MigError> {
     trace!("called sys_info()");
     if cfg!(windows) {
         // Spawn the command `powershell Systeminfo /FO CSV`
-        let process = match Command::new("pauwershell.exe")
-            .args(&["Systeminfo", "/FO", "CSV"])
+        let process = match Command::new(POWERSHELL)
+            .args(&POWERSHELL_PARAMS)
             .stdout(Stdio::piped())
             .stderr(Stdio::piped())
             .spawn()
@@ -107,12 +111,17 @@ pub fn sys_info() -> Result<SysInfo, MigError> {
                 Some(s) => s,
                 None => "",
             };
-            trace!("sys_info: adding {}", headers[idx]);
-            trace!("sys_info: data   {}", data_str);
+            trace!("sys_info: adding {} ->  {}", headers[idx], data_str);
             sys_info_map.insert(String::from(headers[idx]), String::from(data_str));
         }
 
-        Ok(SysInfo::new("windows", sys_info_map))
+        match sys_info_map.get("OS Name") {
+            Some(_s) => Ok(SysInfo::new("OS Name",sys_info_map)),
+            None => Err(MigError::from_code(
+                            MigErrorCode::ErrInvParam,
+                            "missing field 'OS Name' in output from: powershell Systeminfo /FO CSV",
+                            None)),
+        }        
     } else {
         Err(MigError::from_code(
             MigErrorCode::ErrInvOSType,
@@ -124,6 +133,6 @@ pub fn sys_info() -> Result<SysInfo, MigError> {
 
 pub fn process() -> Result<(), MigError> {
     let s_info = sys_info()?;
-    println!("sysInfo: {:?}", s_info);
+    info!("process: {}", s_info.get_os_type().unwrap());
     Ok(())
 }

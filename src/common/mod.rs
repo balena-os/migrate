@@ -4,15 +4,19 @@ use std::collections::HashMap;
 
 #[derive(Debug)]
 pub struct SysInfo {
-    pub sys_info_map: HashMap<String, String>,
-    pub os_type: String,
+    sys_info_map: HashMap<String, String>,
+    os_type_key: String,
 }
 
-impl SysInfo {
-    pub fn new(os_type: &str, map: HashMap<String, String>) -> SysInfo {
+impl<'a> SysInfo {
+    pub fn new(os_type_key: &str, map: HashMap<String, String>) -> SysInfo {        
         SysInfo {
             sys_info_map: map,
-            os_type: String::from(os_type),
+            os_type_key: String::from(os_type_key),
         }
+    }
+
+    pub fn get_os_type(&self) -> Option<&String> {
+        self.sys_info_map.get(&self.os_type_key)
     }
 }
