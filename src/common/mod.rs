@@ -42,7 +42,8 @@ impl<'a> SysInfo {
         trace!("get_mem_value: entered with {}", key_name); 
         
         lazy_static! {
-            static ref RE: Regex = Regex::new(r"^(\d+)\s*(MB|KB|GB)?$").unwrap();
+            static ref RE: Regex = Regex::new(r"^((\d{1,3}(,\d{3})*)|(\d+))\s*(MB|KB|GB)?$").unwrap();
+            //static ref RE: Regex = Regex::new(r"^(\d+)\s*(MB|KB|GB)?$").unwrap();
         }
 
         match self.sys_info_map.get(key_name) {
@@ -50,19 +51,19 @@ impl<'a> SysInfo {
                 trace!("get_mem_value: got key_value {}", s); 
                 let captures = match RE.captures(s) {
                     Some(c) => c,
-                    None => return Err(MigError::from_code(MigErrorCode::ErrInvParam, &format!("SysInfo::set_mem_value(): failed to parse memory field {} from {}", key_name, &s) ,None))
+                    None => return Err(MigError::from_code(MigErrorCode::ErrInvParam, &format!("SysInfo::set_mem_value(): failed to parse memory field '{}' from '{}' - no match on regex", key_name, &s) ,None))
                 };                
 
                 let digits = match captures.get(1) {
                     Some(m) => m.as_str(),
-                    None => return Err(MigError::from_code(MigErrorCode::ErrInvParam, &format!("SysInfo::set_mem_value(): failed to parse memory field {} from {}", key_name, &s) ,None))
+                    None => return Err(MigError::from_code(MigErrorCode::ErrInvParam, &format!("SysInfo::set_mem_value(): failed to parse memory field '{}' from '{}' - no digits captured ", key_name, &s) ,None))
                 };
 
                 trace!("get_mem_value: got digits {}", digits); 
 
                 let mem: usize  = match digits.parse() {
                     Ok(num) => num,
-                    Err(why) => return Err(MigError::from_code(MigErrorCode::ErrInvParam, &format!("SysInfo::set_mem_value(): failed to parse memory field {} from {}", key_name, &s) , Some(Box::new(why))))
+                    Err(why) => return Err(MigError::from_code(MigErrorCode::ErrInvParam, &format!("SysInfo::set_mem_value(): failed to parse memory field '{}' from '{}' - failed to parse digits '{}'", key_name, &s, &digits) , Some(Box::new(why))))
                 };
             
                 Ok(match captures.get(2) .map_or("", |m| m.as_str()) {
