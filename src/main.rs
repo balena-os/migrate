@@ -1,5 +1,8 @@
 use win_test::mswin;
 
+extern crate regex;
+extern crate lazy_static;
+
 #[macro_use]
 extern crate log;
 extern crate stderrlog;

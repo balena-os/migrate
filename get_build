@@ -24,6 +24,11 @@ quit
 EOI
 }
 
+function startSftpProc {
+  sftp ${SFTP_USER}@${SFTP_HOST} 1>&2 
+}
+
+
 function getArchives {
   while read -r line ;
   do 

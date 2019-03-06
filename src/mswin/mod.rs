@@ -118,6 +118,10 @@ pub fn sys_info() -> Result<SysInfo, MigError> {
 
         let mut s_info = SysInfo::new(sys_info_map);
         s_info.set_os_name("OS Name")?;
+        s_info.set_os_version("OS Version")?;
+        s_info.set_host_name("Host Name")?;
+        s_info.set_tot_mem("Total Physical Memory")?;
+
 
         Ok(s_info)
     } else {
