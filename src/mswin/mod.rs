@@ -107,21 +107,19 @@ pub fn sys_info() -> Result<SysInfo, MigError> {
         let columns = headers.len();
 
         for idx in 0..columns {
+            let hdr: &str = &headers[idx];
             let data_str = match data.get(idx) {
                 Some(s) => s,
                 None => "",
             };
-            trace!("sys_info: adding {} ->  {}", headers[idx], data_str);
-            sys_info_map.insert(String::from(headers[idx]), String::from(data_str));
+            trace!("sys_info: adding {} ->  {}", hdr, data_str);
+            sys_info_map.insert(String::from(hdr), String::from(data_str));
         }
 
-        match sys_info_map.get("OS Name") {
-            Some(_s) => Ok(SysInfo::new("OS Name",sys_info_map)),
-            None => Err(MigError::from_code(
-                            MigErrorCode::ErrInvParam,
-                            "missing field 'OS Name' in output from: powershell Systeminfo /FO CSV",
-                            None)),
-        }        
+        let mut s_info = SysInfo::new(sys_info_map);
+        s_info.set_os_name("OS Name")?;
+
+        Ok(s_info)
     } else {
         Err(MigError::from_code(
             MigErrorCode::ErrInvOSType,
@@ -132,7 +130,7 @@ pub fn sys_info() -> Result<SysInfo, MigError> {
 }
 
 pub fn process() -> Result<(), MigError> {
-    let s_info = sys_info()?;
-    info!("process: {}", s_info.get_os_type().unwrap());
+    let s_info = sys_info()?;    
+    info!("process: os_type = {}", s_info.get_os_name());
     Ok(())
 }
