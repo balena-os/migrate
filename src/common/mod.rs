@@ -53,10 +53,15 @@ impl<'a> SysInfo {
                     Some(c) => c,
                     None => return Err(MigError::from_code(MigErrorCode::ErrInvParam, &format!("SysInfo::set_mem_value(): failed to parse memory field '{}' from '{}' - no match on regex", key_name, &s) ,None))
                 };                
-
-                let digits = match captures.get(1) {
-                    Some(m) => m.as_str(),
-                    None => return Err(MigError::from_code(MigErrorCode::ErrInvParam, &format!("SysInfo::set_mem_value(): failed to parse memory field '{}' from '{}' - no digits captured ", key_name, &s) ,None))
+                
+                let digits = match captures.get(2) {
+                    Some(m) => m.as_str().replace(",",""),
+                    None => {
+                        match captures.get(4) {
+                            Some(m) => String::from(m.as_str()),
+                            None => return Err(MigError::from_code(MigErrorCode::ErrInvParam, &format!("SysInfo::set_mem_value(): failed to parse memory field '{}' from '{}' - no digits captured ", key_name, &s) ,None))
+                        }
+                    }
                 };
 
                 trace!("get_mem_value: got digits {}", digits); 
