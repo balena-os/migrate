@@ -134,3 +134,12 @@ pub fn process() -> Result<(), MigError> {
     info!("process: os_type = {}", s_info.get_os_name());
     Ok(())
 }
+
+#[cfg(test)]
+#[test]
+fn get_sys_info() {
+    let s_info = sys_info().unwrap();
+    let os_name = s_info.get_os_name();
+    assert!(os_name.len() > 0);
+}
+

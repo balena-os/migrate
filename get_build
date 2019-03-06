@@ -1,0 +1,66 @@
+#!/bin/bash
+# get a release from the sftp server, upack it and send it to 
+set -e 
+
+## TODO: create interactive sftp shell
+
+BUILD=$1
+PROJ_NAME="win_test"
+PROG_NAME="${PROJ_NAME}.exe"
+ARCH="x86_64"
+SCP_TARGET_PATH=""
+SCP_USER="thomas"
+SCP_HOST="windeln"
+SCP_PASS="traumy8"
+SFTP_USER="appveyor"
+SFTP_HOST="etnur.net"
+
+
+function getSftpDir {
+sftp ${SFTP_USER}@${SFTP_HOST} << EOI
+cd uploads
+ls -1 
+quit
+EOI
+}
+
+function getArchives {
+  while read -r line ;
+  do 
+    if [[ $line =~ .*${PROJ_NAME}-${ARCH}-pc-windows-msvc-([0-9]+)\.zip ]] ; then 
+      echo "${BASH_REMATCH[1]} -> $line"
+    fi 
+  done < <(getSftpDir)
+}
+
+if [ -z "${BUILD}" ] ; then 
+  getArchives  
+  echo "please supply a build number to fetch"
+  read -r BUILD
+  if [ -z "$BUILD" ] ; then 
+    exit 0
+  fi  
+fi  
+
+ARCHIVE="${PROJ_NAME}-${ARCH}-pc-windows-msvc-${BUILD}.zip"
+echo "retrieving archive: $ARCHIVE"
+
+ORIG_DIR=$PWD
+SCRIPTPATH="$( cd "$(dirname "$0")" ; pwd -P )"
+cd "${SCRIPTPATH}/target/appveyor"
+sftp ${SFTP_USER}@${SFTP_HOST} << EOI
+cd uploads
+get ${ARCHIVE} 
+quit
+EOI
+if [ -f "${ARCHIVE}" ] ; then 
+  rm "${PROG_NAME}"	|| true  
+  unzip "${ARCHIVE}" "${PROG_NAME}"
+  rm "${ARCHIVE}"
+  if [ -n "$SCP_PASS" ] ; then 
+    sshpass -p"${SCP_PASS}" scp "${PROG_NAME}" "${SCP_USER}@${SCP_HOST}:${SCP_TARGET_PATH}"
+  else 
+    scp "${PROG_NAME}" "${SCP_USER}@${SCP_HOST}:${SCP_TARGET_PATH}"
+  fi
+fi 
+cd "${ORIG_DIR}"
