@@ -193,8 +193,6 @@ impl PSInfo {
                 None => return Err(MigError::from_code(MigErrorCode::ErrInvParam, &format!("{}::get_cmdlets: name value not found in output from: powershell Get-Commands",MODULE), None)),
             };
         } 
-
-        
             
         Ok(cmds)
     }
