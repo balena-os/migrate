@@ -7,14 +7,19 @@ pub const POWERSHELL_VERSION_PARAMS: [&'static str; 1] = ["$PSVersionTable.PSVer
 use crate::common::mig_error::{MigError, MigErrorCode};
 use crate::common::SysInfo;
 
+use lazy_static::lazy_static;
 use csv;
 use log::{error, trace, warn};
 use std::collections::HashMap;
 use std::io::ErrorKind;
 use std::io::Read;
 use std::process::{Command, Stdio};
+use std::sync::Mutex;
 
-static mut POWERSHELL_VERSION: Option<(u32, u32)> = None;
+// static mut POWERSHELL_VERSION: Option<(u32, u32)> = None;
+
+// static mut POWERSHELL_VERSION: Mutex<Option<(u32, u32)>> = Mutex::new(None);
+
 
 pub fn available() -> bool {
     trace!("{}::available(): called available()", MODULE);
@@ -30,11 +35,19 @@ pub fn get_ps_ver() -> Result<(u32, u32), MigError> {
 
     // TODO: add mutex
 
-    unsafe {
-        match &POWERSHELL_VERSION {
+    lazy_static! {
+        static ref POWERSHELL_VERSION: Mutex<Option<(u32,u32)>> = Mutex::new(None);
+    }
+
+
+    let mut version = match POWERSHELL_VERSION.lock() {
+        Ok(v) => v,
+        Err(why) => return Err(MigError::from_code(MigErrorCode::ErrInvParam, &format!("{}::get_ps_ver: module mutex is poisoned", MODULE),Some(Box::new(why))))
+    };
+
+    match *version {
             Some(s) => return Ok(s.clone()),
             None => (),
-        }
     }
 
     let output = call_to_string(&POWERSHELL_VERSION_PARAMS)?;
@@ -44,12 +57,10 @@ pub fn get_ps_ver() -> Result<(u32, u32), MigError> {
         3 => (),
         0 => {
             warn!("{}::get_ps_ver(): no output from command, assuming version 1.0", MODULE);
-            unsafe {                
-                POWERSHELL_VERSION = Some((1, 0));
-            }
+            *version = Some((1, 0));
             return Ok((1,0))
         }        
-        _ => return Err(MigError::from_code(MigErrorCode::ErrInvParam, &format!("{}::available(): unexpected number of ouput lines in powershell version output: {}", MODULE, output.stdout),None))            
+        _ => return Err(MigError::from_code(MigErrorCode::ErrInvParam, &format!("{}::available(): unexpected number of ouput lines in powershell version output: {}", MODULE, output.stdout),None))
     }
 
     let headers: Vec<&str> = lines[0].split_whitespace().collect();
@@ -73,11 +84,9 @@ pub fn get_ps_ver() -> Result<(u32, u32), MigError> {
         }
     }
 
-    unsafe {
-        POWERSHELL_VERSION = Some((major, minor));
-    }
-
+    *version = Some((major, minor));    
     Ok((major, minor))
+    
 }
 
 pub fn sys_info() -> Result<SysInfo, MigError> {
