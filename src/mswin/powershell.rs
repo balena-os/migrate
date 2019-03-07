@@ -188,7 +188,10 @@ impl PSInfo {
             match words.get(name_idx) {
                 Some(v) => 
                     if self.ps_cmdlets.insert(String::from(*v)) {
+                        trace!("{}::get_cmdlets(): added cmdlet '{}'", MODULE, *v);
                         cmds += 1;
+                    } else {
+                        warn!("{}::get_cmdlets(): duplicate cmdlet '{}'", MODULE, *v);
                     },                    
                 None => return Err(MigError::from_code(MigErrorCode::ErrInvParam, &format!("{}::get_cmdlets: name value not found in output from: powershell Get-Commands",MODULE), None)),
             };
