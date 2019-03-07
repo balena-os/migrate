@@ -133,21 +133,70 @@ impl PSInfo {
     }
 
 
-    fn get_cmdlets(&mut self) -> Result<(), MigError> {
+    fn get_cmdlets(&mut self) -> Result<usize, MigError> {
         trace!("{}::get_cmdlets(): called", MODULE);
         let output = call_to_string(&POWERSHELL_GET_CMDLET_PARAMS, true)?;
 
+        lazy_static! {
+            static ref RE: Regex = Regex::new(r"^-+$").unwrap();            
+        }
+
+
         let mut lines = output.stdout.lines().enumerate();
 
-        let headers: Vec<&str> = match lines.next() {
-            Some(s) => { 
-                trace!("{}::get_cmdlets(): line: {:?}", MODULE, s);
-                s.1.split_whitespace().collect()
-            },
+        let mut name_idx: Option<usize> = None;
+        let mut cmds: usize  = 0;
+
+        for header in  match lines.next() {
+            Some(s) => s.1.split_whitespace().enumerate(),
             None => return Err(MigError::from_code(MigErrorCode::ErrInvParam, &format!("{}::get_cmdlets: 0 output lines received from: powershell Get-Commands",MODULE), None)),
+        } {
+            if header.1 == "Name" {
+                name_idx = Some(header.0);
+                break;
+            }
+        }
+
+        let name_idx = match name_idx {
+            Some(n) => n,
+            None => return Err(MigError::from_code(MigErrorCode::ErrInvParam, &format!("{}::get_cmdlets: name header not found in output from: powershell Get-Commands",MODULE), None)),
         };
+
+        // potentitally skip line with ----
+        match lines.next() {
+                Some(s) => { 
+                    let words: Vec<&str> = s.1.split_whitespace().collect();
+                    match words.get(name_idx) {
+                        Some(v) => {
+                            if !RE.is_match(v) {
+                                if self.ps_cmdlets.insert(String::from(*v)) {
+                                    cmds += 1;
+                                    trace!("{}::get_cmdlets(): added cmdlet '{}'", MODULE, *v);
+                                } else {
+                                    warn!("{}::get_cmdlets(): duplicate cmdlet '{}'", MODULE, *v);
+                                }
+                            }
+                        },
+                        None => return Err(MigError::from_code(MigErrorCode::ErrInvParam, &format!("{}::get_cmdlets: name value not found in output from: powershell Get-Commands",MODULE), None)),
+                    }
+                }
+                None => return Ok(0)
+            } 
+
+        for line in lines {
+            let words: Vec<&str> = line.1.split_whitespace().collect();
+            match words.get(name_idx) {
+                Some(v) => 
+                    if self.ps_cmdlets.insert(String::from(*v)) {
+                        cmds += 1;
+                    },                    
+                None => return Err(MigError::from_code(MigErrorCode::ErrInvParam, &format!("{}::get_cmdlets: name value not found in output from: powershell Get-Commands",MODULE), None)),
+            };
+        } 
+
+        
             
-        Ok(())
+        Ok(cmds)
     }
 
     fn init_sys_info(&mut self) -> Result<(), MigError> {
