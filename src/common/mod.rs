@@ -72,6 +72,7 @@ impl<'a> SysInfo {
                 };
             
                 Ok(match captures.get(2) .map_or("", |m| m.as_str()) {
+                    "gB" => mem * 1024 * 1024 * 1024,
                     "MB" => mem * 1024 * 1024,
                     "KB" => mem * 1024,
                     _ => mem,
@@ -116,6 +117,14 @@ impl<'a> SysInfo {
 
     pub fn set_tot_mem(&mut self, key_name: &str) -> Result<(),MigError> {
         self.tot_memory = match self.get_mem_value(key_name) {
+            Ok(num) => num,
+            Err(why) => return Err(why)
+        };
+        Ok(())
+    }
+
+    pub fn set_avail_mem(&mut self, key_name: &str) -> Result<(),MigError> {
+        self.avail_memory = match self.get_mem_value(key_name) {
             Ok(num) => num,
             Err(why) => return Err(why)
         };

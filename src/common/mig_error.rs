@@ -10,6 +10,7 @@ pub enum MigErrorCode {
     ErrInvParam,
     ErrPgmNotFound,
     ErrNotFound,
+    ErrFeatureMissing,
 }
 
 #[derive(Debug)]
