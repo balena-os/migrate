@@ -1,6 +1,8 @@
 const MODULE: &str = "win_test::mswin::powershell";
 
 const POWERSHELL: &str = "powershell.exe";
+
+pub const POWERSHELL_GET_CMDLET_PARAMS: [&'static str; 3] = ["Get-Command","-CommandType","Cmdlet"];
 pub const POWERSHELL_SYSINFO_PARAMS: [&'static str; 3] = ["Systeminfo", "/FO", "CSV"];
 pub const POWERSHELL_VERSION_PARAMS: [&'static str; 1] = ["$PSVersionTable.PSVersion"];
 
@@ -13,7 +15,9 @@ use log::{error, trace, warn};
 use std::io::ErrorKind;
 use std::io::Read;
 use std::process::{Command, Stdio};
+use std::collections::{HashSet};
 use regex::Regex;
+
 // use std::sync::Mutex;
 
 // static mut POWERSHELL_VERSION: Option<(u32, u32)> = None;
@@ -26,8 +30,8 @@ struct PWRes {
 }
 
 pub struct PSInfo {
-    ps_ver: Option<(u32,u32)>,
-    // si_map: HashMap<String, String>,
+    ps_ver: Option<(u32,u32)>,    
+    ps_cmdlets: HashSet<String>,
     si_os_name: String,
     si_os_release: String,
     si_mem_tot: usize,
@@ -38,7 +42,8 @@ pub struct PSInfo {
 impl PSInfo {
     pub fn try_init() -> Result<PSInfo,MigError> {
         let mut ps_info = PSInfo{ 
-            ps_ver: None,             
+            ps_ver: None,
+            ps_cmdlets: HashSet::new(),             
             si_os_name: String::new(),
             si_os_release: String::new(),
             si_mem_tot: 0,
@@ -62,7 +67,7 @@ impl PSInfo {
         
         false
     }
-
+    
     pub fn get_ps_ver(&mut self) -> Result<(u32, u32), MigError> {
         trace!("{}::get_ps_ver(): called", MODULE);
 
@@ -72,19 +77,19 @@ impl PSInfo {
         }
         
         trace!("{}::get_ps_ver(): calling powershell", MODULE);
-        let output = call_to_string(&POWERSHELL_VERSION_PARAMS)?;
+        let output = call_to_string(&POWERSHELL_VERSION_PARAMS,true)?;
 
         trace!("{}::get_ps_ver(): powershell stdout: {}", MODULE, output.stdout);
         trace!("{}::get_ps_ver(): powershell stderr {}", MODULE, output.stderr);
 
-        let mut lines: Vec<&str> = Vec::new();
-
+        let mut lines: Vec<&str> = output.stdout.lines().collect();
+/*
         for line in output.stdout.lines() {
             if ! line.trim().is_empty() {
                 lines.push(line);
             }
         }
-
+*/
         trace!("{}::get_ps_ver(): powershell stdout: lines: {}", MODULE, lines.len());
         match lines.len() {
             3 => (),
@@ -122,10 +127,16 @@ impl PSInfo {
     }
 
 
-    fn init_sys_info(&mut self) -> Result<(), MigError> {
-        trace!("{}::sys_info(): called", MODULE);
+    fn get_cmdlets(&mut self) -> Result<(), MigError> {
+        trace!("{}::get_cmdlets(): called", MODULE);
+        let output = call_to_string(&POWERSHELL_GET_CMDLET_PARAMS, true)?;
+        Ok(())
+    }
 
-        let output = call_to_string(&POWERSHELL_SYSINFO_PARAMS)?;
+    fn init_sys_info(&mut self) -> Result<(), MigError> {
+        trace!("{}::init_sys_info(): called", MODULE);
+
+        let output = call_to_string(&POWERSHELL_SYSINFO_PARAMS, true)?;
         let mut reader = csv::Reader::from_reader(output.stdout.as_bytes());
         let records: Vec<csv::Result<csv::StringRecord>> = reader.records().collect();
         match records.len() {
@@ -259,7 +270,7 @@ impl SysInfo for PSInfo {
 
 
 
-fn call_to_string(args: &[&str]) -> Result<PWRes, MigError> {
+fn call_to_string(args: &[&str], trimStdOut: bool) -> Result<PWRes, MigError> {
     // TODO: add option - trim - 
 
     trace!("{}::call_to_string(): called with {:?}", MODULE, args);
@@ -329,9 +340,12 @@ fn call_to_string(args: &[&str]) -> Result<PWRes, MigError> {
             ));
         }
     };
-
+    
     Ok(PWRes {
-        stdout: stdout_str,
+        stdout: match trimStdOut { 
+            true => String::from(stdout_str.trim()),
+            false => stdout_str, 
+        },
         stderr: stderr_str,
     })
 }
