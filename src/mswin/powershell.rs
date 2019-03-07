@@ -26,7 +26,10 @@ pub fn available() -> bool {
 
     match get_ps_ver() {
         Ok(_v) => true,
-        Err(_why) => false,
+        Err(why) => { 
+            error!("{}::available: get_ps_ver() returned error: {:?}",MODULE, why);
+            false 
+            },
     }
 }
 
@@ -60,6 +63,7 @@ pub fn get_ps_ver() -> Result<(u32, u32), MigError> {
     trace!("{}::get_ps_ver(): powershell stderr {}", MODULE, output.stderr);
 
     let lines: Vec<&str> = output.stdout.lines().collect();
+    trace!("{}::get_ps_ver(): powershell stdout: lines: {}", MODULE, lines.len());
     match lines.len() {
         3 => (),
         0 => {
