@@ -14,7 +14,7 @@ pub fn available() -> bool {
 }
 
 pub fn process() -> Result<(), MigError> {
-    let s_info = powershell::sys_info()?;
-    info!("process: os_type = {}", s_info.get_os_name());
+    let mut ps_info = powershell::PSInfo::try_init()?;
+    // info!("process: os_type = {}", ps_info.get_os_name());
     Ok(())
 }
