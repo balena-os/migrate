@@ -50,6 +50,12 @@ impl PSInfo {
             si_mem_avail: 0,
             si_boot_dev: String::new(),
         };
+        
+        match ps_info.get_cmdlets() {
+            Ok(_v) => (),
+            Err(why) => return Err(why),
+        };
+        
         match ps_info.get_ps_ver() {
             Ok(_v) => (),
             Err(why) => return Err(why),
@@ -130,6 +136,17 @@ impl PSInfo {
     fn get_cmdlets(&mut self) -> Result<(), MigError> {
         trace!("{}::get_cmdlets(): called", MODULE);
         let output = call_to_string(&POWERSHELL_GET_CMDLET_PARAMS, true)?;
+
+        let mut lines = output.stdout.lines().enumerate();
+
+        let headers: Vec<&str> = match lines.next() {
+            Some(s) => { 
+                trace!("{}::get_cmdlets(): line: {:?}", MODULE, s);
+                s.1.split_whitespace().collect()
+            },
+            None => return Err(MigError::from_code(MigErrorCode::ErrInvParam, &format!("{}::get_cmdlets: 0 output lines received from: powershell Get-Commands",MODULE), None)),
+        };
+            
         Ok(())
     }
 
@@ -268,9 +285,7 @@ impl SysInfo for PSInfo {
 
 } 
 
-
-
-fn call_to_string(args: &[&str], trimStdOut: bool) -> Result<PWRes, MigError> {
+fn call_to_string(args: &[&str], trim_stdout: bool) -> Result<PWRes, MigError> {
     // TODO: add option - trim - 
 
     trace!("{}::call_to_string(): called with {:?}", MODULE, args);
@@ -342,7 +357,7 @@ fn call_to_string(args: &[&str], trimStdOut: bool) -> Result<PWRes, MigError> {
     };
     
     Ok(PWRes {
-        stdout: match trimStdOut { 
+        stdout: match trim_stdout { 
             true => String::from(stdout_str.trim()),
             false => stdout_str, 
         },
