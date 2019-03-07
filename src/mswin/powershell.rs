@@ -39,7 +39,6 @@ pub fn get_ps_ver() -> Result<(u32, u32), MigError> {
         static ref POWERSHELL_VERSION: Mutex<Option<(u32,u32)>> = Mutex::new(None);
     }
 
-
     let mut version = match POWERSHELL_VERSION.lock() {
         Ok(v) => v,
         Err(why) => return Err(MigError::from_code(MigErrorCode::ErrInvParam, &format!("{}::get_ps_ver: module mutex is poisoned", MODULE),Some(Box::new(why))))
@@ -248,10 +247,17 @@ fn call_to_string(args: &[&str]) -> Result<PWRes, MigError> {
 mod tests {
     use super::*;
 
+    #[test] 
+    fn is_available() {
+        available();
+    }
+
     #[test]
     fn get_sys_info() {
-        let s_info = sys_info().unwrap();
-        let os_name = s_info.get_os_name();
-        assert!(os_name.len() > 0);
+        if available() {
+            let s_info = sys_info().unwrap();
+            let os_name = s_info.get_os_name();
+            assert!(os_name.len() > 0);
+        }
     }
 }
