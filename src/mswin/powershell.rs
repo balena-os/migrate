@@ -133,8 +133,8 @@ pub fn sys_info() -> Result<SysInfo, MigError> {
                 Err(_why) => return Err(MigError::from_code(
                     MigErrorCode::ErrInvParam,
                     &format!("{}::sys_info: no headers found in output lines received from: powershell Systeminfo /FO CSV",MODULE),
-                    None,
-                )), // Some(Box::new(why))))
+                    None,                    
+                )), // TODO: Some(Box::new(why))))
             };
 
         let data =
@@ -146,8 +146,8 @@ pub fn sys_info() -> Result<SysInfo, MigError> {
                 Err(_why) => return Err(MigError::from_code(
                     MigErrorCode::ErrInvParam,
                     &format!("{}::sys_info: no data found in output lines received from: powershell Systeminfo /FO CSV",MODULE),
-                    None,
-                )), // Some(Box::new(why))))
+                    None
+                )),
             };
 
         trace!("sys_info: headers: {:?}", headers);
@@ -187,6 +187,8 @@ pub struct PWRes {
     stdout: String,
     stderr: String,
 }
+
+// TODO: add option - trim - 
 
 fn call_to_string(args: &[&str]) -> Result<PWRes, MigError> {
     trace!("{}::call_to_string(): called with {:?}", MODULE, args);
