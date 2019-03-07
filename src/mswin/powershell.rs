@@ -62,7 +62,14 @@ pub fn get_ps_ver() -> Result<(u32, u32), MigError> {
     trace!("{}::get_ps_ver(): powershell stdout: {}", MODULE, output.stdout);
     trace!("{}::get_ps_ver(): powershell stderr {}", MODULE, output.stderr);
 
-    let lines: Vec<&str> = output.stdout.lines().collect();
+    let mut lines: Vec<&str> = Vec::new();
+
+    for line in output.stdout.lines() {
+        if ! line.trim().is_empty() {
+            lines.push(line);
+        }
+    }
+
     trace!("{}::get_ps_ver(): powershell stdout: lines: {}", MODULE, lines.len());
     match lines.len() {
         3 => (),
