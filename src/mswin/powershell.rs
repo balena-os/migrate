@@ -9,7 +9,7 @@ use crate::common::SysInfo;
 
 use lazy_static::lazy_static;
 use csv;
-use log::{error, trace, warn};
+use log::{info, error, trace, warn};
 use std::collections::HashMap;
 use std::io::ErrorKind;
 use std::io::Read;
@@ -22,7 +22,7 @@ use std::sync::Mutex;
 
 
 pub fn available() -> bool {
-    trace!("{}::available(): called available()", MODULE);
+    trace!("{}::available: called available()", MODULE);
 
     match get_ps_ver() {
         Ok(_v) => true,
@@ -33,23 +33,31 @@ pub fn available() -> bool {
 pub fn get_ps_ver() -> Result<(u32, u32), MigError> {
     trace!("{}::get_ps_ver(): called", MODULE);
 
-    // TODO: add mutex
-
     lazy_static! {
         static ref POWERSHELL_VERSION: Mutex<Option<(u32,u32)>> = Mutex::new(None);
     }
 
+    
     let mut version = match POWERSHELL_VERSION.lock() {
         Ok(v) => v,
         Err(why) => return Err(MigError::from_code(MigErrorCode::ErrInvParam, &format!("{}::get_ps_ver: module mutex is poisoned", MODULE),Some(Box::new(why))))
     };
 
+    trace!("{}::get_ps_ver(): after mutex lock {:?}", MODULE, version);
+
     match *version {
-            Some(s) => return Ok(s.clone()),
+            Some(s) => {
+                info!("{}::get_ps_ver(): returning version {:?}", MODULE, version);
+                return Ok(s.clone())
+            },
             None => (),
     }
 
+    trace!("{}::get_ps_ver(): calling powershell", MODULE);
     let output = call_to_string(&POWERSHELL_VERSION_PARAMS)?;
+
+    trace!("{}::get_ps_ver(): powershell stdout: {}", MODULE, output.stdout);
+    trace!("{}::get_ps_ver(): powershell stderr {}", MODULE, output.stderr);
 
     let lines: Vec<&str> = output.stdout.lines().collect();
     match lines.len() {
@@ -89,7 +97,7 @@ pub fn get_ps_ver() -> Result<(u32, u32), MigError> {
 }
 
 pub fn sys_info() -> Result<SysInfo, MigError> {
-    trace!("{}::sysy_info(): called", MODULE);
+    trace!("{}::sys_info(): called", MODULE);
     if available() {
         let output = call_to_string(&POWERSHELL_SYSINFO_PARAMS)?;
         let mut reader = csv::Reader::from_reader(output.stdout.as_bytes());
@@ -170,6 +178,7 @@ pub struct PWRes {
 }
 
 fn call_to_string(args: &[&str]) -> Result<PWRes, MigError> {
+    trace!("{}::call_to_string(): called with {:?}", MODULE, args);
     let process = match Command::new(POWERSHELL)
         .args(args)
         .stdout(Stdio::piped())
