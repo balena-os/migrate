@@ -17,8 +17,8 @@ build_script:
   - cargo build --verbose --all
 after_build:
   - '7z a win_test-%TARGET%-%APPVEYOR_BUILD_NUMBER%.zip %APPVEYOR_BUILD_FOLDER%/target/debug/win_test.*'
-test_script:  
-  - cargo test --verbose --all
+# test_script:  
+#   - cargo test --verbose --all
 branches:
   only:
   - master
