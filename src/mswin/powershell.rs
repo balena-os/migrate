@@ -69,9 +69,8 @@ impl PSInfo {
         Ok(ps_info)
     }
 
-    fn has_command(ps_info: &mut PSInfo,cmd: &str) -> bool {
-        
-        false
+    fn has_command(&mut self, cmd: &str) -> bool {
+        self.ps_cmdlets.contains(cmd)        
     }
     
     pub fn get_ps_ver(&mut self) -> Result<(u32, u32), MigError> {
@@ -88,14 +87,8 @@ impl PSInfo {
         trace!("{}::get_ps_ver(): powershell stdout: {}", MODULE, output.stdout);
         trace!("{}::get_ps_ver(): powershell stderr {}", MODULE, output.stderr);
 
-        let mut lines: Vec<&str> = output.stdout.lines().collect();
-/*
-        for line in output.stdout.lines() {
-            if ! line.trim().is_empty() {
-                lines.push(line);
-            }
-        }
-*/
+        let lines: Vec<&str> = output.stdout.lines().collect();
+
         trace!("{}::get_ps_ver(): powershell stdout: lines: {}", MODULE, lines.len());
         match lines.len() {
             3 => (),
