@@ -12,10 +12,8 @@ use crate::common::SysInfo;
 
 use lazy_static::lazy_static;
 use regex::Regex;
-use log::{error, trace, warn};
+use log::{trace, warn};
 use std::collections::HashSet;
-use std::io::ErrorKind;
-use std::io::Read;
 use std::process::{Command, Stdio};
 
 struct PWRes {
@@ -50,7 +48,7 @@ impl PSInfo {
         Ok(ps_info)
     }
 
-    fn has_command(&mut self, cmd: &str) -> bool {
+    pub fn has_command(&mut self, cmd: &str) -> bool {
         self.ps_cmdlets.contains(cmd)        
     }
 
