@@ -129,6 +129,7 @@ impl PSInfo {
 
         let mut lines = output.stdout.lines().enumerate();
 
+        // find 'Name' in headers ans save word index  
         let mut name_idx: Option<usize> = None;
         let mut cmds: usize = 0;
 
@@ -190,10 +191,8 @@ impl PSInfo {
                 None => return Err(MigError::from_code(MigErrorCode::ErrInvParam, &format!("{}::get_cmdlets: name value not found in output from: powershell Get-Commands",MODULE), None)),
             };
         }
-
         Ok(cmds)
     }
-
 }
 
 fn call_to_string(args: &[&str], trim_stdout: bool) -> Result<PWRes, MigError> {

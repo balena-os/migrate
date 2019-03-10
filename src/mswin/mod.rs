@@ -4,8 +4,8 @@ use crate::common::mig_error;
 use crate::common::SysInfo;
 
 
-use std::process::{Command, Stdio};
-use log::{info, trace, error};
+use std::process::{Command};
+use log::{warn, trace, error};
 use csv;
 use lazy_static::lazy_static;
 use regex::Regex;
@@ -56,7 +56,10 @@ impl MSWInfo {
         // TODO: 
         msw_info.ps_info = match PSInfo::try_init() {
             Ok(pi) => Some(pi), 
-            Err(why) => None    
+            Err(why) => {
+                warn!("{}::try_init: failed to initialize powershell: {:?}", MODULE, why);
+                None    
+            },
         };
 
         Ok(msw_info)
