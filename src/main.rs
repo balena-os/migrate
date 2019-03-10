@@ -39,21 +39,10 @@ fn main() {
         .init()
         .unwrap();
 
-    if mswin::available() {
-        if matches.is_present("info") {
-            let sys_info = mswin::get_sys_info().unwrap();
-            println!("OS Name:     {}",sys_info.get_os_name());
-            println!("OS Release:  {}",sys_info.get_os_release());
-            println!("Boot Device: {}",sys_info.get_boot_dev());
-            println!("Total Mem.:  {}",sys_info.get_mem_tot());
-            println!("Avail. Mem.: {}",sys_info.get_mem_avail());
-            std::process::exit(0);
-        }
-        
-        mswin::process().unwrap()
-
-    } else {
-        println!("Error: not a supported operating system");
-        std::process::exit(1);
-    }
+    let msw_info = mswin::MSWInfo::try_init().unwrap();
+    println!("OS Name:     {}",msw_info.get_os_name());
+    println!("OS Release:  {}",msw_info.get_os_release());
+    println!("Boot Device: {}",msw_info.get_boot_dev());
+    println!("Total Mem.:  {}",msw_info.get_mem_tot());
+    println!("Avail. Mem.: {}",msw_info.get_mem_avail());
 }
