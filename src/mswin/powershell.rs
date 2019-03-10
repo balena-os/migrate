@@ -196,82 +196,38 @@ impl PSInfo {
 
 }
 
-
 fn call_to_string(args: &[&str], trim_stdout: bool) -> Result<PWRes, MigError> {
-    // TODO: add option - trim -
-
-    trace!("{}::call_to_string(): called with {:?}", MODULE, args);
-    let process = match Command::new(POWERSHELL)
+    trace!("{}::call_to_string(): called with {:?}, {}", MODULE, args, trim_stdout);
+    let output = match Command::new(POWERSHELL)
         .args(args)
         .stdout(Stdio::piped())
         .stderr(Stdio::piped())
-        .spawn()
+        .output()
     {
-        Ok(process) => process,
-        Err(why) => match why.kind() {
-            ErrorKind::NotFound => {
-                return Err(MigError::from_code(
-                    MigErrorCode::ErrPgmNotFound,
-                    &format!(
-                        "{}::call_to_string: failed to execute: powershell Systeminfo /FO CSV",
-                        MODULE
-                    ),
-                    Some(Box::new(why)),
-                ));
-            }
-            _ => {
-                return Err(MigError::from_code(
+        Ok(o) => o,
+        Err(why) => return Err(MigError::from_code(
                     MigErrorCode::ErrExecProcess,
                     &format!(
-                        "{}::call_to_string: failed to execute: powershell Systeminfo /FO CSV",
-                        MODULE
+                        "{}::call_to_string: failed to execute: powershell command '{:?}'",
+                        MODULE,args
                     ),
                     Some(Box::new(why)),
-                ));
-            }
-        },
+                ))
+        };
+
+    if !output.status.success() {                
+        return Err(MigError::from_code(MigErrorCode::ErrExecProcess, &format!("{}::init_sys_info: command failed with exit code {}", MODULE, output.status.code().unwrap_or(0)), None));
+    }
+
+    // TODO: use os str instead
+    let stdout_str = match String::from_utf8(output.stdout) {
+        Ok(s) => s,
+        Err(why) => return Err(MigError::from_code(MigErrorCode::ErrInvParam,&format!("{}::call_to_string: invalid utf8 in stdout", MODULE),Some(Box::new(why)))),
     };
 
-    let mut stdout_str: String = String::from("");
-    match process.stdout {
-        Some(mut sout) => match sout.read_to_string(&mut stdout_str) {
-            Ok(_bytes) => (),
-            Err(why) => {
-                return Err(MigError::from_code(
-                    MigErrorCode::ErrCmdIO,
-                    &format!("{}::call_to_string: failed to read command output from: powershell Systeminfo /FO CSV",MODULE),
-                    Some(Box::new(why)),
-                ));
-            }
-        },
-        None => {
-            return Err(MigError::from_code(
-                MigErrorCode::ErrCmdIO,
-                &format!("{}::call_to_string: failed to read command output from: powershell Systeminfo /FO CSV",MODULE),
-                None,
-            ));
-        }
-    };
-
-    let mut stderr_str: String = String::from("");
-    match process.stderr {
-        Some(mut serr) => match serr.read_to_string(&mut stderr_str) {
-            Ok(_bytes) => (),
-            Err(why) => {
-                return Err(MigError::from_code(
-                    MigErrorCode::ErrCmdIO,
-                    &format!("{}::call_to_string: failed to read command error output from: powershell Systeminfo /FO CSV",MODULE),
-                    Some(Box::new(why)),
-                ));
-            }
-        },
-        None => {
-            return Err(MigError::from_code(
-                MigErrorCode::ErrCmdIO,
-                &format!("{}::call_to_string: failed to read command error output from: powershell Systeminfo /FO CSV",MODULE),
-                None,
-            ));
-        }
+    let stderr_str = match String::from_utf8(output.stderr) {
+        Ok(s) => s,
+        Err(why) => return Err(MigError::from_code(MigErrorCode::ErrInvParam,&format!("{}::call_to_string: invalid utf8 in stderr", MODULE),Some(Box::new(why)))),
     };
 
     Ok(PWRes {

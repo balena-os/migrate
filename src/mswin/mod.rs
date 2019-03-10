@@ -53,6 +53,7 @@ impl MSWInfo {
             Err(why) => return Err(why),
         };
 
+        // TODO: 
         msw_info.ps_info = match PSInfo::try_init() {
             Ok(pi) => Some(pi), 
             Err(why) => None    
@@ -76,6 +77,9 @@ impl MSWInfo {
                                     Some(Box::new(why)),))
             };
 
+            if !output.status.success() {                
+                return Err(MigError::from_code(MigErrorCode::ErrExecProcess, &format!("{}::init_sys_info: command failed with exit code {}", MODULE, output.status.code().unwrap_or(0)), None));
+            }
 
             let mut reader = csv::Reader::from_reader(output.stdout.as_slice());
             let records: Vec<csv::Result<csv::StringRecord>> = reader.records().collect();
