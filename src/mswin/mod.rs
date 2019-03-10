@@ -303,3 +303,17 @@ fn parse_mem_value(val: Option<&&str>) -> Result<usize, MigError> {
         _ => mem,
     })
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn init_mswin() {
+        let msw_info = MSWInfo::try_init().unwrap();
+        assert!(!msw_info.get_os_name().is_empty());
+        assert!(!msw_info.get_os_release().is_empty());
+        assert!(!msw_info.get_mem_avail() > 0);
+        assert!(!msw_info.get_mem_tot() > 0);
+    }
+}

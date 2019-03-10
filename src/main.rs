@@ -30,7 +30,7 @@ fn main() {
         )
         .get_matches();
 
-    let log_level = matches.occurrences_of("v") as usize;
+    let log_level = matches.occurrences_of("verbose") as usize;
     
     stderrlog::new()
         .module(module_path!())
