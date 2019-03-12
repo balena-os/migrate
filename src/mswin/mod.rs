@@ -1,4 +1,5 @@
 mod powershell;
+mod win_api;
 
 use crate::common::mig_error;
 use crate::common::SysInfo;
@@ -13,16 +14,9 @@ use regex::Regex;
 use mig_error::{MigError, MigErrorCode};
 use powershell::PSInfo;
 
-// use std::error::Error;
-// use std::io::prelude::*;
-
-
-
-
 const MODULE: &str = "mswin";
 const SYSINFO_CMD: &str = "systeminfo";
 const SYSINFO_ARGS: [&str;2] = ["/FO","CSV"];
-// const OS: &str = "windows";
 
 pub struct MSWInfo {
     ps_info: Option<PSInfo>,
@@ -35,10 +29,6 @@ pub struct MSWInfo {
 
 impl MSWInfo {
     pub fn try_init() -> Result<MSWInfo, MigError> {
-        if !cfg!(windows) {
-            return Err(MigError::from_code(MigErrorCode::ErrInvOSType, &format!("{}: this module only works on Windows OS ", MODULE), None)); 
-        }
-
         let mut msw_info = MSWInfo {
             ps_info: None,
             si_os_name: String::new(),
@@ -84,16 +74,17 @@ impl MSWInfo {
                 return Err(MigError::from_code(MigErrorCode::ErrExecProcess, &format!("{}::init_sys_info: command failed with exit code {}", MODULE, output.status.code().unwrap_or(0)), None));
             }
 
+            trace!("{}::init_sys_info: stdout: {}", MODULE, output.stdout);
             let mut reader = csv::Reader::from_reader(output.stdout.as_slice());
             let records: Vec<csv::Result<csv::StringRecord>> = reader.records().collect();
             match records.len() {
                 1 => (),
                 _ => {
-                    error!("sys_info: invalid number of records () in command output of  powershell Systeminfo /FO CSV");
+                    error!("{}::init_sys_info: invalid number of records {} in command output of Systeminfo /FO CSV",MODULE, records.len());
                     for record in records {
                         error!("sys_info: {:?}", record);
                     }
-                    return Err(MigError::from_code(MigErrorCode::ErrInvParam, &format!("{}::sys_info: unexpected number of output lines received from: powershell Systeminfo /FO CSV",MODULE), None));
+                    return Err(MigError::from_code(MigErrorCode::ErrInvParam, &format!("{}::init_sys_info: unexpected number of output lines received from: Systeminfo /FO CSV",MODULE), None));
                 }
             }
 
@@ -105,7 +96,7 @@ impl MSWInfo {
                     }
                     Err(_why) => return Err(MigError::from_code(
                         MigErrorCode::ErrInvParam,
-                        &format!("{}::sys_info: no headers found in output lines received from: powershell Systeminfo /FO CSV",MODULE),
+                        &format!("{}::init_sys_info: no headers found in output lines received from: Systeminfo /FO CSV",MODULE),
                         None,                    
                     )), // TODO: Some(Box::new(why))))
                 };

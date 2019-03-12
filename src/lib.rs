@@ -1,4 +1,5 @@
 
+#[cfg(windows)]
 pub mod mswin;
 // pub mod linux;
 // pub mod darwin;
