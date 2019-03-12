@@ -237,16 +237,3 @@ fn call_to_string(args: &[&str], trim_stdout: bool) -> Result<PWRes, MigError> {
 }
 
 
-#[cfg(test)]
-mod tests {
-    use super::*;
-
-    #[test]
-    fn init_powershell() {
-        let s_info = PSInfo::try_init().unwrap();
-        assert!(!s_info.get_os_name().is_empty());
-        assert!(!s_info.get_os_release().is_empty());
-        assert!(!s_info.get_mem_avail() > 0);
-        assert!(!s_info.get_mem_tot() > 0);
-    }
-}
