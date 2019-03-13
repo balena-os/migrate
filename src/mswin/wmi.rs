@@ -22,7 +22,6 @@ pub struct ComHandle {
     h_com: i32,
 }
 
-
 impl ComHandle {
     pub fn try_init() -> Result<ComHandle,MigError> {
         trace!("{}::try_init: entered",MODULE);
@@ -53,5 +52,14 @@ impl ComHandle {
         
 
         Ok(ComHandle{h_com: h_com})
+    }
+}
+
+impl<'a> Drop for ComHandle + 'a {
+    fn drop(&mut self) {
+        if self.h_com != 0 {
+            self.h_com = 0;
+            unsafe { CoUninitialize() };
+        }
     }
 }

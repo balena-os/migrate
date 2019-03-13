@@ -12,3 +12,5 @@ lazy_static = "*"
 clap = "*"
 [target.'cfg(windows)'.dependencies]
 winapi = { version = "0.3", features = ["winuser", "handleapi","fileapi","combaseapi", "objbase", "objidl"] }
+[target.'cfg(windows)'.dependencies]
+wmi = "*"
