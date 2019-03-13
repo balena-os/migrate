@@ -1,5 +1,5 @@
 #!/bin/bash
-BASE_DIR="/media/thomas/7896708596704622/Program Files (x86)/Microsoft Visual Studio/2017/Community/SDK/ScopeCppSDK/SDK/include/"
+BASE_DIR="/mnt/windows/Program Files (x86)/Microsoft Visual Studio/2017/Community/SDK/ScopeCppSDK/SDK/include/"
 
 while read -r file ; do 
     

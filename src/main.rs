@@ -12,8 +12,8 @@ extern crate stderrlog;
 use clap::{App, Arg};
 
 fn main() {
-    trace!("balena-migrate started");
-    let matches = App::new("balena-migrate")
+    trace!("balena-migrate-win started");
+    let matches = App::new("balena-migrate-win")
         .version("0.1")
         .author("Thomas Runte <thomasr@balena.io>")
         .about("Migrates devices to BalenaOS")

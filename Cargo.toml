@@ -11,6 +11,7 @@ regex = "1"
 lazy_static = "*"
 clap = "*"
 [target.'cfg(windows)'.dependencies]
-winapi = { version = "0.3", features = ["winuser", "handleapi","fileapi","combaseapi", "objbase", "objidl"] }
-[target.'cfg(windows)'.dependencies]
-wmi = "*"
+winapi = { git = "https://github.com/retep998/winapi-rs.git", branch = "0.3", features = ["winuser", "handleapi","fileapi"] }
+# winapi = { version = "0.3", features = ["winuser", "handleapi","fileapi"] }
+[target.'cfg(windows)']
+wmi = { git = "git@github.com:ohadravid/wmi-rs.git" }
