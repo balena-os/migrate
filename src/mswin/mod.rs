@@ -1,5 +1,6 @@
 mod powershell;
 mod win_api;
+mod wmi;
 
 use crate::common::mig_error;
 use crate::common::SysInfo;
@@ -10,6 +11,9 @@ use log::{warn, trace, error};
 use csv;
 use lazy_static::lazy_static;
 use regex::Regex;
+
+use std::ffi::OsString;
+use std::os::windows::prelude::*;
 
 use mig_error::{MigError, MigErrorCode};
 use powershell::PSInfo;
@@ -56,7 +60,7 @@ impl MSWInfo {
     }
 
     fn init_sys_info(&mut self) -> Result<(), MigError> {
-        trace!("{}::init_sys_info(): called", MODULE);
+        trace!("{}::init_sys_info: called", MODULE);
 
         let output = match Command::new(SYSINFO_CMD)
             .args(&SYSINFO_ARGS)
@@ -65,7 +69,7 @@ impl MSWInfo {
             Err(why) => return Err( MigError::from_code(
                                     MigErrorCode::ErrExecProcess,
                                     &format!(
-                                        "{}::call_to_string: failed to execute: powershell Systeminfo /FO CSV",
+                                        "{}::call_to_string: failed to execute: Systeminfo /FO CSV",
                                         MODULE),
                                     Some(Box::new(why)),))
             };
@@ -73,9 +77,15 @@ impl MSWInfo {
             if !output.status.success() {                
                 return Err(MigError::from_code(MigErrorCode::ErrExecProcess, &format!("{}::init_sys_info: command failed with exit code {}", MODULE, output.status.code().unwrap_or(0)), None));
             }
+            // trace!("{}::init_sys_info: stdout: {:?}", MODULE, output.stdout);
+            
+            
 
-            trace!("{}::init_sys_info: stdout: {}", MODULE, output.stdout);
-            let mut reader = csv::Reader::from_reader(output.stdout.as_slice());
+            trace!("{}::init_sys_info: stdout: {}", MODULE, String::from_utf8_lossy(&output.stdout));
+
+            let o_string = String::from_utf8_lossy(&output.stdout);
+            let mut reader = csv::Reader::from_reader(o_string.as_bytes());
+            //let mut reader = csv::Reader::from_reader(output.stdout.as_slice());
             let records: Vec<csv::Result<csv::StringRecord>> = reader.records().collect();
             match records.len() {
                 1 => (),

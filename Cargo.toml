@@ -11,4 +11,4 @@ regex = "1"
 lazy_static = "*"
 clap = "*"
 [target.'cfg(windows)'.dependencies]
-winapi = { version = "0.3", features = ["winuser"] }
+winapi = { version = "0.3", features = ["winuser", "handleapi","fileapi","combaseapi", "objbase", "objidl"] }

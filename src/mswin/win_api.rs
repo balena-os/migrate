@@ -9,7 +9,11 @@ use log::{warn, info, trace};
 use lazy_static::lazy_static;
 use regex::Regex;
 use std::rc::Rc;
+
 use std::collections::hash_map::HashMap;
+
+use winapi::um::handleapi::{INVALID_HANDLE_VALUE};
+use winapi::um::fileapi::{FindFirstVolumeW, FindNextVolumeW, FindVolumeClose, QueryDosDeviceW};        
 
 const MODULE:&str = "test_win_api";
 
@@ -134,8 +138,6 @@ fn clip<'a>(clip_str: &'a str, clip_start: Option<&str>, clip_end: Option<&str>)
 
 fn get_volumes() -> Result<Vec<String>,Box<std::error::Error>> {
     trace!("{}::get_volumes: entered", MODULE);
-    use winapi::um::handleapi::{INVALID_HANDLE_VALUE};
-    use winapi::um::fileapi::{FindFirstVolumeW, FindNextVolumeW, FindVolumeClose};        
     const BUFFER_SIZE: usize = 2048;
     let mut buffer: [u16;BUFFER_SIZE] = [0; BUFFER_SIZE];
     let mut vol_list: Vec<String> = Vec::new();
@@ -162,8 +164,7 @@ fn get_volumes() -> Result<Vec<String>,Box<std::error::Error>> {
 
 
 fn query_dos_device(dev_name: Option<&str>) -> Result<Vec<String>,Box<std::error::Error>> {
-    trace!("{}::query_dos_device: entered with {:?}" , MODULE, dev_name);
-    use winapi::um::fileapi::{ QueryDosDeviceW};        
+    trace!("{}::query_dos_device: entered with {:?}" , MODULE, dev_name);    
     const BUFFER_SIZE: usize = 131072;
     let mut buffer: [u16;BUFFER_SIZE] = [0; BUFFER_SIZE];
     let num_tchar = match dev_name {
