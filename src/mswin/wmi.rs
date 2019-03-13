@@ -16,7 +16,7 @@ const MODULE: &str = "wmi";
 const S_OK: i32 = 0;
 // TODO: retrieve definitions
 const RPC_C_AUTHN_LEVEL_DEFAULT: u32 = 0;
-const RPC_C_IMP_LEVEL_IMPERSONATE: u32 = 0;
+const RPC_C_IMP_LEVEL_IMPERSONATE: u32 = 3;
 
 pub struct ComHandle {
     h_com: i32,

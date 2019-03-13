@@ -1,0 +1,11 @@
+#!/bin/bash
+BASE_DIR="/media/thomas/7896708596704622/Program Files (x86)/Microsoft Visual Studio/2017/Community/SDK/ScopeCppSDK/SDK/include/"
+
+while read -r file ; do 
+    
+    found=$(grep "${1}" "${file}")
+    if [ -n "${found}" ] ; then 
+        echo "${file}"
+        echo "${found}"
+    fi 
+done < <(find "${BASE_DIR}" -type f)
