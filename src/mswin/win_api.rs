@@ -1,4 +1,4 @@
-extern crate winapi;
+// extern crate winapi;
 use std::io::Error;
 use std::io::ErrorKind;
 use std::ffi::OsStr;

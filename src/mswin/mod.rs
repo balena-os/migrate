@@ -1,13 +1,13 @@
 mod powershell;
 mod win_api;
-mod wmi;
+mod wmi_utils;
 
 use crate::common::mig_error;
 use crate::common::SysInfo;
 
 
 use std::process::{Command};
-use log::{warn, trace, error};
+use log::{info, warn, trace, error};
 use csv;
 use lazy_static::lazy_static;
 use regex::Regex;
@@ -17,6 +17,7 @@ use std::os::windows::prelude::*;
 
 use mig_error::{MigError, MigErrorCode};
 use powershell::PSInfo;
+use wmi_utils::{WmiUtils,Variant};
 
 const MODULE: &str = "mswin";
 const SYSINFO_CMD: &str = "systeminfo";
@@ -26,6 +27,7 @@ pub struct MSWInfo {
     ps_info: Option<PSInfo>,
     si_os_name: String,
     si_os_release: String,
+    si_os_arch: String,
     si_mem_tot: usize,
     si_mem_avail: usize,
     si_boot_dev: String,
@@ -37,6 +39,7 @@ impl MSWInfo {
             ps_info: None,
             si_os_name: String::new(),
             si_os_release: String::new(),
+            si_os_arch: String::new(),
             si_mem_tot: 0,
             si_mem_avail: 0,
             si_boot_dev: String::new(),
@@ -47,7 +50,7 @@ impl MSWInfo {
             Err(why) => return Err(why),
         };
 
-        // TODO: 
+        /*
         msw_info.ps_info = match PSInfo::try_init() {
             Ok(pi) => Some(pi), 
             Err(why) => {
@@ -55,11 +58,62 @@ impl MSWInfo {
                 None    
             },
         };
+        */
 
         Ok(msw_info)
     }
 
     fn init_sys_info(&mut self) -> Result<(), MigError> {
+        let wmi_utils = WmiUtils::new()?;
+        let wmi_res = wmi_utils.wmi_query_system()?;
+        for (key,value) in wmi_res.iter() {
+            info!("{}::init_sys_info: {} -> {:?}", MODULE, key, value);
+        }
+        
+        let empty = Variant::Empty;
+
+        if let Variant::String(s) = wmi_res.get("BootDevice").unwrap_or(&empty) {
+            self.si_boot_dev = s.clone();
+        }
+
+        if let Variant::String(s) = wmi_res.get("Caption").unwrap_or(&empty) {
+            self.si_os_name = s.clone();
+        }
+
+        if let Variant::String(s) = wmi_res.get("Version").unwrap_or(&empty) {
+            self.si_os_release = s.clone();
+        }
+
+        if let Variant::String(s) = wmi_res.get("OSArchitecture").unwrap_or(&empty) {
+            self.si_os_arch = s.clone();
+        }
+
+        if let Variant::String(s) = wmi_res.get("TotalVisibleMemorySize").unwrap_or(&empty) {
+            self.si_mem_tot = match s.parse::<usize>() {
+                Ok(num) => num,
+                Err(why) => return Err(
+                    MigError::from_code(
+                        MigErrorCode::ErrInvParam, 
+                        &format!("{}::init_sys_info: failed to parse TotalVisibleMemorySize from  '{}'", MODULE,s) , 
+                        Some(Box::new(why)))),
+            };
+        }
+
+        if let Variant::String(s) = wmi_res.get("FreePhysicalMemory").unwrap_or(&empty) {
+            self.si_mem_avail = match s.parse::<usize>() {
+                Ok(num) => num,
+                Err(why) => return Err(
+                    MigError::from_code(
+                        MigErrorCode::ErrInvParam, 
+                        &format!("{}::init_sys_info: failed to parse FreePhysicalMemory from  '{}'", MODULE,s) , 
+                        Some(Box::new(why)))),
+            };
+        }
+
+        Ok(())
+    }
+
+    fn init_sys_info_1(&mut self) -> Result<(), MigError> {
         trace!("{}::init_sys_info: called", MODULE);
 
         let output = match Command::new(SYSINFO_CMD)

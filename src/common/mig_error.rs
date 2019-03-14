@@ -11,6 +11,9 @@ pub enum MigErrorCode {
     ErrPgmNotFound,
     ErrNotFound,
     ErrFeatureMissing,
+    ErrComInit,
+    ErrWmiInit,
+    ErrWmiQueryFailed,
 }
 
 #[derive(Debug)]
