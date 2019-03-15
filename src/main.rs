@@ -41,7 +41,13 @@ fn main() {
 
     let msw_info = mswin::MSWInfo::try_init().unwrap();
     println!("OS Name:     {}",msw_info.get_os_name());
-    println!("OS Release:  {}",msw_info.get_os_release());
+
+    if let Some(os) = msw_info.get_os_release() {        
+        println!("OS Release:  {}.{}.{}",os.0,os.1,os.2);
+    } else {
+        println!("OS Release:  N/A");
+    }
+
     println!("Boot Device: {}",msw_info.get_boot_dev());
     println!("Total Mem.:  {}",msw_info.get_mem_tot());
     println!("Avail. Mem.: {}",msw_info.get_mem_avail());
