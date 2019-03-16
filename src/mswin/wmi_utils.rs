@@ -6,7 +6,7 @@ use std::collections::HashMap;
 pub use wmi::Variant;
 
 use failure::{Fail,ResultExt};
-use crate::{MigError,MigErrorKind,MigErrCtx};
+use crate::mig_error::{MigError,MigErrorKind,MigErrCtx};
 
 
 const MODULE: &str = "mswin::wmi_utils";
@@ -25,40 +25,14 @@ pub struct WmiUtils {
 impl WmiUtils {
     pub fn new() -> Result<WmiUtils,MigError> {
         trace!("{}::new: entered", MODULE);
-        let com_con = match COMLibrary::new() {
-            Ok(com_con) => com_con,
-            Err(_why) => return Err(
-                MigError::from_code(
-                    MigErrorCode::ErrComInit, 
-                    &format!("{}::new: failed to initialize COM interface",MODULE),
-                    None)), //Some(Box::new(why))),
-            };
-
+        let com_con = COMLibrary::new().context(MigErrCtx::from(MigErrorKind::WmiInit))?;
         Ok(Self {
-            wmi_con: match WMIConnection::new(com_con.into()) {
-                Ok(c) => c,
-                Err(_why) => return Err(
-                    MigError::from_code(
-                        MigErrorCode::ErrWmiInit, 
-                        &format!("{}::new: failed to initialize WMI interface",MODULE),
-                        None)), //Some(Box::new(why))),
-
-            },
+            wmi_con: WMIConnection::new(com_con.into()).context(MigErrCtx::from(MigErrorKind::WmiInit))?,
         })
     }
     
     pub fn wmi_query(&self,query: &str) -> Result<Vec<HashMap<String, Variant>>, MigError> {    
         trace!("{}::wmi_query: entered with '{}'", MODULE, query);
-        match self.wmi_con.raw_query(query) {
-            Ok(res) => Ok(res),
-            Err(why) => { 
-                error!("{}::wmi_query_system: failed on query {} : {:?}",MODULE, query,why);
-                return Err(                    
-                    MigError::from_code(
-                        MigErrorCode::ErrWmiQueryFailed, 
-                        &format!("{}::wmi_query_system: failed on query {}",MODULE, query),
-                        None)); //Some(Box::new(why))),
-                },
-        }
+        Ok(self.wmi_con.raw_query(query).context(MigErrCtx::from(MigErrorKind::WmiQueryFailed))?)
     }       
 }

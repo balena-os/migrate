@@ -1,4 +1,4 @@
-
+#[macro_use] extern crate failure;
 #[cfg(windows)]
 pub mod mswin;
 // pub mod linux;

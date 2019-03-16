@@ -1,5 +1,4 @@
 
-#[macro_use] extern crate failure;
 use failure::{Error,Fail,Backtrace,ResultExt,Context};
 use std::fmt::{self,Debug,Display,Formatter};
 
@@ -25,6 +24,8 @@ pub enum MigErrorKind {
     NotFound,
     #[fail(display = "A required feature is not available")]
     FeatureMissing,
+    #[fail(display = "Initialization of WMI")]    
+    WmiInit,    
     #[fail(display = "A WMI query failed")]    
     WmiQueryFailed,    
 }
@@ -40,9 +41,19 @@ impl MigErrCtx {
     }
 }
 
+impl From<MigErrorKind> for MigErrCtx {
+    fn from(kind: MigErrorKind) -> MigErrCtx {
+        MigErrCtx{kind, descr: String::new()}
+    }
+}
+
 impl Display for MigErrCtx {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        write!(f, "Error: {}, {}", self.kind, self.descr)
+        if self.descr.is_empty() {
+            write!(f, "Error: {}", self.kind)
+        } else {
+            write!(f, "Error: {}, {}", self.kind, self.descr)
+        }
     }
 }
 

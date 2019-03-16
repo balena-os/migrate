@@ -4,7 +4,7 @@ mod wmi_utils;
 
 
 use failure::{Fail,ResultExt};
-use crate::{MigError,MigErrorKind,MigErrCtx};
+use crate::mig_error::{MigError,MigErrorKind,MigErrCtx};
 
 use crate::common::{SysInfo,OSRelease};
 
@@ -17,7 +17,6 @@ use regex::Regex;
 use std::ffi::OsString;
 use std::os::windows::prelude::*;
 
-use crate::mig_error::{MigError, MigErrorKind, MigErrCtx};
 use powershell::PSInfo;
 use wmi_utils::{WmiUtils,Variant};
 
