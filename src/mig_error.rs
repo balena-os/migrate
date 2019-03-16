@@ -1,11 +1,12 @@
-use std::fmt::{self,Debug,Display,Formatter};
+
 #[macro_use] extern crate failure;
 use failure::{Error,Fail,Backtrace,ResultExt,Context};
+use std::fmt::{self,Debug,Display,Formatter};
 
 #[derive(Copy, Clone, Eq, PartialEq, Debug, Fail)]
 pub enum MigErrorKind {
     #[fail(display = "An error occured in an upstream function")]
-    Upstream
+    Upstream,
     #[fail(display = "An item could not be found")]
     FileRead,    
     #[fail(display = "An unknown error occurred")]

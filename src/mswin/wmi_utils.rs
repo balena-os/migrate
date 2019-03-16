@@ -5,7 +5,9 @@ use wmi::{COMLibrary, WMIConnection};
 use std::collections::HashMap;
 pub use wmi::Variant;
 
-use crate::common::mig_error::{MigError,MigErrorCode};
+use failure::{Fail,ResultExt};
+use crate::{MigError,MigErrorKind,MigErrCtx};
+
 
 const MODULE: &str = "mswin::wmi_utils";
 

@@ -2,7 +2,10 @@ mod powershell;
 mod win_api;
 mod wmi_utils;
 
-use crate::common::mig_error;
+
+use failure::{Fail,ResultExt};
+use crate::{MigError,MigErrorKind,MigErrCtx};
+
 use crate::common::{SysInfo,OSRelease};
 
 use std::process::{Command};
@@ -14,7 +17,7 @@ use regex::Regex;
 use std::ffi::OsString;
 use std::os::windows::prelude::*;
 
-use mig_error::{MigError, MigErrorCode};
+use crate::mig_error::{MigError, MigErrorKind, MigErrCtx};
 use powershell::PSInfo;
 use wmi_utils::{WmiUtils,Variant};
 
@@ -58,7 +61,7 @@ impl MSWInfo {
     }
 
     fn init_sys_info(&mut self) -> Result<(), MigError> {
-        let wmi_utils = WmiUtils::new()?;
+        let wmi_utils = WmiUtils::new().context(MigErrCtx::from_remark(MigErrorKind::Upstream,"Create WMI utils failed"))?;
         let wmi_res = wmi_utils.wmi_query(wmi_utils::WMIQ_OS)?;
         let wmi_row = match wmi_res.get(0) {
             Some(r) => r,
