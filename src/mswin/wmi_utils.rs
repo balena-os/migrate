@@ -9,8 +9,13 @@ use crate::common::mig_error::{MigError,MigErrorCode};
 
 const MODULE: &str = "mswin::wmi_utils";
 
-const WMI_QUERY_OS: &str = "SELECT * FROM Win32_OperatingSystem";
-
+pub const WMIQ_OS: &str = "SELECT Caption,Version,OSArchitecture, BootDevice, TotalVisibleMemorySize,FreePhysicalMemory FROM Win32_OperatingSystem";
+pub const WMIQ_CSProd: &str = "SELECT * FROM Win32_ComputerSystemProduct";
+pub const WMIQ_BootConfig: &str = "SELECT * FROM Win32_SystemBootConfiguration";
+// pub const WMIQ_Disk: &str = "SELECT * FROM Win32_DiskDrive"; 
+pub const WMIQ_Disk: &str = "SELECT Caption,Partitions,Status,DeviceID,Size,BytesPerSector,MediaType,InterfaceType FROM Win32_DiskDrive";
+// pub const WMIQ_Partition: &str = "SELECT * FROM Win32_DiskPartition";
+pub const WMIQ_Partition: &str = "SELECT Caption,Bootable,Size,NumberOfBlocks,Type,BootPartition,DiskIndex,Index FROM Win32_DiskPartition";
 pub struct WmiUtils {
     wmi_con: WMIConnection,
 }
@@ -40,17 +45,16 @@ impl WmiUtils {
         })
     }
     
-    pub fn wmi_query_system(&self) -> Result<HashMap<String, Variant>, MigError> {    
-        trace!("{}::wmi_query_system: entered", MODULE);
-
-        match self.wmi_con.raw_query(WMI_QUERY_OS) {
-            Ok(mut res) => Ok(res.remove(0)),
+    pub fn wmi_query(&self,query: &str) -> Result<Vec<HashMap<String, Variant>>, MigError> {    
+        trace!("{}::wmi_query: entered with '{}'", MODULE, query);
+        match self.wmi_con.raw_query(query) {
+            Ok(res) => Ok(res),
             Err(why) => { 
-                error!("{}::wmi_query_system: failed on query {} : {:?}",MODULE, WMI_QUERY_OS,why);
+                error!("{}::wmi_query_system: failed on query {} : {:?}",MODULE, query,why);
                 return Err(                    
                     MigError::from_code(
                         MigErrorCode::ErrWmiQueryFailed, 
-                        &format!("{}::wmi_query_system: failed on query {}",MODULE, WMI_QUERY_OS),
+                        &format!("{}::wmi_query_system: failed on query {}",MODULE, query),
                         None)); //Some(Box::new(why))),
                 },
         }

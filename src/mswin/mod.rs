@@ -65,30 +65,36 @@ impl MSWInfo {
 
     fn init_sys_info(&mut self) -> Result<(), MigError> {
         let wmi_utils = WmiUtils::new()?;
-        let wmi_res = wmi_utils.wmi_query_system()?;
-        for (key,value) in wmi_res.iter() {
+        let wmi_res = wmi_utils.wmi_query(wmi_utils::WMIQ_OS)?;
+        /*for (key,value) in wmi_res.iter() {
             info!("{}::init_sys_info: {} -> {:?}", MODULE, key, value);
-        }
+        }*/
         
+        
+        let wmi_row = match wmi_res.get(0) {
+            Some(row) => row,
+            None => return Err(MigError::from_code(MigErrorCode::ErrNotFound, &format!("{}::init_sys_info: no rows in result from wmi query: '{}'", MODULE,wmi_utils::WMIQ_OS), None))
+        };
+
         let empty = Variant::Empty;
 
-        if let Variant::String(s) = wmi_res.get("BootDevice").unwrap_or(&empty) {
+        if let Variant::String(s) = wmi_row.get("BootDevice").unwrap_or(&empty) {
             self.si_boot_dev = s.clone();
         }
 
-        if let Variant::String(s) = wmi_res.get("Caption").unwrap_or(&empty) {
+        if let Variant::String(s) = wmi_row.get("Caption").unwrap_or(&empty) {
             self.si_os_name = s.clone();
         }
 
-        if let Variant::String(s) = wmi_res.get("Version").unwrap_or(&empty) {
+        if let Variant::String(s) = wmi_row.get("Version").unwrap_or(&empty) {
             self.si_os_release = s.clone();
         }
 
-        if let Variant::String(s) = wmi_res.get("OSArchitecture").unwrap_or(&empty) {
+        if let Variant::String(s) = wmi_row.get("OSArchitecture").unwrap_or(&empty) {
             self.si_os_arch = s.clone();
         }
 
-        if let Variant::String(s) = wmi_res.get("TotalVisibleMemorySize").unwrap_or(&empty) {
+        if let Variant::String(s) = wmi_row.get("TotalVisibleMemorySize").unwrap_or(&empty) {
             self.si_mem_tot = match s.parse::<usize>() {
                 Ok(num) => num,
                 Err(why) => return Err(
@@ -99,7 +105,7 @@ impl MSWInfo {
             };
         }
 
-        if let Variant::String(s) = wmi_res.get("FreePhysicalMemory").unwrap_or(&empty) {
+        if let Variant::String(s) = wmi_row.get("FreePhysicalMemory").unwrap_or(&empty) {
             self.si_mem_avail = match s.parse::<usize>() {
                 Ok(num) => num,
                 Err(why) => return Err(
@@ -108,6 +114,33 @@ impl MSWInfo {
                         &format!("{}::init_sys_info: failed to parse FreePhysicalMemory from  '{}'", MODULE,s) , 
                         Some(Box::new(why)))),
             };
+        }
+
+        let wmi_res = wmi_utils.wmi_query(wmi_utils::WMIQ_BootConfig)?;
+        info!("{}::init_sys_info: ****** QUERY: {}", MODULE, wmi_utils::WMIQ_BootConfig);
+        for wmi_row in wmi_res.iter() {
+            info!("{}::init_sys_info: *** ROW START", MODULE);
+            for (key,value) in wmi_row.iter() {
+                info!("{}::init_sys_info:   {} -> {:?}", MODULE, key, value);
+            }
+        }
+
+        let wmi_res = wmi_utils.wmi_query(wmi_utils::WMIQ_Disk)?;
+        info!("{}::init_sys_info: ****** QUERY: {}", MODULE, wmi_utils::WMIQ_Disk);
+        for wmi_row in wmi_res.iter() {
+            info!("{}::init_sys_info:   *** ROW START", MODULE);
+            for (key,value) in wmi_row.iter() {
+                info!("{}::init_sys_info:   {} -> {:?}", MODULE, key, value);
+            }
+        }
+
+        let wmi_res = wmi_utils.wmi_query(wmi_utils::WMIQ_Partition)?;
+        info!("{}::init_sys_info: ****** QUERY: {}", MODULE, wmi_utils::WMIQ_Partition);
+        for wmi_row in wmi_res.iter() {
+            info!("{}::init_sys_info:   *** ROW START", MODULE);
+            for (key,value) in wmi_row.iter() {
+                info!("{}::init_sys_info:   {} -> {:?}", MODULE, key, value);
+            }
         }
 
         Ok(())
