@@ -1,0 +1,211 @@
+   Compiling win_test v0.1.0 (C:\Users\IEUser\develop\rust\balena-migrate-win)
+warning: unused import: `crate::common::SysInfo`
+  --> src\mswin\powershell.rs:11:5
+   |
+11 | use crate::common::SysInfo;
+   |     ^^^^^^^^^^^^^^^^^^^^^^
+   |
+   = note: #[warn(unused_imports)] on by default
+
+warning: unused imports: `info`, `warn`
+ --> src\mswin\wmi_utils.rs:3:18
+  |
+3 | use log::{error, warn, info, trace};
+  |                  ^^^^  ^^^^
+
+warning: unused import: `warn`
+  --> src\mswin\mod.rs:10:17
+   |
+10 | use log::{info, warn, trace, error};
+   |                 ^^^^
+
+warning: unused import: `std::ffi::OsString`
+  --> src\mswin\mod.rs:15:5
+   |
+15 | use std::ffi::OsString;
+   |     ^^^^^^^^^^^^^^^^^^
+
+warning: unused import: `std::os::windows::prelude::*`
+  --> src\mswin\mod.rs:16:5
+   |
+16 | use std::os::windows::prelude::*;
+   |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+warning: unused variable: `ps_info`
+   --> src\mswin\mod.rs:312:13
+    |
+312 |     let mut ps_info = powershell::PSInfo::try_init()?;
+    |             ^^^^^^^ help: consider prefixing with an underscore: `_ps_info`
+    |
+    = note: #[warn(unused_variables)] on by default
+
+warning: variable does not need to be mutable
+   --> src\mswin\mod.rs:312:9
+    |
+312 |     let mut ps_info = powershell::PSInfo::try_init()?;
+    |         ----^^^^^^^
+    |         |
+    |         help: remove this `mut`
+    |
+    = note: #[warn(unused_mut)] on by default
+
+warning: constant item is never used: `POWERSHELL_SYSINFO_PARAMS`
+ --> src\mswin\powershell.rs:7:1
+  |
+7 | pub const POWERSHELL_SYSINFO_PARAMS: [&'static str; 3] = ["Systeminfo", "/FO", "CSV"];
+  | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  |
+  = note: #[warn(dead_code)] on by default
+
+warning: method is never used: `has_command`
+  --> src\mswin\powershell.rs:51:5
+   |
+51 |     pub fn has_command(&mut self, cmd: &str) -> bool {
+   |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+warning: constant item is never used: `MODULE`
+  --> src\mswin\win_api.rs:18:1
+   |
+18 | const MODULE:&str = "test_win_api";
+   | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+warning: enum is never used: `StorageDevice`
+  --> src\mswin\win_api.rs:21:1
+   |
+21 | enum StorageDevice {
+   | ^^^^^^^^^^^^^^^^^^
+
+warning: struct is never constructed: `PhysicalDriveInfo`
+  --> src\mswin\win_api.rs:29:1
+   |
+29 | pub struct PhysicalDriveInfo {
+   | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+warning: struct is never constructed: `HarddiskVolumeInfo`
+  --> src\mswin\win_api.rs:36:1
+   |
+36 | pub struct HarddiskVolumeInfo {
+   | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+warning: struct is never constructed: `HarddiskPartitionInfo`
+  --> src\mswin\win_api.rs:43:1
+   |
+43 | pub struct HarddiskPartitionInfo {
+   | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+warning: struct is never constructed: `VolumeInfo`
+  --> src\mswin\win_api.rs:51:1
+   |
+51 | pub struct VolumeInfo {
+   | ^^^^^^^^^^^^^^^^^^^^^
+
+warning: function is never used: `to_string`
+  --> src\mswin\win_api.rs:92:1
+   |
+92 | fn to_string(os_str_buf: &[u16]) -> Result<String,Box<std::error::Error>> {            
+   | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+warning: function is never used: `to_string_list`
+   --> src\mswin\win_api.rs:100:1
+    |
+100 | fn to_string_list(os_str_buf: &[u16]) -> Result<Vec<String>,Box<std::error::Error>> {            
+    | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+warning: function is never used: `clip`
+   --> src\mswin\win_api.rs:121:1
+    |
+121 | fn clip<'a>(clip_str: &'a str, clip_start: Option<&str>, clip_end: Option<&str>) -> &'a str {            
+    | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+warning: function is never used: `get_volumes`
+   --> src\mswin\win_api.rs:139:1
+    |
+139 | fn get_volumes() -> Result<Vec<String>,Box<std::error::Error>> {
+    | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+warning: function is never used: `query_dos_device`
+   --> src\mswin\win_api.rs:166:1
+    |
+166 | fn query_dos_device(dev_name: Option<&str>) -> Result<Vec<String>,Box<std::error::Error>> {
+    | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+warning: function is never used: `enumerate_volumes`
+   --> src\mswin\win_api.rs:189:1
+    |
+189 | pub fn enumerate_volumes() -> Result<i32, Box<std::error::Error>> {    
+    | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+warning: function is never used: `enumerate_drives`
+   --> src\mswin\win_api.rs:218:1
+    |
+218 | pub fn enumerate_drives() -> Result<(),Box<std::error::Error>> {    
+    | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+warning: constant item is never used: `WMIQ_CSProd`
+  --> src\mswin\wmi_utils.rs:13:1
+   |
+13 | pub const WMIQ_CSProd: &str = "SELECT * FROM Win32_ComputerSystemProduct";
+   | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+warning: constant item is never used: `SYSINFO_CMD`
+  --> src\mswin\mod.rs:23:1
+   |
+23 | const SYSINFO_CMD: &str = "systeminfo";
+   | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+warning: constant item is never used: `SYSINFO_ARGS`
+  --> src\mswin\mod.rs:24:1
+   |
+24 | const SYSINFO_ARGS: [&str;2] = ["/FO","CSV"];
+   | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+warning: field is never used: `ps_info`
+  --> src\mswin\mod.rs:27:5
+   |
+27 |     ps_info: Option<PSInfo>,
+   |     ^^^^^^^^^^^^^^^^^^^^^^^
+
+warning: method is never used: `init_sys_info_1`
+   --> src\mswin\mod.rs:149:5
+    |
+149 |     fn init_sys_info_1(&mut self) -> Result<(), MigError> {
+    |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+warning: function is never used: `get_str_value`
+   --> src\mswin\mod.rs:317:1
+    |
+317 | fn get_str_value(val: Option<&&str>) -> Result<String, MigError> {
+    | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+warning: function is never used: `parse_mem_value`
+   --> src\mswin\mod.rs:330:1
+    |
+330 | fn parse_mem_value(val: Option<&&str>) -> Result<usize, MigError> {
+    | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+warning: constant `WMIQ_CSProd` should have an upper case name
+  --> src\mswin\wmi_utils.rs:13:11
+   |
+13 | pub const WMIQ_CSProd: &str = "SELECT * FROM Win32_ComputerSystemProduct";
+   |           ^^^^^^^^^^^ help: convert the identifier to upper case: `WMIQ_CSPROD`
+   |
+   = note: #[warn(non_upper_case_globals)] on by default
+
+warning: constant `WMIQ_BootConfig` should have an upper case name
+  --> src\mswin\wmi_utils.rs:14:11
+   |
+14 | pub const WMIQ_BootConfig: &str = "SELECT * FROM Win32_SystemBootConfiguration";
+   |           ^^^^^^^^^^^^^^^ help: convert the identifier to upper case: `WMIQ_BOOT_CONFIG`
+
+warning: constant `WMIQ_Disk` should have an upper case name
+  --> src\mswin\wmi_utils.rs:16:11
+   |
+16 | pub const WMIQ_Disk: &str = "SELECT Caption,Partitions,Status,DeviceID,Size,BytesPerSector,MediaType,InterfaceType FROM Win32_DiskDrive";
+   |           ^^^^^^^^^ help: convert the identifier to upper case: `WMIQ_DISK`
+
+warning: constant `WMIQ_Partition` should have an upper case name
+  --> src\mswin\wmi_utils.rs:17:11
+   |
+17 | pub const WMIQ_Partition: &str = "SELECT * FROM Win32_DiskPartition";
+   |           ^^^^^^^^^^^^^^ help: convert the identifier to upper case: `WMIQ_PARTITION`
+
