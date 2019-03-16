@@ -8,14 +8,10 @@ use crate::mig_error::{MigError,MigErrorKind,MigErrCtx};
 
 use crate::common::{SysInfo,OSRelease};
 
-use std::process::{Command};
-use log::{info, warn, trace, error};
-use csv;
+use log::{info, trace, error};
+
 use lazy_static::lazy_static;
 use regex::Regex;
-
-use std::ffi::OsString;
-use std::os::windows::prelude::*;
 
 use powershell::PSInfo;
 use wmi_utils::{WmiUtils,Variant};
@@ -64,10 +60,7 @@ impl MSWInfo {
         let wmi_res = wmi_utils.wmi_query(wmi_utils::WMIQ_OS)?;
         let wmi_row = match wmi_res.get(0) {
             Some(r) => r,
-            None => return Err(MigError::from_code(
-                MigErrorCode::ErrNotFound, 
-                &format!("{}::init_sys_info: no rows in result from wmi query: '{}'", MODULE,wmi_utils::WMIQ_OS), 
-                None))
+            None => return Err(MigError::from_remark(MigErrorKind::NotFound,&format!("{}::init_sys_info: no rows in result from wmi query: '{}'", MODULE,wmi_utils::WMIQ_OS)))
         };
         
         if VERBOSE {
@@ -106,25 +99,15 @@ impl MSWInfo {
         }
 
         if let Variant::String(s) = wmi_row.get("TotalVisibleMemorySize").unwrap_or(&empty) {
-            self.si_mem_tot = match s.parse::<usize>() {
-                Ok(num) => num,
-                Err(why) => return Err(
-                    MigError::from_code(
-                        MigErrorCode::ErrInvParam, 
-                        &format!("{}::init_sys_info: failed to parse TotalVisibleMemorySize from  '{}'", MODULE,s) , 
-                        Some(Box::new(why)))),
-            };
+            self.si_mem_tot = s.parse::<usize>().context(
+                MigErrCtx::from_remark(MigErrorKind::InvParam, 
+                &format!("{}::init_sys_info: failed to parse TotalVisibleMemorySize from  '{}'", MODULE,s)))?;
         }
 
         if let Variant::String(s) = wmi_row.get("FreePhysicalMemory").unwrap_or(&empty) {
-            self.si_mem_avail = match s.parse::<usize>() {
-                Ok(num) => num,
-                Err(why) => return Err(
-                    MigError::from_code(
-                        MigErrorCode::ErrInvParam, 
-                        &format!("{}::init_sys_info: failed to parse FreePhysicalMemory from  '{}'", MODULE,s) , 
-                        Some(Box::new(why)))),
-            };
+            self.si_mem_avail = s.parse::<usize>().context(
+                MigErrCtx::from_remark(MigErrorKind::InvParam, 
+                &format!("{}::init_sys_info: failed to parse FreePhysicalMemory from  '{}'", MODULE,s)))?;
         }
 
         let wmi_res = wmi_utils.wmi_query(wmi_utils::WMIQ_BootConfig)?;
@@ -190,28 +173,20 @@ fn parse_os_release(os_release: &str) -> Result<OSRelease,MigError> {
 
     let captures = match RE_OS_VER.captures(os_release) {
         Some(c) => c,
-        None => return Err(MigError::from_code(
-            MigErrorCode::ErrInvParam,
-            &format!("{}::init_sys_info: parse regex failed to parse release string: '{}'",MODULE, os_release),
-            None)),
+        None => return Err(MigError::from_remark(
+            MigErrorKind::InvParam,
+            &format!("{}::init_sys_info: parse regex failed to parse release string: '{}'",MODULE, os_release))),
     };
 
     let parse_capture = |i: usize| -> Result<u32,MigError> {
         match captures.get(i) {
-            Some(s) => {
-                match s.as_str().parse::<u32>() {
-                    Ok(n) => Ok(n),
-                    Err(_why) => 
-                        return Err(MigError::from_code(
-                                MigErrorCode::ErrInvParam,
-                                &format!("{}::init_sys_info: failed to parse {} part {} to u32", MODULE, os_release, i),
-                                None)),
-                }
-            },
-            None => return Err(MigError::from_code(
-                                MigErrorCode::ErrInvParam,
-                                &format!("{}::init_sys_info: failed to get release part {} from: '{}'",MODULE, i, os_release),
-                                None)),
+            Some(s) => 
+                Ok(s.as_str().parse::<u32>().context(MigErrCtx::from_remark(
+                    MigErrorKind::InvParam, 
+                    &format!("{}::init_sys_info: failed to parse {} part {} to u32", MODULE, os_release, i)))?),            
+            None => return Err(MigError::from_remark(
+                                MigErrorKind::InvParam,
+                                &format!("{}::init_sys_info: failed to get release part {} from: '{}'",MODULE, i, os_release))),
         }
     };
 
@@ -222,10 +197,9 @@ fn parse_os_release(os_release: &str) -> Result<OSRelease,MigError> {
             }
         }
     } 
-    Err(MigError::from_code(
-                MigErrorCode::ErrInvParam,
-                &format!("{}::init_sys_info: failed to parse release string: '{}'",MODULE, os_release),
-                None))
+    Err(MigError::from_remark(
+                MigErrorKind::InvParam,
+                &format!("{}::init_sys_info: failed to parse release string: '{}'",MODULE, os_release)))
 }
 
 pub fn available() -> bool {

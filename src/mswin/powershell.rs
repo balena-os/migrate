@@ -7,8 +7,8 @@ pub const POWERSHELL_GET_CMDLET_PARAMS: [&'static str; 3] =
 pub const POWERSHELL_SYSINFO_PARAMS: [&'static str; 3] = ["Systeminfo", "/FO", "CSV"];
 pub const POWERSHELL_VERSION_PARAMS: [&'static str; 1] = ["$PSVersionTable.PSVersion"];
 
-use crate::common::mig_error::{MigError, MigErrorCode};
-use crate::common::SysInfo;
+use failure::{Fail,ResultExt};
+use crate::mig_error::{MigError, MigErrorKind, MigErrCtx};
 
 use lazy_static::lazy_static;
 use regex::Regex;
@@ -89,7 +89,7 @@ impl PSInfo {
                 self.ps_ver = Some((1, 0));
                 return Ok(self.ps_ver.unwrap())
             }        
-            _ => return Err(MigError::from_code(MigErrorCode::ErrInvParam, &format!("{}::available(): unexpected number of ouput lines in powershell version output: {}", MODULE, output.stdout),None))
+            _ => return Err(MigError::from_remark(MigErrorKind::InvParam, &format!("{}::available(): unexpected number of ouput lines in powershell version output: {}", MODULE, output.stdout)))
         }
 
         let headers: Vec<&str> = lines[0].split_whitespace().collect();
@@ -134,14 +134,12 @@ impl PSInfo {
         for header in match lines.next() {
             Some(s) => s.1.split_whitespace().enumerate(),
             None => {
-                return Err(MigError::from_code(
-                    MigErrorCode::ErrInvParam,
+                return Err(MigError::from_remark(
+                    MigErrorKind::InvParam,
                     &format!(
                         "{}::get_cmdlets: 0 output lines received from: powershell Get-Commands",
                         MODULE
-                    ),
-                    None,
-                ));
+                    )));
             }
         } {
             if header.1 == "Name" {
@@ -152,7 +150,7 @@ impl PSInfo {
 
         let name_idx = match name_idx {
             Some(n) => n,
-            None => return Err(MigError::from_code(MigErrorCode::ErrInvParam, &format!("{}::get_cmdlets: name header not found in output from: powershell Get-Commands",MODULE), None)),
+            None => return Err(MigError::from_remark(MigErrorKind::InvParam, &format!("{}::get_cmdlets: name header not found in output from: powershell Get-Commands",MODULE))),
         };
 
         // potentitally skip line with ----
@@ -170,7 +168,9 @@ impl PSInfo {
                                 }
                             }
                         },
-                        None => return Err(MigError::from_code(MigErrorCode::ErrInvParam, &format!("{}::get_cmdlets: name value not found in output from: powershell Get-Commands",MODULE), None)),
+                        None => return Err(MigError::from_remark(
+                            MigErrorKind::InvParam, 
+                            &format!("{}::get_cmdlets: name value not found in output from: powershell Get-Commands",MODULE))),
                     }
             }
             None => return Ok(0),
@@ -186,7 +186,7 @@ impl PSInfo {
                     } else {
                         warn!("{}::get_cmdlets(): duplicate cmdlet '{}'", MODULE, *v);
                     },                    
-                None => return Err(MigError::from_code(MigErrorCode::ErrInvParam, &format!("{}::get_cmdlets: name value not found in output from: powershell Get-Commands",MODULE), None)),
+                None => return Err(MigError::from_remark(MigErrorKind::InvParam, &format!("{}::get_cmdlets: name value not found in output from: powershell Get-Commands",MODULE))),
             };
         }
         Ok(cmds)
@@ -195,37 +195,30 @@ impl PSInfo {
 
 fn call_to_string(args: &[&str], trim_stdout: bool) -> Result<PWRes, MigError> {
     trace!("{}::call_to_string(): called with {:?}, {}", MODULE, args, trim_stdout);
-    let output = match Command::new(POWERSHELL)
+    let output = Command::new(POWERSHELL)
         .args(args)
         .stdout(Stdio::piped())
         .stderr(Stdio::piped())
-        .output()
-    {
-        Ok(o) => o,
-        Err(why) => return Err(MigError::from_code(
-                    MigErrorCode::ErrExecProcess,
+        .output().context(MigErrCtx::from_remark(MigErrorKind::Upstream,
                     &format!(
                         "{}::call_to_string: failed to execute: powershell command '{:?}'",
                         MODULE,args
-                    ),
-                    Some(Box::new(why)),
-                ))
-        };
+                    )))?;
 
     if !output.status.success() {                
-        return Err(MigError::from_code(MigErrorCode::ErrExecProcess, &format!("{}::init_sys_info: command failed with exit code {}", MODULE, output.status.code().unwrap_or(0)), None));
+        return Err(MigError::from_remark(
+            MigErrorKind::ExecProcess, 
+            &format!("{}::init_sys_info: command failed with exit code {}", MODULE, output.status.code().unwrap_or(0))));
     }
 
     // TODO: use os str instead
-    let stdout_str = match String::from_utf8(output.stdout) {
-        Ok(s) => s,
-        Err(why) => return Err(MigError::from_code(MigErrorCode::ErrInvParam,&format!("{}::call_to_string: invalid utf8 in stdout", MODULE),Some(Box::new(why)))),
-    };
+    let stdout_str = String::from_utf8(output.stdout).context(
+        MigErrCtx::from_remark(MigErrorKind::InvParam,&format!("{}::call_to_string: invalid utf8 in stdout", MODULE)))?;
 
-    let stderr_str = match String::from_utf8(output.stderr) {
-        Ok(s) => s,
-        Err(why) => return Err(MigError::from_code(MigErrorCode::ErrInvParam,&format!("{}::call_to_string: invalid utf8 in stderr", MODULE),Some(Box::new(why)))),
-    };
+    let stderr_str = String::from_utf8(output.stderr).context(
+        MigErrCtx::from_remark(
+            MigErrorKind::InvParam,
+            &format!("{}::call_to_string: invalid utf8 in stderr", MODULE)))?;
 
     Ok(PWRes {
         stdout: match trim_stdout {

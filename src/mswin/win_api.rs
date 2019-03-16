@@ -11,9 +11,12 @@ use regex::Regex;
 use std::rc::Rc;
 
 use std::collections::hash_map::HashMap;
+use failure::{Fail,ResultExt, Context};
 
 use winapi::um::handleapi::{INVALID_HANDLE_VALUE};
 use winapi::um::fileapi::{FindFirstVolumeW, FindNextVolumeW, FindVolumeClose, QueryDosDeviceW};        
+
+use crate::mig_error::{MigError, MigErrorKind, MigErrCtx};
 
 const MODULE:&str = "test_win_api";
 
@@ -89,27 +92,23 @@ fn to_os_string(os_str_buf: &[u16]) -> Result<OsString,Box<std::error::Error>> {
 */
 
 
-fn to_string(os_str_buf: &[u16]) -> Result<String,Box<std::error::Error>> {            
+fn to_string(os_str_buf: &[u16]) -> Result<String,MigError> {            
     match os_str_buf.iter().position(|&x| x == 0 ) {        
         Some(i) => Ok(String::from_utf16_lossy(&os_str_buf[0..i])),
-        None => return Err(Box::new(Error::from(ErrorKind::InvalidInput)))
+        None => return Err(MigError::from(MigErrorKind::InvParam)),
     }
 }
 
 
-fn to_string_list(os_str_buf: &[u16]) -> Result<Vec<String>,Box<std::error::Error>> {            
+fn to_string_list(os_str_buf: &[u16]) -> Result<Vec<String>,MigError> {            
     let mut str_list: Vec<String> = Vec::new();
     let mut start: usize = 0;
     for curr in os_str_buf.iter().enumerate() {
         if *curr.1 == 0 {
             if  start < curr.0 {
-                match to_string(&os_str_buf[start .. curr.0 + 1]) {
-                    Ok(s) =>  { 
-                        str_list.push(s);
-                        start = curr.0 + 1;
-                    },
-                    Err(why) => return Err(why),
-                }                
+                let s = to_string(&os_str_buf[start .. curr.0 + 1]).context(MigErrCtx::from(MigErrorKind::InvParam))?;
+                str_list.push(s);
+                start = curr.0 + 1;
             } else {
                 break;
             }            
@@ -136,7 +135,7 @@ fn clip<'a>(clip_str: &'a str, clip_start: Option<&str>, clip_end: Option<&str>)
     work_str
 }
 
-fn get_volumes() -> Result<Vec<String>,Box<std::error::Error>> {
+fn get_volumes() -> Result<Vec<String>,MigError> {
     trace!("{}::get_volumes: entered", MODULE);
     const BUFFER_SIZE: usize = 2048;
     let mut buffer: [u16;BUFFER_SIZE] = [0; BUFFER_SIZE];
@@ -146,8 +145,8 @@ fn get_volumes() -> Result<Vec<String>,Box<std::error::Error>> {
         FindFirstVolumeW(buffer.as_mut_ptr(), BUFFER_SIZE as u32)
     };
     
-    if h_search == INVALID_HANDLE_VALUE {        
-        return Err(Box::new(Error::last_os_error()));
+    if h_search == INVALID_HANDLE_VALUE {    
+        return Err(MigError::from(Error::last_os_error().context(MigErrCtx::from(MigErrorKind::WinApi))));
     }
 
     vol_list.push(to_string(&buffer)?);
@@ -163,7 +162,7 @@ fn get_volumes() -> Result<Vec<String>,Box<std::error::Error>> {
 }
 
 
-fn query_dos_device(dev_name: Option<&str>) -> Result<Vec<String>,Box<std::error::Error>> {
+fn query_dos_device(dev_name: Option<&str>) -> Result<Vec<String>,MigError> {
     trace!("{}::query_dos_device: entered with {:?}" , MODULE, dev_name);    
     const BUFFER_SIZE: usize = 131072;
     let mut buffer: [u16;BUFFER_SIZE] = [0; BUFFER_SIZE];
@@ -181,12 +180,12 @@ fn query_dos_device(dev_name: Option<&str>) -> Result<Vec<String>,Box<std::error
         Ok(to_string_list(&buffer)?)
     } else {
        let os_err = Error::last_os_error();
-       warn!("{}::query_dos_device: returned {}, last os error: {:?} ", MODULE, num_tchar, os_err);
-       return Err(Box::new(os_err));        
+       warn!("{}::query_dos_device: returned {}, last os error: {:?} ", MODULE, num_tchar, os_err);       
+       return Err(MigError::from(os_err.context(MigErrCtx::from(MigErrorKind::WinApi))));
     }
 }
 
-pub fn enumerate_volumes() -> Result<i32, Box<std::error::Error>> {    
+pub fn enumerate_volumes() -> Result<i32, MigError> {    
     
     // use winapi::um::winbase::{FindFirstVolumeA, FindNextVolumeA};
     
@@ -215,7 +214,7 @@ pub fn enumerate_volumes() -> Result<i32, Box<std::error::Error>> {
     Ok(0)
 }
 
-pub fn enumerate_drives() -> Result<(),Box<std::error::Error>> {    
+pub fn enumerate_drives() -> Result<(),MigError> {    
     trace!("{}::enumerate_drives: entered" , MODULE);
 
     lazy_static! {
@@ -239,7 +238,9 @@ pub fn enumerate_drives() -> Result<(),Box<std::error::Error>> {
                     if let Some(c) = RE_HDV.captures(&device) {                        
                         let ms_device_name = match query_dos_device(Some(&device))?.get(0) {
                             Some(s) => s.clone(),
-                            None => return Err(Box::new(Error::from(ErrorKind::NotFound))),
+                            None => return Err(MigError::from_remark(
+                                MigErrorKind::NotFound,
+                                &format!("query_dos_device for {} returned no result", &device))),
                         };
                         storage_device = Some(
                             StorageDevice::HarddiskVolume(
@@ -255,7 +256,9 @@ pub fn enumerate_drives() -> Result<(),Box<std::error::Error>> {
                     if let Some(c) = RE_PD.captures(&device) {                    
                         let ms_device_name = match query_dos_device(Some(&device))?.get(0) {
                             Some(s) => s.clone(),
-                            None => return Err(Box::new(Error::from(ErrorKind::NotFound))),
+                            None => return Err(MigError::from_remark(
+                                MigErrorKind::NotFound,
+                                &format!("query_dos_device for {} returned no result", &device))),
                         };
                         storage_device = Some(
                             StorageDevice::PhysicalDrive(
@@ -271,7 +274,9 @@ pub fn enumerate_drives() -> Result<(),Box<std::error::Error>> {
                     if let Some(c) = RE_VOL.captures(&device) {                    
                         let ms_device_name = match query_dos_device(Some(&device))?.get(0) {
                             Some(s) => s.clone(),
-                            None => return Err(Box::new(Error::from(ErrorKind::NotFound))),
+                            None => return Err(MigError::from_remark(
+                                MigErrorKind::NotFound,
+                                &format!("query_dos_device for {} returned no result", &device))),
                         };
                         storage_device = Some(
                             StorageDevice::Volume(
@@ -287,7 +292,9 @@ pub fn enumerate_drives() -> Result<(),Box<std::error::Error>> {
                     if let Some(c) = RE_HDPART.captures(&device) {                    
                         let ms_device_name = match query_dos_device(Some(&device))?.get(0) {
                             Some(s) => s.clone(),
-                            None => return Err(Box::new(Error::from(ErrorKind::NotFound))),
+                            None => return Err(MigError::from_remark(
+                                MigErrorKind::NotFound,
+                                &format!("query_dos_device for {} returned no result", &device))),
                         };
                         storage_device = Some(
                             StorageDevice::HarddiskPartition(
@@ -308,7 +315,9 @@ pub fn enumerate_drives() -> Result<(),Box<std::error::Error>> {
                     info!("{}::enumerate_drives: adding device: {:?}", MODULE, s);                                        
                     let rc_dev = Rc::new(s);
                     match dev_map.insert(device.clone(),rc_dev.clone()) {
-                        Some(_d) => return Err(Box::new(Error::from(ErrorKind::AlreadyExists))),
+                        Some(_d) => return Err(MigError::from_remark(
+                                MigErrorKind::Duplicate,
+                                &format!("device exists {}", &device))),
                         None => (),
                     };                    
 

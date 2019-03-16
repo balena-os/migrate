@@ -1,13 +1,15 @@
 
-use failure::{Error,Fail,Backtrace,ResultExt,Context};
-use std::fmt::{self,Debug,Display,Formatter};
+use failure::{Fail,Backtrace,Context};
+use std::fmt::{self,Display};
 
 #[derive(Copy, Clone, Eq, PartialEq, Debug, Fail)]
 pub enum MigErrorKind {
+    #[fail(display = "A required item could not be found")]
+    NotFound,
+    #[fail(display = "An duplicate item was encountered where it should be unique")]    
+    Duplicate,    
     #[fail(display = "An error occured in an upstream function")]
     Upstream,
-    #[fail(display = "An item could not be found")]
-    FileRead,    
     #[fail(display = "An unknown error occurred")]
     Unknown,
     #[fail(display = "The OS type is not supported")]
@@ -20,10 +22,12 @@ pub enum MigErrorKind {
     InvParam,
     #[fail(display = "A required program could not be found")]
     PgmNotFound,
-    #[fail(display = "A required item could not be found")]
-    NotFound,
     #[fail(display = "A required feature is not available")]
     FeatureMissing,
+    #[fail(display = "A spawned process returned an error code")]    
+    ExecProcess,    
+    #[fail(display = "An error occurred calling a WINAPI")]    
+    WinApi,    
     #[fail(display = "Initialization of WMI")]    
     WmiInit,    
     #[fail(display = "A WMI query failed")]    
@@ -92,6 +96,12 @@ impl MigError {
         MigError { inner: Context::new(MigErrCtx::from_remark(kind, remark)) } 
     }
 
+}
+
+impl From<MigErrorKind> for MigError {
+    fn from(kind: MigErrorKind) -> MigError {
+        MigError { inner: Context::new(MigErrCtx::from(kind)) }
+    }
 }
 
 impl From<MigErrCtx> for MigError {

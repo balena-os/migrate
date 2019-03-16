@@ -1,5 +1,5 @@
-pub mod mig_error;
-use mig_error::MigError;
+//pub mod mig_error;
+use crate::mig_error::MigError;
 
 pub type OSRelease = (u32,u32,u32);
 
