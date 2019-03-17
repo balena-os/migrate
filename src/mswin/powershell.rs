@@ -16,17 +16,8 @@ use log::{trace, warn};
 use std::collections::HashSet;
 use std::process::{Command, Stdio};
 
-struct PWRes {
-    stdout: String,
-    stderr: String,
-}
-
-pub struct PSInfo {    
-    ps_ver: Option<(u32, u32)>,
-    ps_cmdlets: HashSet<String>,
-}
-
-
+// Find out if called as admin
+// [bool](([System.Security.Principal.WindowsIdentity]::GetCurrent()).groups -match "S-1-5-32-544")
 
 impl PSInfo {
     pub fn try_init() -> Result<PSInfo, MigError> {
@@ -35,12 +26,12 @@ impl PSInfo {
             ps_cmdlets: HashSet::new(),
         };
 
-        match ps_info.get_cmdlets() {
+        match ps_info.get_ps_ver() {
             Ok(_v) => (),
             Err(why) => return Err(why),
         };
 
-        match ps_info.get_ps_ver() {
+        match ps_info.get_cmdlets() {
             Ok(_v) => (),
             Err(why) => return Err(why),
         };

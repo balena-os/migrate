@@ -2,19 +2,19 @@ mod powershell;
 mod win_api;
 mod wmi_utils;
 
-
-use failure::{Fail,ResultExt};
-use crate::mig_error::{MigError,MigErrorKind,MigErrCtx};
-
-use crate::common::{SysInfo,OSRelease};
-
 use log::{info, trace, error};
 
 use lazy_static::lazy_static;
 use regex::Regex;
 
-use powershell::PSInfo;
+use failure::{Fail,ResultExt};
 use wmi_utils::{WmiUtils,Variant};
+
+use crate::mig_error::{MigError,MigErrorKind,MigErrCtx};
+
+use crate::common::{SysInfo,OSRelease};
+
+use powershell::{PSInfo, try_init};
 
 #[cfg(debug_assertions)]
 const VERBOSE: bool = true;
@@ -46,11 +46,9 @@ impl MSWInfo {
             si_mem_avail: 0,
             si_boot_dev: String::new(),
         };
-
-        match msw_info.init_sys_info() {
-            Ok(_v) => (),
-            Err(why) => return Err(why),
-        };
+        
+        msw_info.ps_info = try_init()?;
+        msw_info.init_sys_info()?;
 
         Ok(msw_info)
     }
