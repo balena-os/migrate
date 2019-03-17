@@ -2,8 +2,8 @@ const MODULE: &str = "win_test::mswin::powershell";
 
 const POWERSHELL: &str = "powershell.exe";
 
-pub const POWERSHELL_GET_CMDLET_PARAMS: [&'static str; 3] =
-    ["Get-Command", "-CommandType", "Cmdlet"];
+pub const POWERSHELL_GET_CMDLET_PARAMS: [&'static str; 7] =
+    ["Get-Command", "-CommandType", "Cmdlet", "|" , "out-string", "-width", "1024"];
 pub const POWERSHELL_SYSINFO_PARAMS: [&'static str; 3] = ["Systeminfo", "/FO", "CSV"];
 pub const POWERSHELL_VERSION_PARAMS: [&'static str; 1] = ["$PSVersionTable.PSVersion"];
 
@@ -16,8 +16,21 @@ use log::{trace, warn};
 use std::collections::HashSet;
 use std::process::{Command, Stdio};
 
+
+pub type PSVER = (u32,u32);
+
 // Find out if called as admin
 // [bool](([System.Security.Principal.WindowsIdentity]::GetCurrent()).groups -match "S-1-5-32-544")
+
+struct PSRes {
+    stdout: String,
+    stderr: String,
+} 
+
+pub(crate) struct PSInfo {
+    ps_ver: Option<PSVER>,
+    ps_cmdlets: HashSet<String>,
+}
 
 impl PSInfo {
     pub fn try_init() -> Result<PSInfo, MigError> {
@@ -184,7 +197,7 @@ impl PSInfo {
     }
 }
 
-fn call_to_string(args: &[&str], trim_stdout: bool) -> Result<PWRes, MigError> {
+fn call_to_string(args: &[&str], trim_stdout: bool) -> Result<PSRes, MigError> {
     trace!("{}::call_to_string(): called with {:?}, {}", MODULE, args, trim_stdout);
     let output = Command::new(POWERSHELL)
         .args(args)
@@ -211,7 +224,7 @@ fn call_to_string(args: &[&str], trim_stdout: bool) -> Result<PWRes, MigError> {
             MigErrorKind::InvParam,
             &format!("{}::call_to_string: invalid utf8 in stderr", MODULE)))?;
 
-    Ok(PWRes {
+    Ok(PSRes {
         stdout: match trim_stdout {
             true => String::from(stdout_str.trim()),
             false => stdout_str,

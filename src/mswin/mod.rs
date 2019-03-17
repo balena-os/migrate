@@ -14,7 +14,7 @@ use crate::mig_error::{MigError,MigErrorKind,MigErrCtx};
 
 use crate::common::{SysInfo,OSRelease};
 
-use powershell::{PSInfo, try_init};
+use powershell::{PSInfo};
 
 #[cfg(debug_assertions)]
 const VERBOSE: bool = true;
@@ -26,7 +26,7 @@ const VERBOSE: bool = true;
 const MODULE: &str = "mswin";
 
 pub struct MSWInfo {
-    ps_info: Option<PSInfo>,
+    ps_info: PSInfo,
     si_os_name: String,
     si_os_release: Option<OSRelease>,
     si_os_arch: String,
@@ -38,7 +38,7 @@ pub struct MSWInfo {
 impl MSWInfo {
     pub fn try_init() -> Result<MSWInfo, MigError> {
         let mut msw_info = MSWInfo {
-            ps_info: None,
+            ps_info: PSInfo::try_init()?,
             si_os_name: String::new(),
             si_os_release: None,
             si_os_arch: String::new(),
@@ -46,8 +46,7 @@ impl MSWInfo {
             si_mem_avail: 0,
             si_boot_dev: String::new(),
         };
-        
-        msw_info.ps_info = try_init()?;
+                
         msw_info.init_sys_info()?;
 
         Ok(msw_info)
