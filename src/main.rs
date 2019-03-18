@@ -1,5 +1,3 @@
-use win_test::mswin;
-use win_test::common::{SysInfo};
 
 extern crate lazy_static;
 extern crate regex;
@@ -10,6 +8,49 @@ extern crate clap;
 extern crate stderrlog;
 
 use clap::{App, Arg};
+
+use win_test::mswin;
+use win_test::{SysInfo};
+//use win_test::mig_error::{MigError};
+
+
+
+fn print_sysinfo(s_info: &mut SysInfo) -> () {
+    match s_info.is_admin() {
+        Ok(v)    => println!("Is Admin:         {}",v),
+        Err(why) => println!("Is Admin:         failed: {}",why), 
+    };
+
+    match s_info.is_secure_boot() {
+        Ok(v)    => println!("Is Secure Boot:   {}",v),
+        Err(why) => println!("Is Secure Boot:   failed: {}",why), 
+    }; 
+
+    match s_info.get_os_name() {
+        Ok(v)    => println!("OS Name:          {}",v),
+        Err(why) => println!("OS Name:          failed: {}",why), 
+    }; 
+
+    match s_info.get_os_release() {
+        Ok(v)    => println!("OS Release:       {}",v),
+        Err(why) => println!("OS Release:       failed: {}",why), 
+    }; 
+
+    match s_info.get_boot_dev() {
+        Ok(v)    => println!("Boot Device:      {:?}",v),
+        Err(why) => println!("Boot Device:      failed: {}",why), 
+    }; 
+
+    match s_info.get_mem_tot() {
+        Ok(v)    => println!("PhysicalMemory:   {:?}",v),
+        Err(why) => println!("PhysicalMemory:   failed: {}",why), 
+    }; 
+
+    match s_info.get_mem_avail() {
+        Ok(v)    => println!("Available Memory: {:?}",v),
+        Err(why) => println!("Available Memory: failed: {}",why), 
+    }; 
+}
 
 fn main() {
     trace!("balena-migrate-win started");
@@ -39,16 +80,6 @@ fn main() {
         .init()
         .unwrap();
 
-    let msw_info = mswin::MSWInfo::try_init().unwrap();
-    println!("OS Name:     {}",msw_info.get_os_name());
-
-    if let Some(os) = msw_info.get_os_release() {        
-        println!("OS Release:  {}.{}.{}",os.0,os.1,os.2);
-    } else {
-        println!("OS Release:  N/A");
-    }
-
-    println!("Boot Device: {}",msw_info.get_boot_dev());
-    println!("Total Mem.:  {}",msw_info.get_mem_tot());
-    println!("Avail. Mem.: {}",msw_info.get_mem_avail());
+    let mut s_info = mswin::MSWInfo::try_init().unwrap();
+    print_sysinfo(&mut s_info)
 }

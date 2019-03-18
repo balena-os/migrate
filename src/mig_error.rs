@@ -32,6 +32,10 @@ pub enum MigErrorKind {
     WmiInit,    
     #[fail(display = "A WMI query failed")]    
     WmiQueryFailed,    
+    #[fail(display = "A Powershell command failed")]    
+    PSFailed,    
+    #[fail(display = "You are not authorized to execute this command")]    
+    AuthError,    
 }
 
 pub struct MigErrCtx {

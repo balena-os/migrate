@@ -7,12 +7,12 @@ use log::{info, trace, error};
 use lazy_static::lazy_static;
 use regex::Regex;
 
-use failure::{Fail,ResultExt};
+use failure::{ResultExt};
 use wmi_utils::{WmiUtils,Variant};
 
 use crate::mig_error::{MigError,MigErrorKind,MigErrCtx};
 
-use crate::common::{SysInfo,OSRelease};
+use crate::{SysInfo,OSRelease};
 
 use powershell::{PSInfo};
 
@@ -25,34 +25,30 @@ const VERBOSE: bool = true;
 
 const MODULE: &str = "mswin";
 
+pub struct MWIOSInfo {
+    os_name: String,
+    os_release: OSRelease,
+    os_arch: String,
+    mem_tot: usize,
+    mem_avail: usize,
+    boot_dev: String,
+}
+
 pub struct MSWInfo {
     ps_info: PSInfo,
-    si_os_name: String,
-    si_os_release: Option<OSRelease>,
-    si_os_arch: String,
-    si_mem_tot: usize,
-    si_mem_avail: usize,
-    si_boot_dev: String,
+    os_info: Option<MWIOSInfo>,
 }
 
 impl MSWInfo {
     pub fn try_init() -> Result<MSWInfo, MigError> {
         let mut msw_info = MSWInfo {
             ps_info: PSInfo::try_init()?,
-            si_os_name: String::new(),
-            si_os_release: None,
-            si_os_arch: String::new(),
-            si_mem_tot: 0,
-            si_mem_avail: 0,
-            si_boot_dev: String::new(),
+            os_info: None,
         };
-                
-        msw_info.init_sys_info()?;
-
         Ok(msw_info)
     }
 
-    fn init_sys_info(&mut self) -> Result<(), MigError> {
+    fn init_os_info(&mut self) -> Result<MWIOSInfo, MigError> {
         let wmi_utils = WmiUtils::new().context(MigErrCtx::from_remark(MigErrorKind::Upstream,"Create WMI utils failed"))?;
         let wmi_res = wmi_utils.wmi_query(wmi_utils::WMIQ_OS)?;
         let wmi_row = match wmi_res.get(0) {
@@ -69,44 +65,66 @@ impl MSWInfo {
         }
 
         let empty = Variant::Empty;
-
-        if let Variant::String(s) = wmi_row.get("BootDevice").unwrap_or(&empty) {
-            self.si_boot_dev = s.clone();
-        }
-
-        if let Variant::String(s) = wmi_row.get("Caption").unwrap_or(&empty) {
-            self.si_os_name = s.clone();
-        }
-
+        
+        let boot_dev = match wmi_row.get("BootDevice").unwrap_or(&empty) {
+                Variant::String(s) => s.clone(),
+                _ => return Err(MigError::from_remark(
+                        MigErrorKind::InvParam, 
+                        &format!("{}::init_os_info: invalid result type for 'BootDevice'",MODULE)))
+        };
+        
+        let os_name = match wmi_row.get("Caption").unwrap_or(&empty) {
+            Variant::String(s) => s.clone(), 
+            _ => return Err(MigError::from_remark(
+                        MigErrorKind::InvParam, 
+                        &format!("{}::init_os_info: invalid result type for 'Caption'",MODULE)))
+        };
+        
         // parse si_os_release
-        if let Variant::String(os_release) = wmi_row.get("Version").unwrap_or(&empty) {
-            self.si_os_release = match parse_os_release(&os_release) {
-                Ok(r) => Some(r),
-                Err(why) => { 
-                    error!("{}::init_sys_info: failed to parse {:?}", MODULE, why);
-                    None
-                },
-            };
-        }
+        let os_release = match wmi_row.get("Version").unwrap_or(&empty) {
+            Variant::String(os_rls) => parse_os_release(&os_rls)?,
+            _ => return Err(MigError::from_remark(
+                        MigErrorKind::InvParam, 
+                        &format!("{}::init_os_info: invalid result type for 'Version'",MODULE))),
+        };
 
-        if let Variant::String(s) = wmi_row.get("OSArchitecture").unwrap_or(&empty) {
-            self.si_os_arch = match s {
-                _ => s.clone()
-            };
-        }
+        let os_arch = match wmi_row.get("OSArchitecture").unwrap_or(&empty) {
+            Variant::String(s) => s.clone(), 
+            _ => return Err(MigError::from_remark(
+                        MigErrorKind::InvParam, 
+                        &format!("{}::init_os_info: invalid result type for 'OSArchitecture'",MODULE))),
+        };
 
-        if let Variant::String(s) = wmi_row.get("TotalVisibleMemorySize").unwrap_or(&empty) {
-            self.si_mem_tot = s.parse::<usize>().context(
+        let mem_tot = match wmi_row.get("TotalVisibleMemorySize").unwrap_or(&empty) {
+            Variant::String(s) => s.parse::<usize>().context(
                 MigErrCtx::from_remark(MigErrorKind::InvParam, 
-                &format!("{}::init_sys_info: failed to parse TotalVisibleMemorySize from  '{}'", MODULE,s)))?;
-        }
+                &format!("{}::init_sys_info: failed to parse TotalVisibleMemorySize from  '{}'", MODULE,s)))?,
+            _ => return Err(MigError::from_remark(
+                        MigErrorKind::InvParam, 
+                        &format!("{}::init_os_info: invalid result type for 'TotalVisibleMemorySize'",MODULE))),            
+        };
 
-        if let Variant::String(s) = wmi_row.get("FreePhysicalMemory").unwrap_or(&empty) {
-            self.si_mem_avail = s.parse::<usize>().context(
+        let mem_avail = match wmi_row.get("FreePhysicalMemory").unwrap_or(&empty) {
+            Variant::String(s) => s.parse::<usize>().context(
                 MigErrCtx::from_remark(MigErrorKind::InvParam, 
-                &format!("{}::init_sys_info: failed to parse FreePhysicalMemory from  '{}'", MODULE,s)))?;
-        }
+                &format!("{}::init_sys_info: failed to parse 'FreePhysicalMemory' from  '{}'", MODULE,s)))?,
+            _ => return Err(MigError::from_remark(
+                        MigErrorKind::InvParam, 
+                        &format!("{}::init_os_info: invalid result type for 'FreePhysicalMemory'",MODULE))),            
+        };
 
+        Ok(MWIOSInfo{
+            os_name,
+            os_release,
+            os_arch,
+            mem_tot,
+            mem_avail,
+            boot_dev,
+        })
+    }
+
+
+/*
         let wmi_res = wmi_utils.wmi_query(wmi_utils::WMIQ_BootConfig)?;
 
         info!("{}::init_sys_info: ****** QUERY: {}", MODULE, wmi_utils::WMIQ_BootConfig);
@@ -135,31 +153,73 @@ impl MSWInfo {
             }
         }
 
+
         Ok(())
     }
+    */
 }
 
 
 impl SysInfo for MSWInfo {
-    fn get_os_name(&self) -> String {
-        self.si_os_name.clone()
+    fn get_os_name<'a>(&'a mut self) -> Result<&'a str,MigError> {
+        match self.os_info {
+            Some(ref info) => Ok(&info.os_name),
+            None => {
+                self.os_info = Some(self.init_os_info()?);
+                Ok(&self.os_info.as_ref().unwrap().os_name)              
+            },
+        }
     }
 
-    fn get_os_release(&self) -> Option<OSRelease> {
-        self.si_os_release
+    fn get_os_release<'a>(&'a mut self) -> Result<&'a OSRelease,MigError> {
+        match self.os_info {
+            Some(ref info) => Ok(&info.os_release),
+            None => {
+                self.os_info = Some(self.init_os_info()?);
+                Ok(&self.os_info.as_ref().unwrap().os_release)              
+            },
+        }
     }
 
-    fn get_mem_tot(&self) -> usize {
-        self.si_mem_tot
+    fn get_mem_tot(&mut self) -> Result<usize,MigError> {
+        match self.os_info {
+            Some(ref info) => Ok(info.mem_tot),
+            None => {
+                self.os_info = Some(self.init_os_info()?);
+                Ok(self.os_info.as_ref().unwrap().mem_tot)              
+            },
+        }
     }
 
-    fn get_mem_avail(&self) -> usize {
-        self.si_mem_avail
+    fn get_mem_avail(&mut self) -> Result<usize,MigError> {
+        match self.os_info {
+            Some(ref info) => Ok(info.mem_avail),
+            None => {
+                self.os_info = Some(self.init_os_info()?);
+                Ok(self.os_info.as_ref().unwrap().mem_avail)              
+            },
+        }
     }
 
-    fn get_boot_dev(&self) -> String {
-        self.si_boot_dev.clone()
+    fn get_boot_dev<'a>(&'a mut self) -> Result<&'a str,MigError> {
+        match self.os_info {
+            Some(ref info) => Ok(&info.boot_dev),
+            None => {
+                self.os_info = Some(self.init_os_info()?);
+                Ok(&self.os_info.as_ref().unwrap().boot_dev)              
+            },
+        }
     }
+
+    fn is_admin(&mut self) -> Result<bool,MigError> {
+        Ok(self.ps_info.is_admin()?)
+    }
+    
+    fn is_secure_boot(&mut self) -> Result<bool,MigError> {
+        // TODO: implement
+        Err(MigError::from(MigErrorKind::NotImpl))
+    }
+
 }
 
 
@@ -190,7 +250,7 @@ fn parse_os_release(os_release: &str) -> Result<OSRelease,MigError> {
     if let Ok(n0) = parse_capture(1) {
         if let Ok(n1) = parse_capture(2) {
             if let Ok(n2) = parse_capture(3) {
-                return Ok((n0,n1,n2));
+                return Ok(OSRelease(n0,n1,n2));
             }
         }
     } 
