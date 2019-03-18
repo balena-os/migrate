@@ -15,19 +15,14 @@ use powershell::{PSInfo};
 
 const MODULE: &str = "mswin";
 
-pub fn get_migrator() -> Result<Box<Migrator>,MigError> {
-    Ok(Box::new(MSWMigrator::try_init()?))
-    //Err(MigError::from(MigErrorKind::NotImpl))
-}
-
-struct MSWMigrator {
+pub(crate) struct MSWMigrator {
     ps_info: PSInfo,
     wmi_utils: WmiUtils,
     os_info: Option<WMIOSInfo>,
 }
 
 impl MSWMigrator {
-    fn try_init() -> Result<MSWMigrator, MigError> {
+    pub fn try_init() -> Result<MSWMigrator, MigError> {
         let msw_info = MSWMigrator {
             ps_info: PSInfo::try_init()?,
             wmi_utils: WmiUtils::new()?,

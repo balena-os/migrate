@@ -24,7 +24,7 @@ pub fn get_migrator() -> Result<Box<Migrator>,MigError> {
     //Err(MigError::from(MigErrorKind::NotImpl))
 }
 
-pub struct LinuxMigrator {
+pub(crate) struct LinuxMigrator {
     os_name: Option<String>,
     os_release: Option<OSRelease>,
 }
