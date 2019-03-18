@@ -15,7 +15,6 @@ use powershell::{PSInfo};
 
 const MODULE: &str = "mswin";
 
-
 pub fn get_migrator() -> Result<Box<Migrator>,MigError> {
     Ok(Box::new(MSWMigrator::try_init()?))
     //Err(MigError::from(MigErrorKind::NotImpl))

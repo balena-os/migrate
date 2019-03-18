@@ -16,8 +16,9 @@ use failure::{ResultExt};
 
 use crate::mig_error::{MigError,MigErrorKind,MigErrCtx};
 
-#[derive(Debug)]
+const OS_RELEASE_RE: &str = r"^(\d+)\.(\d+)\.(\d+)(-.*)?$";
 
+#[derive(Debug)]
 pub enum OSArch {
     X86_64,
     I686,    
@@ -34,7 +35,7 @@ pub struct OSRelease (u32,u32,u32);
 impl OSRelease {    
     pub fn parse_from_str(os_release: &str) -> Result<OSRelease,MigError> {
     lazy_static! {
-        static ref RE_OS_VER: Regex = Regex::new(r"^(\d+)\.(\d+)\.(\d+)$").unwrap();                    
+        static ref RE_OS_VER: Regex = Regex::new(OS_RELEASE_RE).unwrap();                    
     }
 
     let captures = match RE_OS_VER.captures(os_release) {

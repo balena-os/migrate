@@ -86,8 +86,13 @@ impl Fail for MigError {
 }
 
 impl Display for MigError {
-    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        Display::fmt(&self.inner, f)
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {        
+        let mut res = Display::fmt(&self.inner, f);
+        if let Some(fail) = self.inner.cause() {
+            write!(f," - ")?;
+            res = Display::fmt(fail, f);
+        }
+        res
     }
 }
 
@@ -99,7 +104,6 @@ impl MigError {
     pub fn from_remark(kind: MigErrorKind, remark: &str) -> MigError {
         MigError { inner: Context::new(MigErrCtx::from_remark(kind, remark)) } 
     }
-
 }
 
 impl From<MigErrorKind> for MigError {
