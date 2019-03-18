@@ -9,8 +9,7 @@ extern crate stderrlog;
 
 use clap::{App, Arg};
 
-use win_test::mswin;
-use win_test::{Migrator};
+use balena_migrator::{Migrator};
 
 fn print_sysinfo(s_info: &mut Migrator) -> () {
 
@@ -84,6 +83,6 @@ fn main() {
         .init()
         .unwrap();
 
-    let mut migrator = mswin::get_migrator().unwrap();
+    let mut migrator = balena_migrator::get_migrator().unwrap();
     print_sysinfo(migrator.as_mut())
 }

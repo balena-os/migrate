@@ -1,7 +1,10 @@
 #[macro_use] extern crate failure;
-#[cfg(windows)]
+
+#[cfg(target_os = "windows")]
 pub mod mswin;
-// pub mod linux;
+
+#[cfg(target_os = "linux")]
+pub mod linux;
 // pub mod darwin;
 // pub mod common;
 pub mod mig_error;
@@ -84,3 +87,17 @@ pub trait Migrator {
     fn can_migrate(&mut self) -> Result<bool,MigError>; 
     fn migrate(&mut self) -> Result<(),MigError>;  
 }
+
+
+#[cfg(target_os = "windows")]
+pub fn get_migrator() -> Result<Box<Migrator>,MigError> {
+    use mswin::MSWMigrator;
+    Ok(Box::new(MSWMigrator::try_init()?))
+}
+
+#[cfg(target_os = "linux")]
+pub fn get_migrator() -> Result<Box<Migrator>,MigError> {
+    use linux::LinuxMigrator;
+    Ok(Box::new(LinuxMigrator::new()))
+}
+

@@ -17,21 +17,19 @@ const MODULE: &str = "mswin";
 
 
 pub fn get_migrator() -> Result<Box<Migrator>,MigError> {
-
-
-    Ok(Box::new(MSWInfo::try_init()?))
+    Ok(Box::new(MSWMigrator::try_init()?))
     //Err(MigError::from(MigErrorKind::NotImpl))
 }
 
-struct MSWInfo {
+struct MSWMigrator {
     ps_info: PSInfo,
     wmi_utils: WmiUtils,
     os_info: Option<WMIOSInfo>,
 }
 
-impl MSWInfo {
-    fn try_init() -> Result<MSWInfo, MigError> {
-        let msw_info = MSWInfo {
+impl MSWMigrator {
+    fn try_init() -> Result<MSWMigrator, MigError> {
+        let msw_info = MSWMigrator {
             ps_info: PSInfo::try_init()?,
             wmi_utils: WmiUtils::new()?,
             os_info: None,
@@ -40,7 +38,7 @@ impl MSWInfo {
     }
 }
 
-impl Migrator for MSWInfo {
+impl Migrator for MSWMigrator {
     fn can_migrate(&mut self) -> Result<bool,MigError> {
 
 
@@ -141,7 +139,7 @@ mod tests {
 
     #[test]
     fn init_mswin() {
-        let msw_info = MSWInfo::try_init().unwrap();
+        let msw_info = MSWMigrator::try_init().unwrap();
         assert!(!msw_info.get_os_name().is_empty());
         assert!(if let Some(_or) = msw_info.get_os_release() {
             true
