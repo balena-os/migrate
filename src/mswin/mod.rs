@@ -48,6 +48,9 @@ impl MSWInfo {
         Ok(msw_info)
     }
 
+
+    // TODO: move to wmi_utils
+    // TODO: implement os_arch
     fn init_os_info(&mut self) -> Result<MWIOSInfo, MigError> {
         let wmi_utils = WmiUtils::new().context(MigErrCtx::from_remark(MigErrorKind::Upstream,"Create WMI utils failed"))?;
         let wmi_res = wmi_utils.wmi_query(wmi_utils::WMIQ_OS)?;

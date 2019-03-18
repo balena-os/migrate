@@ -11,9 +11,6 @@ use clap::{App, Arg};
 
 use win_test::mswin;
 use win_test::{SysInfo};
-//use win_test::mig_error::{MigError};
-
-
 
 fn print_sysinfo(s_info: &mut SysInfo) -> () {
     match s_info.is_admin() {
