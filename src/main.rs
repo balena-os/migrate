@@ -10,18 +10,9 @@ extern crate stderrlog;
 use clap::{App, Arg};
 
 use win_test::mswin;
-use win_test::{SysInfo};
+use win_test::{Migrator};
 
-fn print_sysinfo(s_info: &mut SysInfo) -> () {
-    match s_info.is_admin() {
-        Ok(v)    => println!("Is Admin:         {}",v),
-        Err(why) => println!("Is Admin:         failed: {}",why), 
-    };
-
-    match s_info.is_secure_boot() {
-        Ok(v)    => println!("Is Secure Boot:   {}",v),
-        Err(why) => println!("Is Secure Boot:   failed: {}",why), 
-    }; 
+fn print_sysinfo(s_info: &mut Migrator) -> () {
 
     match s_info.get_os_name() {
         Ok(v)    => println!("OS Name:          {}",v),
@@ -31,6 +22,11 @@ fn print_sysinfo(s_info: &mut SysInfo) -> () {
     match s_info.get_os_release() {
         Ok(v)    => println!("OS Release:       {}",v),
         Err(why) => println!("OS Release:       failed: {}",why), 
+    }; 
+
+    match s_info.get_os_arch() {
+        Ok(v)    => println!("OS Architecture:  {}",v),
+        Err(why) => println!("OS Architecture:  failed: {}",why), 
     }; 
 
     match s_info.get_boot_dev() {
@@ -47,6 +43,17 @@ fn print_sysinfo(s_info: &mut SysInfo) -> () {
         Ok(v)    => println!("Available Memory: {:?}",v),
         Err(why) => println!("Available Memory: failed: {}",why), 
     }; 
+
+    match s_info.is_admin() {
+        Ok(v)    => println!("Is Admin:         {}",v),
+        Err(why) => println!("Is Admin:         failed: {}",why), 
+    };
+
+    match s_info.is_secure_boot() {
+        Ok(v)    => println!("Is Secure Boot:   {}",v),
+        Err(why) => println!("Is Secure Boot:   failed: {}",why), 
+    }; 
+
 }
 
 fn main() {
@@ -77,6 +84,6 @@ fn main() {
         .init()
         .unwrap();
 
-    let mut s_info = mswin::MSWInfo::try_init().unwrap();
-    print_sysinfo(&mut s_info)
+    let mut migrator = mswin::get_migrator().unwrap();
+    print_sysinfo(migrator.as_mut())
 }
