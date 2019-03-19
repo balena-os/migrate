@@ -15,6 +15,8 @@ use failure::{Fail,ResultExt, Context};
 
 use winapi::um::handleapi::{INVALID_HANDLE_VALUE};
 use winapi::um::fileapi::{FindFirstVolumeW, FindNextVolumeW, FindVolumeClose, QueryDosDeviceW};        
+use winapi::um::winbase::{GetFirmwareEnvironmentVariableW};
+
 
 use crate::mig_error::{MigError, MigErrorKind, MigErrCtx};
 
@@ -184,6 +186,32 @@ fn query_dos_device(dev_name: Option<&str>) -> Result<Vec<String>,MigError> {
        return Err(MigError::from(os_err.context(MigErrCtx::from(MigErrorKind::WinApi))));
     }
 }
+
+pub fn is_uefi_boot() -> bool {
+    let dummy: Vec<u16> = OsStr::new("").encode_wide().chain(once(0)).collect();
+    let guid: Vec<u16> = OsStr::new("{00000000-0000-0000-0000-000000000000}").encode_wide().chain(once(0)).collect();
+    let res = unsafe { GetFirmwareEnvironmentVariableW(dummy.as_ptr(), guid.as_ptr(), null_mut(), 0) };
+    let os_err = Error::last_os_error();
+    match os_err.raw_os_error() {
+        Some(_err) => (),
+        None => (),
+    }
+
+
+    /*
+    GetFirmwareEnvironmentVariableA("","{00000000-0000-0000-0000-000000000000}",IntPtr.Zero,0);
+
+            if (Marshal.GetLastWin32Error() == ERROR_INVALID_FUNCTION)
+
+                return false;     // API not supported; this is a legacy BIOS
+
+            else
+
+                return true;      // API error (expected) but call is supported.  This is UEFI.
+    */
+    false                
+}
+
 
 pub fn enumerate_volumes() -> Result<i32, MigError> {    
     
