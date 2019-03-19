@@ -11,9 +11,8 @@ regex = "1"
 lazy_static = "*"
 clap = "*"
 failure = "*"
-[target.'cfg(linux)'.dependencies]
+[target.'cfg(unix)'.dependencies]
 libc = { git = "https://github.com/rust-lang/libc" } 
-
 [target.'cfg(windows)'.dependencies]
 winapi = { git = "https://github.com/retep998/winapi-rs.git", branch = "0.3", features = ["winuser", "handleapi","fileapi"] }
 wmi = { git = "https://github.com/ohadravid/wmi-rs.git" }
