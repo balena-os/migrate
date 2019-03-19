@@ -1,5 +1,5 @@
 use log::{info, trace, error};
-use failure::{ResultExt};
+use failure::{ResultExt, Context};
 
 
 // use std::os::linux::{};
@@ -92,14 +92,22 @@ impl Migrator for LinuxMigrator {
         match self.uefi_boot {
             Some(u) => Ok(u),
             None => {
-                self.uefi_boot = Some(std::fs::metadata(SYS_UEFI_DIR)
-                                    .context(MigErrCtx::from_remark(MigErrorKind::Upstream, &format!("{}::is_uefi_boot: access {}", MODULE, SYS_UEFI_DIR)))?
-                                    .file_type()
-                                    .is_dir());
+                match std::fs::metadata(SYS_UEFI_DIR) {
+                    Ok(metadata) => { self.uefi_boot = Some(metadata.file_type().is_dir()); },
+                    Err(why) => {
+                        match why.kind() {
+                            std::io::ErrorKind::NotFound => { self.uefi_boot = Some(false); },
+                            // TODO: figure out how to create a MigError with context manually
+                            _ => { return Err(MigError::from_remark(MigErrorKind::Upstream,&format!("{}::is_uefi_boot: access {}",MODULE,SYS_UEFI_DIR))); },
+                            //_ => { return Err(why).context(MigErrCtx::from_remark(MigErrorKind::Upstream,&format!("{}::is_uefi_boot: access {}",MODULE,SYS_UEFI_DIR)))); },
+                            }
+                        }
+                    }
                 Ok(self.uefi_boot.unwrap())
-            }
-        }
+                }
+        }        
     }
+
 
 
     fn get_os_arch<'a>(&'a mut self) -> Result<&'a OSArch, MigError> {        
