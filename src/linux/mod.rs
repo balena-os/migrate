@@ -74,8 +74,8 @@ impl LinuxMigrator {
         let mut s_info: libc::sysinfo = unsafe { mem::uninitialized() };        
         let res = unsafe { libc::sysinfo(&mut s_info) };
         if res == 0 {
-            self.mem_tot = Some(s_info.totalram);
-            self.mem_free = Some(s_info.freeram);
+            self.mem_tot = Some(s_info.totalram as u64);
+            self.mem_free = Some(s_info.freeram as u64);
             Ok(())
         } else {
             Err(MigError::from(MigErrorKind::NotImpl))
