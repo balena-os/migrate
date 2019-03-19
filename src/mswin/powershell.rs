@@ -48,7 +48,6 @@ pub(crate) struct PSInfo {
 }
 
 trait PsFailed<T> {
-
    fn ps_failed(ps_res: &PSRes, command: &T, function: &str) -> MigError;   
 }
 

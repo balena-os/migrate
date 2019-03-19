@@ -1,6 +1,7 @@
+
 use log::{info, trace, error};
 use failure::{ResultExt, Context};
-
+use libc::{getuid,sysinfo};
 
 // use std::os::linux::{};
 use lazy_static::lazy_static;
@@ -15,8 +16,10 @@ use crate::common::{call,CmdRes};
 const MODULE: &str = "Linux";
 const OS_NAME_RE: &str = r#"^PRETTY_NAME="([^"]+)"$"#;
 
+
 const OS_RELEASE_FILE: &str = "/etc/os-release";
 const OS_KERNEL_RELEASE_FILE: &str = "/proc/sys/kernel/osrelease";
+const OS_MEMINFO_FILE: &str = "/proc/meminfo";
 const SYS_UEFI_DIR: &str = "/sys/firmware/efi";
 const UNAME_CMD: &str = "uname";
 const UNAME_ARGS_OS_ARCH: [&str;1] = ["-m"];
@@ -25,6 +28,9 @@ const FINDMNT_CMD: &str = "findmnt";
 const FINDMNT_ARGS_BOOT: [&str;5] = ["--noheadings","--canonicalize","--output","SOURCE","/boot"];
 const FINDMNT_ARGS_ROOT: [&str;5] = ["--noheadings","--canonicalize","--output","SOURCE","/"];
 
+const MOKUTIL_CMD:&str = "mokutil";
+const MOKUTIL_ARGS_SB_STATE: [&str;1] = ["--sb-state"];
+
 pub(crate) struct LinuxMigrator {
     os_name: Option<String>,
     os_release: Option<OSRelease>,
@@ -32,7 +38,10 @@ pub(crate) struct LinuxMigrator {
     uefi_boot: Option<bool>,
     boot_dev: Option<String>,
     cmd_path: HashMap<String,String>, 
-
+    mem_tot: Option<u64>,
+    mem_free: Option<u64>,
+    admin: Option<bool>,
+    sec_boot: Option<bool>,
 }
 
 impl LinuxMigrator {
@@ -44,6 +53,10 @@ impl LinuxMigrator {
             uefi_boot: None,
             boot_dev: None,
             cmd_path: HashMap::new(),
+            mem_tot: None,
+            mem_free: None,
+            admin: None,
+            sec_boot: None,
         })
     } 
 }
@@ -55,7 +68,74 @@ impl LinuxMigrator {
             args, 
             trim_stdout)?)
     }
+
+    fn get_mem_info(&mut self) -> Result<(),MigError> {
+        use std::{mem};
+        let mut s_info: libc::sysinfo = unsafe { mem::uninitialized() };        
+        let res = unsafe { libc::sysinfo(&mut s_info) };
+        if res == 0 {
+            self.mem_tot = Some(s_info.totalram);
+            self.mem_free = Some(s_info.freeram);
+            Ok(())
+        } else {
+            Err(MigError::from(MigErrorKind::NotImpl))
+        }
+    }
+
+/*  
+    fn get_mem_info1(&mut self) -> Result<(),MigError> {
+         trace!("{}::get_mem_info: entered", MODULE);
+         let mem_info = std::fs::read_to_string(OS_MEMINFO_FILE).context(MigErrCtx::from(MigErrorKind::Upstream))?;
+         let lines = mem_info.lines();
+         
+         let regex_tot = Regex::new(r"^MemTotal:\s+(\d+)\s+(\S+)$").unwrap();
+         let regex_free = Regex::new(r"^MemFree:\s+(\d+)\s+(\S+)$").unwrap();
+         let mut found = 0;
+         for line in lines {
+             if let Some(cap) = regex_tot.captures(line) {                    
+                let unit = cap.get(2).unwrap().as_str();
+                if unit == "kB" {
+                    self.mem_tot = Some(cap.get(1).unwrap().as_str().parse::<usize>().unwrap() * 1024);
+                    found += 1;
+                    if found > 1 {
+                        break;
+                    } else {
+                        continue;
+                    }
+                } else {
+                    // TODO: support other units
+                    return Err(MigError::from_remark(MigErrorKind::InvParam,&format!("{}::get_mem_info: unsupported unit {}", MODULE, unit)));
+                }
+             }
+
+             if let Some(cap) = regex_free.captures(line) {                    
+                let unit = cap.get(2).unwrap().as_str();
+                if unit == "kB" {
+                    self.mem_free = Some(cap.get(1).unwrap().as_str().parse::<usize>().unwrap() * 1024);
+                    found += 1;
+                    if found > 1 {
+                        break;
+                    } else {
+                        continue;
+                    }
+                } else {
+                    // TODO: support other units
+                    return Err(MigError::from_remark(MigErrorKind::InvParam,&format!("{}::get_mem_info: unsupported unit {}", MODULE, unit)));
+                }
+             }
+         }
+
+         if let Some(_v) = self.mem_tot {
+             if let Some(_v) = self.mem_free {
+                return Ok(());
+             }
+         }
+        
+        Err(MigError::from_remark(MigErrorKind::NotFound, &format!("{}::get_mem_info: failed to retrieve required memory values", MODULE)))
+    }
+    */
 }
+
 
 impl Migrator for LinuxMigrator {
     fn get_os_name<'a>(&'a mut self) -> Result<&'a str,MigError> {
@@ -98,8 +178,8 @@ impl Migrator for LinuxMigrator {
                         match why.kind() {
                             std::io::ErrorKind::NotFound => { self.uefi_boot = Some(false); },
                             // TODO: figure out how to create a MigError with context manually
-                            _ => { return Err(MigError::from_remark(MigErrorKind::Upstream,&format!("{}::is_uefi_boot: access {}",MODULE,SYS_UEFI_DIR))); },
-                            //_ => { return Err(why).context(MigErrCtx::from_remark(MigErrorKind::Upstream,&format!("{}::is_uefi_boot: access {}",MODULE,SYS_UEFI_DIR)))); },
+                            _ => { return Err(MigError::from_remark(MigErrorKind::Upstream,&format!("{}::is_uefi_boot: access {}",MODULE,SYS_UEFI_DIR))); },                            
+                            //_ => { return Err(MigError::from(why.context(MigErrCtx::from_remark(MigErrorKind::Upstream,&format!("{}::is_uefi_boot: access {}",MODULE,SYS_UEFI_DIR))))); },
                             }
                         }
                     }
@@ -107,8 +187,6 @@ impl Migrator for LinuxMigrator {
                 }
         }        
     }
-
-
 
     fn get_os_arch<'a>(&'a mut self) -> Result<&'a OSArch, MigError> {        
         match self.os_arch {
@@ -153,18 +231,74 @@ impl Migrator for LinuxMigrator {
         }       
     }
 
-    fn get_mem_tot(&mut self) -> Result<usize,MigError> {
-        Err(MigError::from(MigErrorKind::NotImpl))
+    fn get_mem_tot(&mut self) -> Result<u64,MigError> {
+        match self.mem_tot { 
+            Some(m) => Ok(m),
+            None => {
+                self.get_mem_info()?;
+                Ok(self.mem_tot.unwrap())
+            }
+        }        
     }
-    fn get_mem_avail(&mut self) -> Result<usize,MigError> {
-        Err(MigError::from(MigErrorKind::NotImpl))
+
+    fn get_mem_avail(&mut self) -> Result<u64,MigError> {
+        match self.mem_free { 
+            Some(m) => Ok(m),
+            None => {
+                self.get_mem_info()?;
+                Ok(self.mem_free.unwrap())
+            }
+        }        
     }
+
     fn is_admin(&mut self) -> Result<bool,MigError> {
-        Err(MigError::from(MigErrorKind::NotImpl))
+        match self.admin {
+            Some(v) => Ok(v),
+            None => {
+                self.admin = Some(unsafe {getuid()} == 0);
+                Ok(self.admin.unwrap())
+            }
+        }
     }
+
     fn is_secure_boot(&mut self) -> Result<bool,MigError> {
-        Err(MigError::from(MigErrorKind::NotImpl))
+        match self.sec_boot {
+            Some(v) => Ok(v),
+            None => {
+                let cmd_res = match self.call_cmd(MOKUTIL_CMD, &MOKUTIL_ARGS_SB_STATE,true) {
+                    Ok(cr) => { 
+                        trace!("{}::is_secure_boot: {} -> {:?}",MODULE, MOKUTIL_CMD, cr);
+                        cr },
+                    Err(why) => {
+                        trace!("{}::is_secure_boot: {} -> {:?}",MODULE, MOKUTIL_CMD, why);
+                        match why.kind() {
+                        MigErrorKind::NotFound => {
+                            self.sec_boot = Some(false);
+                            return Ok(self.sec_boot.unwrap());
+                        },    
+                        _ => { return Err(why); },
+                        }
+                    },
+                };
+                
+                let regex = Regex::new(r"^SecureBoot\s+(disabled|enabled)$").unwrap();
+                let lines = cmd_res.stdout.lines();
+                for line in lines {
+                    if let Some(cap) = regex.captures(line) {
+                        if cap.get(1).unwrap().as_str() == "enabled" {
+                            self.sec_boot = Some(true);                            
+                        } else {
+                            self.sec_boot = Some(false);                            
+                        }
+                        return Ok(self.sec_boot.unwrap());
+                    }
+                }                
+                error!("{}::is_secure_boot: failed to parse command output: '{}'", MODULE, cmd_res.stdout);
+                Err(MigError::from_remark(MigErrorKind::InvParam, &format!("{}::is_secure_boot: failed to parse command output", MODULE)))
+            },    
+        }
     }
+
     fn can_migrate(&mut self) -> Result<bool,MigError> {
         Err(MigError::from(MigErrorKind::NotImpl))
     }
@@ -172,3 +306,4 @@ impl Migrator for LinuxMigrator {
         Err(MigError::from(MigErrorKind::NotImpl))
     }  
 }
+

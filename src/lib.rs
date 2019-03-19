@@ -1,4 +1,13 @@
-#[macro_use] extern crate failure;
+//#![feature(rustc_private)]
+extern crate lazy_static;
+extern crate regex;
+
+extern crate failure;
+extern crate log;
+extern crate clap;
+extern crate stderrlog;
+// extern crate libc;
+pub extern crate libc;
 
 #[cfg(target_os = "windows")]
 pub mod mswin;
@@ -91,8 +100,8 @@ pub trait Migrator {
     fn get_os_release<'a>(&'a mut self) -> Result<&'a OSRelease,MigError>;
     fn get_os_arch<'a>(&'a mut self) -> Result<&'a OSArch, MigError>;
     fn get_boot_dev<'a>(&'a mut self) -> Result<&'a str,MigError>;
-    fn get_mem_tot(&mut self) -> Result<usize,MigError>;
-    fn get_mem_avail(&mut self) -> Result<usize,MigError>;
+    fn get_mem_tot(&mut self) -> Result<u64,MigError>;
+    fn get_mem_avail(&mut self) -> Result<u64,MigError>;
     fn is_admin(&mut self) -> Result<bool,MigError>;
     fn is_secure_boot(&mut self) -> Result<bool,MigError>;
     fn can_migrate(&mut self) -> Result<bool,MigError>; 

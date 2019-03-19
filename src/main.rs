@@ -1,12 +1,3 @@
-
-extern crate lazy_static;
-extern crate regex;
-
-#[macro_use]
-extern crate log;
-extern crate clap;
-extern crate stderrlog;
-
 use clap::{App, Arg};
 
 use balena_migrator::{Migrator};
@@ -61,7 +52,7 @@ fn print_sysinfo(s_info: &mut Migrator) -> () {
 }
 
 fn main() {
-    trace!("balena-migrate-win started");
+    println!("balena-migrate-win started");
     let matches = App::new("balena-migrate-win")
         .version("0.1")
         .author("Thomas Runte <thomasr@balena.io>")

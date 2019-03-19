@@ -34,13 +34,14 @@ pub fn whereis(cmd: &str) -> Result<String,MigError> {
     let cmd_res = call(WHEREIS_CMD, &args,true).context(MigErrCtx::from_remark(MigErrorKind::Upstream,&format!("{}::whereis: failed for '{}'", MODULE, cmd)))?;
     if cmd_res.status.success() {
         if cmd_res.stdout.is_empty() {
-            Err(MigError::from_remark(MigErrorKind::NotFound,&format!("{}::whereis: command not found: '{}'", MODULE, cmd)))
+            Err(MigError::from_remark(MigErrorKind::InvParam,&format!("{}::whereis: no command output for {}", MODULE, cmd)))            
         } else {
             let mut words = cmd_res.stdout.split(" ");
             if let Some(s) = words.nth(1) {
                 Ok(String::from(s))
             } else {
-                Err(MigError::from_remark(MigErrorKind::InvParam,&format!("{}::whereis: failed to parse command output for {}: {}", MODULE, cmd, cmd_res.stdout)))        
+                Err(MigError::from_remark(MigErrorKind::NotFound,&format!("{}::whereis: command not found: '{}'", MODULE, cmd)))
+                //        
             }
         }        
     } else {

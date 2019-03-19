@@ -8,6 +8,7 @@ use crate::mig_error::{MigError,MigErrorKind, MigErrCtx};
 
 const MODULE: &str  = "common";
 
+#[derive(Debug)]
 pub(crate) struct CmdRes {
     pub stdout: String,
     pub stderr: String,
