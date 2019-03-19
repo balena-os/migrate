@@ -30,8 +30,8 @@ pub(crate) struct WMIOSInfo {
     pub os_name: String,
     pub os_release: OSRelease,
     pub os_arch: OSArch,
-    pub mem_tot: usize,
-    pub mem_avail: usize,
+    pub mem_tot: u64,
+    pub mem_avail: u64,
     pub boot_dev: String,
 }
 
@@ -98,7 +98,7 @@ impl WmiUtils {
                 if s.to_lowercase() == "64-bit" {
                     OSArch::AMD64
                 } else if s.to_lowercase() == "32-bit" {
-                    OSArch::I686
+                    OSArch::I386
                 } else {
                     return Err(MigError::from_remark(
                         MigErrorKind::InvParam, 
@@ -110,16 +110,16 @@ impl WmiUtils {
         };
 
         let mem_tot = match wmi_row.get("TotalVisibleMemorySize").unwrap_or(&empty) {
-            Variant::String(s) => s.parse::<usize>().context(
+            Variant::String(s) => s.parse::<u64>().context(
                 MigErrCtx::from_remark(MigErrorKind::InvParam, 
                 &format!("{}::init_sys_info: failed to parse TotalVisibleMemorySize from  '{}'", MODULE,s)))?,
             _ => return Err(MigError::from_remark(
                         MigErrorKind::InvParam, 
                         &format!("{}::init_os_info: invalid result type for 'TotalVisibleMemorySize'",MODULE))),            
-        };
+        } as u64;
 
         let mem_avail = match wmi_row.get("FreePhysicalMemory").unwrap_or(&empty) {
-            Variant::String(s) => s.parse::<usize>().context(
+            Variant::String(s) => s.parse::<u64>().context(
                 MigErrCtx::from_remark(MigErrorKind::InvParam, 
                 &format!("{}::init_sys_info: failed to parse 'FreePhysicalMemory' from  '{}'", MODULE,s)))?,
             _ => return Err(MigError::from_remark(

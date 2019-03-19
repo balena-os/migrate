@@ -4,8 +4,6 @@ version = "0.1.0"
 authors = ["Thomas <thomas@etnur.net>"]
 edition = "2018"
 [dependencies]
-# [target.'cfg(linux)']
-libc = { git = "https://github.com/rust-lang/libc" } 
 log = "*"
 stderrlog = "*"
 csv = "1"
@@ -13,8 +11,10 @@ regex = "1"
 lazy_static = "*"
 clap = "*"
 failure = "*"
+[target.'cfg(linux)'.dependencies]
+libc = { git = "https://github.com/rust-lang/libc" } 
+
 [target.'cfg(windows)'.dependencies]
 winapi = { git = "https://github.com/retep998/winapi-rs.git", branch = "0.3", features = ["winuser", "handleapi","fileapi"] }
-[target.'cfg(windows)']
 wmi = { git = "https://github.com/ohadravid/wmi-rs.git" }
 

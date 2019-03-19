@@ -6,7 +6,12 @@ extern crate failure;
 extern crate log;
 extern crate clap;
 extern crate stderrlog;
-// extern crate libc;
+#[cfg(target_os = "windows")]
+extern crate winapi;
+#[cfg(target_os = "windows")]
+extern crate wmi;
+
+#[cfg(target_os = "linux")]
 pub extern crate libc;
 
 #[cfg(target_os = "windows")]

@@ -76,7 +76,7 @@ impl Migrator for MSWMigrator {
     }
 
 
-    fn get_mem_tot(&mut self) -> Result<usize,MigError> {
+    fn get_mem_tot(&mut self) -> Result<u64,MigError> {
         match self.os_info {
             Some(ref info) => Ok(info.mem_tot),
             None => {
@@ -86,7 +86,7 @@ impl Migrator for MSWMigrator {
         }
     }
 
-    fn get_mem_avail(&mut self) -> Result<usize,MigError> {
+    fn get_mem_avail(&mut self) -> Result<u64,MigError> {
         match self.os_info {
             Some(ref info) => Ok(info.mem_avail),
             None => {
