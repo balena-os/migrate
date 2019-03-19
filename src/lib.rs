@@ -6,7 +6,7 @@ pub mod mswin;
 #[cfg(target_os = "linux")]
 pub mod linux;
 // pub mod darwin;
-// pub mod common;
+mod common;
 pub mod mig_error;
 
 use std::fmt::{self,Display, Formatter};
@@ -18,10 +18,20 @@ use crate::mig_error::{MigError,MigErrorKind,MigErrCtx};
 
 const OS_RELEASE_RE: &str = r"^(\d+)\.(\d+)\.(\d+)(-.*)?$";
 
+
 #[derive(Debug)]
+
 pub enum OSArch {
-    X86_64,
-    I686,    
+    AMD64,
+    ARM64,
+    ARMEL,
+    ARMHF,
+    I386,
+    MIPS,
+    MIPSEL,
+    Powerpc,
+    PPC64EL,
+    S390EX,
 }
 
 impl Display for OSArch {
@@ -87,6 +97,7 @@ pub trait Migrator {
     fn is_secure_boot(&mut self) -> Result<bool,MigError>;
     fn can_migrate(&mut self) -> Result<bool,MigError>; 
     fn migrate(&mut self) -> Result<(),MigError>;  
+    fn is_uefi_boot(&mut self) -> Result<bool,MigError>;
 }
 
 
@@ -99,6 +110,6 @@ pub fn get_migrator() -> Result<Box<Migrator>,MigError> {
 #[cfg(target_os = "linux")]
 pub fn get_migrator() -> Result<Box<Migrator>,MigError> {
     use linux::LinuxMigrator;
-    Ok(Box::new(LinuxMigrator::new()))
+    Ok(Box::new(LinuxMigrator::try_init()?))
 }
 

@@ -96,7 +96,7 @@ impl WmiUtils {
         let os_arch = match wmi_row.get("OSArchitecture").unwrap_or(&empty) {
             Variant::String(s) => 
                 if s.to_lowercase() == "64-bit" {
-                    OSArch::X86_64
+                    OSArch::AMD64
                 } else if s.to_lowercase() == "32-bit" {
                     OSArch::I686
                 } else {

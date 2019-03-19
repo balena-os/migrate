@@ -34,11 +34,13 @@ impl MSWMigrator {
 
 impl Migrator for MSWMigrator {
     fn can_migrate(&mut self) -> Result<bool,MigError> {
-
-
         Err(MigError::from(MigErrorKind::NotImpl))
     }
     
+    fn is_uefi_boot(&mut self) -> Result<bool,MigError> {
+        Err(MigError::from(MigErrorKind::NotImpl))
+    }
+     
     fn migrate(&mut self) -> Result<(),MigError> {
         Err(MigError::from(MigErrorKind::NotImpl))
     }

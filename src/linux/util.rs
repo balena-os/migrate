@@ -1,17 +1,18 @@
 use regex::Regex;
 use std::io::Read;
-use std::fs::File;
+use std::fs::read_to_string;
 use failure::{Fail,ResultExt};
 use log::{trace};
 
-const MODULE: &str = "Linux::util";
 
+const MODULE: &str = "Linux::util";
+const WHEREIS_CMD: &str = "whereis";
+
+use crate::common::{call};
 use crate::{MigError,MigErrCtx,MigErrorKind};
 
-pub fn parse_file(fname: &str, regex: &Regex) -> Result<String,MigError> {
-    let mut os_info = String::new();
-    File::open(fname).context(MigErrCtx::from_remark(MigErrorKind::Upstream, &format!("File open '{}'",fname)))?
-        .read_to_string(&mut os_info).context(MigErrCtx::from_remark(MigErrorKind::Upstream, "File read '/etc/os-release'"))?;
+pub fn parse_file(fname: &str, regex: &Regex) -> Result<String,MigError> {    
+    let os_info = std::fs::read_to_string(fname).context(MigErrCtx::from_remark(MigErrorKind::Upstream, &format!("File read '{}'", fname)))?;
     
     for line in os_info.lines() {
         trace!("{}::parse_file: line: '{}'", MODULE, line);
@@ -23,3 +24,35 @@ pub fn parse_file(fname: &str, regex: &Regex) -> Result<String,MigError> {
 
     Err(MigError::from(MigErrorKind::NotFound))
 }
+
+pub fn file_exists(cmd: &str) -> Result<bool,MigError> {    
+    Err(MigError::from(MigErrorKind::NotImpl))
+} 
+
+pub fn whereis(cmd: &str) -> Result<String,MigError> {
+    let args: [&str;2] = ["-b",cmd];
+    let cmd_res = call(WHEREIS_CMD, &args,true).context(MigErrCtx::from_remark(MigErrorKind::Upstream,&format!("{}::whereis: failed for '{}'", MODULE, cmd)))?;
+    if cmd_res.status.success() {
+        if cmd_res.stdout.is_empty() {
+            Err(MigError::from_remark(MigErrorKind::NotFound,&format!("{}::whereis: command not found: '{}'", MODULE, cmd)))
+        } else {
+            let mut words = cmd_res.stdout.split(" ");
+            if let Some(s) = words.nth(1) {
+                Ok(String::from(s))
+            } else {
+                Err(MigError::from_remark(MigErrorKind::InvParam,&format!("{}::whereis: failed to parse command output for {}: {}", MODULE, cmd, cmd_res.stdout)))        
+            }
+        }        
+    } else {
+        Err(MigError::from_remark(MigErrorKind::ExecProcess,&format!("{}::whereis: command failed for {}: {}", MODULE, cmd, cmd_res.status.code().unwrap_or(0))))
+    }    
+}
+
+pub fn command_exists(cmd: &str) -> Result<bool,MigError> {
+
+    Err(MigError::from(MigErrorKind::NotImpl))
+} 
+
+pub fn exec_command(cmd: &str) -> Result<bool,MigError> {
+    Err(MigError::from(MigErrorKind::NotImpl))
+} 

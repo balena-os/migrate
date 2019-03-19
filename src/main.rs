@@ -28,6 +28,11 @@ fn print_sysinfo(s_info: &mut Migrator) -> () {
         Err(why) => println!("OS Architecture:  failed: {}",why), 
     }; 
 
+    match s_info.is_uefi_boot() {
+        Ok(v)    => println!("UEFI Boot:        {}",v),
+        Err(why) => println!("UEFI Boot:        failed: {}",why), 
+    }; 
+
     match s_info.get_boot_dev() {
         Ok(v)    => println!("Boot Device:      {:?}",v),
         Err(why) => println!("Boot Device:      failed: {}",why), 
