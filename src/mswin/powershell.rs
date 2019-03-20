@@ -1,17 +1,21 @@
 const MODULE: &str = "win_test::mswin::powershell";
 
 const POWERSHELL: &str = "powershell.exe";
+const PS_CMD_PRIMER: &str = "[System.Threading.Thread]::CurrentThread.CurrentUICulture = 'en-US';";
 
-pub const POWERSHELL_FROM_STDIN: [&'static str; 3] = ["-NonInteractive", "-Command", "-"];
+const PS_ARGS_FROM_STDIN: [&'static str; 3] = ["-NonInteractive", "-Command", "-"];
 //pub const POWERSHELL_GET_CMDLET_PARAMS: [&'static str; 7] =
 //    ["Get-Command", "-CommandType", "Cmdlet", "|" , "out-string", "-width", "200"];
-pub const PSCMD_STR_GET_CMDLET_PARAMS: &str =
-    "Get-Command -CommandType Cmdlet | Format-Table Name, Version | out-string -width 200";
-pub const PSCMD_STR_IS_ADMIN: &str =
-    "[bool](([System.Security.Principal.WindowsIdentity]::GetCurrent()).groups -match \"S-1-5-32-544\")";
+const PS_CMD_GET_CMDLET_PARAMS: &str = 
+    "Get-Command -CommandType Cmdlet | Format-Table Name, Version | out-string -width 200;";
+const PS_CMD_IS_ADMIN: &str = 
+    "[bool](([System.Security.Principal.WindowsIdentity]::GetCurrent()).groups -match \"S-1-5-32-544\");";
+const PS_CMD_IS_SECURE_BOOT: &str = "Confirm-SecureBootUEFI;";
 
-pub const POWERSHELL_VERSION_PARAMS: [&'static str; 1] = ["$PSVersionTable.PSVersion"];
-pub const POWERSHELL_IS_SECURE_BOOT: [&'static str; 1] = ["Confirm-SecureBootUEFI"];
+const PS_CMD_GET_CMD: &str = "Get-Command {};";
+
+const PS_ARGS_VERSION_PARAMS: [&'static str; 1] = ["$PSVersionTable.PSVersion"];
+
 
 use crate::mig_error::{MigErrCtx, MigError, MigErrorKind};
 use failure::{Fail, ResultExt};
@@ -20,7 +24,7 @@ use std::io::{Write};
 use lazy_static::lazy_static;
 use log::{trace, info, warn};
 use regex::Regex;
-use std::collections::HashSet;
+use std::collections::HashMap;
 use std::process::{Command, ExitStatus, Stdio};
 use std::fmt::{Display, Debug};
 
@@ -43,8 +47,9 @@ struct PSRes {
 #[derive(Debug)]
 pub(crate) struct PSInfo {
     version: Option<PSVER>,
-    cmdlets: HashSet<String>,
-    is_admin: Option<bool>,
+    cmdlets: HashMap<String,bool>,
+    admin: Option<bool>,
+    secure_boot: Option<bool>,
 }
 
 trait PsFailed<T> {
@@ -56,50 +61,73 @@ impl PSInfo {
 
         let mut ps_info = PSInfo {
             version: None,
-            cmdlets: HashSet::new(),
-            is_admin: None,
+            cmdlets: HashMap::new(),
+            admin: None,
+            secure_boot: None,
         };
         
         ps_info.get_ps_ver()?;
 
+        trace!("{}::try_init: ps_info.has_command('Get-Command')? = '{}'",MODULE, ps_info.has_command("Get-Command")?);
+
         // TODO: rather implement check commands - check if required commads are availabler, 
-        ps_info.get_cmdlets()?;
+        // ps_info.get_cmdlets()?;
 
         // info!("{}::try_init: result: {:?}", MODULE, ps_info);
         Ok(ps_info)
     }
 
-    pub fn has_command(&self, cmd: &str) -> bool {
-        self.cmdlets.contains(cmd)
+    pub fn has_command(&mut self, cmd: &str) -> Result<bool,MigError> {        
+        match self.cmdlets.get(cmd) {
+            Some(v) => return Ok(*v),
+            None => (),
+        }
+
+        let cmd_res = call_from_stdin(&format!("Get-Command {};",cmd),true)?;
+        if cmd_res.ps_ok {
+            self.cmdlets.insert(String::from(cmd),true);
+            Ok(true)
+        } else {
+            self.cmdlets.insert(String::from(cmd),false);
+            Ok(false)
+        }
     }
 
     pub fn is_admin(&mut self) -> Result<bool,MigError> {
-        if let Some(v) = self.is_admin {
+        if let Some(v) = self.admin {
             Ok(v)
         } else {
-            let output = call_from_stdin(PSCMD_STR_IS_ADMIN, true)?;
+            let output = call_from_stdin(PS_CMD_IS_ADMIN, true)?;
             if !output.ps_ok {
-                return Err(ps_failed_stdin(&output,&PSCMD_STR_IS_ADMIN, "is_admin"));
+                return Err(ps_failed_stdin(&output,&PS_CMD_IS_ADMIN, "is_admin"));
             }
-            let val = output.stdout.to_lowercase() == "true";
-            self.is_admin = Some(val);
-            Ok(val)
+            self.admin = Some(output.stdout.to_lowercase() == "true");
+            Ok(self.admin.unwrap())
         }
     }
 
     pub fn is_secure_boot(&mut self) -> Result<bool,MigError> {
-        if ! self.is_admin()? {
-            return Err(MigError::from(MigErrorKind::AuthError));
+        if let Some(v) = self.secure_boot {
+            Ok(v)
+        } else {
+            if ! self.is_admin()? {
+                return Err(MigError::from(MigErrorKind::AuthError));
+            }
+            let output = call_from_stdin(&PS_CMD_IS_SECURE_BOOT,true)?;
+            if !output.ps_ok || !output.stderr.is_empty() {
+                // 'Confirm-SecureBootUEFI : Variable is currently undefined: 0xC0000100'
+                let regex = Regex::new(r"Confirm-SecureBootUEFI\s*:\s*Variable\s+is\s+currently\s+undefined:.*").unwrap();
+                if regex.is_match(&output.stderr) {
+                    self.secure_boot = Some(output.stdout.to_lowercase() == "true");                    
+                } else {
+                    return Err(ps_failed_call(&output, &PS_CMD_IS_SECURE_BOOT, "is_secure_boot"));
+                }
+            } else {
+                self.secure_boot = Some(output.stdout.to_lowercase() == "true");            
+            }
+            Ok(self.secure_boot.unwrap())
         }
-        let output = call(&POWERSHELL_IS_SECURE_BOOT,true)?;
-        if !output.ps_ok || !output.stderr.is_empty() {            
-            return Err(ps_failed_call(&output, &POWERSHELL_IS_SECURE_BOOT, "is_secure_boot"));
-        }
-
-        Ok(output.stdout.to_lowercase() == "true")
     }
-
-    
 
     pub fn get_ps_ver(&mut self) -> Result<(u32, u32), MigError> {
         trace!("{}::get_ps_ver(): called", MODULE);
@@ -110,7 +138,7 @@ impl PSInfo {
         }
 
         trace!("{}::get_ps_ver(): calling powershell", MODULE);
-        let output = call(&POWERSHELL_VERSION_PARAMS, true)?;
+        let output = call(&PS_ARGS_VERSION_PARAMS, true)?;
 
         trace!(
             "{}::get_ps_ver(): powershell stdout: {}",
@@ -166,15 +194,16 @@ impl PSInfo {
         Ok(self.version.unwrap())
     }
 
+/*
     fn get_cmdlets(&mut self) -> Result<usize, MigError> {
         trace!("{}::get_cmdlets(): called", MODULE);
-        let output = call_from_stdin(PSCMD_STR_GET_CMDLET_PARAMS, true)?;
+        let output = call_from_stdin(PS_CMD_GET_CMDLET_PARAMS, true)?;
 
         if !output.ps_ok {
             warn!("{}::get_cmdlets: powershell command failed:", MODULE);
             warn!(
                 "{}::get_cmdlets:   command: '{}'",
-                MODULE, PSCMD_STR_GET_CMDLET_PARAMS
+                MODULE, PS_CMD_GET_CMDLET_PARAMS
             );
             warn!(
                 "{}::get_cmdlets:   exit code: {}",
@@ -262,18 +291,19 @@ impl PSInfo {
         }
         Ok(cmds)
     }
+    */
 }
 
 fn call_from_stdin(cmd_str: &str, trim_stdout: bool) -> Result<PSRes, MigError> {
     trace!(
         "{}::call_from_stdin(): called with {:?} < '{}'  trim_stdout: {}",
         MODULE,
-        POWERSHELL_FROM_STDIN,
+        PS_ARGS_FROM_STDIN,
         cmd_str,
         trim_stdout
     );
     let mut command = Command::new(POWERSHELL)
-        .args(&POWERSHELL_FROM_STDIN)
+        .args(&PS_ARGS_FROM_STDIN)
         .stdin(Stdio::piped())
         .stdout(Stdio::piped())
         .stderr(Stdio::piped())
@@ -286,9 +316,12 @@ fn call_from_stdin(cmd_str: &str, trim_stdout: bool) -> Result<PSRes, MigError> 
             ),
         ))?;
     // TODO: make sure we write the right thing (utf8/wide)
+
+    let mut full_cmd = String::from(PS_CMD_PRIMER);
+    full_cmd.push_str(cmd_str);
     if let Some(ref mut stdin) = command.stdin {
         stdin
-            .write(cmd_str.as_bytes())
+            .write(full_cmd.as_bytes())
             .context(MigErrCtx::from_remark(
                 MigErrorKind::CmdIO,
                 &format!("{}::call_from_stdin: failed to write to stdin", MODULE),

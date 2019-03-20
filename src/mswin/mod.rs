@@ -111,8 +111,7 @@ impl Migrator for MSWMigrator {
     }
     
     fn is_secure_boot(&mut self) -> Result<bool,MigError> {
-        // TODO: implement
-        Err(MigError::from(MigErrorKind::NotImpl))
+        Ok(self.ps_info.is_secure_boot()?)
     }
 
 }
