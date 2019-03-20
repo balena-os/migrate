@@ -1,0 +1,152 @@
+
+PS C:\Windows\System32\WindowsPowerShell\v1.0> $query = "SELECT Index,DiskIndex,Type,PrimaryPartition,Bootable,BootPartition,BlockSize,Size,StartingOffset  from Win32_DiskPartition"
+    Get-WmiObject -Query $query;
+
+
+__GENUS          : 2
+__CLASS          : Win32_DiskPartition
+__SUPERCLASS     : 
+__DYNASTY        : 
+__RELPATH        : 
+__PROPERTY_COUNT : 9
+__DERIVATION     : {}
+__SERVER         : 
+__NAMESPACE      : 
+__PATH           : 
+BlockSize        : 512
+Bootable         : False
+BootPartition    : False
+DiskIndex        : 0
+Index            : 0
+PrimaryPartition : False
+Size             : 471859200
+StartingOffset   : 1048576
+Type             : GPT: Unknown
+PSComputerName   : 
+
+__GENUS          : 2
+__CLASS          : Win32_DiskPartition
+__SUPERCLASS     : 
+__DYNASTY        : 
+__RELPATH        : 
+__PROPERTY_COUNT : 9
+__DERIVATION     : {}
+__SERVER         : 
+__NAMESPACE      : 
+__PATH           : 
+BlockSize        : 512
+Bootable         : True
+BootPartition    : True
+DiskIndex        : 0
+Index            : 1
+PrimaryPartition : True
+Size             : 103809024
+StartingOffset   : 472907776
+Type             : GPT: System
+PSComputerName   : 
+
+__GENUS          : 2
+__CLASS          : Win32_DiskPartition
+__SUPERCLASS     : 
+__DYNASTY        : 
+__RELPATH        : 
+__PROPERTY_COUNT : 9
+__DERIVATION     : {}
+__SERVER         : 
+__NAMESPACE      : 
+__PATH           : 
+BlockSize        : 512
+Bootable         : False
+BootPartition    : False
+DiskIndex        : 0
+Index            : 2
+PrimaryPartition : True
+Size             : 98981673984
+StartingOffset   : 593494016
+Type             : GPT: Basic Data
+PSComputerName   : 
+
+__GENUS          : 2
+__CLASS          : Win32_DiskPartition
+__SUPERCLASS     : 
+__DYNASTY        : 
+__RELPATH        : 
+__PROPERTY_COUNT : 9
+__DERIVATION     : {}
+__SERVER         : 
+__NAMESPACE      : 
+__PATH           : 
+BlockSize        : 512
+Bootable         : False
+BootPartition    : False
+DiskIndex        : 0
+Index            : 3
+PrimaryPartition : False
+Size             : 985661440
+StartingOffset   : 103870889984
+Type             : GPT: Unknown
+PSComputerName   : 
+
+__GENUS          : 2
+__CLASS          : Win32_DiskPartition
+__SUPERCLASS     : 
+__DYNASTY        : 
+__RELPATH        : 
+__PROPERTY_COUNT : 9
+__DERIVATION     : {}
+__SERVER         : 
+__NAMESPACE      : 
+__PATH           : 
+BlockSize        : 512
+Bootable         : False
+BootPartition    : False
+DiskIndex        : 0
+Index            : 4
+PrimaryPartition : False
+Size             : 407252000256
+StartingOffset   : 104857600000
+Type             : GPT: Unknown
+PSComputerName   : 
+
+__GENUS          : 2
+__CLASS          : Win32_DiskPartition
+__SUPERCLASS     : 
+__DYNASTY        : 
+__RELPATH        : 
+__PROPERTY_COUNT : 9
+__DERIVATION     : {}
+__SERVER         : 
+__NAMESPACE      : 
+__PATH           : 
+BlockSize        : 512
+Bootable         : False
+BootPartition    : False
+DiskIndex        : 1
+Index            : 0
+PrimaryPartition : True
+Size             : 1580967395328
+StartingOffset   : 1048576
+Type             : Installable File System
+PSComputerName   : 
+
+__GENUS          : 2
+__CLASS          : Win32_DiskPartition
+__SUPERCLASS     : 
+__DYNASTY        : 
+__RELPATH        : 
+__PROPERTY_COUNT : 9
+__DERIVATION     : {}
+__SERVER         : 
+__NAMESPACE      : 
+__PATH           : 
+BlockSize        : 512
+Bootable         : False
+BootPartition    : False
+DiskIndex        : 1
+Index            : 1
+PrimaryPartition : False
+Size             : 419430400000
+StartingOffset   : 1580968443904
+Type             : Extended Partition
+PSComputerName   : 
+
