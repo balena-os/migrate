@@ -6,13 +6,9 @@ const PS_CMD_PRIMER: &str = "[System.Threading.Thread]::CurrentThread.CurrentUIC
 const PS_ARGS_FROM_STDIN: [&'static str; 3] = ["-NonInteractive", "-Command", "-"];
 //pub const POWERSHELL_GET_CMDLET_PARAMS: [&'static str; 7] =
 //    ["Get-Command", "-CommandType", "Cmdlet", "|" , "out-string", "-width", "200"];
-const PS_CMD_GET_CMDLET_PARAMS: &str = 
-    "Get-Command -CommandType Cmdlet | Format-Table Name, Version | out-string -width 200;";
 const PS_CMD_IS_ADMIN: &str = 
     "[bool](([System.Security.Principal.WindowsIdentity]::GetCurrent()).groups -match \"S-1-5-32-544\");";
 const PS_CMD_IS_SECURE_BOOT: &str = "Confirm-SecureBootUEFI;";
-
-const PS_CMD_GET_CMD: &str = "Get-Command {};";
 
 const PS_ARGS_VERSION_PARAMS: [&'static str; 1] = ["$PSVersionTable.PSVersion"];
 
@@ -37,6 +33,7 @@ pub type PSVER = (u32, u32);
 // Find out if called as admin
 // [bool](([System.Security.Principal.WindowsIdentity]::GetCurrent()).groups -match "S-1-5-32-544")
 
+#[derive(Debug)]
 struct PSRes {
     stdout: String,
     stderr: String,
@@ -114,6 +111,7 @@ impl PSInfo {
                 return Err(MigError::from(MigErrorKind::AuthError));
             }
             let output = call_from_stdin(&PS_CMD_IS_SECURE_BOOT,true)?;
+            trace!("{}::is_secure_boot: command result: {:?}", MODULE, output);
             if !output.ps_ok || !output.stderr.is_empty() {
                 // 'Confirm-SecureBootUEFI : Variable is currently undefined: 0xC0000100'
                 let regex = Regex::new(r"Confirm-SecureBootUEFI\s*:\s*Variable\s+is\s+currently\s+undefined:.*").unwrap();
