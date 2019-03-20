@@ -19,6 +19,7 @@ pub(crate) struct MSWMigrator {
     ps_info: PSInfo,
     wmi_utils: WmiUtils,
     os_info: Option<WMIOSInfo>,
+    uefi_boot: Option<bool>,
 }
 
 impl MSWMigrator {
@@ -27,6 +28,7 @@ impl MSWMigrator {
             ps_info: PSInfo::try_init()?,
             wmi_utils: WmiUtils::new()?,
             os_info: None,
+            uefi_boot: None,
         };
         Ok(msw_info)
     }
@@ -38,7 +40,13 @@ impl Migrator for MSWMigrator {
     }
     
     fn is_uefi_boot(&mut self) -> Result<bool,MigError> {
-        Err(MigError::from(MigErrorKind::NotImpl))
+        match self.uefi_boot {
+            Some(v) => Ok(v),
+            None => {
+                self.uefi_boot = Some(win_api::is_uefi_boot()?);
+                Ok(self.uefi_boot.unwrap())
+            }
+        }
     }
      
     fn migrate(&mut self) -> Result<(),MigError> {

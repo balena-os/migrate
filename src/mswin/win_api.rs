@@ -16,6 +16,7 @@ use failure::{Fail,ResultExt, Context};
 use winapi::um::handleapi::{INVALID_HANDLE_VALUE};
 use winapi::um::fileapi::{FindFirstVolumeW, FindNextVolumeW, FindVolumeClose, QueryDosDeviceW};        
 use winapi::um::winbase::{GetFirmwareEnvironmentVariableW};
+use winapi::shared::winerror::{ERROR_INVALID_FUNCTION};
 
 
 use crate::mig_error::{MigError, MigErrorKind, MigErrCtx};
@@ -187,16 +188,26 @@ fn query_dos_device(dev_name: Option<&str>) -> Result<Vec<String>,MigError> {
     }
 }
 
-pub fn is_uefi_boot() -> bool {
+pub fn is_uefi_boot() -> Result<bool, MigError> {
     let dummy: Vec<u16> = OsStr::new("").encode_wide().chain(once(0)).collect();
     let guid: Vec<u16> = OsStr::new("{00000000-0000-0000-0000-000000000000}").encode_wide().chain(once(0)).collect();
     let res = unsafe { GetFirmwareEnvironmentVariableW(dummy.as_ptr(), guid.as_ptr(), null_mut(), 0) };
-    let os_err = Error::last_os_error();
-    match os_err.raw_os_error() {
-        Some(_err) => (),
-        None => (),
+    if res != 0 {
+        return Err(MigError::from_remark(MigErrorKind::InvParam, &format!("{}::is_uefi_boot: no error where an error was expected", MODULE)));
     }
+    let os_err = Error::last_os_error();
 
+    match os_err.raw_os_error() {
+        Some(err) => { 
+            if err == ERROR_INVALID_FUNCTION as i32 {
+                Ok(false)
+            } else {
+                trace!("{}::is_uefi_boot: error value: {}",MODULE,err);
+                Ok(true)
+            }
+        },
+        None => Err(MigError::from_remark(MigErrorKind::InvParam, &format!("{}::is_uefi_boot: no error where an error was expeted", MODULE))),
+    }
 
     /*
     GetFirmwareEnvironmentVariableA("","{00000000-0000-0000-0000-000000000000}",IntPtr.Zero,0);
@@ -208,8 +219,7 @@ pub fn is_uefi_boot() -> bool {
             else
 
                 return true;      // API error (expected) but call is supported.  This is UEFI.
-    */
-    false                
+    */    
 }
 
 
