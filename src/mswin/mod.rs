@@ -1,5 +1,5 @@
 mod powershell;
-mod win_api;
+pub mod win_api;
 mod wmi_utils;
 
 use log::{info, trace, error};
@@ -38,7 +38,11 @@ impl Migrator for MSWMigrator {
     fn can_migrate(&mut self) -> Result<bool,MigError> {
         Err(MigError::from(MigErrorKind::NotImpl))
     }
-    
+
+    fn migrate(&mut self) -> Result<(),MigError> {
+        Err(MigError::from(MigErrorKind::NotImpl))
+    }
+
     fn is_uefi_boot(&mut self) -> Result<bool,MigError> {
         match self.uefi_boot {
             Some(v) => Ok(v),
@@ -49,10 +53,6 @@ impl Migrator for MSWMigrator {
         }
     }
      
-    fn migrate(&mut self) -> Result<(),MigError> {
-        Err(MigError::from(MigErrorKind::NotImpl))
-    }
-
     fn get_os_name<'a>(&'a mut self) -> Result<&'a str,MigError> {
         match self.os_info {
             Some(ref info) => Ok(&info.os_name),

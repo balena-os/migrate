@@ -24,11 +24,12 @@ use crate::mig_error::{MigError, MigErrorKind, MigErrCtx};
 const MODULE:&str = "test_win_api";
 
 #[derive(Debug)]
-enum StorageDevice {
+pub enum StorageDevice {
     PhysicalDrive(PhysicalDriveInfo),
     HarddiskVolume(HarddiskVolumeInfo),
     HarddiskPartition(HarddiskPartitionInfo),
-    Volume(VolumeInfo),    
+    Volume(VolumeInfo),
+    DriveLetter(DriveLetterInfo),    
 }
 
 #[derive(Debug)]
@@ -59,6 +60,13 @@ pub struct VolumeInfo {
     uuid: String,    
     device: String,
 }
+
+#[derive(Debug)]
+pub struct DriveLetterInfo {
+    dev_name: String,
+    device: String,
+}
+
 
 /*
 #[cfg(windows)]
@@ -211,10 +219,8 @@ pub fn is_uefi_boot() -> Result<bool, MigError> {
 }
 
 
-pub fn enumerate_volumes() -> Result<i32, MigError> {    
-    
-    // use winapi::um::winbase::{FindFirstVolumeA, FindNextVolumeA};
-    
+pub fn enumerate_volumes() -> Result<i32, MigError> {        
+
     match query_dos_device(None) { 
         Ok(sl) => {
             for device in sl {
@@ -240,10 +246,11 @@ pub fn enumerate_volumes() -> Result<i32, MigError> {
     Ok(0)
 }
 
-pub fn enumerate_drives() -> Result<(),MigError> {    
+pub fn enumerate_drives() -> Result<HashMap<String,Rc<StorageDevice>>,MigError> {    
     trace!("{}::enumerate_drives: entered" , MODULE);
 
     lazy_static! {
+        static ref RE_DL: Regex = Regex::new(r"^([A-Z]:)$").unwrap();
         static ref RE_HDV: Regex = Regex::new(r"^HarddiskVolume([0-9]+)$").unwrap();
         static ref RE_PD: Regex = Regex::new(r"^PhysicalDrive([0-9]+)$").unwrap();
         static ref RE_VOL: Regex = Regex::new(r"^Volume\{([0-9a-z\-]+)\}$").unwrap();
@@ -260,6 +267,16 @@ pub fn enumerate_drives() -> Result<(),MigError> {
                 let mut storage_device: Option<StorageDevice> = None;
                 
                 loop {  
+                    if let Some(c) = RE_DL.captures(&device) {
+                        storage_device = Some(
+                            StorageDevice::DriveLetter(
+                                DriveLetterInfo{
+                                    dev_name: device.clone(),                                    
+                                    device: query_dos_device(Some(&device))?.get(0).unwrap().clone(),
+                                }
+                        ));
+                        break;
+                    }
 
                     if let Some(c) = RE_HDV.captures(&device) {                        
                         let ms_device_name = match query_dos_device(Some(&device))?.get(0) {
@@ -356,7 +373,7 @@ pub fn enumerate_drives() -> Result<(),MigError> {
         }
     };
 
-    Ok(())
+    Ok(dev_map)
 }    
 
 

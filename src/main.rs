@@ -1,6 +1,14 @@
 use clap::{App, Arg};
 
 use balena_migrator::{Migrator};
+use balena_migrator::mswin::win_api::{enumerate_drives};
+
+fn print_drives() -> () {
+    let drive_map = enumerate_drives().unwrap();
+    for key in drive_map.keys() {
+        println!("{:?}",drive_map.get(key));
+    }
+}
 
 fn print_sysinfo(s_info: &mut Migrator) -> () {
 
@@ -80,5 +88,8 @@ fn main() {
         .unwrap();
 
     let mut migrator = balena_migrator::get_migrator().unwrap();
-    print_sysinfo(migrator.as_mut())
+    print_sysinfo(migrator.as_mut());
+
+    #[cfg(target_os = "windows")]
+    print_drives();
 }

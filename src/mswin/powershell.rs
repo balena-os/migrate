@@ -318,7 +318,7 @@ fn call_from_stdin(cmd_str: &str, trim_stdout: bool) -> Result<PSRes, MigError> 
 
     let mut full_cmd = String::from(PS_CMD_PREFIX);
     full_cmd.push_str(cmd_str);
-    full_cmd = push_str(PS_CMD_POSTFIX);
+    full_cmd.push_str(PS_CMD_POSTFIX);
     if let Some(ref mut stdin) = command.stdin {
         stdin
             .write(full_cmd.as_bytes())
