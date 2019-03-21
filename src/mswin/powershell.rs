@@ -1,14 +1,15 @@
 const MODULE: &str = "win_test::mswin::powershell";
 
 const POWERSHELL: &str = "powershell.exe";
-const PS_CMD_PRIMER: &str = "[System.Threading.Thread]::CurrentThread.CurrentUICulture = 'en-US';";
+const PS_CMD_PREFIX: &str = "[System.Threading.Thread]::CurrentThread.CurrentUICulture = 'en-US';";
+const PS_CMD_POSTFIX: &str = " | out-string -width 200";
 
 const PS_ARGS_FROM_STDIN: [&'static str; 3] = ["-NonInteractive", "-Command", "-"];
 //pub const POWERSHELL_GET_CMDLET_PARAMS: [&'static str; 7] =
 //    ["Get-Command", "-CommandType", "Cmdlet", "|" , "out-string", "-width", "200"];
 const PS_CMD_IS_ADMIN: &str = 
-    "[bool](([System.Security.Principal.WindowsIdentity]::GetCurrent()).groups -match \"S-1-5-32-544\");";
-const PS_CMD_IS_SECURE_BOOT: &str = "Confirm-SecureBootUEFI;";
+    "[bool](([System.Security.Principal.WindowsIdentity]::GetCurrent()).groups -match \"S-1-5-32-544\")";
+const PS_CMD_IS_SECURE_BOOT: &str = "Confirm-SecureBootUEFI";
 
 const PS_ARGS_VERSION_PARAMS: [&'static str; 1] = ["$PSVersionTable.PSVersion"];
 
@@ -315,8 +316,9 @@ fn call_from_stdin(cmd_str: &str, trim_stdout: bool) -> Result<PSRes, MigError> 
         ))?;
     // TODO: make sure we write the right thing (utf8/wide)
 
-    let mut full_cmd = String::from(PS_CMD_PRIMER);
+    let mut full_cmd = String::from(PS_CMD_PREFIX);
     full_cmd.push_str(cmd_str);
+    full_cmd = push_str(PS_CMD_POSTFIX);
     if let Some(ref mut stdin) = command.stdin {
         stdin
             .write(full_cmd.as_bytes())

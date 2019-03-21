@@ -208,18 +208,6 @@ pub fn is_uefi_boot() -> Result<bool, MigError> {
         },
         None => Err(MigError::from_remark(MigErrorKind::InvParam, &format!("{}::is_uefi_boot: no error where an error was expeted", MODULE))),
     }
-
-    /*
-    GetFirmwareEnvironmentVariableA("","{00000000-0000-0000-0000-000000000000}",IntPtr.Zero,0);
-
-            if (Marshal.GetLastWin32Error() == ERROR_INVALID_FUNCTION)
-
-                return false;     // API not supported; this is a legacy BIOS
-
-            else
-
-                return true;      // API error (expected) but call is supported.  This is UEFI.
-    */    
 }
 
 
