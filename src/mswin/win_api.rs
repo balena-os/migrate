@@ -397,6 +397,15 @@ pub fn enumerate_drives() -> Result<HashMap<String,StorageDevice>,MigError> {
                                 break;
                             }
                         }                        
+
+                        if let None = hdpart.phys_disk {
+                            warn!("{}::enumerate_drives: unmatched partition physical disk {:?}", MODULE, hdpart);
+                        }                    
+                        if let None = hdpart.hd_vol {
+                            warn!("{}::enumerate_drives: unmatched partition harddisk volume {:?}", MODULE, hdpart);
+                        }                    
+
+
                         dev_map.entry(hdpart.dev_name.clone()).or_insert(StorageDevice::HarddiskPartition(hdp.clone()));                        
                     },
                     None => { break; }                   
@@ -415,6 +424,11 @@ pub fn enumerate_drives() -> Result<HashMap<String,StorageDevice>,MigError> {
                                 break;
                             }
                         }                        
+                        
+                        if let None = volume.hd_vol {
+                            warn!("{}::enumerate_drives: unmatched volume {:?}", MODULE, volume);
+                        }                    
+
                         dev_map.entry(volume.dev_name.clone()).or_insert(StorageDevice::Volume(vol.clone()));                        
                         
                     },
@@ -434,10 +448,11 @@ pub fn enumerate_drives() -> Result<HashMap<String,StorageDevice>,MigError> {
                                 break;
                             }                        
                         }    
+                        /*
                         if let None = driveletter.hd_vol {
-                            warn!("{}::enumerate_drives: unmatched drive letter {:?}", dl);
+                            warn!("{}::enumerate_drives: unmatched drive letter {:?}", MODULE, driveletter);
                         }                    
-                        
+                        */ 
                         dev_map.entry(driveletter.dev_name.clone()).or_insert(StorageDevice::DriveLetter(dl.clone()));                        
                         
                     },
@@ -449,11 +464,11 @@ pub fn enumerate_drives() -> Result<HashMap<String,StorageDevice>,MigError> {
             loop {
                 match hdv_list .pop() {                    
                     Some(hdv) => {                        
-                        let hd_vol = hdv.as_ref().borrow();
+                        let hdvol = hdv.as_ref().borrow();
                         if let None = hdvol.hdpart {
-                            warn!("{}::enumerate_drives: unmatched harddisk volume {:?}", hdv);
+                            warn!("{}::enumerate_drives: unmatched harddisk volume {:?}",MODULE, hdvol);
                         }
-                        dev_map.entry(hd_vol.dev_name.clone()).or_insert(StorageDevice::HarddiskVolume(hdv.clone())); 
+                        dev_map.entry(hdvol.dev_name.clone()).or_insert(StorageDevice::HarddiskVolume(hdv.clone())); 
                     },
                     None => { break; },
                 }
