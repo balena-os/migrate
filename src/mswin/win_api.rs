@@ -60,7 +60,6 @@ impl Debug for HarddiskVolumeInfo {
                 dep_dev = String::from("invalid");
             }
         }
-
         write!( f, "HarddiskVolumeInfo {{ dev_name: {}, index: {}, device: {}, hdpart: {} }}", self.dev_name, self.index, self.device, dep_dev)
     }
 }
@@ -433,8 +432,12 @@ pub fn enumerate_drives() -> Result<HashMap<String,StorageDevice>,MigError> {
                                 // TODO: modify hd_vol here                                
                                 driveletter.hd_vol = Some(hdv.clone());                                
                                 break;
-                            }
-                        }                        
+                            }                        
+                        }    
+                        if let None = driveletter.hd_vol {
+                            warn!("{}::enumerate_drives: unmatched drive letter {:?}", dl);
+                        }                    
+                        
                         dev_map.entry(driveletter.dev_name.clone()).or_insert(StorageDevice::DriveLetter(dl.clone()));                        
                         
                     },
@@ -442,6 +445,20 @@ pub fn enumerate_drives() -> Result<HashMap<String,StorageDevice>,MigError> {
                 }
 
             }
+            
+            loop {
+                match hdv_list .pop() {                    
+                    Some(hdv) => {                        
+                        let hd_vol = hdv.as_ref().borrow();
+                        if let None = hdvol.hdpart {
+                            warn!("{}::enumerate_drives: unmatched harddisk volume {:?}", hdv);
+                        }
+                        dev_map.entry(hd_vol.dev_name.clone()).or_insert(StorageDevice::HarddiskVolume(hdv.clone())); 
+                    },
+                    None => { break; },
+                }
+            }    
+
         },
         Err(why) => {
             println!("query_dos_device retured error: {:?}", why);
