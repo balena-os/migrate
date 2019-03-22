@@ -6,7 +6,7 @@ use balena_migrator::mswin::win_api::{enumerate_drives};
 fn print_drives() -> () {
     let drive_map = enumerate_drives().unwrap();
     for key in drive_map.keys() {
-        println!("{:?}",drive_map.get(key));
+        println!("{}\n  -> {:?}\n",&key,drive_map.get(key));
     }
 }
 
