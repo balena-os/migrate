@@ -8,7 +8,7 @@ use std::ptr::null_mut;
 use log::{warn, info, trace};
 use lazy_static::lazy_static;
 use regex::Regex;
-use std::rc::Rc;
+use std::rc::{Rc};
 
 use std::collections::hash_map::HashMap;
 use failure::{Fail,ResultExt, Context};
@@ -25,11 +25,11 @@ const MODULE:&str = "test_win_api";
 
 #[derive(Debug)]
 pub enum StorageDevice {
-    PhysicalDrive(PhysicalDriveInfo),
-    HarddiskVolume(HarddiskVolumeInfo),
-    HarddiskPartition(HarddiskPartitionInfo),
-    Volume(VolumeInfo),
-    DriveLetter(DriveLetterInfo),    
+    PhysicalDrive(Rc<PhysicalDriveInfo>),
+    HarddiskVolume(Rc<HarddiskVolumeInfo>),
+    HarddiskPartition(Rc<HarddiskPartitionInfo>),
+    Volume(Rc<VolumeInfo>),
+    DriveLetter(Rc<DriveLetterInfo>),    
 }
 
 #[derive(Debug)]
@@ -43,7 +43,7 @@ pub struct PhysicalDriveInfo {
 pub struct HarddiskVolumeInfo {
     dev_name: String,
     index: u64,
-    device: String,
+    device: String,    
 }
 
 #[derive(Debug)]
@@ -52,6 +52,8 @@ pub struct HarddiskPartitionInfo {
     hd_index: u64,
     part_index: u64,
     device: String,
+    phys_disk: Option<Rc<PhysicalDriveInfo>>
+    hd_vol: Option<Rc<HardDiskVolumeInfo>>
 }
 
 #[derive(Debug)]
@@ -59,12 +61,14 @@ pub struct VolumeInfo {
     dev_name: String,
     uuid: String,    
     device: String,
+    hd_part: Option<Rc<HarddiskPartitionInfo>>
 }
 
 #[derive(Debug)]
 pub struct DriveLetterInfo {
     dev_name: String,
     device: String,
+    hd_part: Option<Rc<HarddiskPartitionInfo>>
 }
 
 
@@ -257,7 +261,9 @@ pub fn enumerate_drives() -> Result<HashMap<String,Rc<StorageDevice>>,MigError> 
         static ref RE_HDPART: Regex = Regex::new(r"^Harddisk([0-9]+)Partition([0-9]+)$").unwrap();
     }
 
-    let mut dev_list: Vec<Rc<StorageDevice>> = Vec::new();
+    let mut part_list: Vec<Rc<StorageDevice>> = Vec::new();
+    let mut part_list: Vec<Rc<StorageDevice>> = Vec::new();
+
     let mut dev_map: HashMap<String,Rc<StorageDevice>> = HashMap::new();
 
     match query_dos_device(None) { 
@@ -273,6 +279,7 @@ pub fn enumerate_drives() -> Result<HashMap<String,Rc<StorageDevice>>,MigError> 
                                 DriveLetterInfo{
                                     dev_name: device.clone(),                                    
                                     device: query_dos_device(Some(&device))?.get(0).unwrap().clone(),
+                                    hd_part: None
                                 }
                         ));
                         break;
@@ -290,7 +297,7 @@ pub fn enumerate_drives() -> Result<HashMap<String,Rc<StorageDevice>>,MigError> 
                                 HarddiskVolumeInfo{
                                     dev_name: device.clone(),
                                     index: c.get(1).unwrap().as_str().parse::<u64>().unwrap(),
-                                    device: ms_device_name,
+                                    device: ms_device_name,                                    
                                 }
                         ));
                         break;
@@ -327,6 +334,7 @@ pub fn enumerate_drives() -> Result<HashMap<String,Rc<StorageDevice>>,MigError> 
                                     dev_name: device.clone(),
                                     uuid: String::from(c.get(1).unwrap().as_str()),
                                     device: ms_device_name,
+                                    hd_part: None
                                 }
                         ));
                         break;
@@ -346,6 +354,8 @@ pub fn enumerate_drives() -> Result<HashMap<String,Rc<StorageDevice>>,MigError> 
                                     hd_index: c.get(1).unwrap().as_str().parse::<u64>().unwrap(),
                                     part_index: c.get(2).unwrap().as_str().parse::<u64>().unwrap(),
                                     device: ms_device_name,
+                                    phys_disk: None,
+                                    hd_vol: None,
                                 }
                         ));
                         break;
