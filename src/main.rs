@@ -1,12 +1,34 @@
 use clap::{App, Arg};
 
 use balena_migrator::{Migrator};
-use balena_migrator::mswin::win_api::{enumerate_drives};
 
+#[cfg(target_os = "windows")]
 fn print_drives() -> () {
+    use balena_migrator::mswin::drive_info::{enumerate_drives, StorageDevice, DeviceProps};
+
     let drive_map = enumerate_drives().unwrap();
     for key in drive_map.keys() {
-        println!("{}\n  -> {:?}\n",&key,drive_map.get(key));
+        println!("Key: {}",&key);
+        let info = drive_map.get(key).unwrap();
+        match info {
+            StorageDevice::HarddiskPartition(hdp) => {
+                let hdp = hdp.as_ref().borrow();
+                println!("  type: HarddiskPartition");
+                println!("  harddisk index: {}", hdp.get_hd_index());
+                println!("  partition index: {}", hdp.get_part_index());
+                println!("  device :         {}\n", hdp.get_device());
+            },
+            StorageDevice::PhysicalDrive(pd) => {
+                let pd = pd.as_ref();
+                println!("  type: PhysicalDrive");
+                println!("  harddisk index: {}", pd.get_index());                
+                println!("  device :         {}\n", pd.get_device());
+            },
+
+            _ => {
+                println!("  yet to be implemented\n");
+            },
+        }
     }
 }
 

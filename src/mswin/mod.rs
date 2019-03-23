@@ -1,19 +1,20 @@
-mod powershell;
-pub mod win_api;
-mod wmi_utils;
+pub(crate) mod powershell;
+pub(crate) mod win_api;
+pub(crate) mod wmi_utils;
+pub mod drive_info;
 
-use log::{info, trace, error};
+use log::{trace};
 
-use failure::{ResultExt};
+
 use wmi_utils::{WmiUtils,WMIOSInfo};
 
-use crate::mig_error::{MigError,MigErrorKind,MigErrCtx};
+use crate::mig_error::{MigError,MigErrorKind};
 
 use crate::{OSRelease, OSArch, Migrator};
 
 use powershell::{PSInfo};
 
-const MODULE: &str = "mswin";
+// const MODULE: &str = "mswin";
 
 pub(crate) struct MSWMigrator {
     ps_info: PSInfo,
