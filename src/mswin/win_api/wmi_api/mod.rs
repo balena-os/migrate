@@ -12,7 +12,6 @@ use winapi::{
         wtypesbase::CLSCTX_INPROC_SERVER,
     },    
     um::{
-        oaidl::SAFEARRAY,
         objidl::EOAC_NONE,
         combaseapi::{
                     CoCreateInstance, 
@@ -26,8 +25,6 @@ use winapi::{
                     IWbemServices, 
                     WBEM_FLAG_FORWARD_ONLY, 
                     WBEM_FLAG_RETURN_IMMEDIATELY,
-                    WBEM_FLAG_ALWAYS, 
-                    WBEM_FLAG_NONSYSTEM_ONLY,
                     },
     },
 };
@@ -36,11 +33,16 @@ use super::com_api::{get_com_api, HComApi};
 use super::util::to_wide_cstring;
 use crate::{MigErrCtx, MigError, MigErrorKind};
 
-mod iwbem_class_wr;
-pub use iwbem_class_wr::IWbemClassWrapper;
 
 type PMIWbemLocator = *mut IWbemLocator;
 type PMIWbemServices = *mut IWbemServices;
+type PMIEnumWbemClassObject = *mut IEnumWbemClassObject;
+type PMIWbemClassObject = *mut IWbemClassObject;
+
+mod iwbem_class_wr;
+pub use iwbem_class_wr::IWbemClassWrapper;
+mod query_result_enum;
+pub use query_result_enum::QueryResultEnumerator;
 
 const MODULE: &str = "mswin::win_api::wmi_api";
 
@@ -153,7 +155,7 @@ impl<'a> WmiAPI {
         let query_language = to_wide_cstring("WQL");
         let query = to_wide_cstring(query);
 
-        let mut p_enumerator = NULL as *mut IEnumWbemClassObject;
+        let mut p_enumerator = NULL as PMIEnumWbemClassObject;
 
         if unsafe {
             (*self.p_svc).ExecQuery(
@@ -176,8 +178,24 @@ impl<'a> WmiAPI {
 
         debug!("{}::raw_query: Got enumerator {:?}", MODULE, p_enumerator);
 
+        for iwbem_obj in QueryResultEnumerator::new(p_enumerator) {
+            debug!("{}::raw_query: got object", MODULE);
+            match iwbem_obj {
+                Ok(obj) => {
+                    debug!("{}::raw_query:   is object", MODULE);                    
+                    for prop in obj.list_properties()? {
+                        debug!("{}::raw_query:     has property: {:?}", MODULE, prop);                    
+                    }
+                }, 
+                Err(why) => {
+                    warn!("{}::raw_query:   is error result: {:?}", MODULE, why);                    
+                }
+            }
+        }
+
         //Ok(QueryResultEnumerator::new(self, p_enumerator))
 
-        Err(MigError::from(MigErrorKind::NotImpl))
+        Ok(())
+        //Err(MigError::from(MigErrorKind::NotImpl))
     }
 }

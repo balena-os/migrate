@@ -1,31 +1,24 @@
-use failure::{Fail,ResultExt};
-use log::{debug, warn};
-use std::ptr::{self, null_mut};
+use failure::{ResultExt};
+use log::{debug};
+use std::ptr;
 use std::slice;
-use widestring::WideCStr;
+use widestring::{WideCString, WideCStr};
+use std::mem;
 
 use winapi::{
     shared::{
         ntdef::NULL,
-        wtypes::BSTR,
+        wtypes::*,
     },    
-    um::{
-        oaidl::SAFEARRAY,
+    um::{        
+        oaidl::{SAFEARRAY,VARIANT,},
         oleauto::{
             SafeArrayAccessData,
             SafeArrayUnaccessData,
             SafeArrayGetLBound,
             SafeArrayGetUBound,
             SafeArrayDestroy },
-        wbemcli::{  IEnumWbemClassObject,
-                    IWbemClassObject,
-                    CLSID_WbemLocator, 
-                    IID_IWbemLocator, 
-                    IWbemLocator, 
-                    IWbemServices, 
-                    WBEM_FLAG_FORWARD_ONLY, 
-                    WBEM_FLAG_RETURN_IMMEDIATELY,
-                    WBEM_FLAG_ALWAYS, 
+        wbemcli::{  WBEM_FLAG_ALWAYS, 
                     WBEM_FLAG_NONSYSTEM_ONLY,
                     },
     },
@@ -33,15 +26,24 @@ use winapi::{
 
 use crate::mswin::win_api::util::{report_win_api_error};
 use crate::mig_error::{MigError, MigErrorKind, MigErrCtx};
+use super::PMIWbemClassObject;
 
 const MODULE: &str = "mswin::win_api::wmi_api::iwbem_class";
 
+pub enum Variant {
+    STRING(String),
+    U64(u64),    
+    U32(u32),
+    VEC_STRING(Vec<String>),
+    VEC_U32(Vec<u32>),
+}
+
 pub struct IWbemClassWrapper {
-    pub inner: IWbemClassObject,
+    pub inner: PMIWbemClassObject,
 }
 
 impl IWbemClassWrapper {
-    pub fn new(ptr: IWbemClassObject) -> Self {
+    pub fn new(ptr: PMIWbemClassObject) -> Self {
         Self { inner: ptr }
     }
 
@@ -50,7 +52,7 @@ impl IWbemClassWrapper {
         let mut p_names = NULL as *mut SAFEARRAY;
 
         if unsafe {
-            self.inner.GetNames(
+            (*(self.inner)).GetNames(
                 ptr::null(),
                 (WBEM_FLAG_ALWAYS | WBEM_FLAG_NONSYSTEM_ONLY) as i32,
                 ptr::null_mut(),
@@ -66,6 +68,42 @@ impl IWbemClassWrapper {
         }
 
         result
+    }
+
+    fn to_variant(&self, vt_prop: &VARIANT) -> Option<Variant> {
+        let variant_type: VARTYPE = unsafe { vt_prop.n1.n2().vt };
+        if variant_type as u32 & VT_ARRAY == VT_ARRAY {
+            let array: &*mut SAFEARRAY = unsafe { vt_prop.n1.n2().n3.parray() };
+
+            let item_type = variant_type as u32 & VT_TYPEMASK;
+            if item_type ==  {
+
+            }
+
+            return Ok(Variant::Array(safe_array_to_vec(*array, item_type as u32)?));
+        }
+
+
+        None
+    }
+
+    pub fn get_property(&self, prop_name: &str) -> Result<Option<Variant>, MigError> {
+        let name_prop = WideCString::from_str(prop_name).context(MigErrCtx::from(MigErrorKind::InvParam))?;
+
+        let mut vt_prop: VARIANT = unsafe { mem::zeroed() };
+
+        if unsafe {
+            (*self.inner).Get(
+                name_prop.as_ptr() as *mut _,
+                0,
+                &mut vt_prop,
+                ptr::null_mut(),
+                ptr::null_mut(),
+            ) } < 0 {
+                return Err(report_win_api_error(MODULE, "get_property", "IWbemClassObject::Get"));
+            }
+
+        Ok(self.to_variant(&vt_prop))        
     }
 }
 
@@ -97,8 +135,9 @@ fn safe_to_str_array(arr: *mut SAFEARRAY) -> Result<Vec<String>,MigError> {
     let mut result: Vec<String> = Vec::new();
     let data_slice = unsafe { slice::from_raw_parts(p_data as *mut BSTR, (upper_bound + 1) as usize) };
     let data_slice = &data_slice[(lower_bound as usize)..];
-    for item_bstr in data_slice.iter() {
+    for item_bstr in data_slice.iter() {        
         let item: &WideCStr = unsafe { WideCStr::from_ptr_str(*item_bstr) };
+        debug!("{}::safe_to_str_array: adding item: {}", MODULE, item.to_string_lossy());
         result.push(
             String::from(
                 item.to_string()
@@ -109,6 +148,6 @@ fn safe_to_str_array(arr: *mut SAFEARRAY) -> Result<Vec<String>,MigError> {
         return Err(report_win_api_error(MODULE, "safe_to_str_array", "SafeArrayUnaccessData"));
     }
 
-    Err(MigError::from(MigErrorKind::NotImpl))
+    Ok(result)
 }
 
