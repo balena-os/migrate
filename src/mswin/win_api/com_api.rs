@@ -1,6 +1,6 @@
 use failure::Fail;
 use lazy_static::lazy_static;
-use log::{info, trace, warn};
+use log::{info, debug, warn};
 use std::io::Error;
 use std::ptr::null_mut;
 use std::sync::{Arc, Mutex};
@@ -27,15 +27,14 @@ pub type HComApi = Arc<Mutex<Option<ComAPI>>>;
 pub struct ComAPI {}
 
 pub fn get_com_api() -> Result<HComApi, MigError> {
-    //info!("{}::get_com_api: entered", MODULE);
-    println!("{}::get_com_api: entered", MODULE);
+    debug!("{}::get_com_api: entered", MODULE);
     lazy_static! {
         static ref COM_REF: HComApi = Arc::new(Mutex::new(None));
     }
 
     if let Ok(mut oca) = (*COM_REF).lock() {
         if let None = *oca {
-            trace!("{}::get_com_api: initializing com", MODULE);
+            debug!("{}::get_com_api: initializing com", MODULE);
             if unsafe { CoInitializeEx(null_mut(), COINIT_MULTITHREADED) } < 0 {
                 let os_err = Error::last_os_error();
                 warn!(
@@ -47,6 +46,7 @@ pub fn get_com_api() -> Result<HComApi, MigError> {
                     &format!("{}::get_com_api: CoInitializeEx failed", MODULE),
                 ))));
             }
+            debug!("{}::get_com_api: calling CoInitializeSecurity", MODULE);
             if unsafe {
                 CoInitializeSecurity(
                     NULL,
@@ -75,7 +75,7 @@ pub fn get_com_api() -> Result<HComApi, MigError> {
 
             *oca = Some(ComAPI {});
         }
-
+        debug!("{}::get_com_api: done", MODULE);
         Ok(COM_REF.clone())
     } else {
         Err(MigError::from_remark(
@@ -87,7 +87,7 @@ pub fn get_com_api() -> Result<HComApi, MigError> {
 
 impl Drop for ComAPI {
     fn drop(&mut self) {
-        trace!("{}::drop: deinitializing com", MODULE);
+        debug!("{}::drop: deinitializing com", MODULE);
         unsafe { CoUninitialize() };
     }
 }

@@ -18,7 +18,7 @@ use failure::{Fail, ResultExt};
 use std::io::Write;
 
 use lazy_static::lazy_static;
-use log::{info, trace, warn};
+use log::{info, debug, warn};
 use regex::Regex;
 use std::collections::HashMap;
 use std::fmt::{Debug, Display};
@@ -64,7 +64,7 @@ impl PSInfo {
 
         ps_info.get_ps_ver()?;
 
-        trace!(
+        debug!(
             "{}::try_init: ps_info.has_command('Get-Command')? = '{}'",
             MODULE,
             ps_info.has_command("Get-Command")?
@@ -114,7 +114,7 @@ impl PSInfo {
                 return Err(MigError::from(MigErrorKind::AuthError));
             }
             let output = call_from_stdin(&PS_CMD_IS_SECURE_BOOT, true)?;
-            trace!("{}::is_secure_boot: command result: {:?}", MODULE, output);
+            debug!("{}::is_secure_boot: command result: {:?}", MODULE, output);
             if !output.ps_ok || !output.stderr.is_empty() {
                 // 'Confirm-SecureBootUEFI : Variable is currently undefined: 0xC0000100'
                 let regex = Regex::new(
@@ -138,22 +138,22 @@ impl PSInfo {
     }
 
     pub fn get_ps_ver(&mut self) -> Result<(u32, u32), MigError> {
-        trace!("{}::get_ps_ver(): called", MODULE);
+        debug!("{}::get_ps_ver(): called", MODULE);
 
         match self.version {
             Some(v) => return Ok(v),
             None => (),
         }
 
-        trace!("{}::get_ps_ver(): calling powershell", MODULE);
+        debug!("{}::get_ps_ver(): calling powershell", MODULE);
         let output = call(&PS_ARGS_VERSION_PARAMS, true)?;
 
-        trace!(
+        debug!(
             "{}::get_ps_ver(): powershell stdout: {}",
             MODULE,
             output.stdout
         );
-        trace!(
+        debug!(
             "{}::get_ps_ver(): powershell stderr {}",
             MODULE,
             output.stderr
@@ -161,7 +161,7 @@ impl PSInfo {
 
         let lines: Vec<&str> = output.stdout.lines().collect();
 
-        trace!(
+        debug!(
             "{}::get_ps_ver(): powershell stdout: lines: {}",
             MODULE,
             lines.len()
@@ -204,7 +204,7 @@ impl PSInfo {
 
     /*
     fn get_cmdlets(&mut self) -> Result<usize, MigError> {
-        trace!("{}::get_cmdlets(): called", MODULE);
+        debug!("{}::get_cmdlets(): called", MODULE);
         let output = call_from_stdin(PS_CMD_GET_CMDLET_PARAMS, true)?;
 
         if !output.ps_ok {
@@ -270,7 +270,7 @@ impl PSInfo {
                             if !RE.is_match(v) {
                                 if self.cmdlets.insert(String::from(*v)) {
                                     cmds += 1;
-                                    trace!("{}::get_cmdlets(): added cmdlet '{}'", MODULE, *v);
+                                    debug!("{}::get_cmdlets(): added cmdlet '{}'", MODULE, *v);
                                 } else {
                                     warn!("{}::get_cmdlets(): duplicate cmdlet '{}'", MODULE, *v);
                                 }
@@ -289,7 +289,7 @@ impl PSInfo {
             match words.get(name_idx) {
                 Some(v) =>
                     if self.cmdlets.insert(String::from(*v)) {
-                        trace!("{}::get_cmdlets(): added cmdlet '{}'", MODULE, *v);
+                        debug!("{}::get_cmdlets(): added cmdlet '{}'", MODULE, *v);
                         cmds += 1;
                     } else {
                         warn!("{}::get_cmdlets(): duplicate cmdlet '{}'", MODULE, *v);
@@ -303,7 +303,7 @@ impl PSInfo {
 }
 
 fn call_from_stdin(cmd_str: &str, trim_stdout: bool) -> Result<PSRes, MigError> {
-    trace!(
+    debug!(
         "{}::call_from_stdin(): called with {:?} < '{}'  trim_stdout: {}",
         MODULE,
         PS_ARGS_FROM_STDIN,
@@ -365,7 +365,7 @@ fn call_from_stdin(cmd_str: &str, trim_stdout: bool) -> Result<PSRes, MigError> 
 }
 
 fn call(args: &[&str], trim_stdout: bool) -> Result<PSRes, MigError> {
-    trace!(
+    debug!(
         "{}::call_to_string(): called with {:?}, {}",
         MODULE,
         args,

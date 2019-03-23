@@ -1,5 +1,5 @@
 use failure::{Fail, ResultExt};
-use log::trace;
+use log::debug;
 use regex::Regex;
 use std::fs::read_to_string;
 use std::io::Read;
@@ -17,7 +17,7 @@ pub fn parse_file(fname: &str, regex: &Regex) -> Result<String, MigError> {
     ))?;
 
     for line in os_info.lines() {
-        trace!("{}::parse_file: line: '{}'", MODULE, line);
+        debug!("{}::parse_file: line: '{}'", MODULE, line);
 
         if let Some(cap) = regex.captures(line) {
             return Ok(String::from(cap.get(1).unwrap().as_str()));

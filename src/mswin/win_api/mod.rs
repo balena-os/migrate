@@ -1,6 +1,6 @@
 // extern crate winapi;
 use failure::{Fail, ResultExt};
-use log::{trace, warn};
+use log::{debug, warn};
 use std::ffi::OsStr;
 use std::io::Error;
 use std::iter::once;
@@ -29,7 +29,7 @@ use util::{clip, to_string, to_string_list};
 const MODULE: &str = "mswin::win_api";
 
 fn get_volumes() -> Result<Vec<String>, MigError> {
-    trace!("{}::get_volumes: entered", MODULE);
+    debug!("{}::get_volumes: entered", MODULE);
     const BUFFER_SIZE: usize = 2048;
     let mut buffer: [u16; BUFFER_SIZE] = [0; BUFFER_SIZE];
     let mut vol_list: Vec<String> = Vec::new();
@@ -55,7 +55,7 @@ fn get_volumes() -> Result<Vec<String>, MigError> {
 }
 
 pub fn query_dos_device(dev_name: Option<&str>) -> Result<Vec<String>, MigError> {
-    trace!("{}::query_dos_device: entered with {:?}", MODULE, dev_name);
+    debug!("{}::query_dos_device: entered with {:?}", MODULE, dev_name);
     match dev_name {
         Some(s) => {
             const BUFFER_SIZE: usize = 8192;
@@ -65,7 +65,7 @@ pub fn query_dos_device(dev_name: Option<&str>) -> Result<Vec<String>, MigError>
                 QueryDosDeviceW(dev_path.as_ptr(), buffer.as_mut_ptr(), BUFFER_SIZE as u32)
             };
             if num_tchar > 0 {
-                trace!("{}::query_dos_device: success", MODULE);
+                debug!("{}::query_dos_device: success", MODULE);
                 Ok(to_string_list(&buffer)?)
             } else {
                 let os_err = Error::last_os_error();
@@ -84,7 +84,7 @@ pub fn query_dos_device(dev_name: Option<&str>) -> Result<Vec<String>, MigError>
             let num_tchar =
                 unsafe { QueryDosDeviceW(null_mut(), buffer.as_mut_ptr(), BUFFER_SIZE as u32) };
             if num_tchar > 0 {
-                trace!("{}::query_dos_device: success", MODULE);
+                debug!("{}::query_dos_device: success", MODULE);
                 Ok(to_string_list(&buffer)?)
             } else {
                 let os_err = Error::last_os_error();
@@ -124,7 +124,7 @@ pub(crate) fn is_uefi_boot() -> Result<bool, MigError> {
             if err == ERROR_INVALID_FUNCTION as i32 {
                 Ok(false)
             } else {
-                trace!("{}::is_uefi_boot: error value: {}", MODULE, err);
+                debug!("{}::is_uefi_boot: error value: {}", MODULE, err);
                 Ok(true)
             }
         }

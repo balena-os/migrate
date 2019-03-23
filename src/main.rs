@@ -1,6 +1,25 @@
 use clap::{App, Arg};
+use log::{info};
 
 use balena_migrator::Migrator;
+use balena_migrator::mig_error::MigError;
+use balena_migrator::mswin::win_api::com_api::get_com_api;
+use balena_migrator::mswin::win_api::wmi_api::WmiAPI;
+
+#[cfg(target_os = "windows")]
+fn test_com() -> Result<(), MigError> {
+    info!("calling ComAPI::get_api()");
+    let h_com_api = get_com_api()?;
+    info!("calling WmiAPI::get_api_from_hcom");
+    let wmp_api = WmiAPI::get_api_from_hcom(h_com_api)?;
+    Ok(())
+}
+
+#[cfg (not (target_os = "windows"))]
+fn test_com() -> Result<(), MigError> {
+    info!("test_com only works on windows");
+    Ok(())
+}
 
 #[cfg(target_os = "windows")]
 fn print_drives() -> () {
@@ -91,6 +110,16 @@ fn main() {
                 .help("reports system info"),
         )
         .arg(
+            Arg::with_name("wmi")
+                .short("w")
+                .help("reports wmi infos"),
+        )
+        .arg(
+            Arg::with_name("drives")
+                .short("d")
+                .help("reports system drives"),
+        )
+        .arg(
             Arg::with_name("verbose")
                 .short("v")
                 .multiple(true)
@@ -107,9 +136,18 @@ fn main() {
         .init()
         .unwrap();
 
-    let mut migrator = balena_migrator::get_migrator().unwrap();
-    print_sysinfo(migrator.as_mut());
+    if matches.is_present("info") {
+        let mut migrator = balena_migrator::get_migrator().unwrap();
+        print_sysinfo(migrator.as_mut());
+    }
 
-    #[cfg(target_os = "windows")]
-    print_drives();
+    if matches.is_present("drives") {
+        #[cfg(target_os = "windows")]
+        print_drives();
+    }
+
+    if matches.is_present("wmi") {
+        #[cfg(target_os = "windows")]
+        test_com().unwrap();
+    }
 }

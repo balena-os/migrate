@@ -4,7 +4,7 @@ pub mod drive_info;
 pub mod win_api;
 pub(crate) mod wmi_utils;
 
-use log::trace;
+use log::debug;
 
 use wmi_utils::{WMIOSInfo, WmiUtils};
 
@@ -124,7 +124,7 @@ impl Migrator for MSWMigrator {
 }
 
 pub fn available() -> bool {
-    trace!("called available()");
+    debug!("called available()");
     return cfg!(windows);
 }
 

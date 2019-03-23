@@ -26,7 +26,7 @@ use crate::{MigErrCtx, MigError, MigErrorKind};
 type PMIWbemLocator = *mut IWbemLocator;
 type PMIWbemServices = *mut IWbemServices;
 
-const MODULE: &str = "mswin::wmi_api";
+const MODULE: &str = "mswin::win_api::wmi_api";
 
 pub struct WmiAPI {
     com_api: HComApi,
@@ -40,7 +40,7 @@ impl<'a> WmiAPI {
     }
 
     pub fn get_api_from_hcom(h_com_api: HComApi) -> Result<WmiAPI, MigError> {
-        debug!("Calling CoCreateInstance for CLSID_WbemLocator");
+        debug!("{}::get_api_from_hcom: Calling CoCreateInstance for CLSID_WbemLocator", MODULE);
 
         let mut p_loc = NULL;
 
@@ -65,9 +65,9 @@ impl<'a> WmiAPI {
             ))));
         }
 
-        debug!("Got locator {:?}", p_loc);
+        debug!("{}::get_api_from_hcom: Got locator {:?}", MODULE, p_loc);
 
-        debug!("Calling ConnectServer");
+        debug!("{}::get_api_from_hcom: Calling ConnectServer", MODULE);
 
         let mut p_svc = null_mut::<IWbemServices>();
 
@@ -95,7 +95,7 @@ impl<'a> WmiAPI {
             ))));
         }
 
-        debug!("Got services {:?}", p_svc);
+        debug!("{}::get_api_from_hcom: Got services {:?}",MODULE, p_svc);
 
         let wmi_api = Self {
             com_api: h_com_api,
@@ -103,7 +103,7 @@ impl<'a> WmiAPI {
             p_svc: p_svc,
         };
 
-        debug!("Calling CoSetProxyBlanket");
+        debug!("{}::get_api_from_hcom: Calling CoSetProxyBlanket", MODULE);
 
         if unsafe {
             CoSetProxyBlanket(
@@ -128,7 +128,7 @@ impl<'a> WmiAPI {
                 &format!("{}::get_api_from_hcom: CoSetProxyBlanket failed", MODULE),
             ))));
         }
-
+        debug!("{}::get_api_from_hcom: Done", MODULE);
         Ok(wmi_api)
     }
 }

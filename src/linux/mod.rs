@@ -1,6 +1,6 @@
 use failure::{Context, ResultExt};
 use libc::{getuid, sysinfo};
-use log::{error, info, trace};
+use log::{error, info, debug};
 
 // use std::os::linux::{};
 use lazy_static::lazy_static;
@@ -96,7 +96,7 @@ impl LinuxMigrator {
 
     /*
     fn get_mem_info1(&mut self) -> Result<(),MigError> {
-         trace!("{}::get_mem_info: entered", MODULE);
+         debug!("{}::get_mem_info: entered", MODULE);
          let mem_info = std::fs::read_to_string(OS_MEMINFO_FILE).context(MigErrCtx::from(MigErrorKind::Upstream))?;
          let lines = mem_info.lines();
 
@@ -323,11 +323,11 @@ impl Migrator for LinuxMigrator {
             None => {
                 let cmd_res = match self.call_cmd(MOKUTIL_CMD, &MOKUTIL_ARGS_SB_STATE, true) {
                     Ok(cr) => {
-                        trace!("{}::is_secure_boot: {} -> {:?}", MODULE, MOKUTIL_CMD, cr);
+                        debug!("{}::is_secure_boot: {} -> {:?}", MODULE, MOKUTIL_CMD, cr);
                         cr
                     }
                     Err(why) => {
-                        trace!("{}::is_secure_boot: {} -> {:?}", MODULE, MOKUTIL_CMD, why);
+                        debug!("{}::is_secure_boot: {} -> {:?}", MODULE, MOKUTIL_CMD, why);
                         match why.kind() {
                             MigErrorKind::NotFound => {
                                 self.sec_boot = Some(false);

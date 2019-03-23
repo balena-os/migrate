@@ -1,6 +1,6 @@
 // extern crate wmi;
 
-use log::{info, trace};
+use log::{info, debug};
 use std::collections::HashMap;
 pub use wmi::Variant;
 use wmi::{COMLibrary, WMIConnection};
@@ -40,7 +40,7 @@ pub struct WmiUtils {
 
 impl WmiUtils {
     pub fn new() -> Result<WmiUtils, MigError> {
-        trace!("{}::new: entered", MODULE);
+        debug!("{}::new: entered", MODULE);
         let com_con = COMLibrary::new().context(MigErrCtx::from(MigErrorKind::WmiInit))?;
         Ok(Self {
             wmi_con: WMIConnection::new(com_con.into())
@@ -49,7 +49,7 @@ impl WmiUtils {
     }
 
     fn wmi_query(&self, query: &str) -> Result<Vec<HashMap<String, Variant>>, MigError> {
-        trace!("{}::wmi_query: entered with '{}'", MODULE, query);
+        debug!("{}::wmi_query: entered with '{}'", MODULE, query);
         Ok(self
             .wmi_con
             .raw_query(query)

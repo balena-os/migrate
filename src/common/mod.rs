@@ -1,6 +1,6 @@
 //pub mod mig_error;
 use failure::ResultExt;
-use log::trace;
+use log::debug;
 use std::process::{Command, ExitStatus, Stdio};
 
 use crate::mig_error::{MigErrCtx, MigError, MigErrorKind};
@@ -15,7 +15,7 @@ pub(crate) struct CmdRes {
 }
 
 pub(crate) fn call(cmd: &str, args: &[&str], trim_stdout: bool) -> Result<CmdRes, MigError> {
-    trace!(
+    debug!(
         "{}::call(): '{}' called with {:?}, {}",
         MODULE,
         cmd,
