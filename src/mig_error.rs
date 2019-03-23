@@ -36,6 +36,9 @@ pub enum MigErrorKind {
     PSFailed,    
     #[fail(display = "You are not authorized to execute this command")]    
     AuthError,    
+    #[fail(display = "Mutual access failed")]    
+    MutAccess,    
+
 }
 
 pub struct MigErrCtx {

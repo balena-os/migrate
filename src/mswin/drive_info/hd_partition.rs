@@ -34,6 +34,8 @@ impl<'a> HarddiskPartitionInfo {
     }
 
     fn new(device: &str, hd_index: u64, part_index: u64) -> Result<HarddiskPartitionInfo,MigError> {
+        // TODO: query WMI partition info
+
         Ok(HarddiskPartitionInfo{
             dev_name: String::from(device),
             hd_index,
