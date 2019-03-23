@@ -1,7 +1,7 @@
 use lazy_static::lazy_static;
 use std::sync::{Mutex,Arc};
 use std::ptr::null_mut;
-use log::{trace,warn};
+use log::{trace,info,warn};
 use failure::{Fail};
 use std::io::Error;
 
@@ -32,6 +32,8 @@ pub type HComApi = Arc<Mutex<Option<ComAPI>>>;
 pub struct ComAPI {  }
 
 pub fn get_com_api() -> Result<HComApi,MigError> {
+    //info!("{}::get_com_api: entered", MODULE);
+    println!("{}::get_com_api: entered", MODULE);
     lazy_static! {
         static ref COM_REF: HComApi = Arc::new(Mutex::new(None));             
     }
@@ -50,7 +52,7 @@ pub fn get_com_api() -> Result<HComApi,MigError> {
             if unsafe { 
                 CoInitializeSecurity(
                     NULL,
-                    -1, // let C    OM choose.
+                    -1, // let COM choose.
                     null_mut(),
                     NULL,
                     RPC_C_AUTHN_LEVEL_DEFAULT,
@@ -83,5 +85,18 @@ impl Drop for ComAPI {
     }
 }
 
+mod tests {
+    use super::*;
+
+    #[test]
+    fn it_works1() {
+        let h_com_api = get_com_api().unwrap();        
+    }
+
+    #[test]
+    fn it_works2() {
+        let h_com_api = get_com_api().unwrap();        
+    }
+}
 
 

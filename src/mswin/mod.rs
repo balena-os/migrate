@@ -1,5 +1,6 @@
 pub(crate) mod powershell;
-pub(crate) mod win_api;
+//pub(crate) mod win_api;
+pub mod win_api;
 pub(crate) mod wmi_utils;
 pub mod drive_info;
 
@@ -143,14 +144,10 @@ mod tests {
 
     #[test]
     fn init_mswin() {
-        let msw_info = MSWMigrator::try_init().unwrap();
-        assert!(!msw_info.get_os_name().is_empty());
-        assert!(if let Some(_or) = msw_info.get_os_release() {
-            true
-        } else {
-            false
-        });
-        assert!(!msw_info.get_mem_avail() > 0);
-        assert!(!msw_info.get_mem_tot() > 0);
+        let mut msw_info = MSWMigrator::try_init().unwrap();
+        assert!(!msw_info.get_os_name().unwrap().is_empty());
+        msw_info.get_os_release().unwrap();
+        assert!(!msw_info.get_mem_avail().unwrap() > 0);
+        assert!(!msw_info.get_mem_tot().unwrap() > 0);
     }
 }

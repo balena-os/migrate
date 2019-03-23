@@ -15,10 +15,17 @@ use winapi::shared::winerror::{ERROR_INVALID_FUNCTION};
 
 use crate::mig_error::{MigError, MigErrorKind, MigErrCtx};
 
-mod util;
+/* for testing
+pub(crate)mod util;
+pub(crate) mod com_api;
+pub(crate) mod wmi_api;
+*/ 
+
+pub mod util;
+pub mod com_api;
+pub mod wmi_api;
+
 use util::{to_string, to_string_list, clip};
-mod com_api;
-mod wmi_api;
 
 const MODULE:&str = "mswin::win_api";
 

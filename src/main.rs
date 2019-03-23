@@ -2,6 +2,7 @@ use clap::{App, Arg};
 
 use balena_migrator::{Migrator};
 
+
 #[cfg(target_os = "windows")]
 fn print_drives() -> () {
     use balena_migrator::mswin::drive_info::{enumerate_drives, StorageDevice, DeviceProps};
@@ -31,6 +32,7 @@ fn print_drives() -> () {
         }
     }
 }
+
 
 fn print_sysinfo(s_info: &mut Migrator) -> () {
 

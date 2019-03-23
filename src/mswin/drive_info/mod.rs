@@ -5,6 +5,7 @@ use log::{info,warn};
 
 use crate::{MigError,MigErrorKind};
 use crate::mswin::win_api::{query_dos_device};
+use super::win_api::wmi_api::{WmiAPI};
 
 pub mod hd_partition;
 pub mod hd_volume;
@@ -17,6 +18,8 @@ pub use hd_volume::HarddiskVolumeInfo;
 pub use phys_drive::PhysicalDriveInfo;
 pub use volume::VolumeInfo;
 pub use driveletter::DriveLetterInfo;
+
+
 
 const MODULE: &str = "mswin::drive_info";
 
@@ -43,7 +46,7 @@ pub fn enumerate_drives() -> Result<HashMap<String,StorageDevice>,MigError> {
     let mut hdv_list: Vec<Rc<RefCell<HarddiskVolumeInfo>>> = Vec::new();
     let mut dl_list: Vec<Rc<RefCell<DriveLetterInfo>>> = Vec::new();
     let mut vol_list: Vec<Rc<RefCell<VolumeInfo>>> = Vec::new();
-    
+
     for device in query_dos_device(None)? {
         loop {
             if let Some(hdp) = HarddiskPartitionInfo::try_from_device(&device)? {

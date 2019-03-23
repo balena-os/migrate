@@ -11,6 +11,15 @@ regex = "1"
 lazy_static = "*"
 clap = "*"
 failure = "*"
+
+[[bin]]
+name = "balena-migrator"
+path = "src/main.rs"
+
+[[bin]]
+name = "test-com"
+path = "src/test_com.rs"
+
 [target.'cfg(unix)'.dependencies]
 libc = { git = "https://github.com/rust-lang/libc" } 
 [target.'cfg(windows)'.dependencies]
