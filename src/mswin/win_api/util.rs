@@ -1,5 +1,8 @@
 use failure::{ResultExt};
 use crate::{MigError, MigErrorKind, MigErrCtx};
+use std::ffi::OsStr;
+use std::iter::once;
+use std::os::windows::prelude::*;
 
 pub fn to_string(os_str_buf: &[u16]) -> Result<String,MigError> {            
     match os_str_buf.iter().position(|&x| x == 0 ) {        
@@ -41,4 +44,9 @@ pub fn clip<'a>(clip_str: &'a str, clip_start: Option<&str>, clip_end: Option<&s
     }
 
     work_str
+}
+
+pub fn to_wide_cstring(str: &str) -> Vec<u16> {
+    OsStr::new(str).encode_wide().chain(once(0)).collect()
+
 }

@@ -20,6 +20,8 @@ pub enum MigErrorKind {
     CmdIO,
     #[fail(display = "An invalid value was encountered")]
     InvParam,
+    #[fail(display = "An invalid state was encountered")]
+    InvState,
     #[fail(display = "A required program could not be found")]
     PgmNotFound,
     #[fail(display = "A required feature is not available")]
