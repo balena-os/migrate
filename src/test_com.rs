@@ -1,18 +1,17 @@
+use balena_migrator::mig_error::MigError;
+use balena_migrator::mswin::win_api::com_api::get_com_api;
+use balena_migrator::mswin::win_api::wmi_api::WmiAPI;
 use clap::{App, Arg};
-use balena_migrator::mig_error::{MigError};
-use balena_migrator::mswin::win_api::wmi_api::{WmiAPI};    
-use balena_migrator::mswin::win_api::com_api::{get_com_api};    
-use log::{info};
+use log::info;
 
 #[cfg(target_os = "windows")]
-fn test_com() -> Result<(),MigError> {    
-    info!("calling ComAPI::get_api()");    
+fn test_com() -> Result<(), MigError> {
+    info!("calling ComAPI::get_api()");
     let h_com_api = get_com_api()?;
-    info!("calling WmiAPI::get_api_from_hcom");    
+    info!("calling WmiAPI::get_api_from_hcom");
     let wmp_api = WmiAPI::get_api_from_hcom(h_com_api)?;
     Ok(())
 }
-
 
 fn main() {
     println!("test_com started");
@@ -29,7 +28,7 @@ fn main() {
         .get_matches();
 
     let log_level = matches.occurrences_of("verbose") as usize;
-    
+
     stderrlog::new()
         .module(module_path!())
         .verbosity(log_level)
@@ -37,9 +36,9 @@ fn main() {
         .init()
         .unwrap();
 
-    info!("main: log_level: {} ",log_level);    
+    info!("main: log_level: {} ", log_level);
 
-    #[cfg(target_os = "windows")]    
+    #[cfg(target_os = "windows")]
     test_com().unwrap();
-    info!("main: done");    
+    info!("main: done");
 }

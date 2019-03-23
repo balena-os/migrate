@@ -1,15 +1,14 @@
 use clap::{App, Arg};
 
-use balena_migrator::{Migrator};
-
+use balena_migrator::Migrator;
 
 #[cfg(target_os = "windows")]
 fn print_drives() -> () {
-    use balena_migrator::mswin::drive_info::{enumerate_drives, StorageDevice, DeviceProps};
+    use balena_migrator::mswin::drive_info::{enumerate_drives, DeviceProps, StorageDevice};
 
     let drive_map = enumerate_drives().unwrap();
     for key in drive_map.keys() {
-        println!("Key: {}",&key);
+        println!("Key: {}", &key);
         let info = drive_map.get(key).unwrap();
         match info {
             StorageDevice::HarddiskPartition(hdp) => {
@@ -18,69 +17,66 @@ fn print_drives() -> () {
                 println!("  harddisk index: {}", hdp.get_hd_index());
                 println!("  partition index: {}", hdp.get_part_index());
                 println!("  device :         {}\n", hdp.get_device());
-            },
+            }
             StorageDevice::PhysicalDrive(pd) => {
                 let pd = pd.as_ref();
                 println!("  type: PhysicalDrive");
-                println!("  harddisk index: {}", pd.get_index());                
+                println!("  harddisk index: {}", pd.get_index());
                 println!("  device :         {}\n", pd.get_device());
-            },
+            }
 
             _ => {
                 println!("  yet to be implemented\n");
-            },
+            }
         }
     }
 }
 
-
 fn print_sysinfo(s_info: &mut Migrator) -> () {
-
     match s_info.get_os_name() {
-        Ok(v)    => println!("OS Name:          {}",v),
-        Err(why) => println!("OS Name:          failed: {}",why), 
-    }; 
+        Ok(v) => println!("OS Name:          {}", v),
+        Err(why) => println!("OS Name:          failed: {}", why),
+    };
 
     match s_info.get_os_release() {
-        Ok(v)    => println!("OS Release:       {}",v),
-        Err(why) => println!("OS Release:       failed: {}",why), 
-    }; 
+        Ok(v) => println!("OS Release:       {}", v),
+        Err(why) => println!("OS Release:       failed: {}", why),
+    };
 
     match s_info.get_os_arch() {
-        Ok(v)    => println!("OS Architecture:  {}",v),
-        Err(why) => println!("OS Architecture:  failed: {}",why), 
-    }; 
+        Ok(v) => println!("OS Architecture:  {}", v),
+        Err(why) => println!("OS Architecture:  failed: {}", why),
+    };
 
     match s_info.is_uefi_boot() {
-        Ok(v)    => println!("UEFI Boot:        {}",v),
-        Err(why) => println!("UEFI Boot:        failed: {}",why), 
-    }; 
+        Ok(v) => println!("UEFI Boot:        {}", v),
+        Err(why) => println!("UEFI Boot:        failed: {}", why),
+    };
 
     match s_info.get_boot_dev() {
-        Ok(v)    => println!("Boot Device:      {:?}",v),
-        Err(why) => println!("Boot Device:      failed: {}",why), 
-    }; 
+        Ok(v) => println!("Boot Device:      {:?}", v),
+        Err(why) => println!("Boot Device:      failed: {}", why),
+    };
 
     match s_info.get_mem_tot() {
-        Ok(v)    => println!("PhysicalMemory:   {:?}",v),
-        Err(why) => println!("PhysicalMemory:   failed: {}",why), 
-    }; 
+        Ok(v) => println!("PhysicalMemory:   {:?}", v),
+        Err(why) => println!("PhysicalMemory:   failed: {}", why),
+    };
 
     match s_info.get_mem_avail() {
-        Ok(v)    => println!("Available Memory: {:?}",v),
-        Err(why) => println!("Available Memory: failed: {}",why), 
-    }; 
+        Ok(v) => println!("Available Memory: {:?}", v),
+        Err(why) => println!("Available Memory: failed: {}", why),
+    };
 
     match s_info.is_admin() {
-        Ok(v)    => println!("Is Admin:         {}",v),
-        Err(why) => println!("Is Admin:         failed: {}",why), 
+        Ok(v) => println!("Is Admin:         {}", v),
+        Err(why) => println!("Is Admin:         failed: {}", why),
     };
 
     match s_info.is_secure_boot() {
-        Ok(v)    => println!("Is Secure Boot:   {}",v),
-        Err(why) => println!("Is Secure Boot:   failed: {}",why), 
-    }; 
-
+        Ok(v) => println!("Is Secure Boot:   {}", v),
+        Err(why) => println!("Is Secure Boot:   failed: {}", why),
+    };
 }
 
 fn main() {
@@ -92,7 +88,7 @@ fn main() {
         .arg(
             Arg::with_name("info")
                 .short("i")
-                .help("reports system info")
+                .help("reports system info"),
         )
         .arg(
             Arg::with_name("verbose")
@@ -103,7 +99,7 @@ fn main() {
         .get_matches();
 
     let log_level = matches.occurrences_of("verbose") as usize;
-    
+
     stderrlog::new()
         .module(module_path!())
         .verbosity(log_level)

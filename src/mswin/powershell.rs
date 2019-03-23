@@ -13,17 +13,16 @@ const PS_CMD_IS_SECURE_BOOT: &str = "Confirm-SecureBootUEFI";
 
 const PS_ARGS_VERSION_PARAMS: [&'static str; 1] = ["$PSVersionTable.PSVersion"];
 
-
 use crate::mig_error::{MigErrCtx, MigError, MigErrorKind};
 use failure::{Fail, ResultExt};
-use std::io::{Write};
+use std::io::Write;
 
 use lazy_static::lazy_static;
-use log::{trace, info, warn};
+use log::{info, trace, warn};
 use regex::Regex;
 use std::collections::HashMap;
+use std::fmt::{Debug, Display};
 use std::process::{Command, ExitStatus, Stdio};
-use std::fmt::{Display, Debug};
 
 pub type PSVER = (u32, u32);
 
@@ -45,84 +44,94 @@ struct PSRes {
 #[derive(Debug)]
 pub(crate) struct PSInfo {
     version: Option<PSVER>,
-    cmdlets: HashMap<String,bool>,
+    cmdlets: HashMap<String, bool>,
     admin: Option<bool>,
     secure_boot: Option<bool>,
 }
 
 trait PsFailed<T> {
-   fn ps_failed(ps_res: &PSRes, command: &T, function: &str) -> MigError;   
+    fn ps_failed(ps_res: &PSRes, command: &T, function: &str) -> MigError;
 }
 
 impl PSInfo {
     pub fn try_init() -> Result<PSInfo, MigError> {
-
         let mut ps_info = PSInfo {
             version: None,
             cmdlets: HashMap::new(),
             admin: None,
             secure_boot: None,
         };
-        
+
         ps_info.get_ps_ver()?;
 
-        trace!("{}::try_init: ps_info.has_command('Get-Command')? = '{}'",MODULE, ps_info.has_command("Get-Command")?);
+        trace!(
+            "{}::try_init: ps_info.has_command('Get-Command')? = '{}'",
+            MODULE,
+            ps_info.has_command("Get-Command")?
+        );
 
-        // TODO: rather implement check commands - check if required commads are availabler, 
+        // TODO: rather implement check commands - check if required commads are availabler,
         // ps_info.get_cmdlets()?;
 
         // info!("{}::try_init: result: {:?}", MODULE, ps_info);
         Ok(ps_info)
     }
 
-    pub fn has_command(&mut self, cmd: &str) -> Result<bool,MigError> {        
+    pub fn has_command(&mut self, cmd: &str) -> Result<bool, MigError> {
         match self.cmdlets.get(cmd) {
             Some(v) => return Ok(*v),
             None => (),
         }
 
-        let cmd_res = call_from_stdin(&format!("Get-Command {};",cmd),true)?;
+        let cmd_res = call_from_stdin(&format!("Get-Command {};", cmd), true)?;
         if cmd_res.ps_ok {
-            self.cmdlets.insert(String::from(cmd),true);
+            self.cmdlets.insert(String::from(cmd), true);
             Ok(true)
         } else {
-            self.cmdlets.insert(String::from(cmd),false);
+            self.cmdlets.insert(String::from(cmd), false);
             Ok(false)
         }
     }
 
-    pub fn is_admin(&mut self) -> Result<bool,MigError> {
+    pub fn is_admin(&mut self) -> Result<bool, MigError> {
         if let Some(v) = self.admin {
             Ok(v)
         } else {
             let output = call_from_stdin(PS_CMD_IS_ADMIN, true)?;
             if !output.ps_ok {
-                return Err(ps_failed_stdin(&output,&PS_CMD_IS_ADMIN, "is_admin"));
+                return Err(ps_failed_stdin(&output, &PS_CMD_IS_ADMIN, "is_admin"));
             }
             self.admin = Some(output.stdout.to_lowercase() == "true");
             Ok(self.admin.unwrap())
         }
     }
 
-    pub fn is_secure_boot(&mut self) -> Result<bool,MigError> {
+    pub fn is_secure_boot(&mut self) -> Result<bool, MigError> {
         if let Some(v) = self.secure_boot {
             Ok(v)
         } else {
-            if ! self.is_admin()? {
+            if !self.is_admin()? {
                 return Err(MigError::from(MigErrorKind::AuthError));
             }
-            let output = call_from_stdin(&PS_CMD_IS_SECURE_BOOT,true)?;
+            let output = call_from_stdin(&PS_CMD_IS_SECURE_BOOT, true)?;
             trace!("{}::is_secure_boot: command result: {:?}", MODULE, output);
             if !output.ps_ok || !output.stderr.is_empty() {
                 // 'Confirm-SecureBootUEFI : Variable is currently undefined: 0xC0000100'
-                let regex = Regex::new(r"Confirm-SecureBootUEFI\s*:\s*Variable\s+is\s+currently\s+undefined:.*").unwrap();
+                let regex = Regex::new(
+                    r"Confirm-SecureBootUEFI\s*:\s*Variable\s+is\s+currently\s+undefined:.*",
+                )
+                .unwrap();
                 if regex.is_match(&output.stderr) {
-                    self.secure_boot = Some(output.stdout.to_lowercase() == "true");                    
+                    self.secure_boot = Some(output.stdout.to_lowercase() == "true");
                 } else {
-                    return Err(ps_failed_call(&output, &PS_CMD_IS_SECURE_BOOT, "is_secure_boot"));
+                    return Err(ps_failed_call(
+                        &output,
+                        &PS_CMD_IS_SECURE_BOOT,
+                        "is_secure_boot",
+                    ));
                 }
             } else {
-                self.secure_boot = Some(output.stdout.to_lowercase() == "true");            
+                self.secure_boot = Some(output.stdout.to_lowercase() == "true");
             }
             Ok(self.secure_boot.unwrap())
         }
@@ -193,7 +202,7 @@ impl PSInfo {
         Ok(self.version.unwrap())
     }
 
-/*
+    /*
     fn get_cmdlets(&mut self) -> Result<usize, MigError> {
         trace!("{}::get_cmdlets(): called", MODULE);
         let output = call_from_stdin(PS_CMD_GET_CMDLET_PARAMS, true)?;
@@ -268,7 +277,7 @@ impl PSInfo {
                             }
                         },
                         None => return Err(MigError::from_remark(
-                            MigErrorKind::InvParam, 
+                            MigErrorKind::InvParam,
                             &format!("{}::get_cmdlets: name value not found in output from: powershell Get-Commands",MODULE))),
                     }
             }
@@ -278,13 +287,13 @@ impl PSInfo {
         for line in lines {
             let words: Vec<&str> = line.1.split_whitespace().collect();
             match words.get(name_idx) {
-                Some(v) => 
+                Some(v) =>
                     if self.cmdlets.insert(String::from(*v)) {
                         trace!("{}::get_cmdlets(): added cmdlet '{}'", MODULE, *v);
                         cmds += 1;
                     } else {
                         warn!("{}::get_cmdlets(): duplicate cmdlet '{}'", MODULE, *v);
-                    },                    
+                    },
                 None => return Err(MigError::from_remark(MigErrorKind::InvParam, &format!("{}::get_cmdlets: name value not found in output from: powershell Get-Commands",MODULE))),
             };
         }
@@ -335,14 +344,14 @@ fn call_from_stdin(cmd_str: &str, trim_stdout: bool) -> Result<PSRes, MigError> 
         .context(MigErrCtx::from(MigErrorKind::ExecProcess))?;
 
     let mut ps_ok = output.status.success();
-    let stderr = String::from(String::from_utf8_lossy(&output.stderr));    
+    let stderr = String::from(String::from_utf8_lossy(&output.stderr));
 
     if ps_ok && !stderr.is_empty() {
         lazy_static! {
             static ref RE: Regex = Regex::new(r"^At line:\d+ char:\d+").unwrap();
         }
         ps_ok = !RE.is_match(&stderr);
-    } 
+    }
 
     Ok(PSRes {
         stdout: match trim_stdout {
@@ -377,14 +386,14 @@ fn call(args: &[&str], trim_stdout: bool) -> Result<PSRes, MigError> {
         ))?;
 
     let mut ps_ok = output.status.success();
-    let stderr = String::from(String::from_utf8_lossy(&output.stderr));    
+    let stderr = String::from(String::from_utf8_lossy(&output.stderr));
 
     if ps_ok && !stderr.is_empty() {
         lazy_static! {
             static ref RE: Regex = Regex::new(r"^At line:\d+ char:\d+").unwrap();
         }
         ps_ok = !RE.is_match(&stderr);
-    } 
+    }
 
     Ok(PSRes {
         stdout: match trim_stdout {
@@ -397,16 +406,32 @@ fn call(args: &[&str], trim_stdout: bool) -> Result<PSRes, MigError> {
     })
 }
 
-fn ps_failed_call<T: Debug>(ps_res: &PSRes, command: &T, function: &str) -> MigError {    
-    warn!("{}::{}: powershell command failed: '{:?}'", MODULE, function, command);    
-    warn!("{}::{}:   exit code: {}", MODULE, function, ps_res.exit_status.code().unwrap_or(0));
+fn ps_failed_call<T: Debug>(ps_res: &PSRes, command: &T, function: &str) -> MigError {
+    warn!(
+        "{}::{}: powershell command failed: '{:?}'",
+        MODULE, function, command
+    );
+    warn!(
+        "{}::{}:   exit code: {}",
+        MODULE,
+        function,
+        ps_res.exit_status.code().unwrap_or(0)
+    );
     warn!("{}::{}:   stderr: '{}'", MODULE, function, &ps_res.stderr);
     MigError::from(MigErrorKind::PSFailed)
 }
 
-fn ps_failed_stdin<T: Display>(ps_res: &PSRes, command: &T, function: &str) -> MigError {    
-    warn!("{}::{}: powershell command failed: '{}'", MODULE, function, command);    
-    warn!("{}::{}:   exit code: {}", MODULE, function, ps_res.exit_status.code().unwrap_or(0));
+fn ps_failed_stdin<T: Display>(ps_res: &PSRes, command: &T, function: &str) -> MigError {
+    warn!(
+        "{}::{}: powershell command failed: '{}'",
+        MODULE, function, command
+    );
+    warn!(
+        "{}::{}:   exit code: {}",
+        MODULE,
+        function,
+        ps_res.exit_status.code().unwrap_or(0)
+    );
     warn!("{}::{}:   stderr: '{}'", MODULE, function, &ps_res.stderr);
     MigError::from(MigErrorKind::PSFailed)
 }

@@ -1,22 +1,21 @@
-use std::rc::{Rc};
-use std::cell::{RefCell};
 use lazy_static::lazy_static;
-use regex::{Regex};
+use regex::Regex;
+use std::cell::RefCell;
+use std::rc::Rc;
 
-use super::{HarddiskVolumeInfo, DeviceProps};
-use crate::{MigError};
-use crate::mswin::win_api::{query_dos_device};
-
+use super::{DeviceProps, HarddiskVolumeInfo};
+use crate::mswin::win_api::query_dos_device;
+use crate::MigError;
 
 #[derive(Debug)]
 pub struct DriveLetterInfo {
     dev_name: String,
     device: String,
-    hd_vol: Option<Rc<RefCell<HarddiskVolumeInfo>>>
+    hd_vol: Option<Rc<RefCell<HarddiskVolumeInfo>>>,
 }
 
 impl<'a> DriveLetterInfo {
-    pub fn try_from_device(device: &str) -> Result<Option<DriveLetterInfo>,MigError> {
+    pub fn try_from_device(device: &str) -> Result<Option<DriveLetterInfo>, MigError> {
         lazy_static! {
             static ref RE_DL: Regex = Regex::new(r"^([A-Z]:)$").unwrap();
         }
@@ -27,14 +26,15 @@ impl<'a> DriveLetterInfo {
         }
     }
 
-    fn new(device: &str) -> Result<DriveLetterInfo,MigError> {
-        Ok(DriveLetterInfo{
-            dev_name: String::from(device),                                    
+    fn new(device: &str) -> Result<DriveLetterInfo, MigError> {
+        Ok(DriveLetterInfo {
+            dev_name: String::from(device),
             device: query_dos_device(Some(device))?.get(0).unwrap().clone(),
-            hd_vol: None})
-   }
+            hd_vol: None,
+        })
+    }
 
-    pub(crate) fn set_hd_vol(&mut self, vol: & Rc<RefCell<HarddiskVolumeInfo>>) -> () {
+    pub(crate) fn set_hd_vol(&mut self, vol: &Rc<RefCell<HarddiskVolumeInfo>>) -> () {
         // TODO: what if it is already set ?
         self.hd_vol = Some(vol.clone())
     }
@@ -48,7 +48,7 @@ impl DeviceProps for DriveLetterInfo {
     fn get_device_name<'a>(&'a self) -> &'a str {
         &self.dev_name
     }
-    
+
     fn get_device<'a>(&'a self) -> &'a str {
         &self.device
     }

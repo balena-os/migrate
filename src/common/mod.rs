@@ -1,12 +1,11 @@
 //pub mod mig_error;
-use log::{trace};
-use std::process::{Command,ExitStatus,Stdio};
-use failure::{ResultExt};
+use failure::ResultExt;
+use log::trace;
+use std::process::{Command, ExitStatus, Stdio};
 
-use crate::mig_error::{MigError,MigErrorKind, MigErrCtx};
+use crate::mig_error::{MigErrCtx, MigError, MigErrorKind};
 
-
-const MODULE: &str  = "common";
+const MODULE: &str = "common";
 
 #[derive(Debug)]
 pub(crate) struct CmdRes {

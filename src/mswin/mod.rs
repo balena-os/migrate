@@ -1,19 +1,18 @@
 pub(crate) mod powershell;
 //pub(crate) mod win_api;
+pub mod drive_info;
 pub mod win_api;
 pub(crate) mod wmi_utils;
-pub mod drive_info;
 
-use log::{trace};
+use log::trace;
 
+use wmi_utils::{WMIOSInfo, WmiUtils};
 
-use wmi_utils::{WmiUtils,WMIOSInfo};
+use crate::mig_error::{MigError, MigErrorKind};
 
-use crate::mig_error::{MigError,MigErrorKind};
+use crate::{Migrator, OSArch, OSRelease};
 
-use crate::{OSRelease, OSArch, Migrator};
-
-use powershell::{PSInfo};
+use powershell::PSInfo;
 
 // const MODULE: &str = "mswin";
 
@@ -37,15 +36,15 @@ impl MSWMigrator {
 }
 
 impl Migrator for MSWMigrator {
-    fn can_migrate(&mut self) -> Result<bool,MigError> {
+    fn can_migrate(&mut self) -> Result<bool, MigError> {
         Err(MigError::from(MigErrorKind::NotImpl))
     }
 
-    fn migrate(&mut self) -> Result<(),MigError> {
+    fn migrate(&mut self) -> Result<(), MigError> {
         Err(MigError::from(MigErrorKind::NotImpl))
     }
 
-    fn is_uefi_boot(&mut self) -> Result<bool,MigError> {
+    fn is_uefi_boot(&mut self) -> Result<bool, MigError> {
         match self.uefi_boot {
             Some(v) => Ok(v),
             None => {
@@ -54,76 +53,74 @@ impl Migrator for MSWMigrator {
             }
         }
     }
-     
-    fn get_os_name<'a>(&'a mut self) -> Result<&'a str,MigError> {
+
+    fn get_os_name<'a>(&'a mut self) -> Result<&'a str, MigError> {
         match self.os_info {
             Some(ref info) => Ok(&info.os_name),
             None => {
                 self.os_info = Some(self.wmi_utils.init_os_info()?);
-                Ok(&self.os_info.as_ref().unwrap().os_name)              
-            },
+                Ok(&self.os_info.as_ref().unwrap().os_name)
+            }
         }
     }
 
-    fn get_os_release<'a>(&'a mut self) -> Result<&'a OSRelease,MigError> {
+    fn get_os_release<'a>(&'a mut self) -> Result<&'a OSRelease, MigError> {
         match self.os_info {
             Some(ref info) => Ok(&info.os_release),
             None => {
                 self.os_info = Some(self.wmi_utils.init_os_info()?);
-                Ok(&self.os_info.as_ref().unwrap().os_release)              
-            },
+                Ok(&self.os_info.as_ref().unwrap().os_release)
+            }
         }
     }
 
-    fn get_os_arch<'a>(&'a mut self) -> Result<&'a OSArch,MigError> {
+    fn get_os_arch<'a>(&'a mut self) -> Result<&'a OSArch, MigError> {
         match self.os_info {
             Some(ref info) => Ok(&info.os_arch),
             None => {
                 self.os_info = Some(self.wmi_utils.init_os_info()?);
-                Ok(&self.os_info.as_ref().unwrap().os_arch)              
-            },
+                Ok(&self.os_info.as_ref().unwrap().os_arch)
+            }
         }
     }
 
-
-    fn get_mem_tot(&mut self) -> Result<u64,MigError> {
+    fn get_mem_tot(&mut self) -> Result<u64, MigError> {
         match self.os_info {
             Some(ref info) => Ok(info.mem_tot),
             None => {
                 self.os_info = Some(self.wmi_utils.init_os_info()?);
-                Ok(self.os_info.as_ref().unwrap().mem_tot)              
-            },
+                Ok(self.os_info.as_ref().unwrap().mem_tot)
+            }
         }
     }
 
-    fn get_mem_avail(&mut self) -> Result<u64,MigError> {
+    fn get_mem_avail(&mut self) -> Result<u64, MigError> {
         match self.os_info {
             Some(ref info) => Ok(info.mem_avail),
             None => {
                 self.os_info = Some(self.wmi_utils.init_os_info()?);
-                Ok(self.os_info.as_ref().unwrap().mem_avail)              
-            },
+                Ok(self.os_info.as_ref().unwrap().mem_avail)
+            }
         }
     }
 
-    fn get_boot_dev<'a>(&'a mut self) -> Result<&'a str,MigError> {
+    fn get_boot_dev<'a>(&'a mut self) -> Result<&'a str, MigError> {
         match self.os_info {
             Some(ref info) => Ok(&info.boot_dev),
             None => {
                 self.os_info = Some(self.wmi_utils.init_os_info()?);
-                Ok(&self.os_info.as_ref().unwrap().boot_dev)              
-            },
+                Ok(&self.os_info.as_ref().unwrap().boot_dev)
+            }
         }
     }
 
-    fn is_admin(&mut self) -> Result<bool,MigError> {
+    fn is_admin(&mut self) -> Result<bool, MigError> {
         Ok(self.ps_info.is_admin()?)
     }
-    
-    fn is_secure_boot(&mut self) -> Result<bool,MigError> {
+
+    fn is_secure_boot(&mut self) -> Result<bool, MigError> {
         Ok(self.ps_info.is_secure_boot()?)
     }
-
 }
 
 pub fn available() -> bool {
@@ -136,7 +133,6 @@ pub fn process() -> Result<(), MigError> {
     // info!("process: os_type = {}", ps_info.get_os_name());
     Ok(())
 }
-
 
 #[cfg(test)]
 mod tests {

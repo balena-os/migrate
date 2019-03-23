@@ -1,13 +1,12 @@
-
-use failure::{Fail,Backtrace,Context};
-use std::fmt::{self,Display};
+use failure::{Backtrace, Context, Fail};
+use std::fmt::{self, Display};
 
 #[derive(Copy, Clone, Eq, PartialEq, Debug, Fail)]
 pub enum MigErrorKind {
     #[fail(display = "A required item could not be found")]
     NotFound,
-    #[fail(display = "An duplicate item was encountered where it should be unique")]    
-    Duplicate,    
+    #[fail(display = "An duplicate item was encountered where it should be unique")]
+    Duplicate,
     #[fail(display = "An error occured in an upstream function")]
     Upstream,
     #[fail(display = "An unknown error occurred")]
@@ -26,21 +25,20 @@ pub enum MigErrorKind {
     PgmNotFound,
     #[fail(display = "A required feature is not available")]
     FeatureMissing,
-    #[fail(display = "A spawned process returned an error code")]    
-    ExecProcess,    
-    #[fail(display = "An error occurred calling a WINAPI")]    
-    WinApi,    
-    #[fail(display = "Initialization of WMI")]    
-    WmiInit,    
-    #[fail(display = "A WMI query failed")]    
-    WmiQueryFailed,    
-    #[fail(display = "A Powershell command failed")]    
-    PSFailed,    
-    #[fail(display = "You are not authorized to execute this command")]    
-    AuthError,    
-    #[fail(display = "Mutual access failed")]    
-    MutAccess,    
-
+    #[fail(display = "A spawned process returned an error code")]
+    ExecProcess,
+    #[fail(display = "An error occurred calling a WINAPI")]
+    WinApi,
+    #[fail(display = "Initialization of WMI")]
+    WmiInit,
+    #[fail(display = "A WMI query failed")]
+    WmiQueryFailed,
+    #[fail(display = "A Powershell command failed")]
+    PSFailed,
+    #[fail(display = "You are not authorized to execute this command")]
+    AuthError,
+    #[fail(display = "Mutual access failed")]
+    MutAccess,
 }
 
 pub struct MigErrCtx {
@@ -50,13 +48,19 @@ pub struct MigErrCtx {
 
 impl MigErrCtx {
     pub fn from_remark(kind: MigErrorKind, descr: &str) -> MigErrCtx {
-        MigErrCtx{kind,descr: String::from(descr)}
+        MigErrCtx {
+            kind,
+            descr: String::from(descr),
+        }
     }
 }
 
 impl From<MigErrorKind> for MigErrCtx {
     fn from(kind: MigErrorKind) -> MigErrCtx {
-        MigErrCtx{kind, descr: String::new()}
+        MigErrCtx {
+            kind,
+            descr: String::new(),
+        }
     }
 }
 
@@ -75,7 +79,6 @@ pub struct MigError {
     inner: Context<MigErrCtx>,
 }
 
-
 impl Fail for MigError {
     fn name(&self) -> Option<&str> {
         self.inner.name()
@@ -91,10 +94,10 @@ impl Fail for MigError {
 }
 
 impl Display for MigError {
-    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {        
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         let mut res = Display::fmt(&self.inner, f);
         if let Some(fail) = self.inner.cause() {
-            write!(f," - ")?;
+            write!(f, " - ")?;
             res = Display::fmt(fail, f);
         }
         res
@@ -107,19 +110,25 @@ impl MigError {
     }
 
     pub fn from_remark(kind: MigErrorKind, remark: &str) -> MigError {
-        MigError { inner: Context::new(MigErrCtx::from_remark(kind, remark)) } 
+        MigError {
+            inner: Context::new(MigErrCtx::from_remark(kind, remark)),
+        }
     }
 }
 
 impl From<MigErrorKind> for MigError {
     fn from(kind: MigErrorKind) -> MigError {
-        MigError { inner: Context::new(MigErrCtx::from(kind)) }
+        MigError {
+            inner: Context::new(MigErrCtx::from(kind)),
+        }
     }
 }
 
 impl From<MigErrCtx> for MigError {
     fn from(mig_ctxt: MigErrCtx) -> MigError {
-        MigError { inner: Context::new(mig_ctxt) }
+        MigError {
+            inner: Context::new(mig_ctxt),
+        }
     }
 }
 

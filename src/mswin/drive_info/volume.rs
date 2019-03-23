@@ -1,40 +1,41 @@
-use std::rc::{Rc};
-use std::cell::{RefCell};
+use std::cell::RefCell;
+use std::rc::Rc;
 
 use lazy_static::lazy_static;
-use regex::{Regex};
+use regex::Regex;
 
-use super::{HarddiskVolumeInfo, DeviceProps};
-use crate::{MigError};
-use crate::mswin::win_api::{query_dos_device};
+use super::{DeviceProps, HarddiskVolumeInfo};
+use crate::mswin::win_api::query_dos_device;
+use crate::MigError;
 
 #[derive(Debug)]
 pub struct VolumeInfo {
     dev_name: String,
-    uuid: String,    
+    uuid: String,
     device: String,
-    hd_vol: Option<Rc<RefCell<HarddiskVolumeInfo>>>
+    hd_vol: Option<Rc<RefCell<HarddiskVolumeInfo>>>,
 }
 
 impl<'a> VolumeInfo {
-    pub fn try_from_device(device: &str) -> Result<Option<VolumeInfo>,MigError> {
+    pub fn try_from_device(device: &str) -> Result<Option<VolumeInfo>, MigError> {
         lazy_static! {
             static ref RE_DL: Regex = Regex::new(r"^Volume\{([0-9a-z\-]+)\}$").unwrap();
         }
         if let Some(cap) = RE_DL.captures(device) {
-            Ok(Some(VolumeInfo::new(device,cap.get(1).unwrap().as_str())?))
+            Ok(Some(VolumeInfo::new(device, cap.get(1).unwrap().as_str())?))
         } else {
             Ok(None)
         }
     }
 
-    fn new(device: &str, uuid: &str) -> Result<VolumeInfo,MigError> {
-        Ok(VolumeInfo{
+    fn new(device: &str, uuid: &str) -> Result<VolumeInfo, MigError> {
+        Ok(VolumeInfo {
             dev_name: String::from(device),
             uuid: String::from(uuid),
             device: query_dos_device(Some(&device))?.get(0).unwrap().clone(),
-            hd_vol: None})
-   }
+            hd_vol: None,
+        })
+    }
 
     pub fn get_dev_name(&'a self) -> &'a str {
         &self.dev_name
@@ -48,7 +49,7 @@ impl<'a> VolumeInfo {
         &self.device
     }
 
-    pub(crate) fn set_hd_vol(&mut self, vol: & Rc<RefCell<HarddiskVolumeInfo>>) -> () {
+    pub(crate) fn set_hd_vol(&mut self, vol: &Rc<RefCell<HarddiskVolumeInfo>>) -> () {
         // TODO: what if it is already set ?
         self.hd_vol = Some(vol.clone())
     }
@@ -62,7 +63,7 @@ impl DeviceProps for VolumeInfo {
     fn get_device_name<'a>(&'a self) -> &'a str {
         &self.dev_name
     }
-    
+
     fn get_device<'a>(&'a self) -> &'a str {
         &self.device
     }
