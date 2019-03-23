@@ -51,6 +51,13 @@ fn print_drives() -> () {
     }
 }
 
+#[cfg (not (target_os = "windows"))]
+fn print_drives() -> () {
+    info!("print drives currently only works on windows");
+    Ok(())
+}
+
+
 fn print_sysinfo(s_info: &mut Migrator) -> () {
     match s_info.get_os_name() {
         Ok(v) => println!("OS Name:          {}", v),
@@ -142,12 +149,10 @@ fn main() {
     }
 
     if matches.is_present("drives") {
-        #[cfg(target_os = "windows")]
         print_drives();
     }
 
     if matches.is_present("wmi") {
-        #[cfg(target_os = "windows")]
         test_com().unwrap();
     }
 }
