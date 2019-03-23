@@ -1,30 +1,9 @@
-use std::ptr::{self, null_mut};
 use winapi::{
     shared::{
-        ntdef::NULL,
-        rpcdce::{
-            RPC_C_AUTHN_LEVEL_CALL, RPC_C_AUTHN_WINNT, RPC_C_AUTHZ_NONE,
-            RPC_C_IMP_LEVEL_IMPERSONATE,
-        },
-        wtypesbase::CLSCTX_INPROC_SERVER,
+        ntdef::NULL,        
     },    
     um::{
-        oaidl::SAFEARRAY,
-        objidl::EOAC_NONE,
-        combaseapi::{
-                    CoCreateInstance, 
-                    CoSetProxyBlanket
-                    },                
-        wbemcli::{  IEnumWbemClassObject,
-                    IWbemClassObject,
-                    CLSID_WbemLocator, 
-                    IID_IWbemLocator, 
-                    IWbemLocator, 
-                    IWbemServices, 
-                    WBEM_FLAG_FORWARD_ONLY, 
-                    WBEM_FLAG_RETURN_IMMEDIATELY,
-                    WBEM_FLAG_ALWAYS, 
-                    WBEM_FLAG_NONSYSTEM_ONLY,
+        wbemcli::{  IWbemClassObject,                    
                     WBEM_INFINITE,
                     },
     },
