@@ -31,6 +31,7 @@ impl QueryResultEnumerator {
 
 impl<'a> Drop for QueryResultEnumerator {
     fn drop(&mut self) {        
+        debug!("{}::drop: dropping IEnumWbemClassObject", MODULE);
         unsafe {
             (*self.p_enumerator).Release();
         }

@@ -13,7 +13,14 @@ fn test_com() -> Result<(), MigError> {
     let h_com_api = get_com_api()?;
     info!("calling WmiAPI::get_api_from_hcom");
     let mut wmi_api = WmiAPI::get_api_from_hcom(h_com_api)?;
-    wmi_api.raw_query("SELECT Caption,Version,OSArchitecture, BootDevice, TotalVisibleMemorySize,FreePhysicalMemory FROM Win32_OperatingSystem")?;
+    let res = wmi_api.raw_query("SELECT Caption,Version,OSArchitecture, BootDevice, TotalVisibleMemorySize,FreePhysicalMemory FROM Win32_OperatingSystem")?;
+    for item in res {
+        info!("got item:");
+        for key in item.keys() {
+            info!("got item property: {} -> {:?}", key, item.get(key).unwrap());
+        }
+        info!("end of item\n");
+    }
     Ok(())
 }
 

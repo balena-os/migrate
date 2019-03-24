@@ -2,6 +2,8 @@ use failure::Fail;
 use log::{debug, warn};
 use std::io::Error;
 use std::ptr::{self, null_mut};
+use std::collections::HashMap;
+
 use winapi::{
     shared::{
         ntdef::NULL,
@@ -40,15 +42,14 @@ type PMIEnumWbemClassObject = *mut IEnumWbemClassObject;
 type PMIWbemClassObject = *mut IWbemClassObject;
 
 mod iwbem_class_wr;
-pub use iwbem_class_wr::IWbemClassWrapper;
+pub use iwbem_class_wr::{IWbemClassWrapper,Variant};
 mod query_result_enum;
 pub use query_result_enum::QueryResultEnumerator;
 
 const MODULE: &str = "mswin::win_api::wmi_api";
 
 pub struct WmiAPI {
-    com_api: HComApi,
-    p_loc: PMIWbemLocator,
+    _com_api: HComApi,
     p_svc: PMIWbemServices,
 }
 
@@ -116,8 +117,7 @@ impl<'a> WmiAPI {
         debug!("{}::get_api_from_hcom: Got services {:?}",MODULE, p_svc);
 
         let wmi_api = Self {
-            com_api: h_com_api,
-            p_loc: p_loc as PMIWbemLocator,
+            _com_api: h_com_api,
             p_svc: p_svc,
         };
 
@@ -150,7 +150,7 @@ impl<'a> WmiAPI {
         Ok(wmi_api)
     }
 
-    pub fn raw_query(&mut self, query: &str) -> Result<(),MigError> {
+    pub fn raw_query(&mut self, query: &str) -> Result<Vec<HashMap<String,Variant>>,MigError> {
         debug!("{}::raw_query: entered with {}", MODULE, query);
         let query_language = to_wide_cstring("WQL");
         let query = to_wide_cstring(query);
@@ -178,14 +178,17 @@ impl<'a> WmiAPI {
 
         debug!("{}::raw_query: Got enumerator {:?}", MODULE, p_enumerator);
 
+        let mut result: Vec<HashMap<String,Variant>> = Vec::new();
         for iwbem_obj in QueryResultEnumerator::new(p_enumerator) {
-            debug!("{}::raw_query: got object", MODULE);
+            debug!("{}::raw_query: got object", MODULE);            
             match iwbem_obj {
                 Ok(obj) => {
-                    debug!("{}::raw_query:   is object", MODULE);                    
+                    result.push(obj.to_map()?);
+/*                    debug!("{}::raw_query:   is object", MODULE);                    
                     for prop in obj.list_properties()? {
                         debug!("{}::raw_query:     has property: {:?}", MODULE, prop);                    
                     }
+*/                    
                 }, 
                 Err(why) => {
                     warn!("{}::raw_query:   is error result: {:?}", MODULE, why);                    
@@ -195,7 +198,7 @@ impl<'a> WmiAPI {
 
         //Ok(QueryResultEnumerator::new(self, p_enumerator))
 
-        Ok(())
+        Ok(result)
         //Err(MigError::from(MigErrorKind::NotImpl))
     }
 }
