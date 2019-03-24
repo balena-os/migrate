@@ -1,6 +1,6 @@
 use failure::Fail;
 use lazy_static::lazy_static;
-use log::{info, debug, warn};
+use log::{debug, warn};
 use std::io::Error;
 use std::ptr::null_mut;
 use std::sync::{Arc, Mutex};
@@ -11,7 +11,7 @@ use winapi::{
         rpcdce::{RPC_C_AUTHN_LEVEL_DEFAULT, RPC_C_IMP_LEVEL_IMPERSONATE},
     },
     um::{
-        combaseapi::{CoInitializeEx, CoInitializeSecurity, CoSetProxyBlanket, CoUninitialize},
+        combaseapi::{CoInitializeEx, CoInitializeSecurity, CoUninitialize},
         objbase::COINIT_MULTITHREADED,
         objidl::EOAC_NONE,
     },
@@ -22,86 +22,92 @@ use crate::{MigErrCtx, MigError, MigErrorKind};
 
 const MODULE: &str = "mswin::win_api::com_api";
 
-pub type HComApi = Arc<Mutex<Option<ComAPI>>>;
 
-pub struct ComAPI {}
+pub type RefCount = Arc<Mutex<u64>>;
 
-pub fn get_com_api() -> Result<HComApi, MigError> {
-    debug!("{}::get_com_api: entered", MODULE);
-    lazy_static! {
-        static ref COM_REF: HComApi = Arc::new(Mutex::new(None));
-    }
+pub struct ComAPI {
+    uc: RefCount,
+}
 
-    if let Ok(mut oca) = (*COM_REF).lock() {
-        if let None = *oca {
-            debug!("{}::get_com_api: initializing com", MODULE);
-            if unsafe { CoInitializeEx(null_mut(), COINIT_MULTITHREADED) } < 0 {
-                let os_err = Error::last_os_error();
-                warn!(
-                    "{}::get_com_api: CoInitializeEx returned os error: {:?} ",
-                    MODULE, os_err
-                );
-                return Err(MigError::from(os_err.context(MigErrCtx::from_remark(
-                    MigErrorKind::WinApi,
-                    &format!("{}::get_com_api: CoInitializeEx failed", MODULE),
-                ))));
-            }
-            debug!("{}::get_com_api: calling CoInitializeSecurity", MODULE);
-            if unsafe {
-                CoInitializeSecurity(
-                    NULL,
-                    -1, // let COM choose.
-                    null_mut(),
-                    NULL,
-                    RPC_C_AUTHN_LEVEL_DEFAULT,
-                    RPC_C_IMP_LEVEL_IMPERSONATE,
-                    NULL,
-                    EOAC_NONE,
-                    NULL,
-                )
-            } < 0
-            {
-                let os_err = Error::last_os_error();
-                unsafe { CoUninitialize() };
-                warn!(
-                    "{}::get_com_api: CoInitializeSecurity returned os error: {:?} ",
-                    MODULE, os_err
-                );
-                return Err(MigError::from(os_err.context(MigErrCtx::from_remark(
-                    MigErrorKind::WinApi,
-                    &format!("{}::get_com_api: CoInitializeSecurity failed", MODULE),
-                ))));
-            }
-
-            *oca = Some(ComAPI {});
+impl ComAPI {
+    pub fn get_api() -> Result<ComAPI,MigError> {
+        debug!("{}::new: entered", MODULE);
+        lazy_static! {
+            static ref COM_REF: RefCount = Arc::new(Mutex::new(0));
         }
-        debug!("{}::get_com_api: done", MODULE);
-        Ok(COM_REF.clone())
-    } else {
-        Err(MigError::from_remark(
-            MigErrorKind::MutAccess,
-            &format!("{}::get_com_api: failed to lock mutex", MODULE),
-        ))
+        if let Ok(mut use_count) = COM_REF.lock() {
+            if *use_count == 0 {
+                debug!("{}::get_api: initializing com", MODULE);
+                if unsafe { CoInitializeEx(null_mut(), COINIT_MULTITHREADED) } < 0 {
+                    let os_err = Error::last_os_error();
+                    warn!(
+                        "{}::get_api: CoInitializeEx returned os error: {:?} ",
+                        MODULE, os_err
+                    );
+                    return Err(MigError::from(os_err.context(MigErrCtx::from_remark(
+                        MigErrorKind::WinApi,
+                        &format!("{}::get_api: CoInitializeEx failed", MODULE),
+                    ))));
+                }
+                debug!("{}::get_api: calling CoInitializeSecurity", MODULE);
+                if unsafe {
+                    CoInitializeSecurity(
+                        NULL,
+                        -1, // let COM choose.
+                        null_mut(),
+                        NULL,
+                        RPC_C_AUTHN_LEVEL_DEFAULT,
+                        RPC_C_IMP_LEVEL_IMPERSONATE,
+                        NULL,
+                        EOAC_NONE,
+                        NULL,
+                    )
+                } < 0
+                {
+                    let os_err = Error::last_os_error();
+                    unsafe { CoUninitialize() };
+                    warn!(
+                        "{}::get_api: CoInitializeSecurity returned os error: {:?} ",
+                        MODULE, os_err
+                    );
+                    return Err(MigError::from(os_err.context(MigErrCtx::from_remark(
+                        MigErrorKind::WinApi,
+                        &format!("{}::get_api: CoInitializeSecurity failed", MODULE),
+                    ))));
+                }                
+            } 
+            *use_count += 1;
+            Ok( ComAPI{uc: COM_REF.clone() })            
+        } else {
+            Err(MigError::from(MigErrorKind::MutAccess))
+        }
     }
 }
 
 impl Drop for ComAPI {
     fn drop(&mut self) {
-        debug!("{}::drop: deinitializing com", MODULE);
-        unsafe { CoUninitialize() };
+        debug!("{}::drop: called", MODULE);
+        if let Ok(mut v) = self.uc.lock() {
+            if *v == 1 {
+                debug!("{}::drop: deinitializing com", MODULE);
+                unsafe { CoUninitialize() };
+            } 
+            *v -= 1;    
+        }
     }
 }
+
 
 mod tests {
     use super::*;
 
     #[test]
     fn it_works1() {
-        let h_com_api = get_com_api().unwrap();
+        let h_com_api = ComAPI::get_api().unwrap();
     }
 
     #[test]
     fn it_works2() {
-        let h_com_api = get_com_api().unwrap();
+        let h_com_api = ComAPI::get_api().unwrap();
     }
 }

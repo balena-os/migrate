@@ -31,7 +31,7 @@ use winapi::{
     },
 };
 
-use super::com_api::{get_com_api, HComApi};
+use super::com_api::ComAPI;
 use super::util::to_wide_cstring;
 use crate::{MigErrCtx, MigError, MigErrorKind};
 
@@ -49,16 +49,16 @@ pub use query_result_enum::QueryResultEnumerator;
 const MODULE: &str = "mswin::win_api::wmi_api";
 
 pub struct WmiAPI {
-    _com_api: HComApi,
+    _com_api: ComAPI,
     p_svc: PMIWbemServices,
 }
 
 impl<'a> WmiAPI {
     pub fn get_api() -> Result<WmiAPI, MigError> {
-        WmiAPI::get_api_from_hcom(get_com_api()?)
+        WmiAPI::get_api_from_hcom(ComAPI::get_api()?)
     }
 
-    pub fn get_api_from_hcom(h_com_api: HComApi) -> Result<WmiAPI, MigError> {
+    pub fn get_api_from_hcom(h_com_api: ComAPI) -> Result<WmiAPI, MigError> {
         debug!("{}::get_api_from_hcom: Calling CoCreateInstance for CLSID_WbemLocator", MODULE);
 
         let mut p_loc = NULL;

@@ -6,11 +6,11 @@ use balena_migrator::mig_error::MigError;
 
 #[cfg(target_os = "windows")]
 fn test_com() -> Result<(), MigError> {
-    use balena_migrator::mswin::win_api::com_api::get_com_api;
+    use balena_migrator::mswin::win_api::com_api::ComAPI;
     use balena_migrator::mswin::win_api::wmi_api::WmiAPI;
 
     info!("calling ComAPI::get_api()");
-    let h_com_api = get_com_api()?;
+    let h_com_api = ComAPI::get_api()?;
     info!("calling WmiAPI::get_api_from_hcom");
     let mut wmi_api = WmiAPI::get_api_from_hcom(h_com_api)?;
     let res = wmi_api.raw_query("SELECT Caption,Version,OSArchitecture, BootDevice, TotalVisibleMemorySize,FreePhysicalMemory FROM Win32_OperatingSystem")?;
