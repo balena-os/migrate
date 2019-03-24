@@ -70,21 +70,55 @@ impl IWbemClassWrapper {
         result
     }
 
-    fn to_variant(&self, vt_prop: &VARIANT) -> Option<Variant> {
+    fn to_variant(&self, vt_prop: &VARIANT) -> Result<Variant, MigError> {
         let variant_type: VARTYPE = unsafe { vt_prop.n1.n2().vt };
         if variant_type as u32 & VT_ARRAY == VT_ARRAY {
             let array: &*mut SAFEARRAY = unsafe { vt_prop.n1.n2().n3.parray() };
 
             let item_type = variant_type as u32 & VT_TYPEMASK;
-            if item_type ==  {
-
+            if item_type ==  VT_BSTR {
+                Ok(Variant::VEC_STRING(safe_to_str_array(array)?)
+            } else if item_type ==  VT_I4 {
+                Ok(Variant::VEC_I32(safe_to_i32_array(array)?)
+            } else {
+                Err(MigError::from_remark(MigErrorKind::NotImpl,&format!("{}::to_variant: the type {} has not been implemented yet", MODULE, variant_type)))
             }
-
-            return Ok(Variant::Array(safe_array_to_vec(*array, item_type as u32)?));
+        } else {
+            let variant_value = match variant_type as u32 {
+                VT_BSTR => {
+                    let bstr_ptr: &BSTR = unsafe { vt_prop.n1.n2().n3.bstrVal() };
+                    let prop_val: &WideCStr = unsafe { WideCStr::from_ptr_str(*bstr_ptr) };
+                    let property_value_as_string = prop_val.to_string()?;
+                    Variant::String(property_value_as_string)
+                }
+                VT_I2 => {
+                    let num: &i16 = unsafe { vt.n1.n2().n3.iVal() };
+                    Variant::I2(*num)
+                }
+                VT_I4 => {
+                    let num: &i32 = unsafe { vt.n1.n2().n3.lVal() };
+                    Variant::I4(*num)
+                }
+                VT_BOOL => {
+                    let value: &i16 = unsafe { vt.n1.n2().n3.boolVal() };
+                    match *value {
+                        VARIANT_FALSE => Variant::Bool(false),
+                        VARIANT_TRUE => Variant::Bool(true),
+                        _ => bail!("Invalid bool value: {:#X}", value),
+                    }
+                }
+                VT_UI1 => {
+                    let num: &i8 = unsafe { vt.n1.n2().n3.cVal() };
+                    Variant::UI1(*num as u8)
+                }
+                VT_EMPTY => Variant::Empty,
+                VT_NULL => Variant::Null,
+                _ => bail!(
+                    "Converting from variant type {:#X} is not implemented yet",
+                    variant_type
+                ),
+            }
         }
-
-
-        None
     }
 
     pub fn get_property(&self, prop_name: &str) -> Result<Option<Variant>, MigError> {
@@ -151,3 +185,35 @@ fn safe_to_str_array(arr: *mut SAFEARRAY) -> Result<Vec<String>,MigError> {
     Ok(result)
 }
 
+fn safe_to_i32_array(arr: *mut SAFEARRAY) -> Result<Vec<String>,MigError> {
+    let mut p_data = NULL;
+    let mut lower_bound: i32 = 0;
+    let mut upper_bound: i32 = 0;
+
+    if unsafe { SafeArrayGetLBound(arr, 1, &mut lower_bound as _) } < 0 {
+        return Err(report_win_api_error(MODULE, "safe_to_str_array", "SafeArrayGetLBound"));
+    }
+
+    if unsafe { SafeArrayGetUBound(arr, 1, &mut upper_bound as _) } < 0 {
+        return Err(report_win_api_error(MODULE, "safe_to_str_array", "SafeArrayGetUBound"));
+    }
+
+    if unsafe { SafeArrayAccessData(arr, &mut p_data) } < 0 {
+        return Err(report_win_api_error(MODULE, "safe_to_str_array", "SafeArrayAccessData"));
+    }
+
+    let mut result: Vec<String> = Vec::new();
+    let data_slice = unsafe { slice::from_raw_parts(p_data as *mut i32, (upper_bound + 1) as usize) };
+    let data_slice = &data_slice[(lower_bound as usize)..];
+    for item_i32_num in data_slice.iter() {        
+        let item: &WideCStr = unsafe { WideCStr::from_ptr_str(*item_bstr) };
+        debug!("{}::safe_to_i32_array: adding item: {}", MODULE, item);
+        result.push(item_i32_num);
+    }
+
+    if unsafe { SafeArrayUnaccessData(arr) } < 0 {
+        return Err(report_win_api_error(MODULE, "safe_to_str_array", "SafeArrayUnaccessData"));
+    }
+
+    Ok(result)
+}
