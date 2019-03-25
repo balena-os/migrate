@@ -47,7 +47,6 @@ pub struct WmiPartitionInfo {
     pub boot_partition: bool,
     pub disk_index: u64,
     pub partition_index: u64,
-    pub start_offset: usize,
 }
 
 
@@ -209,7 +208,7 @@ impl WmiUtils {
     }
 
     pub fn get_partition_info(&self, disk_index: u64, partition_index: u64) -> Result<WmiPartitionInfo, MigError> {
-        let query = format!("SELECT Caption,Bootable,Size,NumberOfBlocks,Type,BootPartition,StartingOffset FROM Win32_DiskPartition where DiskIndex={} and Index={}", disk_index, partition_index);
+        let query = format!("SELECT Caption,Bootable,Size,NumberOfBlocks,Type,BootPartition FROM Win32_DiskPartition where DiskIndex={} and Index={}", disk_index, partition_index);
         debug!("{}::get_partition_info: performing WMI Query: '{}'", MODULE, query);
         let mut q_res = self.wmi_api.raw_query(&query)?;
         match q_res.len() {
@@ -223,7 +222,6 @@ impl WmiUtils {
                     number_of_blocks: 0,
                     ptype: String::from(res_map.get_string_property("Type")?),
                     boot_partition: res_map.get_bool_property("BootPartition")?,
-                    start_offset: 0,
                     disk_index,
                     partition_index,
                 })
@@ -282,7 +280,7 @@ impl<'a> QueryRes {
             if let Variant::STRING(val) = variant {
                 Ok(val.as_ref())
             } else {
-                debug!("{}::get_string_property: unexpected variant type, not STRING for key: '{} -> {:?}", MODULE, prop_name, variant);
+                debug!("{}::get_string_property: unexpected variant type, expected STRING for key: '{} -> {:?}", MODULE, prop_name, variant);
                 Err(MigError::from_remark(MigErrorKind::InvParam,&format!("{}::get_string_property: unexpected variant type, not STRING for key: '{}", MODULE, prop_name)))
             }
         } else {
@@ -295,7 +293,7 @@ impl<'a> QueryRes {
             if let Variant::BOOL(val) = variant {
                 Ok(*val)
             } else {
-                debug!("{}::get_bool_property: unexpected variant type, not STRING for key: '{} -> {:?}", MODULE, prop_name, variant);
+                debug!("{}::get_bool_property: unexpected variant type, expected  BOOL for key: '{} -> {:?}", MODULE, prop_name, variant);
                 Err(MigError::from_remark(MigErrorKind::InvParam,&format!("{}::get_bool_property: unexpected variant type, not OOL for key: '{}", MODULE, prop_name)))
             }
         } else {
@@ -303,20 +301,29 @@ impl<'a> QueryRes {
         }
      }
 
-    /*
-    fn get_usize_property(&self, prop_name: &str) -> Result<usize, MigError> {    
-        if let Some(ref variant) = self.q_result.get(prop_name) {
-            if let Variant::I(val) = variant {
-                Ok(*val)
-            } else {
-                debug!("{}::get_bool_property: unexpected variant type, not STRING for key: '{} -> {:?}", MODULE, prop_name, variant);
+    fn get_sint_property(&self, prop_name: &str) -> Result<i64, MigError> {
+        if let Some(ref variant) = self.q_result.get(prop_name) {            
+            if let Variant::I32(val) = variant {
+                Ok(*val as I64)
+            } else {                
+                debug!("{}::get_bool_property: unexpected variant type, expected STRING or I32 for key: '{} -> {:?}", MODULE, prop_name, variant);
                 Err(MigError::from_remark(MigErrorKind::InvParam,&format!("{}::get_bool_property: unexpected variant type, not OOL for key: '{}", MODULE, prop_name)))
             }
         } else {
             Err(MigError::from_remark(MigErrorKind::NotFound,&format!("{}::get_bool_property: value not found for key: '{}", MODULE, prop_name)))
         }
      }
-     */
 
-
+    fn get_uint_property(&self, prop_name: &str) -> Result<u64, MigError> {
+        if let Some(ref variant) = self.q_result.get(prop_name) {            
+            if let Variant::STRING(val) = variant {
+                Ok(*val.parse<u64>().context(MigErrCtx::from_remark(MigErrorKind::InvParam,&format!("{}::get_uint_property: failed tp parse value from string", MODULE, val)))?)
+            } else {                
+                debug!("{}::get_uint_property: unexpected variant type, expected STRING for key: '{} -> {:?}", MODULE, prop_name, variant);
+                Err(MigError::from_remark(MigErrorKind::InvParam,&format!("{}::get_bool_property: unexpected variant type, not OOL for key: '{}", MODULE, prop_name)))
+            }
+        } else {
+            Err(MigError::from_remark(MigErrorKind::NotFound,&format!("{}::get_bool_property: value not found for key: '{}", MODULE, prop_name)))
+        }
+     }
 }

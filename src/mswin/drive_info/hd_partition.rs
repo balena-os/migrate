@@ -117,6 +117,14 @@ impl<'a> HarddiskPartitionInfo {
         }
     }
 
+    pub fn get_start_offset(&self) -> Option<usize> {
+        if let Some(ref wi) = self.wmi_info {
+            Some(wi.start_offset)
+        } else {
+            None
+        }
+    }
+
     pub fn get_name(&'a self) -> Option<&'a str> {
         if let Some(ref wi) = self.wmi_info {
             Some(&wi.name)
