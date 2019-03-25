@@ -3,7 +3,7 @@ use std::cell::RefCell;
 use std::collections::HashMap;
 use std::rc::Rc;
 
-use super::win_api::wmi_api::WmiAPI;
+use super::WmiUtils;
 use crate::mswin::win_api::query_dos_device;
 use crate::{MigError, MigErrorKind};
 
@@ -44,10 +44,11 @@ pub fn enumerate_drives() -> Result<HashMap<String, StorageDevice>, MigError> {
     let mut hdv_list: Vec<Rc<RefCell<HarddiskVolumeInfo>>> = Vec::new();
     let mut dl_list: Vec<Rc<RefCell<DriveLetterInfo>>> = Vec::new();
     let mut vol_list: Vec<Rc<RefCell<VolumeInfo>>> = Vec::new();
+    let wmi_utils = WmiUtils::new()?;
 
     for device in query_dos_device(None)? {
         loop {
-            if let Some(hdp) = HarddiskPartitionInfo::try_from_device(&device)? {
+            if let Some(hdp) = HarddiskPartitionInfo::try_from_device(&device, &wmi_utils)? {
                 hdp_list.push(Rc::new(RefCell::new(hdp)));
                 break;
             }

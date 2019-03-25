@@ -2,13 +2,15 @@ use lazy_static::lazy_static;
 use regex::Regex;
 use std::cell::RefCell;
 use std::rc::Rc;
+use log::{debug};
 
 use super::{DeviceProps, HarddiskVolumeInfo, PhysicalDriveInfo};
 
 use crate::mswin::win_api::query_dos_device;
-use crate::mswin::wmi_utils::{WmiUtils,WmiPartitionInfo};
+use crate::mswin::wmi_utils::{WmiUtils, WmiPartitionInfo};
 use crate::MigError;
 
+const MODULE: &str = "mswin::drive_info::hd_partition";
 
 #[derive(Debug)]
 pub struct HarddiskPartitionInfo {
@@ -21,7 +23,7 @@ pub struct HarddiskPartitionInfo {
 }
 
 impl<'a> HarddiskPartitionInfo {
-    pub fn try_from_device(device: &str) -> Result<Option<HarddiskPartitionInfo>, MigError> {
+    pub fn try_from_device(device: &str, wmi_utils: &WmiUtils) -> Result<Option<HarddiskPartitionInfo>, MigError> {
         lazy_static! {
             static ref RE_HDPART: Regex =
                 Regex::new(r"^Harddisk([0-9]+)Partition([0-9]+)$").unwrap();
@@ -31,6 +33,7 @@ impl<'a> HarddiskPartitionInfo {
                 device,
                 cap.get(1).unwrap().as_str().parse::<u64>().unwrap(),
                 cap.get(2).unwrap().as_str().parse::<u64>().unwrap(),
+                wmi_utils,
             )?))
         } else {
             Ok(None)
@@ -41,9 +44,15 @@ impl<'a> HarddiskPartitionInfo {
         device: &str,
         hd_index: u64,
         part_index: u64,
+        wmi_utils: &WmiUtils
     ) -> Result<HarddiskPartitionInfo, MigError> {
         // TODO: query WMI partition info
-        let part_info = WmiUtils::new()?.get_partition_info(hd_index, part_index)?;
+        
+        match wmi_utils.get_partition_info(hd_index, part_index) {
+            Ok(pi) => { debug!("{}::new: got WmiPartitionInfo: {:?}", MODULE, pi); },
+            Err(why) => { debug!("{}::new: failed to get WmiPartitionInfo: {:?}", MODULE, why); },
+        };
+        
 
         Ok(HarddiskPartitionInfo {
             dev_name: String::from(device),

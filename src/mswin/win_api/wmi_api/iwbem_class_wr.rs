@@ -52,6 +52,7 @@ pub struct IWbemClassWrapper {
 
 impl IWbemClassWrapper {
     pub fn new(ptr: PMIWbemClassObject) -> Self {
+        debug!("{}::new: creating IWbemClassWrapper, ptr: {:?}", MODULE, ptr);
         Self { inner: ptr }
     }
 
@@ -191,8 +192,8 @@ impl IWbemClassWrapper {
 }
 
 impl Drop for IWbemClassWrapper {
-    fn drop(&mut self) {
-        debug!("{}::drop: dropping IWbemClassWrapper", MODULE);
+    fn drop(&mut self) {        
+        debug!("{}::drop: dropping IWbemClassWrapper, ptr: {:?}", MODULE, self.inner);
         unsafe {
             (*self.inner).Release();
         }

@@ -27,6 +27,7 @@ pub const WMIQ_Disk: &str = "SELECT Caption,Partitions,Status,DeviceID,Size,Byte
 // pub const WMIQ_Partition: &str = "SELECT * FROM Win32_DiskPartition";
 pub const WMIQ_Partition: &str = "SELECT Caption,Bootable,Size,NumberOfBlocks,Type,BootPartition,DiskIndex,Index FROM Win32_DiskPartition";
 
+#[derive(Debug)]
 pub(crate) struct WMIOSInfo {
     pub os_name: String,
     pub os_release: OSRelease,
@@ -36,6 +37,7 @@ pub(crate) struct WMIOSInfo {
     pub boot_dev: String,
 }
 
+#[derive(Debug)]
 pub struct WmiPartitionInfo {
     name: String,
     bootable: bool,

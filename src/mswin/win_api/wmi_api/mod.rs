@@ -166,7 +166,7 @@ impl<'a> WmiAPI {
                 (WBEM_FLAG_FORWARD_ONLY | WBEM_FLAG_RETURN_IMMEDIATELY) as i32,
                 ptr::null_mut(),
                 &mut p_enumerator,
-            ) } < 0 {
+            ) } != 0 {
             let os_err = Error::last_os_error();
             warn!(
                 "{}::raw_query: ExecQuery returned os error: {:?} ",

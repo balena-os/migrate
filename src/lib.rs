@@ -33,7 +33,6 @@ use crate::mig_error::{MigErrCtx, MigError, MigErrorKind};
 const OS_RELEASE_RE: &str = r"^(\d+)\.(\d+)\.(\d+)(-.*)?$";
 
 #[derive(Debug)]
-
 pub enum OSArch {
     AMD64,
     ARM64,
@@ -53,6 +52,7 @@ impl Display for OSArch {
     }
 }
 
+#[derive(Debug)]
 pub struct OSRelease(u32, u32, u32);
 
 impl OSRelease {
