@@ -11,3 +11,4 @@
 
     $query = "SELECT Index,DiskIndex,Type,PrimaryPartition,Bootable,BootPartition,BlockSize,Size,StartingOffset  from Win32_DiskPartition"
     Get-WmiObject -Query $query;
+    SELECT Caption,Bootable,Size,NumberOfBlocks,Type,BootPartition FROM Win32_DiskPartition where DiskIndex=0 and Index=5

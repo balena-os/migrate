@@ -38,17 +38,16 @@ pub trait DeviceProps {
     }
 }
 
-pub fn enumerate_drives() -> Result<HashMap<String, StorageDevice>, MigError> {
+pub fn enumerate_drives(wmi_utils: &WmiUtils) -> Result<HashMap<String, StorageDevice>, MigError> {
     let mut dev_map: HashMap<String, StorageDevice> = HashMap::new();
     let mut hdp_list: Vec<Rc<RefCell<HarddiskPartitionInfo>>> = Vec::new();
     let mut hdv_list: Vec<Rc<RefCell<HarddiskVolumeInfo>>> = Vec::new();
     let mut dl_list: Vec<Rc<RefCell<DriveLetterInfo>>> = Vec::new();
-    let mut vol_list: Vec<Rc<RefCell<VolumeInfo>>> = Vec::new();
-    let wmi_utils = WmiUtils::new()?;
+    let mut vol_list: Vec<Rc<RefCell<VolumeInfo>>> = Vec::new();    
 
     for device in query_dos_device(None)? {
         loop {
-            if let Some(hdp) = HarddiskPartitionInfo::try_from_device(&device, &wmi_utils)? {
+            if let Some(hdp) = HarddiskPartitionInfo::try_from_device(&device, wmi_utils)? {
                 hdp_list.push(Rc::new(RefCell::new(hdp)));
                 break;
             }

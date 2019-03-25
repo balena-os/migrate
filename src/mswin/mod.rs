@@ -5,14 +5,16 @@ pub mod win_api;
 pub(crate) mod wmi_utils;
 
 use log::debug;
+use std::collections::{HashMap};
 
 use wmi_utils::{WMIOSInfo, WmiUtils};
-
 use crate::mig_error::{MigError, MigErrorKind};
-
 use crate::{Migrator, OSArch, OSRelease};
+use crate::mswin::drive_info::StorageDevice;
 
 use powershell::PSInfo;
+
+
 
 // const MODULE: &str = "mswin";
 
@@ -120,6 +122,10 @@ impl Migrator for MSWMigrator {
 
     fn is_secure_boot(&mut self) -> Result<bool, MigError> {
         Ok(self.ps_info.is_secure_boot()?)
+    }
+    
+    fn enumerate_drives(&self) -> Result<HashMap<String, StorageDevice>, MigError> {
+        drive_info::enumerate_drives(&self.wmi_utils)
     }
 }
 

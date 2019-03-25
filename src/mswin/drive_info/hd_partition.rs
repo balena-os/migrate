@@ -2,7 +2,7 @@ use lazy_static::lazy_static;
 use regex::Regex;
 use std::cell::RefCell;
 use std::rc::Rc;
-use log::{debug};
+use log::{debug, warn};
 
 use super::{DeviceProps, HarddiskVolumeInfo, PhysicalDriveInfo};
 
@@ -20,6 +20,7 @@ pub struct HarddiskPartitionInfo {
     device: String,
     phys_disk: Option<Rc<PhysicalDriveInfo>>,
     hd_vol: Option<Rc<RefCell<HarddiskVolumeInfo>>>,
+    wmi_info: Option<WmiPartitionInfo>,
 }
 
 impl<'a> HarddiskPartitionInfo {
@@ -48,12 +49,15 @@ impl<'a> HarddiskPartitionInfo {
     ) -> Result<HarddiskPartitionInfo, MigError> {
         // TODO: query WMI partition info
         
-        match wmi_utils.get_partition_info(hd_index, part_index) {
-            Ok(pi) => { debug!("{}::new: got WmiPartitionInfo: {:?}", MODULE, pi); },
-            Err(why) => { debug!("{}::new: failed to get WmiPartitionInfo: {:?}", MODULE, why); },
+        let mut wmi_info: Option<WmiPartitionInfo> = None;
+        match wmi_utils.get_partition_info(hd_index, part_index - 1) {
+            Ok(pi) => { 
+                debug!("{}::new: got WmiPartitionInfo: {:?}", MODULE, pi); 
+                wmi_info = Some(pi);                
+                },
+            Err(why) => { warn!("{}::new: failed to get WmiPartitionInfo: {:?}", MODULE, why); },
         };
         
-
         Ok(HarddiskPartitionInfo {
             dev_name: String::from(device),
             hd_index,
@@ -61,6 +65,7 @@ impl<'a> HarddiskPartitionInfo {
             device: query_dos_device(Some(device))?.get(0).unwrap().clone(),
             phys_disk: None,
             hd_vol: None,
+            wmi_info: wmi_info,
         })
     }
 
@@ -70,6 +75,62 @@ impl<'a> HarddiskPartitionInfo {
 
     pub fn get_part_index(&self) -> u64 {
         self.part_index
+    }
+
+    pub fn has_wmi_info(&self) -> bool {
+        if let Some(ref _wi) = self.wmi_info {
+            true
+        } else {
+            false
+        }
+    }
+
+    pub fn is_boot_device(&self) -> Option<bool> {
+        if let Some(ref wi) = self.wmi_info {
+            Some(wi.boot_partition)
+        } else {
+            None
+        }
+    }
+
+    pub fn is_bootable(&self) -> Option<bool> {
+        if let Some(ref wi) = self.wmi_info {
+            Some(wi.bootable)
+        } else {
+            None
+        }
+    }
+
+    pub fn get_size(&self) -> Option<usize> {
+        if let Some(ref wi) = self.wmi_info {
+            Some(wi.size)
+        } else {
+            None
+        }
+    }
+
+    pub fn get_num_blocks(&self) -> Option<usize> {
+        if let Some(ref wi) = self.wmi_info {
+            Some(wi.number_of_blocks)
+        } else {
+            None
+        }
+    }
+
+    pub fn get_name(&'a self) -> Option<&'a str> {
+        if let Some(ref wi) = self.wmi_info {
+            Some(&wi.name)
+        } else {
+            None
+        }
+    }
+
+    pub fn get_ptype(&'a self) -> Option<&'a str> {
+        if let Some(ref wi) = self.wmi_info {
+            Some(&wi.ptype)
+        } else {
+            None
+        }
     }
 
     pub fn get_phys_disk(&'a self) -> &'a Option<Rc<PhysicalDriveInfo>> {

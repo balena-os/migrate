@@ -39,14 +39,14 @@ pub(crate) struct WMIOSInfo {
 
 #[derive(Debug)]
 pub struct WmiPartitionInfo {
-    name: String,
-    bootable: bool,
-    size: usize,
-    number_of_blocks: usize,
-    ptype: String,
-    boot_partition: bool,
-    disk_index: u64,
-    partition_index: u64,
+    pub name: String,
+    pub bootable: bool,
+    pub size: usize,
+    pub number_of_blocks: usize,
+    pub ptype: String,
+    pub boot_partition: bool,
+    pub disk_index: u64,
+    pub partition_index: u64,
 }
 
 

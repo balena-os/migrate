@@ -8,8 +8,6 @@ extern crate log;
 extern crate stderrlog;
 #[cfg(target_os = "windows")]
 extern crate winapi;
-//#[cfg(target_os = "windows")]
-//extern crate wmi;
 
 #[cfg(target_os = "linux")]
 pub extern crate libc;
@@ -27,8 +25,11 @@ use failure::ResultExt;
 use lazy_static::lazy_static;
 use regex::Regex;
 use std::fmt::{self, Display, Formatter};
-
+use std::collections::{HashMap};
+#[cfg(target_os = "windows")]    
+use crate::mswin::drive_info::StorageDevice;
 use crate::mig_error::{MigErrCtx, MigError, MigErrorKind};
+
 
 const OS_RELEASE_RE: &str = r"^(\d+)\.(\d+)\.(\d+)(-.*)?$";
 
@@ -127,6 +128,8 @@ pub trait Migrator {
     fn can_migrate(&mut self) -> Result<bool, MigError>;
     fn migrate(&mut self) -> Result<(), MigError>;
     fn is_uefi_boot(&mut self) -> Result<bool, MigError>;
+#[cfg(target_os = "windows")]    
+    fn enumerate_drives(&self) -> Result<HashMap<String, StorageDevice>, MigError>;
 }
 
 #[cfg(target_os = "windows")]

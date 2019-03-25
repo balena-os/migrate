@@ -31,10 +31,10 @@ fn test_com() -> Result<(), MigError> {
 }
 
 #[cfg(target_os = "windows")]
-fn print_drives() -> () {
-    use balena_migrator::mswin::drive_info::{enumerate_drives, DeviceProps, StorageDevice};
+fn print_drives(migrator: &Migrator) -> () {
+    use balena_migrator::mswin::drive_info::{DeviceProps, StorageDevice};
 
-    let drive_map = enumerate_drives().unwrap();
+    let drive_map = migrator.enumerate_drives().unwrap();
     for key in drive_map.keys() {
         println!("Key: {}", &key);
         let info = drive_map.get(key).unwrap();
@@ -44,7 +44,14 @@ fn print_drives() -> () {
                 println!("  type: HarddiskPartition");
                 println!("  harddisk index: {}", hdp.get_hd_index());
                 println!("  partition index: {}", hdp.get_part_index());
-                println!("  device :         {}\n", hdp.get_device());
+                println!("  device :         {}", hdp.get_device());
+                if hdp.has_wmi_info() {
+                    println!("  boot device:     {}", hdp.is_boot_device().unwrap());
+                    println!("  bootable:        {}", hdp.is_bootable().unwrap());
+                    println!("  size:            {}", hdp.get_size().unwrap());
+                    println!("  type:            {}", hdp.get_ptype().unwrap());
+                }
+                println!();
             }
             StorageDevice::PhysicalDrive(pd) => {
                 let pd = pd.as_ref();
@@ -61,11 +68,10 @@ fn print_drives() -> () {
 }
 
 #[cfg (not (target_os = "windows"))]
-fn print_drives() -> () {
+fn print_drives(_migrator: &mut Migrator) -> () {
     println!("print drives currently only works on windows");
     ()
 }
-
 
 fn print_sysinfo(s_info: &mut Migrator) -> () {
     match s_info.get_os_name() {
@@ -152,13 +158,14 @@ fn main() {
         .init()
         .unwrap();
 
-    if matches.is_present("info") {
-        let mut migrator = balena_migrator::get_migrator().unwrap();
+    let mut migrator = balena_migrator::get_migrator().unwrap();
+
+    if matches.is_present("info") {        
         print_sysinfo(migrator.as_mut());
     }
 
     if matches.is_present("drives") {
-        print_drives();
+        print_drives(migrator.as_ref());
     }
 
     if matches.is_present("wmi") {

@@ -23,7 +23,7 @@ use crate::{MigErrCtx, MigError, MigErrorKind};
 const MODULE: &str = "mswin::win_api::com_api";
 
 
-pub type RefCount = Arc<Mutex<u64>>;
+type RefCount = Arc<Mutex<u64>>;
 
 pub struct ComAPI {
     uc: RefCount,
