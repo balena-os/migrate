@@ -42,14 +42,16 @@ fn print_drives(migrator: &Migrator) -> () {
             StorageDevice::HarddiskPartition(hdp) => {
                 let hdp = hdp.as_ref().borrow();
                 println!("  type: HarddiskPartition");
-                println!("  harddisk index: {}", hdp.get_hd_index());
-                println!("  partition index: {}", hdp.get_part_index());
-                println!("  device :         {}", hdp.get_device());
+                println!("  harddisk index:   {}", hdp.get_hd_index());
+                println!("  partition index:  {}", hdp.get_part_index());
+                println!("  device :          {}", hdp.get_device());
                 if hdp.has_wmi_info() {
-                    println!("  boot device:     {}", hdp.is_boot_device().unwrap());
-                    println!("  bootable:        {}", hdp.is_bootable().unwrap());
-                    println!("  size:            {}", hdp.get_size().unwrap());
-                    println!("  type:            {}", hdp.get_ptype().unwrap());
+                    println!("  boot device:      {}", hdp.is_boot_device().unwrap());
+                    println!("  bootable:         {}", hdp.is_bootable().unwrap());
+                    println!("  size:             {} kB", hdp.get_size().unwrap()/1024);
+                    println!("  type:             {}", hdp.get_ptype().unwrap());
+                    println!("  number of blocks: {}", hdp.get_num_blocks().unwrap());
+                    println!("  start offset:     {}", hdp.get_start_offset().unwrap());
                 }
                 println!();
             }

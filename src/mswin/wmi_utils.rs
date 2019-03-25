@@ -20,12 +20,12 @@ const VERBOSE: bool = true;
 const MODULE: &str = "mswin::wmi_utils";
 
 pub const WMIQ_OS: &str = "SELECT Caption,Version,OSArchitecture, BootDevice, TotalVisibleMemorySize,FreePhysicalMemory FROM Win32_OperatingSystem";
-pub const WMIQ_CSProd: &str = "SELECT * FROM Win32_ComputerSystemProduct";
+//pub const WMIQ_CSProd: &str = "SELECT * FROM Win32_ComputerSystemProduct";
 pub const WMIQ_BootConfig: &str = "SELECT * FROM Win32_SystemBootConfiguration";
 // pub const WMIQ_Disk: &str = "SELECT * FROM Win32_DiskDrive";
-pub const WMIQ_Disk: &str = "SELECT Caption,Partitions,Status,DeviceID,Size,BytesPerSector,MediaType,InterfaceType FROM Win32_DiskDrive";
+// pub const WMIQ_Disk: &str = "SELECT Caption,Partitions,Status,DeviceID,Size,BytesPerSector,MediaType,InterfaceType FROM Win32_DiskDrive";
 // pub const WMIQ_Partition: &str = "SELECT * FROM Win32_DiskPartition";
-pub const WMIQ_Partition: &str = "SELECT Caption,Bootable,Size,NumberOfBlocks,Type,BootPartition,DiskIndex,Index FROM Win32_DiskPartition";
+// pub const WMIQ_Partition: &str = "SELECT Caption,Bootable,Size,NumberOfBlocks,Type,BootPartition,DiskIndex,Index FROM Win32_DiskPartition";
 
 #[derive(Debug)]
 pub(crate) struct WMIOSInfo {
@@ -41,13 +41,27 @@ pub(crate) struct WMIOSInfo {
 pub struct WmiPartitionInfo {
     pub name: String,
     pub bootable: bool,
-    pub size: usize,
-    pub number_of_blocks: usize,
+    pub size: u64,
+    pub number_of_blocks: u64,
     pub ptype: String,
     pub boot_partition: bool,
     pub disk_index: u64,
     pub partition_index: u64,
+    pub start_offset: u64,
 }
+
+#[derive(Debug)]
+pub struct WmiDriveInfo {
+    pub name: String,
+    pub size: u64,
+    pub media_type: String,
+    pub status: String,    
+    pub bytes_per_sector: u64,
+    pub partitions: u64,
+    pub compression_method: String,
+    pub disk_index: u64,
+}
+
 
 
 pub struct WmiUtils {
@@ -208,7 +222,7 @@ impl WmiUtils {
     }
 
     pub fn get_partition_info(&self, disk_index: u64, partition_index: u64) -> Result<WmiPartitionInfo, MigError> {
-        let query = format!("SELECT Caption,Bootable,Size,NumberOfBlocks,Type,BootPartition FROM Win32_DiskPartition where DiskIndex={} and Index={}", disk_index, partition_index);
+        let query = format!("SELECT Caption,Bootable,Size,NumberOfBlocks,Type,BootPartition,StartingOffset FROM Win32_DiskPartition where DiskIndex={} and Index={}", disk_index, partition_index);
         debug!("{}::get_partition_info: performing WMI Query: '{}'", MODULE, query);
         let mut q_res = self.wmi_api.raw_query(&query)?;
         match q_res.len() {
@@ -218,10 +232,11 @@ impl WmiUtils {
                 Ok(WmiPartitionInfo{
                     name: String::from(res_map.get_string_property("Caption")?),
                     bootable: res_map.get_bool_property("Bootable")?, 
-                    size: 0,
-                    number_of_blocks: 0,
-                    ptype: String::from(res_map.get_string_property("Type")?),
+                    size: res_map.get_uint_property("Size")?,
+                    number_of_blocks: res_map.get_uint_property("NumberOfBlocks")?,
+                    ptype: String::from(res_map.get_string_property("Type")?), // TODO: parse this value GPT / System 
                     boot_partition: res_map.get_bool_property("BootPartition")?,
+                    start_offset: res_map.get_uint_property("StartingOffset")?,
                     disk_index,
                     partition_index,
                 })
@@ -230,6 +245,28 @@ impl WmiUtils {
         }
     } 
 
+    pub fn get_drive_info(&self, disk_index: u64) -> Result<WmiDriveInfo, MigError> {
+        let query = format!("SELECT Name, Size, MediaType, Status, BytesPerSector, Partitions, CompressionMethod FROM Win32_DiskDrive WHERE Index={}", disk_index);        
+        debug!("{}::get_partition_info: performing WMI Query: '{}'", MODULE, query);
+        let mut q_res = self.wmi_api.raw_query(&query)?;
+        match q_res.len() {
+            0 => Err(MigError::from_remark(MigErrorKind::NotFound,&format!("{}::get_disk_info: the query returned an empty result set: '{}'", MODULE, query))), 
+            1 => {
+                let res_map = QueryRes::new(q_res.pop().unwrap());
+                Ok(WmiDriveInfo{
+                    name: String::from(res_map.get_string_property("Name")?),
+                    media_type: String::from(res_map.get_string_property("MediaType")?),  // TODO: parse this value fixed / removable
+                    size: res_map.get_uint_property("Size")?,
+                    status: String::from(res_map.get_string_property("Status")?),
+                    bytes_per_sector: res_map.get_uint_property("BytesPerSector")?,
+                    partitions: res_map.get_uint_property("Partitions")?,
+                    compression_method: String::from(res_map.get_string_property("CompressionMethod")?),
+                    disk_index,
+                })
+            },
+            _ => Err(MigError::from_remark(MigErrorKind::InvParam, &format!("{}::get_drive_info: invalid result cout for query, expected 1, got  {}",MODULE, q_res.len()))), 
+        }
+    } 
 
     /*
         let wmi_res = wmi_utils.wmi_query(wmi_utils::WMIQ_BootConfig)?;
@@ -304,10 +341,10 @@ impl<'a> QueryRes {
     fn get_sint_property(&self, prop_name: &str) -> Result<i64, MigError> {
         if let Some(ref variant) = self.q_result.get(prop_name) {            
             if let Variant::I32(val) = variant {
-                Ok(*val as I64)
+                Ok(*val as i64)
             } else {                
                 debug!("{}::get_bool_property: unexpected variant type, expected STRING or I32 for key: '{} -> {:?}", MODULE, prop_name, variant);
-                Err(MigError::from_remark(MigErrorKind::InvParam,&format!("{}::get_bool_property: unexpected variant type, not OOL for key: '{}", MODULE, prop_name)))
+                Err(MigError::from_remark(MigErrorKind::InvParam,&format!("{}::get_bool_property: unexpected variant type, not BOOL for key: '{}", MODULE, prop_name)))
             }
         } else {
             Err(MigError::from_remark(MigErrorKind::NotFound,&format!("{}::get_bool_property: value not found for key: '{}", MODULE, prop_name)))
@@ -317,7 +354,7 @@ impl<'a> QueryRes {
     fn get_uint_property(&self, prop_name: &str) -> Result<u64, MigError> {
         if let Some(ref variant) = self.q_result.get(prop_name) {            
             if let Variant::STRING(val) = variant {
-                Ok(*val.parse<u64>().context(MigErrCtx::from_remark(MigErrorKind::InvParam,&format!("{}::get_uint_property: failed tp parse value from string", MODULE, val)))?)
+                Ok((*val).parse::<u64>().context(MigErrCtx::from_remark(MigErrorKind::InvParam,&format!("{}::get_uint_property: failed tp parse value from string '{}'", MODULE, val)))?)
             } else {                
                 debug!("{}::get_uint_property: unexpected variant type, expected STRING for key: '{} -> {:?}", MODULE, prop_name, variant);
                 Err(MigError::from_remark(MigErrorKind::InvParam,&format!("{}::get_bool_property: unexpected variant type, not OOL for key: '{}", MODULE, prop_name)))

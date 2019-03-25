@@ -101,7 +101,7 @@ impl<'a> HarddiskPartitionInfo {
         }
     }
 
-    pub fn get_size(&self) -> Option<usize> {
+    pub fn get_size(&self) -> Option<u64> {
         if let Some(ref wi) = self.wmi_info {
             Some(wi.size)
         } else {
@@ -109,7 +109,7 @@ impl<'a> HarddiskPartitionInfo {
         }
     }
 
-    pub fn get_num_blocks(&self) -> Option<usize> {
+    pub fn get_num_blocks(&self) -> Option<u64> {
         if let Some(ref wi) = self.wmi_info {
             Some(wi.number_of_blocks)
         } else {
@@ -117,7 +117,7 @@ impl<'a> HarddiskPartitionInfo {
         }
     }
 
-    pub fn get_start_offset(&self) -> Option<usize> {
+    pub fn get_start_offset(&self) -> Option<u64> {
         if let Some(ref wi) = self.wmi_info {
             Some(wi.start_offset)
         } else {

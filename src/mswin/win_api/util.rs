@@ -1,9 +1,7 @@
 use crate::{MigErrCtx, MigError, MigErrorKind};
 use failure::ResultExt;
-use std::ffi::{OsStr, OsString};
+use std::ffi::{OsStr};
 use std::iter::once;
-use std::ptr::read;
-use std::mem::transmute;
 use std::os::windows::prelude::*;
 use log::{warn};
 use std::io::Error;
