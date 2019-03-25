@@ -68,7 +68,7 @@ fn print_drives(migrator: &Migrator) -> () {
 }
 
 #[cfg (not (target_os = "windows"))]
-fn print_drives(_migrator: &mut Migrator) -> () {
+fn print_drives(_migrator: &Migrator) -> () {
     println!("print drives currently only works on windows");
     ()
 }
