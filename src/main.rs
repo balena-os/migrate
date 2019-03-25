@@ -58,8 +58,15 @@ fn print_drives(migrator: &Migrator) -> () {
             StorageDevice::PhysicalDrive(pd) => {
                 let pd = pd.as_ref();
                 println!("  type: PhysicalDrive");
-                println!("  harddisk index: {}", pd.get_index());
-                println!("  device :         {}\n", pd.get_device());
+                println!("  harddisk index:     {}", pd.get_index());
+                println!("  device:             {}", pd.get_device());
+                println!("  wmi name:           {}", pd.get_wmi_name());
+                println!("  media type:         {}", pd.get_media_type());
+                println!("  bytes per sector:   {}", pd.get_bytes_per_sector());
+                println!("  partitions:         {}", pd.get_partitions());
+                println!("  compression_method: {}", pd.get_compression_method());
+                println!("  size:               {} kB", pd.get_size() / 1024);
+                println!("  status:             {}", pd.get_status());
             }
 
             _ => {

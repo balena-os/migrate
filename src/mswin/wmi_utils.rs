@@ -19,6 +19,8 @@ const VERBOSE: bool = true;
 
 const MODULE: &str = "mswin::wmi_utils";
 
+const EMPTY_STR: &str = "";
+
 pub const WMIQ_OS: &str = "SELECT Caption,Version,OSArchitecture, BootDevice, TotalVisibleMemorySize,FreePhysicalMemory FROM Win32_OperatingSystem";
 //pub const WMIQ_CSProd: &str = "SELECT * FROM Win32_ComputerSystemProduct";
 pub const WMIQ_BootConfig: &str = "SELECT * FROM Win32_SystemBootConfiguration";
@@ -56,8 +58,8 @@ pub struct WmiDriveInfo {
     pub size: u64,
     pub media_type: String,
     pub status: String,    
-    pub bytes_per_sector: u64,
-    pub partitions: u64,
+    pub bytes_per_sector: i32,
+    pub partitions: i32,
     pub compression_method: String,
     pub disk_index: u64,
 }
@@ -258,8 +260,8 @@ impl WmiUtils {
                     media_type: String::from(res_map.get_string_property("MediaType")?),  // TODO: parse this value fixed / removable
                     size: res_map.get_uint_property("Size")?,
                     status: String::from(res_map.get_string_property("Status")?),
-                    bytes_per_sector: res_map.get_uint_property("BytesPerSector")?,
-                    partitions: res_map.get_uint_property("Partitions")?,
+                    bytes_per_sector: res_map.get_int_property("BytesPerSector")?,
+                    partitions: res_map.get_int_property("Partitions")?,
                     compression_method: String::from(res_map.get_string_property("CompressionMethod")?),
                     disk_index,
                 })
@@ -314,11 +316,12 @@ impl<'a> QueryRes {
 
     fn get_string_property(&'a self, prop_name: &str) -> Result<&'a str, MigError> {    
         if let Some(ref variant) = self.q_result.get(prop_name) {
-            if let Variant::STRING(val) = variant {
-                Ok(val.as_ref())
-            } else {
-                debug!("{}::get_string_property: unexpected variant type, expected STRING for key: '{} -> {:?}", MODULE, prop_name, variant);
-                Err(MigError::from_remark(MigErrorKind::InvParam,&format!("{}::get_string_property: unexpected variant type, not STRING for key: '{}", MODULE, prop_name)))
+            match variant {
+                Variant::STRING(val) => Ok(val.as_ref()),
+                Variant::NULL() => Ok(EMPTY_STR),
+                _ => {
+                    Err(MigError::from_remark(MigErrorKind::InvParam,&format!("{}::get_string_property: unexpected variant type, not STRING for key: '{}', value: {:?}", MODULE, prop_name, variant)))
+                }
             }
         } else {
             Err(MigError::from_remark(MigErrorKind::NotFound,&format!("{}::get_string_property: value not found for key: '{}", MODULE, prop_name)))
@@ -329,25 +332,23 @@ impl<'a> QueryRes {
         if let Some(ref variant) = self.q_result.get(prop_name) {
             if let Variant::BOOL(val) = variant {
                 Ok(*val)
-            } else {
-                debug!("{}::get_bool_property: unexpected variant type, expected  BOOL for key: '{} -> {:?}", MODULE, prop_name, variant);
-                Err(MigError::from_remark(MigErrorKind::InvParam,&format!("{}::get_bool_property: unexpected variant type, not OOL for key: '{}", MODULE, prop_name)))
+            } else {                
+                Err(MigError::from_remark(MigErrorKind::InvParam,&format!("{}::get_bool_property: unexpected variant type, not OOL for key: '{}' value: {:?}", MODULE, prop_name, variant)))
             }
         } else {
             Err(MigError::from_remark(MigErrorKind::NotFound,&format!("{}::get_bool_property: value not found for key: '{}", MODULE, prop_name)))
         }
      }
 
-    fn get_sint_property(&self, prop_name: &str) -> Result<i64, MigError> {
+    fn get_int_property(&self, prop_name: &str) -> Result<i32, MigError> {
         if let Some(ref variant) = self.q_result.get(prop_name) {            
             if let Variant::I32(val) = variant {
-                Ok(*val as i64)
-            } else {                
-                debug!("{}::get_bool_property: unexpected variant type, expected STRING or I32 for key: '{} -> {:?}", MODULE, prop_name, variant);
-                Err(MigError::from_remark(MigErrorKind::InvParam,&format!("{}::get_bool_property: unexpected variant type, not BOOL for key: '{}", MODULE, prop_name)))
+                Ok(*val)
+            } else {                                
+                Err(MigError::from_remark(MigErrorKind::InvParam,&format!("{}::get_int_property: unexpected variant type, not I32 for key: '{}' value: {:?}", MODULE, prop_name, variant)))
             }
         } else {
-            Err(MigError::from_remark(MigErrorKind::NotFound,&format!("{}::get_bool_property: value not found for key: '{}", MODULE, prop_name)))
+            Err(MigError::from_remark(MigErrorKind::NotFound,&format!("{}::get_int_property: value not found for key: '{}", MODULE, prop_name)))
         }
      }
 
@@ -355,12 +356,11 @@ impl<'a> QueryRes {
         if let Some(ref variant) = self.q_result.get(prop_name) {            
             if let Variant::STRING(val) = variant {
                 Ok((*val).parse::<u64>().context(MigErrCtx::from_remark(MigErrorKind::InvParam,&format!("{}::get_uint_property: failed tp parse value from string '{}'", MODULE, val)))?)
-            } else {                
-                debug!("{}::get_uint_property: unexpected variant type, expected STRING for key: '{} -> {:?}", MODULE, prop_name, variant);
-                Err(MigError::from_remark(MigErrorKind::InvParam,&format!("{}::get_bool_property: unexpected variant type, not OOL for key: '{}", MODULE, prop_name)))
+            } else {                                
+                Err(MigError::from_remark(MigErrorKind::InvParam,&format!("{}::get_uint_property: unexpected variant type, not STRING for key: '{}', value: {:?}", MODULE, prop_name, variant)))
             }
         } else {
-            Err(MigError::from_remark(MigErrorKind::NotFound,&format!("{}::get_bool_property: value not found for key: '{}", MODULE, prop_name)))
+            Err(MigError::from_remark(MigErrorKind::NotFound,&format!("{}::get_uint_property: value not found for key: '{}", MODULE, prop_name)))
         }
      }
 }

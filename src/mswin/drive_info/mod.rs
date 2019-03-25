@@ -67,7 +67,7 @@ pub fn enumerate_drives(wmi_utils: &WmiUtils) -> Result<HashMap<String, StorageD
                 break;
             }
 
-            if let Some(dl) = PhysicalDriveInfo::try_from_device(&device)? {
+            if let Some(dl) = PhysicalDriveInfo::try_from_device(&device, wmi_utils)? {
                 dev_map
                     .entry(device.clone())
                     .or_insert(StorageDevice::PhysicalDrive(Rc::new(dl)));
