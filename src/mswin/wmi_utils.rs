@@ -47,6 +47,7 @@ pub struct WmiPartitionInfo {
     pub boot_partition: bool,
     pub disk_index: u64,
     pub partition_index: u64,
+    pub start_offset: usize,
 }
 
 
@@ -208,7 +209,7 @@ impl WmiUtils {
     }
 
     pub fn get_partition_info(&self, disk_index: u64, partition_index: u64) -> Result<WmiPartitionInfo, MigError> {
-        let query = format!("SELECT Caption,Bootable,Size,NumberOfBlocks,Type,BootPartition FROM Win32_DiskPartition where DiskIndex={} and Index={}", disk_index, partition_index);
+        let query = format!("SELECT Caption,Bootable,Size,NumberOfBlocks,Type,BootPartition,StartingOffset FROM Win32_DiskPartition where DiskIndex={} and Index={}", disk_index, partition_index);
         debug!("{}::get_partition_info: performing WMI Query: '{}'", MODULE, query);
         let mut q_res = self.wmi_api.raw_query(&query)?;
         match q_res.len() {
@@ -222,6 +223,7 @@ impl WmiUtils {
                     number_of_blocks: 0,
                     ptype: String::from(res_map.get_string_property("Type")?),
                     boot_partition: res_map.get_bool_property("BootPartition")?,
+                    start_offset: 0,
                     disk_index,
                     partition_index,
                 })
@@ -300,5 +302,21 @@ impl<'a> QueryRes {
             Err(MigError::from_remark(MigErrorKind::NotFound,&format!("{}::get_bool_property: value not found for key: '{}", MODULE, prop_name)))
         }
      }
+
+    /*
+    fn get_usize_property(&self, prop_name: &str) -> Result<usize, MigError> {    
+        if let Some(ref variant) = self.q_result.get(prop_name) {
+            if let Variant::I(val) = variant {
+                Ok(*val)
+            } else {
+                debug!("{}::get_bool_property: unexpected variant type, not STRING for key: '{} -> {:?}", MODULE, prop_name, variant);
+                Err(MigError::from_remark(MigErrorKind::InvParam,&format!("{}::get_bool_property: unexpected variant type, not OOL for key: '{}", MODULE, prop_name)))
+            }
+        } else {
+            Err(MigError::from_remark(MigErrorKind::NotFound,&format!("{}::get_bool_property: value not found for key: '{}", MODULE, prop_name)))
+        }
+     }
+     */
+
 
 }

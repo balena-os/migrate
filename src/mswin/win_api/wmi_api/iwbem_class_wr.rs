@@ -2,10 +2,9 @@ use failure::{ResultExt};
 use log::{debug};
 use std::ptr;
 use std::slice;
-use widestring::{WideCString, WideCStr};
+use widestring::{WideCString};
 use std::mem;
 use std::collections::HashMap;
-use std::fmt::Display;
 
 use winapi::{
     shared::{
@@ -29,22 +28,9 @@ use winapi::{
 use crate::mswin::win_api::util::{report_win_api_error};
 use crate::mig_error::{MigError, MigErrorKind, MigErrCtx};
 use super::PMIWbemClassObject;
+use super::variant::{Variant}; 
 
-const MODULE: &str = "mswin::win_api::wmi_api::iwbem_class";
-
-#[derive(Debug)]
-pub enum Variant {
-    STRING(String),
-    I32(i32),    
-    I16(i16),
-    U8(u8),
-    BOOL(bool),
-    NULL(),
-    EMPTY(),
-    UNSUPPORTED(),    
-    VECSTRING(Vec<String>),
-    VECI32(Vec<i32>),
-}
+const MODULE: &str = "mswin::win_api::wmi_api::iwbem_class_wr";
 
 pub struct IWbemClassWrapper {
     pub inner: PMIWbemClassObject,
@@ -103,60 +89,6 @@ impl IWbemClassWrapper {
         result
     }
 
-    fn to_variant(&self, vt_prop: &VARIANT) -> Result<Variant, MigError> {
-        let variant_type: VARTYPE = unsafe { vt_prop.n1.n2().vt };
-        if variant_type as u32 & VT_ARRAY == VT_ARRAY {
-            let array: &*mut SAFEARRAY = unsafe { vt_prop.n1.n2().n3.parray() };
-            let item_type = variant_type as u32 & VT_TYPEMASK;
-            if item_type ==  VT_BSTR {
-                Ok(Variant::VECSTRING(safe_to_str_array(*array)?))
-            } else if item_type ==  VT_I4 {
-                Ok(Variant::VECI32(safe_to_i32_array(*array)?))
-            } else {
-                Err(MigError::from_remark(MigErrorKind::NotImpl,&format!("{}::to_variant: the type {} has not been implemented yet", MODULE, variant_type)))
-            }
-        } else {
-            match variant_type as u32 {
-                VT_BSTR => {
-                    let bstr_ptr: &BSTR = unsafe { vt_prop.n1.n2().n3.bstrVal() };
-                    let prop_val: &WideCStr = unsafe { WideCStr::from_ptr_str(*bstr_ptr) };
-                    let property_value_as_string = prop_val.to_string()
-                                                    .context(
-                                                        MigErrCtx::from_remark(
-                                                            MigErrorKind::InvParam, 
-                                                            &format!("{}::to_variant: invalid character found in BSTR", MODULE)))?;
-                    Ok(Variant::STRING(property_value_as_string))
-                }
-                VT_I2 => {
-                    let num: &i16 = unsafe { vt_prop.n1.n2().n3.iVal() };
-                    Ok(Variant::I16(*num))
-                }
-                VT_I4 => {
-                    let num: &i32 = unsafe { vt_prop.n1.n2().n3.lVal() };
-                    Ok(Variant::I32(*num))
-                }
-                VT_BOOL => {
-                    let value: &i16 = unsafe { vt_prop.n1.n2().n3.boolVal() };
-                    match *value {
-                        VARIANT_FALSE => Ok(Variant::BOOL(false)),
-                        VARIANT_TRUE => Ok(Variant::BOOL(true)),
-                        _ => Err(MigError::from_remark(
-                                    MigErrorKind::InvParam,
-                                    &format!("{}::to_variant: an invalid bool value: {:#X} was encountered", MODULE, *value))),
-                    }
-                }
-                VT_UI1 => {
-                    let num: &i8 = unsafe { vt_prop.n1.n2().n3.cVal() };
-                    Ok(Variant::U8(*num as u8))
-                }
-                VT_EMPTY => Ok(Variant::EMPTY()),
-                VT_NULL => Ok(Variant::NULL()),
-                _ => Err(MigError::from_remark(
-                                    MigErrorKind::NotImpl,
-                                    &format!("{}::to_variant: the variant type {} has not yet been implemented", MODULE, variant_type))),
-            }
-        }
-    }
 
     pub fn get_property(&self, prop_name: &WideCString) -> Result<Option<Variant>, MigError> {
         // let name_prop = WideCString::from_str(prop_name).context(MigErrCtx::from(MigErrorKind::InvParam))?;
@@ -175,7 +107,7 @@ impl IWbemClassWrapper {
             }
 
         // Todo find out how to detect that item is not present and return OK(None)
-        Ok(Some(self.to_variant(&vt_prop)?))        
+        Ok(Some(Variant::from(&vt_prop)?))        
     }
 
     pub fn to_map(&self) -> Result<HashMap<String,Variant>,MigError> {        
@@ -202,7 +134,7 @@ impl Drop for IWbemClassWrapper {
 
 
 // TODO: make these generic
-fn safe_to_wstr_array(arr: *mut SAFEARRAY) -> Result<Vec<WideCString>,MigError> {
+pub(crate) fn safe_to_wstr_array(arr: *mut SAFEARRAY) -> Result<Vec<WideCString>,MigError> {
     let mut p_data = NULL;
     let mut lower_bound: i32 = 0;
     let mut upper_bound: i32 = 0;
@@ -235,7 +167,7 @@ fn safe_to_wstr_array(arr: *mut SAFEARRAY) -> Result<Vec<WideCString>,MigError> 
     Ok(result)
 }
 
-fn safe_to_str_array(arr: *mut SAFEARRAY) -> Result<Vec<String>,MigError> {
+pub(crate) fn safe_to_str_array(arr: *mut SAFEARRAY) -> Result<Vec<String>,MigError> {
     let mut p_data = NULL;
     let mut lower_bound: i32 = 0;
     let mut upper_bound: i32 = 0;
@@ -268,7 +200,7 @@ fn safe_to_str_array(arr: *mut SAFEARRAY) -> Result<Vec<String>,MigError> {
     Ok(result)
 }
 
-fn safe_to_i32_array(arr: *mut SAFEARRAY) -> Result<Vec<i32>,MigError> {
+pub(crate) fn safe_to_i32_array(arr: *mut SAFEARRAY) -> Result<Vec<i32>,MigError> {
     let mut p_data = NULL;
     let mut lower_bound: i32 = 0;
     let mut upper_bound: i32 = 0;

@@ -1,22 +1,18 @@
 use winapi::{
     shared::{
-        ntdef::NULL,
         wtypes::*,
     },    
     um::{        
         oaidl::{SAFEARRAY,VARIANT,},
-        oleauto::{
-            SafeArrayAccessData,
-            SafeArrayUnaccessData,
-            SafeArrayGetLBound,
-            SafeArrayGetUBound,
-            SafeArrayDestroy },
-        wbemcli::{  WBEM_FLAG_ALWAYS, 
-                    WBEM_FLAG_NONSYSTEM_ONLY,
-                    },
     },
 };
+use failure::{Fail, ResultExt};
+use widestring::{WideCStr};
 
+use crate::mig_error::{MigError, MigErrorKind, MigErrCtx};
+use super::iwbem_class_wr::{safe_to_str_array, safe_to_i32_array};
+
+const MODULE: &str = "mswin::win_api::wmi_api::variant";
 
 #[derive(Debug)]
 pub enum Variant {
@@ -33,7 +29,7 @@ pub enum Variant {
 }
 
 impl Variant {
-    fn from(vt_prop: &VARIANT) -> Result<Variant, MigError> {
+    pub fn from(vt_prop: &VARIANT) -> Result<Variant, MigError> {
         let variant_type: VARTYPE = unsafe { vt_prop.n1.n2().vt };
         if variant_type as u32 & VT_ARRAY == VT_ARRAY {
             let array: &*mut SAFEARRAY = unsafe { vt_prop.n1.n2().n3.parray() };
@@ -87,3 +83,4 @@ impl Variant {
             }
         }
     }
+}
