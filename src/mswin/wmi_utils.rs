@@ -2,13 +2,15 @@
 
 use log::{info, debug};
 use std::collections::HashMap;
-pub use wmi::Variant;
-use wmi::{COMLibrary, WMIConnection};
+// pub use wmi::Variant;
+// use wmi::{COMLibrary, WMIConnection};
+
 
 use failure::{Fail, ResultExt};
 
 use crate::mig_error::{MigErrCtx, MigError, MigErrorKind};
 use crate::{OSArch, OSRelease};
+use crate::mswin::win_api::wmi_api::{WmiAPI, Variant};
 
 // TODO: fix this
 //#![cfg(debug_assertions)]
@@ -34,30 +36,35 @@ pub(crate) struct WMIOSInfo {
     pub boot_dev: String,
 }
 
+pub struct WmiPartitionInfo {
+    name: String,
+    bootable: bool,
+    size: usize,
+    number_of_blocks: usize,
+    ptype: String,
+    boot_partition: bool,
+    disk_index: u64,
+    partition_index: u64,
+}
+
+
 pub struct WmiUtils {
-    wmi_con: WMIConnection,
+    wmi_api: WmiAPI,
 }
 
 impl WmiUtils {
     pub fn new() -> Result<WmiUtils, MigError> {
-        debug!("{}::new: entered", MODULE);
-        let com_con = COMLibrary::new().context(MigErrCtx::from(MigErrorKind::WmiInit))?;
-        Ok(Self {
-            wmi_con: WMIConnection::new(com_con.into())
-                .context(MigErrCtx::from(MigErrorKind::WmiInit))?,
-        })
+        debug!("{}::new: entered", MODULE);        
+        Ok(Self { wmi_api: WmiAPI::get_api()?, })
     }
 
-    fn wmi_query(&self, query: &str) -> Result<Vec<HashMap<String, Variant>>, MigError> {
+    pub fn wmi_query(&self, query: &str) -> Result<Vec<HashMap<String, Variant>>, MigError> {
         debug!("{}::wmi_query: entered with '{}'", MODULE, query);
-        Ok(self
-            .wmi_con
-            .raw_query(query)
-            .context(MigErrCtx::from(MigErrorKind::WmiQueryFailed))?)
+        Ok(self.wmi_api.raw_query(query)?)            
     }
 
     pub(crate) fn init_os_info(&self) -> Result<WMIOSInfo, MigError> {
-        let wmi_res = self.wmi_query(WMIQ_OS)?;
+        let wmi_res = self.wmi_api.raw_query(WMIQ_OS)?;
         let wmi_row = match wmi_res.get(0) {
             Some(r) => r,
             None => {
@@ -82,10 +89,10 @@ impl WmiUtils {
             }
         }
 
-        let empty = Variant::Empty;
+        let empty = Variant::EMPTY();
 
         let boot_dev = match wmi_row.get("BootDevice").unwrap_or(&empty) {
-            Variant::String(s) => s.clone(),
+            Variant::STRING(s) => s.clone(),
             _ => {
                 return Err(MigError::from_remark(
                     MigErrorKind::InvParam,
@@ -98,7 +105,7 @@ impl WmiUtils {
         };
 
         let os_name = match wmi_row.get("Caption").unwrap_or(&empty) {
-            Variant::String(s) => s.clone(),
+            Variant::STRING(s) => s.clone(),
             _ => {
                 return Err(MigError::from_remark(
                     MigErrorKind::InvParam,
@@ -111,7 +118,7 @@ impl WmiUtils {
         };
 
         let os_release = match wmi_row.get("Version").unwrap_or(&empty) {
-            Variant::String(os_rls) => OSRelease::parse_from_str(&os_rls)?,
+            Variant::STRING(os_rls) => OSRelease::parse_from_str(&os_rls)?,
             _ => {
                 return Err(MigError::from_remark(
                     MigErrorKind::InvParam,
@@ -124,7 +131,7 @@ impl WmiUtils {
         };
 
         let os_arch = match wmi_row.get("OSArchitecture").unwrap_or(&empty) {
-            Variant::String(s) => {
+            Variant::STRING(s) => {
                 if s.to_lowercase() == "64-bit" {
                     OSArch::AMD64
                 } else if s.to_lowercase() == "32-bit" {
@@ -151,7 +158,7 @@ impl WmiUtils {
         };
 
         let mem_tot = match wmi_row.get("TotalVisibleMemorySize").unwrap_or(&empty) {
-            Variant::String(s) => s.parse::<u64>().context(MigErrCtx::from_remark(
+            Variant::STRING(s) => s.parse::<u64>().context(MigErrCtx::from_remark(
                 MigErrorKind::InvParam,
                 &format!(
                     "{}::init_sys_info: failed to parse TotalVisibleMemorySize from  '{}'",
@@ -170,7 +177,7 @@ impl WmiUtils {
         } as u64;
 
         let mem_avail = match wmi_row.get("FreePhysicalMemory").unwrap_or(&empty) {
-            Variant::String(s) => s.parse::<u64>().context(MigErrCtx::from_remark(
+            Variant::STRING(s) => s.parse::<u64>().context(MigErrCtx::from_remark(
                 MigErrorKind::InvParam,
                 &format!(
                     "{}::init_sys_info: failed to parse 'FreePhysicalMemory' from  '{}'",
@@ -197,6 +204,30 @@ impl WmiUtils {
             boot_dev,
         })
     }
+
+    pub fn get_partition_info(&self, disk_index: u64, partition_index: u64) -> Result<WmiPartitionInfo, MigError> {
+        let query = format!("SELECT Caption,Bootable,Size,NumberOfBlocks,Type,BootPartition FROM Win32_DiskPartition where DiskIndex={} and Index={}", disk_index, partition_index);
+        debug!("{}::get_partition_info: performing WMI Query: '{}'", MODULE, query);
+        let mut q_res = self.wmi_api.raw_query(&query)?;
+        match q_res.len() {
+            0 => Err(MigError::from_remark(MigErrorKind::NotFound,&format!("{}::get_partition_info: the query returned an empty result set: '{}'", MODULE, query))), 
+            1 => {
+                let res_map = QueryRes::new(q_res.pop().unwrap());
+                Ok(WmiPartitionInfo{
+                    name: String::from(res_map.get_string_property("Caption")?),
+                    bootable: res_map.get_bool_property("Bootable")?, 
+                    size: 0,
+                    number_of_blocks: 0,
+                    ptype: String::from(res_map.get_string_property("Type")?),
+                    boot_partition: res_map.get_bool_property("BootPartition")?,
+                    disk_index,
+                    partition_index,
+                })
+            },
+            _ => Err(MigError::from_remark(MigErrorKind::InvParam, &format!("{}::get_partition_info: invalid result cout for query, expected 1, got  {}",MODULE, q_res.len()))), 
+        }
+    } 
+
 
     /*
         let wmi_res = wmi_utils.wmi_query(wmi_utils::WMIQ_BootConfig)?;
@@ -231,4 +262,41 @@ impl WmiUtils {
         Ok(())
     }
     */
+}
+
+struct QueryRes {
+    q_result: HashMap<String,Variant>,
+}
+
+impl<'a> QueryRes {
+    fn new(result: HashMap<String,Variant>,) -> QueryRes {
+        QueryRes{q_result: result}
+    }
+
+    fn get_string_property(&'a self, prop_name: &str) -> Result<&'a str, MigError> {    
+        if let Some(ref variant) = self.q_result.get(prop_name) {
+            if let Variant::STRING(val) = variant {
+                Ok(val.as_ref())
+            } else {
+                debug!("{}::get_string_property: unexpected variant type, not STRING for key: '{} -> {:?}", MODULE, prop_name, variant);
+                Err(MigError::from_remark(MigErrorKind::InvParam,&format!("{}::get_string_property: unexpected variant type, not STRING for key: '{}", MODULE, prop_name)))
+            }
+        } else {
+            Err(MigError::from_remark(MigErrorKind::NotFound,&format!("{}::get_string_property: value not found for key: '{}", MODULE, prop_name)))
+        }
+     }
+
+    fn get_bool_property(&self, prop_name: &str) -> Result<bool, MigError> {    
+        if let Some(ref variant) = self.q_result.get(prop_name) {
+            if let Variant::BOOL(val) = variant {
+                Ok(*val)
+            } else {
+                debug!("{}::get_bool_property: unexpected variant type, not STRING for key: '{} -> {:?}", MODULE, prop_name, variant);
+                Err(MigError::from_remark(MigErrorKind::InvParam,&format!("{}::get_bool_property: unexpected variant type, not OOL for key: '{}", MODULE, prop_name)))
+            }
+        } else {
+            Err(MigError::from_remark(MigErrorKind::NotFound,&format!("{}::get_bool_property: value not found for key: '{}", MODULE, prop_name)))
+        }
+     }
+
 }

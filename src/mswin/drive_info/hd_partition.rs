@@ -6,7 +6,9 @@ use std::rc::Rc;
 use super::{DeviceProps, HarddiskVolumeInfo, PhysicalDriveInfo};
 
 use crate::mswin::win_api::query_dos_device;
+use crate::mswin::wmi_utils::{WmiUtils,WmiPartitionInfo};
 use crate::MigError;
+
 
 #[derive(Debug)]
 pub struct HarddiskPartitionInfo {
@@ -41,6 +43,7 @@ impl<'a> HarddiskPartitionInfo {
         part_index: u64,
     ) -> Result<HarddiskPartitionInfo, MigError> {
         // TODO: query WMI partition info
+        let part_info = WmiUtils::new()?.get_partition_info(hd_index, part_index)?;
 
         Ok(HarddiskPartitionInfo {
             dev_name: String::from(device),

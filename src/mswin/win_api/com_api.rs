@@ -103,11 +103,11 @@ mod tests {
 
     #[test]
     fn it_works1() {
-        let h_com_api = ComAPI::get_api().unwrap();
-    }
-
-    #[test]
-    fn it_works2() {
-        let h_com_api = ComAPI::get_api().unwrap();
+        {
+            let h_com_api = ComAPI::get_api().unwrap();
+        }
+        {
+            let h_com_api = ComAPI::get_api().unwrap();
+        }
     }
 }

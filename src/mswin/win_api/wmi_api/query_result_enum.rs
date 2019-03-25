@@ -5,11 +5,13 @@ use winapi::{
     um::{
         wbemcli::{  IWbemClassObject,                    
                     WBEM_INFINITE,
+                    WBEMSTATUS,
                     },
     },
 };
 
 use log::{debug};
+use std::io::Error;
 
 use crate::mig_error::{MigError};
 use crate::mswin::win_api::util::report_win_api_error;
@@ -53,17 +55,22 @@ impl Iterator for QueryResultEnumerator {
                 &mut return_value,
             ) };
         
-        if res < 0 {
-            return Some(Err(report_win_api_error(MODULE, "next", "IEnumWbemClassObject::Next")))
-       }
+        // TODO: figure out how to use WBEMSTATUS::WBEM_S_NO_ERROR
+
+        if res != 0 {
+            let os_err = Error::last_os_error();
+            debug!("{}::next: Enumerator::Next returned {}, os_error: {:?}", MODULE, res, os_err);                
+            return None;
+            //return Some(Err(report_win_api_error(MODULE, "next", "IEnumWbemClassObject::Next")))
+        }
+        
+        debug!("{}::next: Enumerator::Next returned {}, retun_value {} pcls_obj {:?}", MODULE, res, return_value, pcls_obj);
         
         if return_value == 0 {
             return None;
         }
 
-        debug!(
-            "Got enumerator {:?} and obj {:?}", self.p_enumerator, pcls_obj
-        );
+        debug!("{}::next: Got enumerator {:?} and obj {:?}", MODULE, self.p_enumerator, pcls_obj);
 
         let pcls_wrapper = IWbemClassWrapper::new(pcls_obj);
 

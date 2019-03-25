@@ -48,6 +48,8 @@ pub use query_result_enum::QueryResultEnumerator;
 
 const MODULE: &str = "mswin::win_api::wmi_api";
 
+// TODO: make singleton like ComAPI
+
 pub struct WmiAPI {
     _com_api: ComAPI,
     p_svc: PMIWbemServices,
@@ -150,7 +152,7 @@ impl<'a> WmiAPI {
         Ok(wmi_api)
     }
 
-    pub fn raw_query(&mut self, query: &str) -> Result<Vec<HashMap<String,Variant>>,MigError> {
+    pub fn raw_query(&self, query: &str) -> Result<Vec<HashMap<String,Variant>>,MigError> {
         debug!("{}::raw_query: entered with {}", MODULE, query);
         let query_language = to_wide_cstring("WQL");
         let query = to_wide_cstring(query);
