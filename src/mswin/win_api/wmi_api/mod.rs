@@ -41,8 +41,10 @@ type PMIWbemServices = *mut IWbemServices;
 type PMIEnumWbemClassObject = *mut IEnumWbemClassObject;
 type PMIWbemClassObject = *mut IWbemClassObject;
 
+mod variant;
+pub use variant::{Variant};
 mod iwbem_class_wr;
-pub use iwbem_class_wr::{IWbemClassWrapper,Variant};
+pub use iwbem_class_wr::{IWbemClassWrapper};
 mod query_result_enum;
 pub use query_result_enum::QueryResultEnumerator;
 
