@@ -31,11 +31,14 @@ fn test_com() -> Result<(), MigError> {
 }
 
 #[cfg(target_os = "windows")]
-fn print_drives(migrator: &Migrator) -> () {
+fn print_drives(migrator: &mut Migrator) -> () {
     use balena_migrator::mswin::drive_info::{DeviceProps, StorageDevice};
 
     let drive_map = migrator.enumerate_drives().unwrap();
-    for key in drive_map.keys() {
+    let mut keys: Vec<&String> = drive_map.keys().collect();
+    keys.sort();
+
+    for key in  keys {    
         println!("Key: {}", &key);
         let info = drive_map.get(key).unwrap();
         match info {
@@ -47,11 +50,15 @@ fn print_drives(migrator: &Migrator) -> () {
                 println!("  device :          {}", hdp.get_device());
                 if hdp.has_wmi_info() {
                     println!("  boot device:      {}", hdp.is_boot_device().unwrap());
-                    println!("  bootable:         {}", hdp.is_bootable().unwrap());
-                    println!("  size:             {} kB", hdp.get_size().unwrap()/1024);
+                    println!("  bootable:         {}", hdp.is_bootable().unwrap());                    
                     println!("  type:             {}", hdp.get_ptype().unwrap());
                     println!("  number of blocks: {}", hdp.get_num_blocks().unwrap());
                     println!("  start offset:     {}", hdp.get_start_offset().unwrap());
+                    println!("  size:             {} kB", hdp.get_size().unwrap()/1024);
+                }
+                if hdp.has_supported_sizes() {
+                    println!("  min supp. size:   {} kB", hdp.get_min_supported_size().unwrap() / 1024);
+                    println!("  max supp. size:   {} kB", hdp.get_max_supported_size().unwrap() / 1024);
                 }
                 println!();
             }
@@ -66,7 +73,7 @@ fn print_drives(migrator: &Migrator) -> () {
                 println!("  partitions:         {}", pd.get_partitions());
                 println!("  compression_method: {}", pd.get_compression_method());
                 println!("  size:               {} kB", pd.get_size() / 1024);
-                println!("  status:             {}", pd.get_status());
+                println!("  status:             {}\n", pd.get_status());
             }
 
             _ => {
@@ -77,7 +84,7 @@ fn print_drives(migrator: &Migrator) -> () {
 }
 
 #[cfg (not (target_os = "windows"))]
-fn print_drives(_migrator: &Migrator) -> () {
+fn print_drives(_migrator: &mut Migrator) -> () {
     println!("print drives currently only works on windows");
     ()
 }
@@ -174,7 +181,7 @@ fn main() {
     }
 
     if matches.is_present("drives") {
-        print_drives(migrator.as_ref());
+        print_drives(migrator.as_mut());
     }
 
     if matches.is_present("wmi") {

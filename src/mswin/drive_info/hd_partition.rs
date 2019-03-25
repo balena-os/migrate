@@ -5,9 +5,12 @@ use std::rc::Rc;
 use log::{debug, warn};
 
 use super::{DeviceProps, HarddiskVolumeInfo, PhysicalDriveInfo};
+use crate::mswin::{ 
+    powershell::PSInfo,
+    win_api::query_dos_device,
+    wmi_utils::WmiPartitionInfo,
+    MSWMigrator };
 
-use crate::mswin::win_api::query_dos_device;
-use crate::mswin::wmi_utils::{WmiUtils, WmiPartitionInfo};
 use crate::MigError;
 
 const MODULE: &str = "mswin::drive_info::hd_partition";
@@ -21,10 +24,11 @@ pub struct HarddiskPartitionInfo {
     phys_disk: Option<Rc<PhysicalDriveInfo>>,
     hd_vol: Option<Rc<RefCell<HarddiskVolumeInfo>>>,
     wmi_info: Option<WmiPartitionInfo>,
+    sizes: Option<(u64,u64)>,
 }
 
 impl<'a> HarddiskPartitionInfo {
-    pub fn try_from_device(device: &str, wmi_utils: &WmiUtils) -> Result<Option<HarddiskPartitionInfo>, MigError> {
+    pub(crate) fn try_from_device(device: &str, migrator: &mut MSWMigrator) -> Result<Option<HarddiskPartitionInfo>, MigError> {
         lazy_static! {
             static ref RE_HDPART: Regex =
                 Regex::new(r"^Harddisk([0-9]+)Partition([0-9]+)$").unwrap();
@@ -34,7 +38,7 @@ impl<'a> HarddiskPartitionInfo {
                 device,
                 cap.get(1).unwrap().as_str().parse::<u64>().unwrap(),
                 cap.get(2).unwrap().as_str().parse::<u64>().unwrap(),
-                wmi_utils,
+                migrator,
             )?))
         } else {
             Ok(None)
@@ -45,19 +49,28 @@ impl<'a> HarddiskPartitionInfo {
         device: &str,
         hd_index: u64,
         part_index: u64,
-        wmi_utils: &WmiUtils
+        migrator: &mut MSWMigrator
     ) -> Result<HarddiskPartitionInfo, MigError> {
         // TODO: query WMI partition info
         
         let mut wmi_info: Option<WmiPartitionInfo> = None;
-        match wmi_utils.get_partition_info(hd_index, part_index - 1) {
+        match migrator.get_wmi_utils().get_partition_info(hd_index, part_index - 1) {
             Ok(pi) => { 
                 debug!("{}::new: got WmiPartitionInfo: {:?}", MODULE, pi); 
-                wmi_info = Some(pi);                
+                wmi_info = Some(pi);
                 },
             Err(why) => { warn!("{}::new: failed to get WmiPartitionInfo: {:?}", MODULE, why); },
         };
-        
+
+        let mut sizes: Option<(u64,u64)> = None;
+        match migrator.get_ps_info().get_part_supported_size(hd_index, part_index) {
+            Ok(pss) => { 
+                debug!("{}::new: got supported sizes: {:?}", MODULE, pss); 
+                sizes = Some(pss);
+                },
+            Err(why) => { warn!("{}::new: failed to get partition supported sizes: {:?}", MODULE, why); },
+        };
+
         Ok(HarddiskPartitionInfo {
             dev_name: String::from(device),
             hd_index,
@@ -65,7 +78,8 @@ impl<'a> HarddiskPartitionInfo {
             device: query_dos_device(Some(device))?.get(0).unwrap().clone(),
             phys_disk: None,
             hd_vol: None,
-            wmi_info: wmi_info,
+            wmi_info,
+            sizes,
         })
     }
 
@@ -82,6 +96,30 @@ impl<'a> HarddiskPartitionInfo {
             true
         } else {
             false
+        }
+    }
+
+    pub fn has_supported_sizes(&self) -> bool {
+        if let Some(_sizes) = self.sizes {
+            true
+        } else {
+            false
+        }
+    }
+
+    pub fn get_min_supported_size(&self) -> Option<u64> {
+        if let Some(ref sizes) = self.sizes {
+            Some(sizes.0)
+        } else {
+            None
+        }
+    }
+
+    pub fn get_max_supported_size(&self) -> Option<u64> {
+        if let Some(ref sizes) = self.sizes {
+            Some(sizes.1)
+        } else {
+            None
         }
     }
 

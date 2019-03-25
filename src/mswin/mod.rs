@@ -18,14 +18,14 @@ use powershell::PSInfo;
 
 // const MODULE: &str = "mswin";
 
-pub(crate) struct MSWMigrator {
+pub struct MSWMigrator {
     ps_info: PSInfo,
     wmi_utils: WmiUtils,
     os_info: Option<WMIOSInfo>,
     uefi_boot: Option<bool>,
 }
 
-impl MSWMigrator {
+impl<'a> MSWMigrator {
     pub fn try_init() -> Result<MSWMigrator, MigError> {
         let msw_info = MSWMigrator {
             ps_info: PSInfo::try_init()?,
@@ -34,6 +34,14 @@ impl MSWMigrator {
             uefi_boot: None,
         };
         Ok(msw_info)
+    }
+
+    pub(crate) fn get_wmi_utils(&'a self) -> &'a WmiUtils {
+        &self.wmi_utils
+    }
+
+    pub(crate) fn get_ps_info(&'a mut self) -> &'a mut  PSInfo {
+        &mut self.ps_info
     }
 }
 
@@ -124,8 +132,8 @@ impl Migrator for MSWMigrator {
         Ok(self.ps_info.is_secure_boot()?)
     }
     
-    fn enumerate_drives(&self) -> Result<HashMap<String, StorageDevice>, MigError> {
-        drive_info::enumerate_drives(&self.wmi_utils)
+    fn enumerate_drives(&mut self) -> Result<HashMap<String, StorageDevice>, MigError> {
+        drive_info::enumerate_drives(self)
     }
 }
 

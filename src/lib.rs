@@ -129,7 +129,7 @@ pub trait Migrator {
     fn migrate(&mut self) -> Result<(), MigError>;
     fn is_uefi_boot(&mut self) -> Result<bool, MigError>;
 #[cfg(target_os = "windows")]    
-    fn enumerate_drives(&self) -> Result<HashMap<String, StorageDevice>, MigError>;
+    fn enumerate_drives(&mut self) -> Result<HashMap<String, StorageDevice>, MigError>;
 }
 
 #[cfg(target_os = "windows")]

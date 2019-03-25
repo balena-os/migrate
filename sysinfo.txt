@@ -1,0 +1,120 @@
+balena-migrate-win started
+OS Name:          Microsoft Windows 10 Home
+OS Release:       10.0.17134
+OS Architecture:  AMD64
+UEFI Boot:        true
+Boot Device:      "\\Device\\HarddiskVolume2"
+PhysicalMemory:   16686048
+Available Memory: 10822080
+Is Admin:         false
+Is Secure Boot:   failed: Error: You are not authorized to execute this command
+Key: C:
+  yet to be implemented
+
+Key: Harddisk0Partition1
+  type: HarddiskPartition
+  harddisk index:   0
+  partition index:  1
+  device :          \Device\HarddiskVolume1
+  boot device:      false
+  bootable:         false
+  size:             460800 kB
+  type:             GPT: Unknown
+  number of blocks: 921600
+  start offset:     1048576
+
+Key: Harddisk0Partition2
+  type: HarddiskPartition
+  harddisk index:   0
+  partition index:  2
+  device :          \Device\HarddiskVolume2
+  boot device:      true
+  bootable:         true
+  size:             101376 kB
+  type:             GPT: System
+  number of blocks: 202752
+  start offset:     472907776
+
+Key: Harddisk0Partition3
+  type: HarddiskPartition
+  harddisk index:   0
+  partition index:  3
+  device :          \Device\HarddiskVolume3
+  boot device:      false
+  bootable:         false
+  size:             96661791 kB
+  type:             GPT: Basic Data
+  number of blocks: 193323582
+  start offset:     593494016
+
+Key: Harddisk0Partition4
+  type: HarddiskPartition
+  harddisk index:   0
+  partition index:  4
+  device :          \Device\HarddiskVolume4
+  boot device:      false
+  bootable:         false
+  size:             962560 kB
+  type:             GPT: Unknown
+  number of blocks: 1925120
+  start offset:     103870889984
+
+Key: Harddisk0Partition5
+  type: HarddiskPartition
+  harddisk index:   0
+  partition index:  5
+  device :          \Device\HarddiskVolume5
+  boot device:      false
+  bootable:         false
+  size:             397707031 kB
+  type:             GPT: Unknown
+  number of blocks: 795414063
+  start offset:     104857600000
+
+Key: Harddisk0Partition6
+  type: HarddiskPartition
+  harddisk index:   0
+  partition index:  6
+  device :          \Device\HarddiskVolume6
+
+Key: HarddiskVolume1
+  yet to be implemented
+
+Key: HarddiskVolume2
+  yet to be implemented
+
+Key: HarddiskVolume3
+  yet to be implemented
+
+Key: HarddiskVolume4
+  yet to be implemented
+
+Key: HarddiskVolume5
+  yet to be implemented
+
+Key: HarddiskVolume6
+  yet to be implemented
+
+Key: PhysicalDrive0
+  type: PhysicalDrive
+  harddisk index:     0
+  device:             \Device\Harddisk0\DR0
+  wmi name:           \\.\PHYSICALDRIVE0
+  media type:         Fixed hard disk media
+  bytes per sector:   512
+  partitions:         5
+  compression_method: 
+  size:               500103450 kB
+  status:             OK
+Key: Volume{361a398b-fa92-444b-929a-ecc0e6f99430}
+  yet to be implemented
+
+Key: Volume{3bdc11d3-6e8f-4b1e-b6dd-ea0c92eb0c4f}
+  yet to be implemented
+
+Key: Volume{523d4064-b421-4b2e-ba0e-320263dcbd27}
+  yet to be implemented
+
+Key: Volume{a821e2d5-3ca9-4729-86ff-336b04419766}
+  yet to be implemented
+

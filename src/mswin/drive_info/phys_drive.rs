@@ -1,9 +1,13 @@
 use lazy_static::lazy_static;
 use regex::Regex;
 
-use crate::mswin::win_api::query_dos_device;
+
 use crate::MigError;
-use crate::mswin::wmi_utils::{WmiDriveInfo, WmiUtils};
+use crate::mswin::{
+    wmi_utils::{WmiDriveInfo, WmiUtils},
+    win_api::query_dos_device,
+    MSWMigrator,
+};
 
 #[derive(Debug)]
 pub struct PhysicalDriveInfo {
@@ -14,7 +18,7 @@ pub struct PhysicalDriveInfo {
 }
 
 impl<'a> PhysicalDriveInfo {
-    pub fn try_from_device(device: &str, wmi_utils: &WmiUtils) -> Result<Option<PhysicalDriveInfo>, MigError> {
+    pub(crate) fn try_from_device(device: &str, migrator: &MSWMigrator) -> Result<Option<PhysicalDriveInfo>, MigError> {
         lazy_static! {
             static ref RE_PD: Regex = Regex::new(r"^PhysicalDrive([0-9]+)$").unwrap();
         }
@@ -22,19 +26,19 @@ impl<'a> PhysicalDriveInfo {
             Ok(Some(PhysicalDriveInfo::new(
                 device,
                 cap.get(1).unwrap().as_str().parse::<u64>().unwrap(),
-                wmi_utils
+                migrator
             )?))
         } else {
             Ok(None)
         }
     }
 
-    fn new(device: &str, index: u64, wmi_utils: &WmiUtils) -> Result<PhysicalDriveInfo, MigError> {
+    fn new(device: &str, index: u64, migrator: &MSWMigrator) -> Result<PhysicalDriveInfo, MigError> {
         Ok(PhysicalDriveInfo {
             dev_name: String::from(device),
             index: index,
             device: query_dos_device(Some(device))?.get(0).unwrap().clone(),
-            wmi_info: wmi_utils.get_drive_info(index)?,
+            wmi_info: migrator.get_wmi_utils().get_drive_info(index)?,
         })
     }
 

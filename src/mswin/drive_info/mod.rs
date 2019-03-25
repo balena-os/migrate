@@ -3,8 +3,8 @@ use std::cell::RefCell;
 use std::collections::HashMap;
 use std::rc::Rc;
 
-use super::WmiUtils;
 use crate::mswin::win_api::query_dos_device;
+use crate::mswin::MSWMigrator;
 use crate::{MigError, MigErrorKind};
 
 pub mod driveletter;
@@ -38,7 +38,7 @@ pub trait DeviceProps {
     }
 }
 
-pub fn enumerate_drives(wmi_utils: &WmiUtils) -> Result<HashMap<String, StorageDevice>, MigError> {
+pub fn enumerate_drives(migrator: &mut MSWMigrator) -> Result<HashMap<String, StorageDevice>, MigError> {
     let mut dev_map: HashMap<String, StorageDevice> = HashMap::new();
     let mut hdp_list: Vec<Rc<RefCell<HarddiskPartitionInfo>>> = Vec::new();
     let mut hdv_list: Vec<Rc<RefCell<HarddiskVolumeInfo>>> = Vec::new();
@@ -47,7 +47,7 @@ pub fn enumerate_drives(wmi_utils: &WmiUtils) -> Result<HashMap<String, StorageD
 
     for device in query_dos_device(None)? {
         loop {
-            if let Some(hdp) = HarddiskPartitionInfo::try_from_device(&device, wmi_utils)? {
+            if let Some(hdp) = HarddiskPartitionInfo::try_from_device(&device, migrator)? {
                 hdp_list.push(Rc::new(RefCell::new(hdp)));
                 break;
             }
@@ -67,7 +67,7 @@ pub fn enumerate_drives(wmi_utils: &WmiUtils) -> Result<HashMap<String, StorageD
                 break;
             }
 
-            if let Some(dl) = PhysicalDriveInfo::try_from_device(&device, wmi_utils)? {
+            if let Some(dl) = PhysicalDriveInfo::try_from_device(&device, migrator)? {
                 dev_map
                     .entry(device.clone())
                     .or_insert(StorageDevice::PhysicalDrive(Rc::new(dl)));
