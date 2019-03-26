@@ -21,8 +21,10 @@ pub struct HarddiskPartitionInfo {
     hd_index: u64,
     part_index: u64,
     device: String,
-    phys_disk: Option<Rc<PhysicalDriveInfo>>,
-    hd_vol: Option<Rc<RefCell<HarddiskVolumeInfo>>>,
+    phys_disk: Option<PhysicalDriveInfo>,
+    hd_vol: Option<HarddiskVolumeInfo>,
+    driveletter: Option<DriveletterInfo>,
+    volume: Option<VolumeInfo>,
     wmi_info: Option<WmiPartitionInfo>,
     sizes: Option<(u64,u64)>,
 }
@@ -78,6 +80,8 @@ impl<'a> HarddiskPartitionInfo {
             device: query_dos_device(Some(device))?.get(0).unwrap().clone(),
             phys_disk: None,
             hd_vol: None,
+            driveletter: None,
+            volume: None,
             wmi_info,
             sizes,
         })
@@ -179,23 +183,29 @@ impl<'a> HarddiskPartitionInfo {
         }
     }
 
-    pub fn get_phys_disk(&'a self) -> &'a Option<Rc<PhysicalDriveInfo>> {
+    pub fn get_phys_disk(&'a self) -> &'a Option<PhysicalDriveInfo> {
         &self.phys_disk
     }
 
-    pub fn get_hd_vol(&'a self) -> &'a Option<Rc<RefCell<HarddiskVolumeInfo>>> {
+    pub fn get_hd_vol(&'a self) -> &'a Option<HarddiskVolumeInfo> {
         &self.hd_vol
     }
 
-    pub(crate) fn set_phys_disk(&mut self, pd: &Rc<PhysicalDriveInfo>) -> () {
+    pub(crate) fn set_phys_disk(&mut self, pd: PhysicalDriveInfo) -> () {
         // TODO: what if it is already set ?
-        self.phys_disk = Some(pd.clone())
+        self.phys_disk = Some(pd)
     }
 
-    pub(crate) fn set_hd_vol(&mut self, vol: &Rc<RefCell<HarddiskVolumeInfo>>) -> () {
+    pub(crate) fn set_hd_vol(&mut self, vol: HarddiskVolumeInfo) -> () {
         // TODO: what if it is already set ?
-        self.hd_vol = Some(vol.clone())
+        self.hd_vol = Some(vol)
     }
+
+    pub(crate) fn set_volume(&mut self, vol: VolumeInfo) -> () {
+        // TODO: what if it is already set ?
+        self.volume = Some(vol)
+    }
+
 }
 
 impl DeviceProps for HarddiskPartitionInfo {

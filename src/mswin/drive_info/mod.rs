@@ -40,37 +40,36 @@ pub trait DeviceProps {
 
 pub fn enumerate_drives(migrator: &mut MSWMigrator) -> Result<HashMap<String, StorageDevice>, MigError> {
     let mut dev_map: HashMap<String, StorageDevice> = HashMap::new();
-    let mut hdp_list: Vec<Rc<RefCell<HarddiskPartitionInfo>>> = Vec::new();
-    let mut hdv_list: Vec<Rc<RefCell<HarddiskVolumeInfo>>> = Vec::new();
-    let mut dl_list: Vec<Rc<RefCell<DriveLetterInfo>>> = Vec::new();
-    let mut vol_list: Vec<Rc<RefCell<VolumeInfo>>> = Vec::new();    
+    let mut hdp_list: Vec<<HarddiskPartitionInfo> = Vec::new();
+    let mut hdv_map: HashMap<String,HarddiskVolumeInfo> = HashMap::new();
+    let mut dl_map: HashMap<String,DriveLetterInfo> = HashMap::new();
+    let mut vol_map: HashMap<String,VolumeInfo> = HashMap::new();    
+    let mut pd_map: HashMap<String,Rc<PhysicalDriveInfo>> = HashMap::new();    
 
     for device in query_dos_device(None)? {
         loop {
             if let Some(hdp) = HarddiskPartitionInfo::try_from_device(&device, migrator)? {
-                hdp_list.push(Rc::new(RefCell::new(hdp)));
+                hdp_list.push(hdp);
                 break;
             }
 
             if let Some(hdv) = HarddiskVolumeInfo::try_from_device(&device)? {
-                hdv_list.push(Rc::new(RefCell::new(hdv)));
+                hdv_list.insert(String::from(hdv.get_device()),hdv);
                 break;
             }
 
             if let Some(dl) = DriveLetterInfo::try_from_device(&device)? {
-                dl_list.push(Rc::new(RefCell::new(dl)));
+                dl_list.push(dl);
                 break;
             }
 
             if let Some(vol) = VolumeInfo::try_from_device(&device)? {
-                vol_list.push(Rc::new(RefCell::new(vol)));
+                vol_list.push(vol);
                 break;
             }
 
             if let Some(dl) = PhysicalDriveInfo::try_from_device(&device, migrator)? {
-                dev_map
-                    .entry(device.clone())
-                    .or_insert(StorageDevice::PhysicalDrive(Rc::new(dl)));
+                pd_list.push(Rc::new(dl));
                 break;
             }
 
@@ -103,7 +102,7 @@ pub fn enumerate_drives(migrator: &mut MSWMigrator) -> Result<HashMap<String, St
                     ));
                 }
 
-                for hdv in &hdv_list {
+                for (idx,hdv) in &hdv_list.enumerate() {
                     if hdpart.is_same_device(&*hdv.as_ref().borrow()) {
                         info!(
                             "{}::enumerate_drives: partition {} found matching hdv {:?}",

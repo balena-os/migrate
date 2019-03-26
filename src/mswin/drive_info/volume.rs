@@ -12,8 +12,7 @@ use crate::MigError;
 pub struct VolumeInfo {
     dev_name: String,
     uuid: String,
-    device: String,
-    hd_vol: Option<Rc<RefCell<HarddiskVolumeInfo>>>,
+    device: String,    
 }
 
 impl<'a> VolumeInfo {
@@ -33,7 +32,6 @@ impl<'a> VolumeInfo {
             dev_name: String::from(device),
             uuid: String::from(uuid),
             device: query_dos_device(Some(&device))?.get(0).unwrap().clone(),
-            hd_vol: None,
         })
     }
 
@@ -47,15 +45,6 @@ impl<'a> VolumeInfo {
 
     pub fn get_device(&'a self) -> &'a str {
         &self.device
-    }
-
-    pub(crate) fn set_hd_vol(&mut self, vol: &Rc<RefCell<HarddiskVolumeInfo>>) -> () {
-        // TODO: what if it is already set ?
-        self.hd_vol = Some(vol.clone())
-    }
-
-    pub fn get_hd_vol(&'a self) -> &'a Option<Rc<RefCell<HarddiskVolumeInfo>>> {
-        &self.hd_vol
     }
 }
 

@@ -37,24 +37,15 @@ impl<'a> HarddiskVolumeInfo {
             dev_name: String::from(device),
             index: index,
             device: query_dos_device(Some(device))?.get(0).unwrap().clone(),
-            hd_part: None,
         })
     }
 
     pub fn get_index(&self) -> u64 {
         self.index
     }
-
-    pub fn get_hd_part(&'a self) -> &'a Option<Weak<RefCell<HarddiskPartitionInfo>>> {
-        &self.hd_part
-    }
-
-    pub(crate) fn set_hd_part(&mut self, part: &Rc<RefCell<HarddiskPartitionInfo>>) -> () {
-        // TODO: what if it is already set ?
-        self.hd_part = Some(Rc::downgrade(part))
-    }
 }
 
+/*
 // need this to break infinite cycle introduced by weak backref to hdpart
 impl Debug for HarddiskVolumeInfo {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
@@ -78,6 +69,7 @@ impl Debug for HarddiskVolumeInfo {
         )
     }
 }
+*/
 
 impl DeviceProps for HarddiskVolumeInfo {
     fn get_device_name<'a>(&'a self) -> &'a str {
