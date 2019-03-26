@@ -2,18 +2,21 @@ use lazy_static::lazy_static;
 use regex::Regex;
 
 
-use crate::MigError;
+use crate::mig_error::{MigError,MigErrorKind};
 use crate::mswin::{
     wmi_utils::{WmiDriveInfo, WmiUtils},
     win_api::query_dos_device,
     MSWMigrator,
 };
 
+use super::HarddiskPartitionInfo;
+
 #[derive(Debug)]
 pub struct PhysicalDriveInfo {
     dev_name: String,
     index: u64,
     device: String,
+    partitions: Vec<HarddiskPartitionInfo>,
     wmi_info: WmiDriveInfo,
 }
 
@@ -38,8 +41,17 @@ impl<'a> PhysicalDriveInfo {
             dev_name: String::from(device),
             index: index,
             device: query_dos_device(Some(device))?.get(0).unwrap().clone(),
+            partitions: Vec::new(),
             wmi_info: migrator.get_wmi_utils().get_drive_info(index)?,
         })
+    }
+
+    pub(crate) fn add_partition(&mut self,hdpart: HarddiskPartitionInfo) -> Result<(),MigError> {
+        if self.partitions.contains(hdpart) {
+            return Err(MigError::from(MigErrorKind::Duplicate));
+        }
+        self.partitions.push(hdpart);
+        Ok(())
     }
 
     pub fn get_dev_name(&'a self) -> &'a str {

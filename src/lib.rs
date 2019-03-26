@@ -27,7 +27,6 @@ use regex::Regex;
 use std::fmt::{self, Display, Formatter};
 use std::collections::{HashMap};
 #[cfg(target_os = "windows")]    
-use crate::mswin::drive_info::StorageDevice;
 use crate::mig_error::{MigErrCtx, MigError, MigErrorKind};
 
 

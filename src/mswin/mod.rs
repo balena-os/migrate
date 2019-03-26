@@ -10,7 +10,6 @@ use std::collections::{HashMap};
 use wmi_utils::{WMIOSInfo, WmiUtils};
 use crate::mig_error::{MigError, MigErrorKind};
 use crate::{Migrator, OSArch, OSRelease};
-use crate::mswin::drive_info::StorageDevice;
 
 use powershell::PSInfo;
 

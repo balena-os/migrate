@@ -4,9 +4,9 @@ use std::cell::RefCell;
 use std::rc::Rc;
 use log::{debug, warn};
 
-use super::{DeviceProps, HarddiskVolumeInfo, PhysicalDriveInfo};
+use super::{DeviceProps, HarddiskVolumeInfo, PhysicalDriveInfo, VolumeInfo, DriveLetterInfo};
 use crate::mswin::{ 
-    powershell::PSInfo,
+    powershell::PSInfo,    
     win_api::query_dos_device,
     wmi_utils::WmiPartitionInfo,
     MSWMigrator };
@@ -21,9 +21,9 @@ pub struct HarddiskPartitionInfo {
     hd_index: u64,
     part_index: u64,
     device: String,
-    phys_disk: Option<PhysicalDriveInfo>,
+    phys_disk: Option<Rc<PhysicalDriveInfo>>,
     hd_vol: Option<HarddiskVolumeInfo>,
-    driveletter: Option<DriveletterInfo>,
+    driveletter: Option<DriveLetterInfo>,
     volume: Option<VolumeInfo>,
     wmi_info: Option<WmiPartitionInfo>,
     sizes: Option<(u64,u64)>,
@@ -191,9 +191,9 @@ impl<'a> HarddiskPartitionInfo {
         &self.hd_vol
     }
 
-    pub(crate) fn set_phys_disk(&mut self, pd: PhysicalDriveInfo) -> () {
+    pub(crate) fn set_phys_disk(&mut self, pd: &Rc<PhysicalDriveInfo>) -> () {
         // TODO: what if it is already set ?
-        self.phys_disk = Some(pd)
+        self.phys_disk = Some(pd.clone())
     }
 
     pub(crate) fn set_hd_vol(&mut self, vol: HarddiskVolumeInfo) -> () {
@@ -204,6 +204,11 @@ impl<'a> HarddiskPartitionInfo {
     pub(crate) fn set_volume(&mut self, vol: VolumeInfo) -> () {
         // TODO: what if it is already set ?
         self.volume = Some(vol)
+    }
+
+    pub(crate) fn set_driveletter(&mut self, dl: DriveLetterInfo) -> () {
+        // TODO: what if it is already set ?
+        self.driveletter = Some(dl)
     }
 
 }
