@@ -24,8 +24,7 @@ pub struct HarddiskPartitionInfo {
     hd_vol: Option<HarddiskVolumeInfo>,
     driveletter: Option<DriveLetterInfo>,
     volume: Option<VolumeInfo>,
-    wmi_info: Option<WmiPartitionInfo>,
-    sizes: Option<(u64,u64)>,
+    wmi_info: Option<WmiPartitionInfo>,    
 }
 
 impl Eq for HarddiskPartitionInfo {}
@@ -88,18 +87,6 @@ impl<'a> HarddiskPartitionInfo {
             Err(why) => { warn!("{}::new: failed to get WmiPartitionInfo: {:?}", MODULE, why); },
         };
 
-        /* do this on demand and repeatedly rather
-        let mut sizes: Option<(u64,u64)> = None;
-        match migrator.get_ps_info().get_part_supported_size(hd_index, part_index) {
-            Ok(pss) => { 
-                debug!("{}::new: got supported sizes: {:?}", MODULE, pss); 
-                sizes = Some(pss);
-                },
-            Err(why) => { warn!("{}::new: failed to get partition supported sizes: {:?}", MODULE, why); },
-        };
-        */
-
-
         Ok(HarddiskPartitionInfo {
             dev_name: String::from(device),
             hd_index,
@@ -109,7 +96,6 @@ impl<'a> HarddiskPartitionInfo {
             driveletter: None,
             volume: None,
             wmi_info,
-            sizes: None,
         })
     }
 
@@ -134,30 +120,6 @@ impl<'a> HarddiskPartitionInfo {
             true
         } else {
             false
-        }
-    }
-
-    pub fn has_supported_sizes(&self) -> bool {
-        if let Some(_sizes) = self.sizes {
-            true
-        } else {
-            false
-        }
-    }
-
-    pub fn get_min_supported_size(&self) -> Option<u64> {
-        if let Some(ref sizes) = self.sizes {
-            Some(sizes.0)
-        } else {
-            None
-        }
-    }
-
-    pub fn get_max_supported_size(&self) -> Option<u64> {
-        if let Some(ref sizes) = self.sizes {
-            Some(sizes.1)
-        } else {
-            None
         }
     }
 
