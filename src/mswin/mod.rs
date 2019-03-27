@@ -130,11 +130,7 @@ impl Migrator for MSWMigrator {
 
     fn is_secure_boot(&mut self) -> Result<bool, MigError> {
         Ok(self.ps_info.is_secure_boot()?)
-    }
-    
-    fn enumerate_drives(&mut self) -> Result<HashMap<u64, PhysicalDriveInfo>, MigError> {
-        drive_info::enumerate_drives(self)
-    }
+    }    
 }
 
 pub fn available() -> bool {

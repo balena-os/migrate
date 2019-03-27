@@ -22,7 +22,7 @@ const MODULE: &str = "mswin::wmi_utils";
 const EMPTY_STR: &str = "";
 
 pub const WMIQ_OS: &str = "SELECT Caption,Version,OSArchitecture, BootDevice, TotalVisibleMemorySize,FreePhysicalMemory FROM Win32_OperatingSystem";
-//pub const WMIQ_CSProd: &str = "SELECT * FROM Win32_ComputerSystemProduct";
+// pub const WMIQ_CSProd: &str = "SELECT * FROM Win32_ComputerSystemProduct";
 pub const WMIQ_BootConfig: &str = "SELECT * FROM Win32_SystemBootConfiguration";
 // pub const WMIQ_Disk: &str = "SELECT * FROM Win32_DiskDrive";
 // pub const WMIQ_Disk: &str = "SELECT Caption,Partitions,Status,DeviceID,Size,BytesPerSector,MediaType,InterfaceType FROM Win32_DiskDrive";

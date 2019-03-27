@@ -1,8 +1,11 @@
-use clap::{App, Arg};
+use clap::{App, Arg, ArgMatches};
 use log::{info};
 
-use balena_migrator::Migrator;
 use balena_migrator::mig_error::MigError;
+
+use balena_migrator::Migrator;
+#[cfg(target_os = "windows")]
+use balena_migrator::mswin::MSWMigrator;
 
 const GB_SIZE: u64 = 1024 * 1024 * 1024;
 const MB_SIZE: u64 = 1024 * 1024;
@@ -29,7 +32,7 @@ fn test_com() -> Result<(), MigError> {
     info!("calling ComAPI::get_api()");
     let h_com_api = ComAPI::get_api()?;
     info!("calling WmiAPI::get_api_from_hcom");
-    let mut wmi_api = WmiAPI::get_api_from_hcom(h_com_api)?;
+    let wmi_api = WmiAPI::get_api_from_hcom(h_com_api)?;
     let res = wmi_api.raw_query("SELECT Caption,Version,OSArchitecture, BootDevice, TotalVisibleMemorySize,FreePhysicalMemory FROM Win32_OperatingSystem")?;
     for item in res {
         info!("got item:");
@@ -48,10 +51,10 @@ fn test_com() -> Result<(), MigError> {
 }
 
 #[cfg(target_os = "windows")]
-fn print_drives(migrator: &mut Migrator) -> () {
-    use balena_migrator::mswin::drive_info::{DeviceProps, PhysicalDriveInfo};
+fn print_drives(migrator: &mut MSWMigrator) -> Result<(),MigError> {
+    use balena_migrator::mswin::drive_info::{enumerate_drives,DeviceProps};
 
-    let drive_map = migrator.enumerate_drives().unwrap();
+    let drive_map = enumerate_drives(migrator).unwrap();
     let mut keys: Vec<&u64> = drive_map.keys().collect();
     keys.sort();
 
@@ -81,9 +84,12 @@ fn print_drives(migrator: &mut Migrator) -> () {
                 println!("    start offset:     {}", hd_part.get_start_offset().unwrap());
                 println!("    size:             {}", format_size_with_unit(hd_part.get_size().unwrap()));
             }
-            if hd_part.has_supported_sizes() {
-                println!("    min supp. size:   {} kB", hd_part.get_min_supported_size().unwrap() / 1024);
-                println!("    max supp. size:   {} kB", hd_part.get_max_supported_size().unwrap() / 1024);
+            if let Some(dl) = hd_part.get_driveletter() {
+                if let Ok(sizes) = hd_part.get_supported_sizes(migrator) {
+                    println!("    min supp. size:   {} kB", format_size_with_unit(sizes.0));
+                    println!("    max supp. size:   {} kB", format_size_with_unit(sizes.1));
+                }
+                println!("    drive letter:     {}:", dl);
             }
             println!();
         }
@@ -104,6 +110,7 @@ fn print_drives(migrator: &mut Migrator) -> () {
         }
         */
     }
+    Ok(())
 }
 
 #[cfg (not (target_os = "windows"))]
@@ -159,6 +166,30 @@ fn print_sysinfo(s_info: &mut Migrator) -> () {
     };
 }
 
+#[cfg (target_os = "windows")]
+fn process(arg_matches: &ArgMatches) -> Result<(),MigError> {
+    let mut migrator = MSWMigrator::try_init()?;
+
+    if arg_matches.is_present("info") {        
+        print_sysinfo(&mut migrator);
+    }
+
+    if arg_matches.is_present("drives") {
+        print_drives(&mut migrator)?;
+    }
+
+    if arg_matches.is_present("wmi") {
+        test_com()?;
+    }
+
+    Ok(())
+} 
+
+#[cfg (not (target_os = "windows"))]
+fn process(arg_matches: &ArgMatches) -> Result<(),MigError> {
+    Err(MigError::from(MigErrorKind::NotImpl))
+} 
+
 fn main() {
     println!("balena-migrate-win started");
     let matches = App::new("balena-migrate-win")
@@ -197,17 +228,7 @@ fn main() {
         .init()
         .unwrap();
 
-    let mut migrator = balena_migrator::get_migrator().unwrap();
+    
+    process(&matches).unwrap();
 
-    if matches.is_present("info") {        
-        print_sysinfo(migrator.as_mut());
-    }
-
-    if matches.is_present("drives") {
-        print_drives(migrator.as_mut());
-    }
-
-    if matches.is_present("wmi") {
-        test_com().unwrap();
-    }
 }

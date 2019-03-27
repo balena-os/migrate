@@ -129,8 +129,6 @@ pub trait Migrator {
     fn can_migrate(&mut self) -> Result<bool, MigError>;
     fn migrate(&mut self) -> Result<(), MigError>;
     fn is_uefi_boot(&mut self) -> Result<bool, MigError>;
-#[cfg(target_os = "windows")]    
-    fn enumerate_drives(&mut self) -> Result<HashMap<u64, PhysicalDriveInfo>, MigError>;
 }
 
 #[cfg(target_os = "windows")]

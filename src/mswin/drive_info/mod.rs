@@ -1,4 +1,4 @@
-use log::{info, warn};
+use log::{info, warn, debug};
 use std::cell::RefCell;
 use std::collections::HashMap;
 use std::rc::Rc;
@@ -38,27 +38,33 @@ pub fn enumerate_drives(migrator: &mut MSWMigrator) -> Result<HashMap<u64,Physic
 
     for device in query_dos_device(None)? {
         loop {
+            info!("{}::enumerate_drives: looking at device {}", MODULE, device);
             if let Some(hdp) = HarddiskPartitionInfo::try_from_device(&device, migrator)? {
+                debug!("{}::enumerate_drives: harddisk partition {:?}", MODULE, &hdp);
                 hdp_list.push(hdp);
                 break;
             }
 
             if let Some(hdv) = HarddiskVolumeInfo::try_from_device(&device)? {
+                debug!("{}::enumerate_drives: harddisk volume {:?}", MODULE, &hdv);
                 hdv_map.insert(String::from(hdv.get_device()),hdv);
                 break;
             }
 
             if let Some(dl) = DriveLetterInfo::try_from_device(&device)? {
-                dl_map.insert(String::from(dl.get_device()),dl);
+                debug!("{}::enumerate_drives: driveletter {:?}", MODULE, &dl);
+                dl_map.insert(String::from(dl.get_device()),dl);                
                 break;
             }
 
             if let Some(vol) = VolumeInfo::try_from_device(&device)? {
+                debug!("{}::enumerate_drives: volume {:?}", MODULE, &vol);
                 vol_map.insert(String::from(vol.get_device()),vol);
                 break;
             }
 
             if let Some(pd) = PhysicalDriveInfo::try_from_device(&device, migrator)? {
+                debug!("{}::enumerate_drives: physical drive {:?}", MODULE, &pd);
                 pd_map.insert(pd.get_index(),pd);
                 break;
             }

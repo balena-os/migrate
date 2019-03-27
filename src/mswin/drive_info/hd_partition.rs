@@ -62,7 +62,7 @@ impl<'a> HarddiskPartitionInfo {
             Ok(Some(HarddiskPartitionInfo::new(
                 device,
                 cap.get(1).unwrap().as_str().parse::<u64>().unwrap(),
-                cap.get(2).unwrap().as_str().parse::<u64>().unwrap(),
+                cap.get(2).unwrap().as_str().parse::<u64>().unwrap() - 1,
                 migrator,
             )?))
         } else {
@@ -71,7 +71,7 @@ impl<'a> HarddiskPartitionInfo {
     }
 
     fn new(
-        device: &str,
+        name: &str,
         hd_index: u64,
         part_index: u64,
         migrator: &mut MSWMigrator
@@ -79,7 +79,7 @@ impl<'a> HarddiskPartitionInfo {
         // TODO: query WMI partition info
         
         let mut wmi_info: Option<WmiPartitionInfo> = None;
-        match migrator.get_wmi_utils().get_partition_info(hd_index, part_index - 1) {
+        match migrator.get_wmi_utils().get_partition_info(hd_index, part_index) {
             Ok(pi) => { 
                 debug!("{}::new: got WmiPartitionInfo: {:?}", MODULE, pi); 
                 wmi_info = Some(pi);
@@ -88,15 +88,23 @@ impl<'a> HarddiskPartitionInfo {
         };
 
         Ok(HarddiskPartitionInfo {
-            dev_name: String::from(device),
+            dev_name: String::from(name),
             hd_index,
             part_index,
-            device: query_dos_device(Some(device))?.get(0).unwrap().clone(),            
+            device: query_dos_device(Some(name))?.get(0).unwrap().clone(),            
             hd_vol: None,
             driveletter: None,
             volume: None,
             wmi_info,
         })
+    }
+
+    pub fn get_driveletter(&'a self) -> Option<&'a str> {
+        if let Some(ref dl) = self.driveletter {
+            Some(dl.get_driveletter())
+        } else {
+            None
+        }
     }
 
     pub fn get_supported_sizes(&self, migrator: &mut MSWMigrator) -> Result<(u64,u64),MigError> {
