@@ -203,7 +203,7 @@ impl PSInfo {
     }
 
     
-    pub fn get_part_supported_size(&mut self, disk_index: u64, part_index: u64 ) -> Result<(u64, u64), MigError> {
+    pub fn get_drive_supported_size(&mut self, driveletter: &str) -> Result<(u64, u64), MigError> {
         if !self.is_admin()? {
             return Err(MigError::from(MigErrorKind::AuthError));
         }
@@ -213,7 +213,7 @@ impl PSInfo {
             return Err(MigError::from_remark(MigErrorKind::FeatureMissing, &format!("{}::get_part_supported_size: command not supported by powershell: '{}'", MODULE, COMMAND)));
         }
         
-        let cmd_str = format!("{} -DiskNumber {} -PartitionNumber {}",COMMAND, disk_index, part_index);
+        let cmd_str = format!("{} -DriveLetter {} ",COMMAND, driveletter);
         let output = call_from_stdin(&cmd_str, true)?;
 
         if !output.ps_ok || !output.stderr.is_empty() {

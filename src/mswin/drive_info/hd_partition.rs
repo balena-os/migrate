@@ -1,32 +1,56 @@
 use lazy_static::lazy_static;
 use regex::Regex;
-use std::cell::RefCell;
-use std::rc::Rc;
 use log::{debug, warn};
+use std::cmp::{Eq, Ord, PartialOrd, PartialEq, Ordering};
 
-use super::{DeviceProps, HarddiskVolumeInfo, PhysicalDriveInfo, VolumeInfo, DriveLetterInfo};
+use super::{DeviceProps, HarddiskVolumeInfo, VolumeInfo, DriveLetterInfo};
 use crate::mswin::{ 
     powershell::PSInfo,    
     win_api::query_dos_device,
     wmi_utils::WmiPartitionInfo,
     MSWMigrator };
 
-use crate::MigError;
+use crate::mig_error::{MigError, MigErrorKind};
 
 const MODULE: &str = "mswin::drive_info::hd_partition";
+
 
 #[derive(Debug)]
 pub struct HarddiskPartitionInfo {
     dev_name: String,
     hd_index: u64,
     part_index: u64,
-    device: String,
-    phys_disk: Option<Rc<PhysicalDriveInfo>>,
+    device: String,    
     hd_vol: Option<HarddiskVolumeInfo>,
     driveletter: Option<DriveLetterInfo>,
     volume: Option<VolumeInfo>,
     wmi_info: Option<WmiPartitionInfo>,
     sizes: Option<(u64,u64)>,
+}
+
+impl Eq for HarddiskPartitionInfo {}
+
+impl Ord for HarddiskPartitionInfo {
+    fn cmp(&self, other: &HarddiskPartitionInfo) -> Ordering {
+        let res = self.hd_index.cmp(&other.hd_index);
+        if let Ordering::Equal = res {
+            self.part_index.cmp(&other.part_index)
+        } else {
+            res
+        }        
+    }
+}
+
+impl PartialOrd for HarddiskPartitionInfo {
+    fn partial_cmp(&self, other: &HarddiskPartitionInfo) -> Option<Ordering> {
+        Some(self.cmp(other))
+    }
+}
+
+impl PartialEq for HarddiskPartitionInfo {
+    fn eq(&self, other: &HarddiskPartitionInfo) -> bool {
+        (self.hd_index == other.hd_index) && (self.part_index == other.part_index)
+    }
 }
 
 impl<'a> HarddiskPartitionInfo {
@@ -64,6 +88,7 @@ impl<'a> HarddiskPartitionInfo {
             Err(why) => { warn!("{}::new: failed to get WmiPartitionInfo: {:?}", MODULE, why); },
         };
 
+        /* do this on demand and repeatedly rather
         let mut sizes: Option<(u64,u64)> = None;
         match migrator.get_ps_info().get_part_supported_size(hd_index, part_index) {
             Ok(pss) => { 
@@ -72,20 +97,29 @@ impl<'a> HarddiskPartitionInfo {
                 },
             Err(why) => { warn!("{}::new: failed to get partition supported sizes: {:?}", MODULE, why); },
         };
+        */
+
 
         Ok(HarddiskPartitionInfo {
             dev_name: String::from(device),
             hd_index,
             part_index,
-            device: query_dos_device(Some(device))?.get(0).unwrap().clone(),
-            phys_disk: None,
+            device: query_dos_device(Some(device))?.get(0).unwrap().clone(),            
             hd_vol: None,
             driveletter: None,
             volume: None,
             wmi_info,
-            sizes,
+            sizes: None,
         })
     }
+
+    pub fn get_supported_sizes(&self, migrator: &mut MSWMigrator) -> Result<(u64,u64),MigError> {
+        if let Some(ref dl) = self.driveletter {
+            migrator.get_ps_info().get_drive_supported_size(dl.get_driveletter())
+        } else {
+            Err(MigError::from_remark(MigErrorKind::InvState, &format!("{}::get_supported_sizes: not supported for unmapped partition {}", MODULE, &self.dev_name)))
+        }
+    }  
 
     pub fn get_hd_index(&self) -> u64 {
         self.hd_index
@@ -183,19 +217,20 @@ impl<'a> HarddiskPartitionInfo {
         }
     }
 
-    pub fn get_phys_disk(&'a self) -> &'a Option<PhysicalDriveInfo> {
+/*    pub fn get_phys_disk(&'a self) -> &'a Option<PhysicalDriveInfo> {
         &self.phys_disk
     }
-
+*/
     pub fn get_hd_vol(&'a self) -> &'a Option<HarddiskVolumeInfo> {
         &self.hd_vol
     }
 
+/*
     pub(crate) fn set_phys_disk(&mut self, pd: &Rc<PhysicalDriveInfo>) -> () {
         // TODO: what if it is already set ?
         self.phys_disk = Some(pd.clone())
     }
-
+*/
     pub(crate) fn set_hd_vol(&mut self, vol: HarddiskVolumeInfo) -> () {
         // TODO: what if it is already set ?
         self.hd_vol = Some(vol)

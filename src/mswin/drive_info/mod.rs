@@ -49,12 +49,12 @@ pub fn enumerate_drives(migrator: &mut MSWMigrator) -> Result<HashMap<u64,Physic
             }
 
             if let Some(dl) = DriveLetterInfo::try_from_device(&device)? {
-                dl_map.insert(String::from(hdv.get_device()),dl);
+                dl_map.insert(String::from(dl.get_device()),dl);
                 break;
             }
 
             if let Some(vol) = VolumeInfo::try_from_device(&device)? {
-                vol_map.insert(String::from(hdv.get_device()),vol);
+                vol_map.insert(String::from(vol.get_device()),vol);
                 break;
             }
 
@@ -89,14 +89,20 @@ pub fn enumerate_drives(migrator: &mut MSWMigrator) -> Result<HashMap<u64,Physic
             hdpart.set_volume(vol);
         } 
         
-        if let Some(pd) = pd_map.get(hdpart.get_hd_index()) {
-            pd.add_partition(hdpart)?;        
+        //pd_map.entry(hdpart.get_hd_index()).and_modify(|pd| { *pd.add_partition(hdpart)?; });
+        
+        if let Some(pd) = pd_map.get_mut(&hdpart.get_hd_index()) {
+            if (pd.get_partitions() as u64)  >= hdpart.get_part_index()  {
+                pd.add_partition(hdpart)?;
+            } else {
+                warn!("{}::enumerate_drives: ignoring invalid partition {}", MODULE, hdpart.get_device_name())
+            }            
         } else {
             return Err(MigError::from_remark(
                 MigErrorKind::NotFound,
                 &format!(
                     "{}::enumerate_drives: could not find {} in physical drive map",
-                    MODULE, &findstr
+                    MODULE, hdpart.get_hd_index()
                 ),
             ));
         }
@@ -104,3 +110,4 @@ pub fn enumerate_drives(migrator: &mut MSWMigrator) -> Result<HashMap<u64,Physic
 
     Ok(pd_map)
 }
+

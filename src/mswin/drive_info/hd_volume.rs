@@ -1,20 +1,19 @@
 use lazy_static::lazy_static;
 use regex::Regex;
-use std::cell::RefCell;
 use std::fmt::{self, Debug};
-use std::rc::{Rc, Weak};
+use std::cmp::{Eq, PartialEq};
 
-use super::{DeviceProps, HarddiskPartitionInfo};
+use super::{DeviceProps};
 use crate::mswin::win_api::query_dos_device;
 use crate::MigError;
 
 //use crate::mswin::drive_info::hd_partition::HarddiskPartitionInfo;
 
+#[derive(Debug)]
 pub struct HarddiskVolumeInfo {
     dev_name: String,
     index: u64,
-    device: String,
-    hd_part: Option<Weak<RefCell<HarddiskPartitionInfo>>>,
+    device: String,    
 }
 
 impl<'a> HarddiskVolumeInfo {

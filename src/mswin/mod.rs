@@ -10,6 +10,7 @@ use std::collections::{HashMap};
 use wmi_utils::{WMIOSInfo, WmiUtils};
 use crate::mig_error::{MigError, MigErrorKind};
 use crate::{Migrator, OSArch, OSRelease};
+use crate::mswin::drive_info::PhysicalDriveInfo;
 
 use powershell::PSInfo;
 
@@ -131,7 +132,7 @@ impl Migrator for MSWMigrator {
         Ok(self.ps_info.is_secure_boot()?)
     }
     
-    fn enumerate_drives(&mut self) -> Result<HashMap<String, StorageDevice>, MigError> {
+    fn enumerate_drives(&mut self) -> Result<HashMap<u64, PhysicalDriveInfo>, MigError> {
         drive_info::enumerate_drives(self)
     }
 }

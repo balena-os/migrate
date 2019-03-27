@@ -47,11 +47,16 @@ impl<'a> PhysicalDriveInfo {
     }
 
     pub(crate) fn add_partition(&mut self,hdpart: HarddiskPartitionInfo) -> Result<(),MigError> {
-        if self.partitions.contains(hdpart) {
+        if self.partitions.contains(&hdpart) {
             return Err(MigError::from(MigErrorKind::Duplicate));
         }
         self.partitions.push(hdpart);
+        self.partitions.sort();
         Ok(())
+    }
+
+    pub fn get_partition_list(&'a self) -> &'a Vec<HarddiskPartitionInfo> {
+        &self.partitions
     }
 
     pub fn get_dev_name(&'a self) -> &'a str {

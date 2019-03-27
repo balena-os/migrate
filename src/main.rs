@@ -4,6 +4,23 @@ use log::{info};
 use balena_migrator::Migrator;
 use balena_migrator::mig_error::MigError;
 
+const GB_SIZE: u64 = 1024 * 1024 * 1024;
+const MB_SIZE: u64 = 1024 * 1024;
+const KB_SIZE: u64 = 1024;
+
+fn format_size_with_unit(size: u64) -> String {
+    if size > (10 * GB_SIZE) {
+        format!("{} GB", size / GB_SIZE)
+    } else if size > (10 * MB_SIZE) {
+        format!("{} MB", size / MB_SIZE)
+    } else if size > (10 * KB_SIZE) {
+        format!("{} kB", size / KB_SIZE)
+    } else {
+        format!("{} B", size)
+    }
+}
+
+
 #[cfg(target_os = "windows")]
 fn test_com() -> Result<(), MigError> {
     use balena_migrator::mswin::win_api::com_api::ComAPI;
@@ -32,54 +49,60 @@ fn test_com() -> Result<(), MigError> {
 
 #[cfg(target_os = "windows")]
 fn print_drives(migrator: &mut Migrator) -> () {
-    use balena_migrator::mswin::drive_info::{DeviceProps, StorageDevice};
+    use balena_migrator::mswin::drive_info::{DeviceProps, PhysicalDriveInfo};
 
     let drive_map = migrator.enumerate_drives().unwrap();
-    let mut keys: Vec<&String> = drive_map.keys().collect();
+    let mut keys: Vec<&u64> = drive_map.keys().collect();
     keys.sort();
 
-    for key in  keys {    
-        println!("Key: {}", &key);
-        let info = drive_map.get(key).unwrap();
+    for key in  keys {            
+        let pd_info = drive_map.get(key).unwrap();
+        println!("  type: PhysicalDrive");
+        println!("  harddisk index:     {}", pd_info.get_index());
+        println!("  device:             {}", pd_info.get_device());
+        println!("  wmi name:           {}", pd_info.get_wmi_name());
+        println!("  media type:         {}", pd_info.get_media_type());
+        println!("  bytes per sector:   {}", pd_info.get_bytes_per_sector());
+        println!("  partitions:         {}", pd_info.get_partitions());
+        println!("  compression_method: {}", pd_info.get_compression_method());
+        println!("  size:               {}", format_size_with_unit(pd_info.get_size()));    
+        println!("  status:             {}\n", pd_info.get_status());
+        
+        for hd_part in pd_info.get_partition_list() {
+            println!("    type: HarddiskPartition");
+            println!("    harddisk index:   {}", hd_part.get_hd_index());
+            println!("    partition index:  {}", hd_part.get_part_index());
+            println!("    device :          {}", hd_part.get_device());
+            if hd_part.has_wmi_info() {
+                println!("    boot device:      {}", hd_part.is_boot_device().unwrap());
+                println!("    bootable:         {}", hd_part.is_bootable().unwrap());                    
+                println!("    type:             {}", hd_part.get_ptype().unwrap());
+                println!("    number of blocks: {}", hd_part.get_num_blocks().unwrap());
+                println!("    start offset:     {}", hd_part.get_start_offset().unwrap());
+                println!("    size:             {}", format_size_with_unit(hd_part.get_size().unwrap()));
+            }
+            if hd_part.has_supported_sizes() {
+                println!("    min supp. size:   {} kB", hd_part.get_min_supported_size().unwrap() / 1024);
+                println!("    max supp. size:   {} kB", hd_part.get_max_supported_size().unwrap() / 1024);
+            }
+            println!();
+        }
+
+/*
+        
         match info {
             StorageDevice::HarddiskPartition(hdp) => {
                 let hdp = hdp.as_ref().borrow();
-                println!("  type: HarddiskPartition");
-                println!("  harddisk index:   {}", hdp.get_hd_index());
-                println!("  partition index:  {}", hdp.get_part_index());
-                println!("  device :          {}", hdp.get_device());
-                if hdp.has_wmi_info() {
-                    println!("  boot device:      {}", hdp.is_boot_device().unwrap());
-                    println!("  bootable:         {}", hdp.is_bootable().unwrap());                    
-                    println!("  type:             {}", hdp.get_ptype().unwrap());
-                    println!("  number of blocks: {}", hdp.get_num_blocks().unwrap());
-                    println!("  start offset:     {}", hdp.get_start_offset().unwrap());
-                    println!("  size:             {} kB", hdp.get_size().unwrap()/1024);
-                }
-                if hdp.has_supported_sizes() {
-                    println!("  min supp. size:   {} kB", hdp.get_min_supported_size().unwrap() / 1024);
-                    println!("  max supp. size:   {} kB", hdp.get_max_supported_size().unwrap() / 1024);
-                }
-                println!();
             }
             StorageDevice::PhysicalDrive(pd) => {
                 let pd = pd.as_ref();
-                println!("  type: PhysicalDrive");
-                println!("  harddisk index:     {}", pd.get_index());
-                println!("  device:             {}", pd.get_device());
-                println!("  wmi name:           {}", pd.get_wmi_name());
-                println!("  media type:         {}", pd.get_media_type());
-                println!("  bytes per sector:   {}", pd.get_bytes_per_sector());
-                println!("  partitions:         {}", pd.get_partitions());
-                println!("  compression_method: {}", pd.get_compression_method());
-                println!("  size:               {} kB", pd.get_size() / 1024);
-                println!("  status:             {}\n", pd.get_status());
             }
 
             _ => {
                 println!("  yet to be implemented\n");
             }
         }
+        */
     }
 }
 
