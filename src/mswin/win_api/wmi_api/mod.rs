@@ -52,6 +52,7 @@ const MODULE: &str = "mswin::win_api::wmi_api";
 
 // TODO: make singleton like ComAPI
 
+#[derive(Debug)]
 pub struct WmiAPI {
     _com_api: ComAPI,
     p_svc: PMIWbemServices,

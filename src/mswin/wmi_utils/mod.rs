@@ -45,34 +45,6 @@ pub(crate) struct WMIOSInfo {
     pub boot_dev: String,
 }
 
-#[derive(Debug)]
-pub struct WmiPartitionInfo {
-    pub name: String,
-    pub device_id: String,
-    pub bootable: bool,
-    pub size: u64,
-    pub number_of_blocks: u64,
-    pub ptype: String,
-    pub boot_partition: bool,
-    pub disk_index: u64,
-    pub partition_index: u64,
-    pub start_offset: u64,
-}
-
-#[derive(Debug)]
-pub struct WmiDriveInfo {
-    pub name: String,
-    pub device_id: String,
-    pub size: u64,
-    pub media_type: String,
-    pub status: String,    
-    pub bytes_per_sector: i32,
-    pub partitions: i32,
-    pub compression_method: String,
-    pub disk_index: u64,
-}
-
-
 // TODO: make WmiAPI an Rc to make it shareble with dependant objects ? 
 pub struct WmiUtils {
     wmi_api: Rc<WmiAPI>,
@@ -231,6 +203,7 @@ impl WmiUtils {
         })
     }
 
+/*  make this query_partitions (if required), individual partitions can be queried fron drive
     pub fn get_partition_info(&self, disk_index: u64, partition_index: u64) -> Result<WmiPartitionInfo, MigError> {
         let query = format!("SELECT Caption,Bootable,Size,NumberOfBlocks,Type,BootPartition,StartingOffset FROM Win32_DiskPartition where DiskIndex={} and Index={}", disk_index, partition_index);
         debug!("{}::get_partition_info: performing WMI Query: '{}'", MODULE, query);
@@ -255,7 +228,7 @@ impl WmiUtils {
             _ => Err(MigError::from_remark(MigErrorKind::InvParam, &format!("{}::get_partition_info: invalid result cout for query, expected 1, got  {}",MODULE, q_res.len()))), 
         }
     } 
-
+*/ 
     pub fn query_drives(&self) -> Result<Vec<PhysicalDrive>, MigError> {   
         let query = PhysicalDrive::get_query_all();     
         debug!("{}::get_drives: performing WMI Query: '{}'", MODULE, query);

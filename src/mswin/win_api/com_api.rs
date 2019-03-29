@@ -25,6 +25,7 @@ const MODULE: &str = "mswin::win_api::com_api";
 
 type RefCount = Arc<Mutex<u64>>;
 
+#[derive(Debug)]
 pub struct ComAPI {
     uc: RefCount,
 }

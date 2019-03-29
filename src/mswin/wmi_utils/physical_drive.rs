@@ -1,11 +1,14 @@
 use std::rc::{Rc};
 
+use log::{debug};
 use crate::mig_error::{MigError, MigErrorKind};
 use crate::mswin::win_api::wmi_api::{WmiAPI};
 use super::{QueryRes, Partition};
 
+const MODULE: &str = "mswin::wmi_utils::physical_drive";
 const QUERY_ALL: &str = "SELECT Caption, Index, DeviceID, Size, MediaType, Status, BytesPerSector, Partitions, CompressionMethod FROM Win32_DiskDrive";        
 
+#[derive(Debug)]
 pub struct PhysicalDrive {
     wmi_api: Rc<WmiAPI>,
     pub name: String,
@@ -45,6 +48,15 @@ impl PhysicalDrive {
 
     pub fn query_partitions(&mut self) -> Result<Vec<Partition>, MigError> {
         let query = &format!("ASSOCIATORS OF {{Win32_DiskDrive.DeviceID='{}'}} WHERE AssocClass = Win32_DiskDriveToDiskPartition",self.device_id);
+        debug!("{}::query_partitions: performing WMI Query: '{}'", MODULE, query);
+        let q_res = self.wmi_api.raw_query(query)?;
+/*        let mut result: Vec<Partition> = Vec::new();
+        for res in q_res {
+            let res_map = QueryRes::new(res);
+            result.push(PhysicalDrive::new(self.wmi_api.clone(), res_map)?);
+        }
+        Ok(result)
+*/
         Err(MigError::from(MigErrorKind::NotImpl))
     }
 }
