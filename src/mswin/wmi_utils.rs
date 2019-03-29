@@ -223,6 +223,8 @@ impl WmiUtils {
         })
     }
 
+
+
     pub fn get_partition_info(&self, disk_index: u64, partition_index: u64) -> Result<WmiPartitionInfo, MigError> {
         let query = format!("SELECT Caption,Bootable,Size,NumberOfBlocks,Type,BootPartition,StartingOffset FROM Win32_DiskPartition where DiskIndex={} and Index={}", disk_index, partition_index);
         debug!("{}::get_partition_info: performing WMI Query: '{}'", MODULE, query);
@@ -247,9 +249,30 @@ impl WmiUtils {
         }
     } 
 
+    pub fn query_drives(&self) -> <Vec<WmiDriveInfo>, MigError> {
+        const QUERY: &str = "SELECT Name, Size, MediaType, Status, BytesPerSector, Partitions, CompressionMethod FROM Win32_DiskDrive WHERE";        
+        debug!("{}::get_drive_info: performing WMI Query: '{}'", MODULE, QUERY);
+        let q_res = self.wmi_api.raw_query(QUERY)?;
+        let mut result: Vec<WmiDriveInfo> = Vec::new();
+        for res_map in q_res {
+            result.push(WmiDriveInfo{
+                name: String::from(res_map.get_string_property("Name")?),
+                media_type: String::from(res_map.get_string_property("MediaType")?),  // TODO: parse this value fixed / removable
+                size: res_map.get_uint_property("Size")?,
+                status: String::from(res_map.get_string_property("Status")?),
+                bytes_per_sector: res_map.get_int_property("BytesPerSector")?,
+                partitions: res_map.get_int_property("Partitions")?,
+                compression_method: String::from(res_map.get_string_property("CompressionMethod")?),
+                disk_index,
+            });
+        }
+        Ok(result)
+    }
+
+
     pub fn get_drive_info(&self, disk_index: u64) -> Result<WmiDriveInfo, MigError> {
         let query = format!("SELECT Name, Size, MediaType, Status, BytesPerSector, Partitions, CompressionMethod FROM Win32_DiskDrive WHERE Index={}", disk_index);        
-        debug!("{}::get_partition_info: performing WMI Query: '{}'", MODULE, query);
+        debug!("{}::get_drive_info: performing WMI Query: '{}'", MODULE, query);
         let mut q_res = self.wmi_api.raw_query(&query)?;
         match q_res.len() {
             0 => Err(MigError::from_remark(MigErrorKind::NotFound,&format!("{}::get_disk_info: the query returned an empty result set: '{}'", MODULE, query))), 

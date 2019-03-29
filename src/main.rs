@@ -13,11 +13,11 @@ const KB_SIZE: u64 = 1024;
 
 fn format_size_with_unit(size: u64) -> String {
     if size > (10 * GB_SIZE) {
-        format!("{} GB", size / GB_SIZE)
+        format!("{} GiB", size / GB_SIZE)
     } else if size > (10 * MB_SIZE) {
-        format!("{} MB", size / MB_SIZE)
+        format!("{} MiB", size / MB_SIZE)
     } else if size > (10 * KB_SIZE) {
-        format!("{} kB", size / KB_SIZE)
+        format!("{} KiB", size / KB_SIZE)
     } else {
         format!("{} B", size)
     }
