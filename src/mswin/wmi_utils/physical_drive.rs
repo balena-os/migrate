@@ -31,9 +31,9 @@ impl PhysicalDrive {
         format!("SELECT Caption, Index, DeviceID, Size, MediaType, Status, BytesPerSector, Partitions, CompressionMethod FROM Win32_DiskDrive WHERE Index={}",index)
     }
 
-    pub(crate) fn new(wmi_api: Rc<WmiAPI>, res_map: QueryRes) -> Result<PhysicalDrive,MigError> {
+    pub(crate) fn new(wmi_api: &Rc<WmiAPI>, res_map: QueryRes) -> Result<PhysicalDrive,MigError> {
         Ok(PhysicalDrive{            
-            wmi_api, 
+            wmi_api: wmi_api.clone(), 
             name: String::from(res_map.get_string_property("Caption")?),
             device_id: String::from(res_map.get_string_property("DeviceID")?),
             media_type: String::from(res_map.get_string_property("MediaType")?),  // TODO: parse this value fixed / removable
@@ -49,14 +49,13 @@ impl PhysicalDrive {
     pub fn query_partitions(&mut self) -> Result<Vec<Partition>, MigError> {
         let query = &format!("ASSOCIATORS OF {{Win32_DiskDrive.DeviceID='{}'}} WHERE AssocClass = Win32_DiskDriveToDiskPartition",self.device_id);
         debug!("{}::query_partitions: performing WMI Query: '{}'", MODULE, query);
+        
         let q_res = self.wmi_api.raw_query(query)?;
-/*        let mut result: Vec<Partition> = Vec::new();
+        let mut result: Vec<Partition> = Vec::new();
         for res in q_res {
             let res_map = QueryRes::new(res);
-            result.push(PhysicalDrive::new(self.wmi_api.clone(), res_map)?);
+            result.push(Partition::new(&self.wmi_api, self.disk_index, res_map)?);
         }
         Ok(result)
-*/
-        Err(MigError::from(MigErrorKind::NotImpl))
     }
 }

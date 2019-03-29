@@ -52,8 +52,20 @@ fn test_com() -> Result<(), MigError> {
 
 #[cfg(target_os = "windows")]
 fn print_drives(migrator: &mut MSWMigrator) -> Result<(),MigError> {
-    use balena_migrator::mswin::drive_info::{enumerate_drives,DeviceProps};
+    use balena_migrator::mswin::{WmiUtils};
+    let wmi_utils = WmiUtils::new()?;
+    
+    for mut phys_drive in wmi_utils.query_drives()? {
+        println!("drive: {:?}", phys_drive);
+        for partition in phys_drive.query_partitions()? {
+            println!("  partition: {:?}", partition);
+        }
+    }
 
+
+    // use balena_migrator::mswin::drive_info::{enumerate_drives,DeviceProps};
+
+/*
     let drive_map = enumerate_drives(migrator).unwrap();
     let mut keys: Vec<&u64> = drive_map.keys().collect();
     keys.sort();
@@ -110,6 +122,7 @@ fn print_drives(migrator: &mut MSWMigrator) -> Result<(),MigError> {
         }
         */
     }
+    */
     Ok(())
 }
 

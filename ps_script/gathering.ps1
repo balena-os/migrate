@@ -14,7 +14,9 @@
     # [System.Threading.Thread]::CurrentThread.CurrentCulture = 'en-US';Get-WmiObject -Query $query;
     # Get-WmiObject -Class Win32_DiskDrive  | Select-Object -Property *;
 
-    $query="SELECT Index, DeviceId, Size, MediaType, Status, BytesPerSector, Partitions, CompressionMethod FROM Win32_DiskDrive"
-    [System.Threading.Thread]::CurrentThread.CurrentCulture = 'en-US';Get-WmiObject -Query $query;
+    # $query="SELECT Index, DeviceId, Size, MediaType, Status, BytesPerSector, Partitions, CompressionMethod FROM Win32_DiskDrive"
+    # [System.Threading.Thread]::CurrentThread.CurrentCulture = 'en-US';Get-WmiObject -Query $query;
     # Get-WmiObject -Class Win32_DiskDrive  | Select-Object -Property *;
     
+    $query="SELECT DeviceID FROM (ASSOCIATORS OF {Win32_DiskDrive.DeviceID='\\.\PHYSICALDRIVE0'} WHERE AssocClass = Win32_DiskDriveToDiskPartition)";
+    [System.Threading.Thread]::CurrentThread.CurrentCulture = 'en-US';Get-WmiObject -Query $query;

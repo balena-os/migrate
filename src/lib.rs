@@ -14,8 +14,8 @@ pub extern crate libc;
 
 #[cfg(target_os = "windows")]
 pub mod mswin;
-#[cfg(target_os = "windows")]
-use mswin::drive_info::PhysicalDriveInfo;
+// #[cfg(target_os = "windows")]
+// use mswin::drive_info::PhysicalDriveInfo;
 
 #[cfg(target_os = "linux")]
 pub mod linux;

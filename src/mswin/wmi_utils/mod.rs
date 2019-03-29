@@ -14,6 +14,9 @@ use crate::mswin::win_api::wmi_api::{WmiAPI, Variant};
 
 mod physical_drive;
 pub use physical_drive::PhysicalDrive;
+mod logical_drive;
+pub use logical_drive::LogicalDrive;
+
 mod partition;
 pub use partition::Partition;
 
@@ -236,7 +239,7 @@ impl WmiUtils {
         let mut result: Vec<PhysicalDrive> = Vec::new();
         for res in q_res {
             let res_map = QueryRes::new(res);
-            result.push(PhysicalDrive::new(self.wmi_api.clone(), res_map)?);
+            result.push(PhysicalDrive::new(&self.wmi_api, res_map)?);
         }
         Ok(result)
     }
@@ -249,7 +252,7 @@ impl WmiUtils {
             0 => Err(MigError::from_remark(MigErrorKind::NotFound,&format!("{}::get_disk_info: the query returned an empty result set: '{}'", MODULE, query))), 
             1 => {
                 let res_map = QueryRes::new(q_res.pop().unwrap());
-                Ok(PhysicalDrive::new(self.wmi_api.clone(), res_map)?)
+                Ok(PhysicalDrive::new(&self.wmi_api, res_map)?)
             },
             _ => Err(MigError::from_remark(MigErrorKind::InvParam, &format!("{}::get_drive_info: invalid result cout for query, expected 1, got  {}",MODULE, q_res.len()))), 
         }
@@ -290,7 +293,7 @@ impl WmiUtils {
     */
 }
 
-struct QueryRes {
+pub(crate) struct QueryRes {
     q_result: HashMap<String,Variant>,
 }
 

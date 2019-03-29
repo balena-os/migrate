@@ -1,16 +1,17 @@
 pub(crate) mod powershell;
 //pub(crate) mod win_api;
-pub mod drive_info;
+// pub mod drive_info;
 pub mod win_api;
 pub(crate) mod wmi_utils;
 
 use log::debug;
-use std::collections::{HashMap};
+// use std::collections::{HashMap};
 
-use wmi_utils::{WMIOSInfo, WmiUtils};
+pub use wmi_utils::{WmiUtils};
+use wmi_utils::{WMIOSInfo};
 use crate::mig_error::{MigError, MigErrorKind};
 use crate::{Migrator, OSArch, OSRelease};
-use crate::mswin::drive_info::PhysicalDriveInfo;
+//use crate::mswin::drive_info::PhysicalDriveInfo;
 
 use powershell::PSInfo;
 
