@@ -14,7 +14,7 @@
     # [System.Threading.Thread]::CurrentThread.CurrentCulture = 'en-US';Get-WmiObject -Query $query;
     # Get-WmiObject -Class Win32_DiskDrive  | Select-Object -Property *;
 
-    $query="SELECT Caption, Name, Size, MediaType, Status, BytesPerSector, Partitions, CompressionMethod FROM Win32_DiskDrive"
+    $query="SELECT Index, DeviceId, Size, MediaType, Status, BytesPerSector, Partitions, CompressionMethod FROM Win32_DiskDrive"
     [System.Threading.Thread]::CurrentThread.CurrentCulture = 'en-US';Get-WmiObject -Query $query;
-
+    # Get-WmiObject -Class Win32_DiskDrive  | Select-Object -Property *;
     

@@ -1,5 +1,5 @@
 use failure::{ResultExt};
-use log::{debug};
+use log::{debug, trace};
 use std::ptr;
 use std::slice;
 use widestring::{WideCString};
@@ -113,7 +113,7 @@ impl IWbemClassWrapper {
     pub fn to_map(&self) -> Result<HashMap<String,Variant>,MigError> {        
         let mut result: HashMap<String,Variant> = HashMap::new();
         for prop_name_w in self.list_properties_wstr()? {
-            debug!("{}::to_map: attempting property: {}", MODULE, prop_name_w.to_string_lossy());
+            trace!("{}::to_map: attempting property: {}", MODULE, prop_name_w.to_string_lossy());
             let prop_name = prop_name_w.to_string().context(MigErrCtx::from_remark(MigErrorKind::InvParam,&format!("{}::to_map: invalid BSTR value", MODULE)))?;
             result.entry(prop_name).or_insert(self.get_property(&prop_name_w)?.unwrap());
         }         
@@ -156,7 +156,7 @@ pub(crate) fn safe_to_wstr_array(arr: *mut SAFEARRAY) -> Result<Vec<WideCString>
     let data_slice = &data_slice[(lower_bound as usize)..];
     for item_bstr in data_slice.iter() {        
         let item = unsafe { WideCString::from_ptr_str(*item_bstr) };
-        debug!("{}::safe_to_wstr_array: adding item: {}", MODULE, item.to_string_lossy());
+        trace!("{}::safe_to_wstr_array: adding item: {}", MODULE, item.to_string_lossy());
         result.push(item);
     }
 
@@ -189,7 +189,7 @@ pub(crate) fn safe_to_str_array(arr: *mut SAFEARRAY) -> Result<Vec<String>,MigEr
     let data_slice = &data_slice[(lower_bound as usize)..];
     for item_bstr in data_slice.iter() {        
         let item = unsafe { WideCString::from_ptr_str(*item_bstr) };
-        debug!("{}::safe_to_str_array: adding item: {}", MODULE, item.to_string_lossy());        
+        trace!("{}::safe_to_str_array: adding item: {}", MODULE, item.to_string_lossy());        
         result.push(item.to_string().context(MigErrCtx::from_remark(MigErrorKind::InvParam,&format!("{}::safe_to_str_array: invalid chars in wstring", MODULE)))?);
     }
 
@@ -223,7 +223,7 @@ pub(crate) fn safe_to_i32_array(arr: *mut SAFEARRAY) -> Result<Vec<i32>,MigError
     let mut result: Vec<i32> = Vec::new();
 
     for i32_num in data_slice.iter() {        
-        debug!("{}::safe_to_i32_array: adding item: {}", MODULE, i32_num);
+        trace!("{}::safe_to_i32_array: adding item: {}", MODULE, i32_num);
         result.push(*i32_num);
     }
 

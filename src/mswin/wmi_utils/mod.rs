@@ -4,13 +4,19 @@ use log::{info, debug};
 use std::collections::HashMap;
 // pub use wmi::Variant;
 // use wmi::{COMLibrary, WMIConnection};
-
+use std::rc::Rc;
 
 use failure::{Fail, ResultExt};
 
 use crate::mig_error::{MigErrCtx, MigError, MigErrorKind};
 use crate::{OSArch, OSRelease};
 use crate::mswin::win_api::wmi_api::{WmiAPI, Variant};
+
+mod physical_drive;
+pub use physical_drive::PhysicalDrive;
+mod partition;
+pub use partition::Partition;
+
 
 // TODO: fix this
 //#![cfg(debug_assertions)]
@@ -42,6 +48,7 @@ pub(crate) struct WMIOSInfo {
 #[derive(Debug)]
 pub struct WmiPartitionInfo {
     pub name: String,
+    pub device_id: String,
     pub bootable: bool,
     pub size: u64,
     pub number_of_blocks: u64,
@@ -55,6 +62,7 @@ pub struct WmiPartitionInfo {
 #[derive(Debug)]
 pub struct WmiDriveInfo {
     pub name: String,
+    pub device_id: String,
     pub size: u64,
     pub media_type: String,
     pub status: String,    
@@ -65,15 +73,15 @@ pub struct WmiDriveInfo {
 }
 
 
-
+// TODO: make WmiAPI an Rc to make it shareble with dependant objects ? 
 pub struct WmiUtils {
-    wmi_api: WmiAPI,
+    wmi_api: Rc<WmiAPI>,
 }
 
 impl WmiUtils {
     pub fn new() -> Result<WmiUtils, MigError> {
         debug!("{}::new: entered", MODULE);        
-        Ok(Self { wmi_api: WmiAPI::get_api()?, })
+        Ok(Self { wmi_api: Rc::new(WmiAPI::get_api()?), })
     }
 
     pub fn wmi_query(&self, query: &str) -> Result<Vec<HashMap<String, Variant>>, MigError> {
@@ -223,8 +231,6 @@ impl WmiUtils {
         })
     }
 
-
-
     pub fn get_partition_info(&self, disk_index: u64, partition_index: u64) -> Result<WmiPartitionInfo, MigError> {
         let query = format!("SELECT Caption,Bootable,Size,NumberOfBlocks,Type,BootPartition,StartingOffset FROM Win32_DiskPartition where DiskIndex={} and Index={}", disk_index, partition_index);
         debug!("{}::get_partition_info: performing WMI Query: '{}'", MODULE, query);
@@ -235,6 +241,7 @@ impl WmiUtils {
                 let res_map = QueryRes::new(q_res.pop().unwrap());
                 Ok(WmiPartitionInfo{
                     name: String::from(res_map.get_string_property("Caption")?),
+                    device_id: String::new(),
                     bootable: res_map.get_bool_property("Bootable")?, 
                     size: res_map.get_uint_property("Size")?,
                     number_of_blocks: res_map.get_uint_property("NumberOfBlocks")?,
@@ -249,45 +256,27 @@ impl WmiUtils {
         }
     } 
 
-    pub fn query_drives(&self) -> <Vec<WmiDriveInfo>, MigError> {
-        const QUERY: &str = "SELECT Name, Size, MediaType, Status, BytesPerSector, Partitions, CompressionMethod FROM Win32_DiskDrive WHERE";        
-        debug!("{}::get_drive_info: performing WMI Query: '{}'", MODULE, QUERY);
-        let q_res = self.wmi_api.raw_query(QUERY)?;
-        let mut result: Vec<WmiDriveInfo> = Vec::new();
-        for res_map in q_res {
-            result.push(WmiDriveInfo{
-                name: String::from(res_map.get_string_property("Name")?),
-                media_type: String::from(res_map.get_string_property("MediaType")?),  // TODO: parse this value fixed / removable
-                size: res_map.get_uint_property("Size")?,
-                status: String::from(res_map.get_string_property("Status")?),
-                bytes_per_sector: res_map.get_int_property("BytesPerSector")?,
-                partitions: res_map.get_int_property("Partitions")?,
-                compression_method: String::from(res_map.get_string_property("CompressionMethod")?),
-                disk_index,
-            });
+    pub fn query_drives(&self) -> Result<Vec<PhysicalDrive>, MigError> {   
+        let query = PhysicalDrive::get_query_all();     
+        debug!("{}::get_drives: performing WMI Query: '{}'", MODULE, query);
+        let q_res = self.wmi_api.raw_query(query)?;
+        let mut result: Vec<PhysicalDrive> = Vec::new();
+        for res in q_res {
+            let res_map = QueryRes::new(res);
+            result.push(PhysicalDrive::new(self.wmi_api.clone(), res_map)?);
         }
         Ok(result)
     }
 
-
-    pub fn get_drive_info(&self, disk_index: u64) -> Result<WmiDriveInfo, MigError> {
-        let query = format!("SELECT Name, Size, MediaType, Status, BytesPerSector, Partitions, CompressionMethod FROM Win32_DiskDrive WHERE Index={}", disk_index);        
-        debug!("{}::get_drive_info: performing WMI Query: '{}'", MODULE, query);
+    pub fn get_drive(&self, disk_index: u64) -> Result<PhysicalDrive, MigError> {
+        let query = PhysicalDrive::get_query_by_index(disk_index);             
+        debug!("{}::get_drives: performing WMI Query: '{}'", MODULE, query);
         let mut q_res = self.wmi_api.raw_query(&query)?;
         match q_res.len() {
             0 => Err(MigError::from_remark(MigErrorKind::NotFound,&format!("{}::get_disk_info: the query returned an empty result set: '{}'", MODULE, query))), 
             1 => {
                 let res_map = QueryRes::new(q_res.pop().unwrap());
-                Ok(WmiDriveInfo{
-                    name: String::from(res_map.get_string_property("Name")?),
-                    media_type: String::from(res_map.get_string_property("MediaType")?),  // TODO: parse this value fixed / removable
-                    size: res_map.get_uint_property("Size")?,
-                    status: String::from(res_map.get_string_property("Status")?),
-                    bytes_per_sector: res_map.get_int_property("BytesPerSector")?,
-                    partitions: res_map.get_int_property("Partitions")?,
-                    compression_method: String::from(res_map.get_string_property("CompressionMethod")?),
-                    disk_index,
-                })
+                Ok(PhysicalDrive::new(self.wmi_api.clone(), res_map)?)
             },
             _ => Err(MigError::from_remark(MigErrorKind::InvParam, &format!("{}::get_drive_info: invalid result cout for query, expected 1, got  {}",MODULE, q_res.len()))), 
         }

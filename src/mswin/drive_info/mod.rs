@@ -35,7 +35,12 @@ pub fn enumerate_drives(migrator: &mut MSWMigrator) -> Result<HashMap<u64,Physic
     let mut dl_map: HashMap<String,DriveLetterInfo> = HashMap::new();
     let mut vol_map: HashMap<String,VolumeInfo> = HashMap::new();    
     let mut pd_map: HashMap<u64,PhysicalDriveInfo> = HashMap::new();    
+    
+    for wmi_drive in migrator.get_wmi_utils().query_drives()? {
+        info!("{}::enumerate_drives: {:?}", MODULE, wmi_drive);
+    }
 
+/*
     for device in query_dos_device(None)? {
         loop {
             info!("{}::enumerate_drives: looking at device {}", MODULE, device);
@@ -113,6 +118,7 @@ pub fn enumerate_drives(migrator: &mut MSWMigrator) -> Result<HashMap<u64,Physic
             ));
         }
     }
+    */
 
     Ok(pd_map)
 }
