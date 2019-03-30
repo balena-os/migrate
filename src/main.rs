@@ -55,12 +55,41 @@ fn print_drives(migrator: &mut MSWMigrator) -> Result<(),MigError> {
     use balena_migrator::mswin::{WmiUtils};
     let wmi_utils = WmiUtils::new()?;
     
-    for mut phys_drive in wmi_utils.query_drives()? {
-        println!("drive: {:?}", phys_drive);
+    for phys_drive in wmi_utils.query_drives()? {
+        println!("  type: PhysicalDrive");
+        println!("  harddisk index:     {}", phys_drive.get_index());
+        println!("  device:             {}", phys_drive.get_device());
+        println!("  wmi name:           {}", phys_drive.get_wmi_name());
+        println!("  media type:         {}", phys_drive.get_media_type());
+        println!("  bytes per sector:   {}", phys_drive.get_bytes_per_sector());
+        println!("  partitions:         {}", phys_drive.get_partitions());
+        println!("  compression_method: {}", phys_drive.get_compression_method());
+        println!("  size:               {}", format_size_with_unit(phys_drive.get_size()));    
+        println!("  status:             {}\n", phys_drive.get_status());
+
         for partition in phys_drive.query_partitions()? {
-            println!("  partition: {:?}", partition);
-        }
+            println!("    type: HarddiskPartition");
+            println!("    harddisk index:   {}", partition.get_hd_index());
+            println!("    partition index:  {}", partition.get_part_index());
+            println!("    device :          {}", partition.get_device());
+            println!("    boot device:      {}", partition.is_boot_device());
+            println!("    bootable:         {}", partition.is_bootable());                    
+            println!("    type:             {}", partition.get_ptype());
+            println!("    number of blocks: {}", partition.get_num_blocks());
+            println!("    start offset:     {}", partition.get_start_offset());
+            println!("    size:             {}", format_size_with_unit(partition.get_size()));
+            if let Some(ld) = partition.query_logical_drive()? {
+                println!("    logical drive:    {}",ld.get_device_id());
+                if migrator.is_admin()? == true {
+                    let supp_sizes = ld.get_supported_sizes(migrator)?;
+                    println!("    min supp. size:   {}", format_size_with_unit(supp_sizes.0));
+                    println!("    max supp. size:   {}", format_size_with_unit(supp_sizes.1));
+                }
+            }
+            println!();
+        }        
     }
+
 
 
     // use balena_migrator::mswin::drive_info::{enumerate_drives,DeviceProps};

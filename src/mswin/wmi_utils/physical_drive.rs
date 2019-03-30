@@ -2,7 +2,10 @@ use std::rc::{Rc};
 
 use log::{debug};
 use crate::mig_error::{MigError, MigErrorKind};
-use crate::mswin::win_api::wmi_api::{WmiAPI};
+use crate::mswin::win_api::{ 
+    query_dos_device,
+    wmi_api::{WmiAPI}
+};
 use super::{QueryRes, Partition};
 
 const MODULE: &str = "mswin::wmi_utils::physical_drive";
@@ -11,18 +14,19 @@ const QUERY_ALL: &str = "SELECT Caption, Index, DeviceID, Size, MediaType, Statu
 #[derive(Debug)]
 pub struct PhysicalDrive {
     wmi_api: Rc<WmiAPI>,
-    pub name: String,
-    pub device_id: String,
-    pub size: u64,
-    pub media_type: String,
-    pub status: String,    
-    pub bytes_per_sector: i32,
-    pub partitions: i32,
-    pub compression_method: String,
-    pub disk_index: u64,
+    name: String,
+    device_id: String,
+    size: u64,
+    media_type: String,
+    status: String,    
+    bytes_per_sector: i32,
+    partitions: i32,
+    compression_method: String,
+    disk_index: u64,
+    device: String,
 }
 
-impl PhysicalDrive {
+impl<'a> PhysicalDrive {
     pub(crate) fn get_query_all() -> &'static str {
         QUERY_ALL
     }
@@ -32,6 +36,7 @@ impl PhysicalDrive {
     }
 
     pub(crate) fn new(wmi_api: &Rc<WmiAPI>, res_map: QueryRes) -> Result<PhysicalDrive,MigError> {
+        let disk_index = res_map.get_int_property("Index")? as u64;
         Ok(PhysicalDrive{            
             wmi_api: wmi_api.clone(), 
             name: String::from(res_map.get_string_property("Caption")?),
@@ -42,11 +47,12 @@ impl PhysicalDrive {
             bytes_per_sector: res_map.get_int_property("BytesPerSector")?,
             partitions: res_map.get_int_property("Partitions")?,
             compression_method: String::from(res_map.get_string_property("CompressionMethod")?),
-            disk_index: res_map.get_int_property("Index")? as u64,
+            disk_index,
+            device: String::from(query_dos_device(Some(&format!("PhysicalDrive{}",disk_index)))?.get(0).unwrap().as_ref()),
         })
     }
 
-    pub fn query_partitions(&mut self) -> Result<Vec<Partition>, MigError> {
+    pub fn query_partitions(&self) -> Result<Vec<Partition>, MigError> {
         let query = &format!("ASSOCIATORS OF {{Win32_DiskDrive.DeviceID='{}'}} WHERE AssocClass = Win32_DiskDriveToDiskPartition",self.device_id);
         debug!("{}::query_partitions: performing WMI Query: '{}'", MODULE, query);
         
@@ -57,5 +63,46 @@ impl PhysicalDrive {
             result.push(Partition::new(&self.wmi_api, self.disk_index, res_map)?);
         }
         Ok(result)
+    }
+
+
+    pub fn get_device_id(&'a self) -> &'a str {
+        &self.device_id
+    }
+
+    pub fn get_device(&'a self) -> &'a str {
+        &self.device
+    }
+
+    pub fn get_index(&self) -> u64 {
+        self.disk_index
+    }
+
+    pub fn get_size(&self) -> u64 {
+        self.size
+    }
+
+    pub fn get_partitions(&self) -> i32 {
+        self.partitions
+    }
+
+    pub fn get_bytes_per_sector(&self) -> i32 {
+        self.bytes_per_sector
+    }
+
+    pub fn get_status(&'a self) -> &'a str {
+        &self.status
+    }
+
+    pub fn get_media_type(&'a self) -> &'a str {
+        &self.media_type
+    }
+
+    pub fn get_compression_method(&'a self) -> &'a str {
+        &self.compression_method
+    }
+
+    pub fn get_wmi_name(&'a self) -> &'a str {
+        &self.name
     }
 }
