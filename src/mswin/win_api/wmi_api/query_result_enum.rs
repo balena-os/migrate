@@ -56,6 +56,7 @@ impl Iterator for QueryResultEnumerator {
         // TODO: figure out how to use WBEMSTATUS::WBEM_S_NO_ERROR
 
         if res != 0 {
+            // TODO: detect 'normal' end of Enumerator
             let os_err = Error::last_os_error();
             debug!("{}::next: Enumerator::Next returned {}, os_error: {:?}", MODULE, res, os_err);                
             return None;

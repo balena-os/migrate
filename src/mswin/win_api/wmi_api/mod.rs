@@ -218,7 +218,11 @@ mod tests {
         let query_res = wmi_api.raw_query("SELECT Caption,Version,OSArchitecture, BootDevice, TotalVisibleMemorySize,FreePhysicalMemory FROM Win32_OperatingSystem").unwrap();
         assert_eq!(query_res.len(),1);
         let res_amp = query_res.get(0).unwrap();
-        let caption = res_amp.get("Caption").unwrap().as_str();
-        assert!(!caption.is_empty())
+        let caption = res_amp.get("Caption").unwrap();
+        if let Variant::STRING(s) = caption {
+            assert!(!s.is_empty());
+        } else {
+            panic!("caption should be a string");
+        }        
     }
 }
