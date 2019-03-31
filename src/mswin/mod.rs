@@ -21,7 +21,6 @@ use powershell::PSInfo;
 
 pub struct MSWMigrator {
     ps_info: PSInfo,
-    wmi_utils: WmiUtils,
     os_info: Option<WMIOSInfo>,
     uefi_boot: Option<bool>,
 }
@@ -29,16 +28,11 @@ pub struct MSWMigrator {
 impl<'a> MSWMigrator {
     pub fn try_init() -> Result<MSWMigrator, MigError> {
         let msw_info = MSWMigrator {
-            ps_info: PSInfo::try_init()?,
-            wmi_utils: WmiUtils::new()?,
+            ps_info: PSInfo::try_init()?,            
             os_info: None,
             uefi_boot: None,
         };
         Ok(msw_info)
-    }
-
-    pub(crate) fn get_wmi_utils(&'a self) -> &'a WmiUtils {
-        &self.wmi_utils
     }
 
     pub(crate) fn get_ps_info(&'a mut self) -> &'a mut  PSInfo {
@@ -69,7 +63,7 @@ impl Migrator for MSWMigrator {
         match self.os_info {
             Some(ref info) => Ok(&info.os_name),
             None => {
-                self.os_info = Some(self.wmi_utils.init_os_info()?);
+                self.os_info = Some(WmiUtils::init_os_info()?);
                 Ok(&self.os_info.as_ref().unwrap().os_name)
             }
         }
@@ -79,7 +73,7 @@ impl Migrator for MSWMigrator {
         match self.os_info {
             Some(ref info) => Ok(&info.os_release),
             None => {
-                self.os_info = Some(self.wmi_utils.init_os_info()?);
+                self.os_info = Some(WmiUtils::init_os_info()?);
                 Ok(&self.os_info.as_ref().unwrap().os_release)
             }
         }
@@ -89,7 +83,7 @@ impl Migrator for MSWMigrator {
         match self.os_info {
             Some(ref info) => Ok(&info.os_arch),
             None => {
-                self.os_info = Some(self.wmi_utils.init_os_info()?);
+                self.os_info = Some(WmiUtils::init_os_info()?);
                 Ok(&self.os_info.as_ref().unwrap().os_arch)
             }
         }
@@ -99,7 +93,7 @@ impl Migrator for MSWMigrator {
         match self.os_info {
             Some(ref info) => Ok(info.mem_tot),
             None => {
-                self.os_info = Some(self.wmi_utils.init_os_info()?);
+                self.os_info = Some(WmiUtils::init_os_info()?);
                 Ok(self.os_info.as_ref().unwrap().mem_tot)
             }
         }
@@ -109,7 +103,7 @@ impl Migrator for MSWMigrator {
         match self.os_info {
             Some(ref info) => Ok(info.mem_avail),
             None => {
-                self.os_info = Some(self.wmi_utils.init_os_info()?);
+                self.os_info = Some(WmiUtils::init_os_info()?);
                 Ok(self.os_info.as_ref().unwrap().mem_avail)
             }
         }
@@ -119,7 +113,7 @@ impl Migrator for MSWMigrator {
         match self.os_info {
             Some(ref info) => Ok(&info.boot_dev),
             None => {
-                self.os_info = Some(self.wmi_utils.init_os_info()?);
+                self.os_info = Some(WmiUtils::init_os_info()?);
                 Ok(&self.os_info.as_ref().unwrap().boot_dev)
             }
         }

@@ -5,14 +5,13 @@ use crate::mswin::win_api::{
     query_dos_device,
     wmi_api::{WmiAPI}
 };
-use super::{QueryRes, LogicalDrive};
+use super::{QueryRes, LogicalDrive, NS_CVIM2};
 
 const MODULE: &str = "mswin::wmi_utils::partition";
 // const QUERY_ALL: &str = "SELECT Caption, Index, DeviceID, Size, MediaType, Status, BytesPerSector, Partitions, CompressionMethod FROM Win32_DiskDrive";        
 
 #[derive(Debug)]
 pub struct Partition {
-    wmi_api: Rc<WmiAPI>,
     name: String,
     device_id: String,
     bootable: bool,
@@ -27,11 +26,10 @@ pub struct Partition {
 }
 
 impl<'a> Partition {
-    pub(crate) fn new(wmi_api: &Rc<WmiAPI>, disk_index: u64, res_map: QueryRes ) -> Result<Partition,MigError> {
+    pub(crate) fn new(disk_index: u64, res_map: QueryRes ) -> Result<Partition,MigError> {
         let partition_index = res_map.get_int_property("Index")? as u64;
         
         Ok(Partition { 
-            wmi_api: wmi_api.clone(),
             name: String::from(res_map.get_string_property("Caption")?),
             device_id: String::from(res_map.get_string_property("DeviceID")?),
             device: String::from(query_dos_device(Some(&format!("Harddisk{}Partition{}",disk_index, partition_index + 1)))?.get(0).unwrap().as_ref()),
@@ -50,12 +48,12 @@ impl<'a> Partition {
         let query = &format!("ASSOCIATORS OF {{Win32_DiskPartition.DeviceID='{}'}} WHERE AssocClass = Win32_LogicalDiskToPartition",self.device_id);
         debug!("{}::query_logical_drive: performing WMI Query: '{}'", MODULE, query);
         
-        let mut q_res = self.wmi_api.raw_query(query)?;
+        let mut q_res = WmiAPI::get_api(NS_CVIM2)?.raw_query(query)?;
         match q_res.len() {
             0 => Ok(None), 
             1 => {
                 let res_map = QueryRes::new(q_res.pop().unwrap());
-                Ok(Some(LogicalDrive::new(&self.wmi_api, res_map)?))
+                Ok(Some(LogicalDrive::new(res_map)?))
             },
             _ => Err(MigError::from_remark(MigErrorKind::InvParam, &format!("{}::query_logical_drive: invalid result cout for query, expected 1, got  {}",MODULE, q_res.len()))), 
         }

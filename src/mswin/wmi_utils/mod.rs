@@ -1,8 +1,8 @@
 // extern crate wmi;
 
-use log::{debug};
+use log::{info,debug};
 use std::collections::HashMap;
-use std::rc::Rc;
+// use std::rc::Rc;
 
 use failure::{ResultExt};
 
@@ -66,7 +66,7 @@ impl WmiUtils {
 */
 
     pub(crate) fn init_os_info() -> Result<WMIOSInfo, MigError> {
-        let wmi_api = WmiAPI.get_api(NS_CVIM2)?;
+        let wmi_api = WmiAPI::get_api(NS_CVIM2)?;
         let wmi_res = wmi_api.raw_query(WMIQ_OS)?;
         let wmi_row = match wmi_res.get(0) {
             Some(r) => r,
@@ -223,27 +223,45 @@ impl WmiUtils {
         }
     } 
 */ 
-    pub fn query_drives(&self) -> Result<Vec<PhysicalDrive>, MigError> {   
+    pub fn query_drives() -> Result<Vec<PhysicalDrive>, MigError> {   
         let query = PhysicalDrive::get_query_all();     
         debug!("{}::get_drives: performing WMI Query: '{}'", MODULE, query);
-        let q_res = self.wmi_api.raw_query(query)?;
+        let q_res = WmiAPI::get_api(NS_CVIM2)?.raw_query(query)?;
         let mut result: Vec<PhysicalDrive> = Vec::new();
         for res in q_res {
             let res_map = QueryRes::new(res);
-            result.push(PhysicalDrive::new(&self.wmi_api, res_map)?);
+            result.push(PhysicalDrive::new(res_map)?);
         }
         Ok(result)
     }
 
-    pub fn get_drive(&self, disk_index: u64) -> Result<PhysicalDrive, MigError> {
+    pub fn get_drive(disk_index: u64) -> Result<PhysicalDrive, MigError> {
         let query = PhysicalDrive::get_query_by_index(disk_index);             
         debug!("{}::get_drives: performing WMI Query: '{}'", MODULE, query);
-        let mut q_res = self.wmi_api.raw_query(&query)?;
+        let mut q_res = WmiAPI::get_api(NS_CVIM2)?.raw_query(&query)?;
         match q_res.len() {
             0 => Err(MigError::from_remark(MigErrorKind::NotFound,&format!("{}::get_disk_info: the query returned an empty result set: '{}'", MODULE, query))), 
             1 => {
                 let res_map = QueryRes::new(q_res.pop().unwrap());
-                Ok(PhysicalDrive::new(&self.wmi_api, res_map)?)
+                Ok(PhysicalDrive::new(res_map)?)
+            },
+            _ => Err(MigError::from_remark(MigErrorKind::InvParam, &format!("{}::get_drive_info: invalid result cout for query, expected 1, got  {}",MODULE, q_res.len()))), 
+        }
+    } 
+
+
+    pub fn test_get_drive(disk_index: u64) -> Result<(),MigError> {
+        let query = format!("SELECT * FROM MSFT_Disk WHERE Number={}", disk_index);
+        let mut q_res = WmiAPI::get_api(NS_MSW_STORAGE)?.raw_query(&query)?;
+
+        match q_res.len() {
+            0 => Err(MigError::from_remark(MigErrorKind::NotFound,&format!("{}::get_disk_info: the query returned an empty result set: '{}'", MODULE, query))), 
+            1 => {
+                let res_map = q_res.pop().unwrap();
+                for (key,value) in res_map.iter().enumerate() {
+                    info!("{}::test_get_drive: {} -> {:?}", MODULE, key, value);
+                }
+                Ok(())
             },
             _ => Err(MigError::from_remark(MigErrorKind::InvParam, &format!("{}::get_drive_info: invalid result cout for query, expected 1, got  {}",MODULE, q_res.len()))), 
         }

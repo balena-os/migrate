@@ -216,7 +216,7 @@ mod tests {
 
     #[test]
     fn init_wmi_api() {
-        let wmi_api = WmiAPI::get_api().unwrap();
+        let wmi_api = WmiAPI::get_api("ROOT\\CVIM2").unwrap();
         let query_res = wmi_api.raw_query("SELECT Caption,Version,OSArchitecture, BootDevice, TotalVisibleMemorySize,FreePhysicalMemory FROM Win32_OperatingSystem").unwrap();
         assert_eq!(query_res.len(),1);
         let res_amp = query_res.get(0).unwrap();
