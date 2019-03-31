@@ -2,8 +2,6 @@
 
 use log::{debug};
 use std::collections::HashMap;
-// pub use wmi::Variant;
-// use wmi::{COMLibrary, WMIConnection};
 use std::rc::Rc;
 
 use failure::{ResultExt};

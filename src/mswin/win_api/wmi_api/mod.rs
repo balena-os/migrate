@@ -207,3 +207,18 @@ impl<'a> WmiAPI {
         //Err(MigError::from(MigErrorKind::NotImpl))
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn init_wmi_api() {
+        let wmi_api = WmiAPI::get_api().unwrap();
+        let query_res = wmi_api.raw_query("SELECT Caption,Version,OSArchitecture, BootDevice, TotalVisibleMemorySize,FreePhysicalMemory FROM Win32_OperatingSystem").unwrap();
+        assert_eq!(query_res.len(),1);
+        let res_amp = query_res.get(0).unwrap();
+        let caption = res_amp.get("Caption").unwrap().as_str();
+        assert!(!caption.is_empty())
+    }
+}
