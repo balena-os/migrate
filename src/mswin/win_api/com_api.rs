@@ -98,17 +98,16 @@ impl Drop for ComAPI {
     }
 }
 
-
+#[cfg(test)]
 mod tests {
-    use super::*;
-
-    #[test]
+    use super::ComAPI;
+    #[test]    
     fn it_works1() {
         {
-            let h_com_api = ComAPI::get_api().unwrap();
+            let _h_com_api = ComAPI::get_api().unwrap();
         }
         {
-            let h_com_api = ComAPI::get_api().unwrap();
+            let _h_com_api = ComAPI::get_api().unwrap();
         }
     }
 }

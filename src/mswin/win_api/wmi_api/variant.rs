@@ -6,7 +6,7 @@ use winapi::{
         oaidl::{SAFEARRAY,VARIANT,},
     },
 };
-use failure::{Fail, ResultExt};
+use failure::{ResultExt};
 use widestring::{WideCStr};
 
 use crate::mig_error::{MigError, MigErrorKind, MigErrCtx};

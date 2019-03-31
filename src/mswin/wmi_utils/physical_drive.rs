@@ -1,7 +1,7 @@
 use std::rc::{Rc};
 
 use log::{debug};
-use crate::mig_error::{MigError, MigErrorKind};
+use crate::mig_error::{MigError};
 use crate::mswin::win_api::{ 
     query_dos_device,
     wmi_api::{WmiAPI}

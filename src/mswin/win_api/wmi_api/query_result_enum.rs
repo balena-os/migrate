@@ -5,7 +5,6 @@ use winapi::{
     um::{
         wbemcli::{  IWbemClassObject,                    
                     WBEM_INFINITE,
-                    WBEMSTATUS,
                     },
     },
 };
@@ -14,7 +13,6 @@ use log::{debug};
 use std::io::Error;
 
 use crate::mig_error::{MigError};
-use crate::mswin::win_api::util::report_win_api_error;
 use super::{PMIEnumWbemClassObject, IWbemClassWrapper};
 
 const MODULE: &str = "mswin::win_api::wmi_api::query_result_enum";

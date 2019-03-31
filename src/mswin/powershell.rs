@@ -14,11 +14,11 @@ const PS_CMD_IS_SECURE_BOOT: &str = "Confirm-SecureBootUEFI";
 const PS_ARGS_VERSION_PARAMS: [&'static str; 1] = ["$PSVersionTable.PSVersion"];
 
 use crate::mig_error::{MigErrCtx, MigError, MigErrorKind};
-use failure::{Fail, ResultExt};
+use failure::{ResultExt};
 use std::io::Write;
 
 use lazy_static::lazy_static;
-use log::{info, debug, warn};
+use log::{debug, warn};
 use regex::Regex;
 use std::collections::HashMap;
 use std::fmt::{Debug, Display};

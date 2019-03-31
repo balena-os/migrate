@@ -1,14 +1,14 @@
 use std::rc::{Rc};
 
-use log::{debug};
-use regex::{Regex,Captures};
+// use log::{debug};
+use regex::{Regex};
 use crate::mig_error::{MigError, MigErrorKind};
 use crate::mswin::MSWMigrator;
 use crate::mswin::win_api::wmi_api::{WmiAPI};
 use super::{QueryRes};
 
 const MODULE: &str = "mswin::wmi_utils::logical_drive";
-const QUERY_ALL: &str = "SELECT Caption, Index, DeviceID, Size, MediaType, Status, BytesPerSector, Partitions, CompressionMethod FROM Win32_DiskDrive";        
+// const QUERY_ALL: &str = "SELECT Caption, Index, DeviceID, Size, MediaType, Status, BytesPerSector, Partitions, CompressionMethod FROM Win32_DiskDrive";        
 
 
 

@@ -8,7 +8,7 @@ use crate::mswin::win_api::{
 use super::{QueryRes, LogicalDrive};
 
 const MODULE: &str = "mswin::wmi_utils::partition";
-const QUERY_ALL: &str = "SELECT Caption, Index, DeviceID, Size, MediaType, Status, BytesPerSector, Partitions, CompressionMethod FROM Win32_DiskDrive";        
+// const QUERY_ALL: &str = "SELECT Caption, Index, DeviceID, Size, MediaType, Status, BytesPerSector, Partitions, CompressionMethod FROM Win32_DiskDrive";        
 
 #[derive(Debug)]
 pub struct Partition {

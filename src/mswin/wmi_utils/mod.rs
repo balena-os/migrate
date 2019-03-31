@@ -1,12 +1,12 @@
 // extern crate wmi;
 
-use log::{info, debug};
+use log::{debug};
 use std::collections::HashMap;
 // pub use wmi::Variant;
 // use wmi::{COMLibrary, WMIConnection};
 use std::rc::Rc;
 
-use failure::{Fail, ResultExt};
+use failure::{ResultExt};
 
 use crate::mig_error::{MigErrCtx, MigError, MigErrorKind};
 use crate::{OSArch, OSRelease};
@@ -24,7 +24,7 @@ pub use partition::Partition;
 // TODO: fix this
 //#![cfg(debug_assertions)]
 //const VERBOSE: bool = false;
-const VERBOSE: bool = true;
+// const VERBOSE: bool = true;
 
 const MODULE: &str = "mswin::wmi_utils";
 
@@ -32,7 +32,7 @@ const EMPTY_STR: &str = "";
 
 pub const WMIQ_OS: &str = "SELECT Caption,Version,OSArchitecture, BootDevice, TotalVisibleMemorySize,FreePhysicalMemory FROM Win32_OperatingSystem";
 // pub const WMIQ_CSProd: &str = "SELECT * FROM Win32_ComputerSystemProduct";
-pub const WMIQ_BootConfig: &str = "SELECT * FROM Win32_SystemBootConfiguration";
+// pub const WMIQ_BOOT_CONFIG: &str = "SELECT * FROM Win32_SystemBootConfiguration";
 // pub const WMIQ_Disk: &str = "SELECT * FROM Win32_DiskDrive";
 // pub const WMIQ_Disk: &str = "SELECT Caption,Partitions,Status,DeviceID,Size,BytesPerSector,MediaType,InterfaceType FROM Win32_DiskDrive";
 // pub const WMIQ_Partition: &str = "SELECT * FROM Win32_DiskPartition";
@@ -78,17 +78,6 @@ impl WmiUtils {
                 ))
             }
         };
-
-        if VERBOSE {
-            info!(
-                "{}::init_sys_info: ****** QUERY: {}",
-                MODULE, WMIQ_BootConfig
-            );
-            info!("{}::init_sys_info: *** ROW START", MODULE);
-            for (key, value) in wmi_row.iter() {
-                info!("{}::init_sys_info:   {} -> {:?}", MODULE, key, value);
-            }
-        }
 
         let empty = Variant::EMPTY();
 

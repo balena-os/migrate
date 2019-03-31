@@ -27,7 +27,7 @@ use failure::ResultExt;
 use lazy_static::lazy_static;
 use regex::Regex;
 use std::fmt::{self, Display, Formatter};
-use std::collections::{HashMap};
+
 #[cfg(target_os = "windows")]    
 use crate::mig_error::{MigErrCtx, MigError, MigErrorKind};
 

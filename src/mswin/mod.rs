@@ -140,7 +140,8 @@ pub fn available() -> bool {
 }
 
 pub fn process() -> Result<(), MigError> {
-    let mut ps_info = powershell::PSInfo::try_init()?;
+    let _ps_info = powershell::PSInfo::try_init()?;
+    // TODO: implement
     // info!("process: os_type = {}", ps_info.get_os_name());
     Ok(())
 }
