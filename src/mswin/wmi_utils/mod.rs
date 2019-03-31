@@ -51,12 +51,10 @@ pub(crate) struct WMIOSInfo {
 }
 
 // TODO: make WmiAPI an Rc to make it shareble with dependant objects ? 
-pub struct WmiUtils {
-    wmi_api: Rc<WmiAPI>,
-}
+pub struct WmiUtils {}
 
 impl WmiUtils {
-    pub fn new(namespace:  &str) -> Result<WmiUtils, MigError> {
+/*    pub fn new(namespace:  &str) -> Result<WmiUtils, MigError> {
         debug!("{}::new: entered", MODULE);        
         Ok(Self { wmi_api: Rc::new(WmiAPI::get_api(namespace)?), })
     }
@@ -65,9 +63,11 @@ impl WmiUtils {
         debug!("{}::wmi_query: entered with '{}'", MODULE, query);
         Ok(self.wmi_api.raw_query(query)?)            
     }
+*/
 
-    pub(crate) fn init_os_info(&self) -> Result<WMIOSInfo, MigError> {
-        let wmi_res = self.wmi_api.raw_query(WMIQ_OS)?;
+    pub(crate) fn init_os_info() -> Result<WMIOSInfo, MigError> {
+        let wmi_api = WmiAPI.get_api(NS_CVIM2)?;
+        let wmi_res = wmi_api.raw_query(WMIQ_OS)?;
         let wmi_row = match wmi_res.get(0) {
             Some(r) => r,
             None => {
