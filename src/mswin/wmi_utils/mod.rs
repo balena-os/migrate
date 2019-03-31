@@ -27,6 +27,10 @@ pub use partition::Partition;
 const MODULE: &str = "mswin::wmi_utils";
 
 const EMPTY_STR: &str = "";
+pub const NS_CVIM2: &str = "ROOT\\CIMV2";
+pub const NS_MSW_STORAGE: &str = r"ROOT\Microsoft\Windows\Storage";
+
+
 
 pub const WMIQ_OS: &str = "SELECT Caption,Version,OSArchitecture, BootDevice, TotalVisibleMemorySize,FreePhysicalMemory FROM Win32_OperatingSystem";
 // pub const WMIQ_CSProd: &str = "SELECT * FROM Win32_ComputerSystemProduct";
@@ -52,9 +56,9 @@ pub struct WmiUtils {
 }
 
 impl WmiUtils {
-    pub fn new() -> Result<WmiUtils, MigError> {
+    pub fn new(namespace:  &str) -> Result<WmiUtils, MigError> {
         debug!("{}::new: entered", MODULE);        
-        Ok(Self { wmi_api: Rc::new(WmiAPI::get_api()?), })
+        Ok(Self { wmi_api: Rc::new(WmiAPI::get_api(namespace)?), })
     }
 
     pub fn wmi_query(&self, query: &str) -> Result<Vec<HashMap<String, Variant>>, MigError> {

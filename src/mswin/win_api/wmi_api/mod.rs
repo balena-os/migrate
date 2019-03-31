@@ -53,17 +53,18 @@ const MODULE: &str = "mswin::win_api::wmi_api";
 // TODO: make singleton like ComAPI
 
 #[derive(Debug)]
-pub struct WmiAPI {
+pub struct WmiAPI {    
     _com_api: ComAPI,
     p_svc: PMIWbemServices,
+    namespace: String,
 }
 
 impl<'a> WmiAPI {
-    pub fn get_api() -> Result<WmiAPI, MigError> {
-        WmiAPI::get_api_from_hcom(ComAPI::get_api()?)
+    pub fn get_api(namespace: &str) -> Result<WmiAPI, MigError> {
+        WmiAPI::get_api_from_hcom(ComAPI::get_api()?, namespace)
     }
 
-    pub fn get_api_from_hcom(h_com_api: ComAPI) -> Result<WmiAPI, MigError> {
+    pub fn get_api_from_hcom(h_com_api: ComAPI, namespace: &str) -> Result<WmiAPI, MigError> {
         debug!("{}::get_api_from_hcom: Calling CoCreateInstance for CLSID_WbemLocator", MODULE);
 
         let mut p_loc = NULL;
@@ -97,7 +98,7 @@ impl<'a> WmiAPI {
 
         if unsafe {
             (*(p_loc as PMIWbemLocator)).ConnectServer(
-                to_wide_cstring("ROOT\\CIMV2").as_ptr() as *mut _,
+                to_wide_cstring(namespace).as_ptr() as *mut _,
                 ptr::null_mut(),
                 ptr::null_mut(),
                 ptr::null_mut(),
@@ -124,6 +125,7 @@ impl<'a> WmiAPI {
         let wmi_api = Self {
             _com_api: h_com_api,
             p_svc: p_svc,
+            namespace: String::from(namespace),
         };
 
         debug!("{}::get_api_from_hcom: Calling CoSetProxyBlanket", MODULE);
