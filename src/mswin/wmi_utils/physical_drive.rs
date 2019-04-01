@@ -6,14 +6,13 @@ use crate::mswin::win_api::{
     query_dos_device,
     wmi_api::{WmiAPI}
 };
-use super::{QueryRes, Partition};
+use super::{QueryRes, Partition, NS_CVIM2};
 
 const MODULE: &str = "mswin::wmi_utils::physical_drive";
 const QUERY_ALL: &str = "SELECT Caption, Index, DeviceID, Size, MediaType, Status, BytesPerSector, Partitions, CompressionMethod FROM Win32_DiskDrive";        
 
 #[derive(Debug)]
 pub struct PhysicalDrive {
-    wmi_api: Rc<WmiAPI>,
     name: String,
     device_id: String,
     size: u64,
@@ -35,10 +34,9 @@ impl<'a> PhysicalDrive {
         format!("SELECT Caption, Index, DeviceID, Size, MediaType, Status, BytesPerSector, Partitions, CompressionMethod FROM Win32_DiskDrive WHERE Index={}",index)
     }
 
-    pub(crate) fn new(wmi_api: &Rc<WmiAPI>, res_map: QueryRes) -> Result<PhysicalDrive,MigError> {
+    pub(crate) fn new(res_map: QueryRes) -> Result<PhysicalDrive,MigError> {
         let disk_index = res_map.get_int_property("Index")? as u64;
-        Ok(PhysicalDrive{            
-            wmi_api: wmi_api.clone(), 
+        Ok(PhysicalDrive{                        
             name: String::from(res_map.get_string_property("Caption")?),
             device_id: String::from(res_map.get_string_property("DeviceID")?),
             media_type: String::from(res_map.get_string_property("MediaType")?),  // TODO: parse this value fixed / removable
@@ -56,11 +54,11 @@ impl<'a> PhysicalDrive {
         let query = &format!("ASSOCIATORS OF {{Win32_DiskDrive.DeviceID='{}'}} WHERE AssocClass = Win32_DiskDriveToDiskPartition",self.device_id);
         debug!("{}::query_partitions: performing WMI Query: '{}'", MODULE, query);
         
-        let q_res = self.wmi_api.raw_query(query)?;
+        let q_res = WmiAPI::get_api(NS_CVIM2)?.raw_query(query)?;
         let mut result: Vec<Partition> = Vec::new();
         for res in q_res {
             let res_map = QueryRes::new(res);
-            result.push(Partition::new(&self.wmi_api, self.disk_index, res_map)?);
+            result.push(Partition::new(self.disk_index, res_map)?);
         }
         Ok(result)
     }

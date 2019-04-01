@@ -14,15 +14,13 @@ const MODULE: &str = "mswin::wmi_utils::logical_drive";
 
 #[derive(Debug)]
 pub struct LogicalDrive {
-    wmi_api: Rc<WmiAPI>,
     name: String,
     device_id: String,
 }
 
 impl<'a> LogicalDrive {
-    pub(crate) fn new(wmi_api: &Rc<WmiAPI>, res_map: QueryRes ) -> Result<LogicalDrive,MigError> {
-        Ok(LogicalDrive { 
-            wmi_api: wmi_api.clone(),
+    pub(crate) fn new(res_map: QueryRes ) -> Result<LogicalDrive,MigError> {
+        Ok(LogicalDrive {             
             name: String::from(res_map.get_string_property("Caption")?),
             device_id: String::from(res_map.get_string_property("DeviceID")?),
         })
