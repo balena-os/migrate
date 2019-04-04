@@ -30,29 +30,25 @@ Definitely a 'Nice to Have' feature would be having network connectivity during 
 
 The investigation so far has been restricted to post Windows 8 and EFI installations.
 
-On these systems information about the OS, Boot process and drives can easiy be gathered using the Windows Management Interface (WMI). This interface can also be used to manipulate the system, to partition and format disks and to set up the boot configuration.
+On these systems information about the OS, Boot process and drives can easily be gathered using the Windows Management Interface (WMI). This interface can also be used to manipulate the system, to partition and format disks and to set up the boot configuration.
 
 So far I have rust interfaces to query information from WMI. Calling  WMI object methods is yet to be implemented.
 
-With a system set up for EFI boot it should be trivial to set up an alternative configuration on the EFI partition. Main challenge is to use BCDEdit or its WMI interfaces to set up the NVRAM variables to boot the new configration. 
+With a system set up for EFI boot it is trivial to set up an alternative configuration on the EFI partition. 
 
-As a fallback there is an option to replace the Windows boot setup, so that no NVRAM variable changes are needed. Downside to this approach that it destroys the Windows boot setup. As a result it should only be used as a last resort when NVRAM setup using BCDEdit fails.  
+I am currently installing systemd-boot as EFI boot manager. Systemd-boot automatically recognizes the windows boot setup and creates a boot menu entry for it. Configuring systemd-boot to boot a linux is easily done by wrintig two config files in the EFI partition. The kernel and initramfs can reside directly in the EFI partition. Only requirement for the kernel is that it is compiled with EFI_STUB support so it can be started directly by systemd-boot. 
 
-The EFI partitions will usually be several hundred MB in size and thus have sufficient free space to deposit another EFI boot configuration in most cases. In windows the EFI file system can be mounted the mountvol command and most probably also using WMI. It can then be accessed with admin privileges.
+When testing on VirtualBox it is essential to setup the systemd-boot efi executable to repplace the windows vesion in /EFI/BOOT as VirtualBox currently does not persist NVRAM variables across power downs.
 
-In the simplest variant the boot configuration could be a linux kernel that (starting with kernel 3.3 and compiled with EFI Stub support) can act as its own boot loader. Downside to this approach is that no Kernel boot parameters can be specified on the command line - instead they would have to be compiled into the kernel. This makes this approach a little inflexible. 
+Main challenge is to use BCDEdit or its WMI interfaces to set up the NVRAM variables to boot the new configuration. When replacing the Windows default EFI boot loader in /EFI/BOOT/bootx86.efi this is not necessarry.
 
-To get around that we would need to install an intermediate boot manager like syslinux that allows us to configure kernel boot parameters. 
+So far I have not found options to set up single boot using BCDEdit or systemd-boot. This makes recovering from a failing boot problematic. Onece starting the migrate-system can reset the boot manager but otherwise manual intervention is needed. 
 
-Kernel boot parameters would typically include the path to an initramfs and possibly to a root file system. 
+The EFI partitions will usually be several hundred MB in size and thus have sufficient free space to deposit another EFI boot configuration in most cases. In windows the EFI file system can be mounted the mountvol command and likely also using WMI. It can then be accessed with admin privileges.
 
-Still the advantage of a UEFI boot configuration remains, in that we have a good chance of getting around having to make space for a boot partition. With a small kernel file and initramfs we can boot a system into ram without needing to write anything outside of the EFI partition at all. The actual OS image could then be downloaded to the ram disk and flashed to hard disk from there.
- 
-To specify the above parameters we will need to know the device names of the partitions that the files (initramfs, root file system) are stored on and this will is in some cases be a chalenge. 
-The linux device names will have to be guessed based on the hard drive information available in windows to produces linux style device names like /dev/sda /dev/mmcblk or /dev/nvme0n1.
+In the simplest variant the boot configuration could be a linux kernel that (starting with kernel 3.3 and compiled with EFI Stub support) can act as its own boot loader. So far I have not been successfull. This setup (without boot manager) does not allow to specify kernel cmdline parameters which are needed to point to the initramfs. Statically compiling the CMDLINE into the kernel difd not work for me and would be a little inflexibale anyway.
 
-The perfect solution would be a self-contained kernel, that contians all necesarry files as well as the root file system (to mount to RAM). 
-
+Next challenge is to get access to a BalenaOS Image to flash to the device. Currently I am exploring the option of using a kernel with built in NTFS support. The anticipated outcome would be that I can place the BalenaImage in a well known location in Windows and just access it directly from the minimal linux. This would allow me to just use available space on the windows partition and get around having to make space and format a partition to store data. 
 
 
 
@@ -60,9 +56,14 @@ The perfect solution would be a self-contained kernel, that contians all necesar
 ## Strategies for pre Windows 8
 
 Windows 7 and before will usually be Legacy Bios installations and will be missing 
-certain features. I am currently gathering most of the System-Information using WMI. I noticed that powershell is missing some important commands on windows 7 but I have not yet checked if the WMI classes I use are present in these Systems.
+certain features (yet to be explored). I am currently gathering most of the System-Information using WMI. I noticed that powershell is missing some important commands on windows 7 but I have not yet checked if the WMI classes I use are present in these Systems.
 
-The default mechanism for manipulating boot configuration entries in Windows (BCDEdit) appears to work quite differently in Legacy Systems and certain strategies that I am contemplating UEFI migration will not work in Legacy Mode.
+The default mechanism for manipulating boot configuration entries in Windows (BCDEdit) appears to work quite differently in Legacy Systems and certain strategies that I am contemplating in UEFI migration will not work in Legacy Mode.
 
+In contrast to the stragegy described above I will need to create a partition (most likely FAT32) to contain at least the migrate system (kernel and initramfs, currently 18MB). Once booted from there I can proceed as in EFI configurations.
+
+## Migration scipts
+
+Currently bash / sh scripts are used for linux migration. These scripts can be adapted to be used in the  
 
  
