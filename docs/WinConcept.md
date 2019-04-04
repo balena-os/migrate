@@ -4,7 +4,7 @@ Looking at options to migrate Windows devices to Balena I have come up with the 
 
 Depending on the type of Windows installation there are several different cases to look at that might require different strategies. We should probably try to prioritize certain common / likely configurations:
 
-* Windows Version - mainly pre Windows 8 and after. Pre windows 8 will typically be legacy boot and will be missing several features.
+* Windows Version - mainly need to dstinguish between pre Windows 8 and after. Pre windows 8 will typically be legacy boot and will be missing several features.
 
 * Type of boot process: Legacy or EFI
 
