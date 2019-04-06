@@ -201,10 +201,10 @@ fn main() {
         .version("0.1")
         .author("Thomas Runte <thomasr@balena.io>")
         .about("Migrates devices to BalenaOS")
-        .arg(Arg::with_name("standalone")
-                .short("s")
-                .long("standalone")
-                .help("select standalone mode"),
+        .arg(Arg::with_name("immediate")
+                .short("i")
+                .long("immediate")
+                .help("select immediate mode"),
         )
         .arg(Arg::with_name("agent")
                 .short("a")

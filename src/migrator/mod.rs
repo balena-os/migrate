@@ -19,15 +19,11 @@ pub mod mswin;
 
 #[cfg(target_os = "linux")]
 pub mod linux;
-// pub mod darwin;
 mod common;
 
 pub use common::mig_error::{MigError, MigErrorKind, MigErrCtx};
 pub use common::os_release::OSRelease;
 pub use common::OSArch;
-
-
-
 
 pub trait Migrator {
     fn get_os_name<'a>(&'a mut self) -> Result<&'a str, MigError>;
@@ -42,6 +38,9 @@ pub trait Migrator {
     fn migrate(&mut self) -> Result<(), MigError>;
     fn is_uefi_boot(&mut self) -> Result<bool, MigError>;
 }
+
+
+
 
 #[cfg(target_os = "windows")]
 pub fn get_migrator() -> Result<Box<Migrator>, MigError> {

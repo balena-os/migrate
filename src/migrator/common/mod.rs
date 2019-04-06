@@ -9,6 +9,8 @@ use mig_error::{MigErrCtx, MigError, MigErrorKind};
 
 pub mod os_release;
 
+pub mod config;
+
 const MODULE: &str = "common";
 
 #[derive(Debug)]
@@ -30,8 +32,6 @@ impl Display for OSArch {
         write!(f, "{:?}", self)
     }
 }
-
-
 
 #[derive(Debug)]
 pub(crate) struct CmdRes {

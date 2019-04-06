@@ -11,6 +11,7 @@ regex = "1"
 lazy_static = "*"
 clap = "*"
 failure = "*"
+yaml-rust = "0.4"
 
 [target.'cfg(unix)'.dependencies]
 libc = { git = "https://github.com/rust-lang/libc" } 
