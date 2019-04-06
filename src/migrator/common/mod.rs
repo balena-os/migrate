@@ -3,7 +3,7 @@ use failure::ResultExt;
 use log::debug;
 use std::process::{Command, ExitStatus, Stdio};
 
-use crate::mig_error::{MigErrCtx, MigError, MigErrorKind};
+use crate::migrator::mig_error::{MigErrCtx, MigError, MigErrorKind};
 
 const MODULE: &str = "common";
 

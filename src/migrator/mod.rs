@@ -23,6 +23,8 @@ pub mod linux;
 mod common;
 pub mod mig_error;
 
+
+use mig_error::{MigError, MigErrorKind, MigErrCtx};
 use failure::ResultExt;
 use lazy_static::lazy_static;
 use regex::Regex;

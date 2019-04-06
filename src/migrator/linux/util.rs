@@ -7,8 +7,8 @@ use std::io::Read;
 const MODULE: &str = "Linux::util";
 const WHEREIS_CMD: &str = "whereis";
 
-use crate::common::call;
-use crate::{MigErrCtx, MigError, MigErrorKind};
+use crate::migrator::common::call;
+use crate::migrator::mig_error::{MigErrCtx, MigError, MigErrorKind};
 
 pub fn parse_file(fname: &str, regex: &Regex) -> Result<String, MigError> {
     let os_info = std::fs::read_to_string(fname).context(MigErrCtx::from_remark(

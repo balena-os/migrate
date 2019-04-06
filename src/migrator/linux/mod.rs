@@ -7,9 +7,14 @@ use lazy_static::lazy_static;
 use regex::Regex;
 
 mod util;
-use crate::common::{call, CmdRes};
-use crate::mig_error::{MigErrCtx, MigError, MigErrorKind};
-use crate::{Migrator, OSArch, OSRelease};
+
+use crate::migrator::{
+    common::{call, CmdRes},
+    mig_error::{MigErrCtx, MigError, MigErrorKind},
+    Migrator, 
+    OSArch, 
+    OSRelease};
+
 use std::collections::hash_map::HashMap;
 
 const MODULE: &str = "Linux";

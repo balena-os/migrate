@@ -1,11 +1,14 @@
 use clap::{App, Arg, ArgMatches};
 use log::{info};
 
-use balena_migrator::mig_error::MigError;
+mod migrator;
+use migrator::{ 
+    mig_error::{MigError, MigErrorKind}, 
+    Migrator
+};
 
-use balena_migrator::Migrator;
 #[cfg(target_os = "windows")]
-use balena_migrator::mswin::{
+use migrator::mswin::{
     MSWMigrator,
     WmiUtils,
 };
@@ -190,16 +193,36 @@ fn process(arg_matches: &ArgMatches) -> Result<(),MigError> {
     Err(MigError::from(MigErrorKind::NotImpl))
 } 
 
+
+
 fn main() {
     println!("balena-migrate-win started");
     let matches = App::new("balena-migrate-win")
         .version("0.1")
         .author("Thomas Runte <thomasr@balena.io>")
         .about("Migrates devices to BalenaOS")
+        .arg(Arg::with_name("standalone")
+                .short("s")
+                .long("standalone")
+                .help("select standalone mode"),
+        )
+        .arg(Arg::with_name("agent")
+                .short("a")
+                .long("agent")
+                .help("select agent mode"),
+        )
         .arg(
             Arg::with_name("info")
                 .short("i")
-                .help("reports system info"),
+                .long("info")
+                .help("display system info"),
+        )
+        .arg(
+            Arg::with_name("config")
+                .short("c")
+                .long("config")
+                .value_name("FILE")
+                .help("use config file"),
         )
         .arg(
             Arg::with_name("wmi")
@@ -214,6 +237,7 @@ fn main() {
         .arg(
             Arg::with_name("test")
                 .short("t")
+                .long("test")
                 .help("tests what currently needs testing"),
         )
         .arg(
