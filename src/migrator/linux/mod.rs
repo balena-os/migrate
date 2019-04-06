@@ -10,7 +10,9 @@ mod util;
 
 use crate::migrator::{
     common::{call, CmdRes},
-    mig_error::{MigErrCtx, MigError, MigErrorKind},
+    MigErrCtx, 
+    MigError, 
+    MigErrorKind,
     Migrator, 
     OSArch, 
     OSRelease};

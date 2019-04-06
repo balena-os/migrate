@@ -4,7 +4,8 @@ use log::{info};
 mod migrator;
 
 use migrator::{ 
-    mig_error::{MigError, MigErrorKind}, 
+    MigError, 
+    MigErrorKind, 
     Migrator
 };
 
@@ -194,8 +195,6 @@ fn process(arg_matches: &ArgMatches) -> Result<(),MigError> {
     Err(MigError::from(MigErrorKind::NotImpl))
 } 
 
-
-
 fn main() {
     println!("balena-migrate-win started");
     let matches = App::new("balena-migrate-win")
@@ -211,6 +210,12 @@ fn main() {
                 .short("a")
                 .long("agent")
                 .help("select agent mode"),
+        )
+        .arg(
+            Arg::with_name("explain")
+                .short("e")
+                .long("explain")
+                .help("in standalone mode - explain what migrator will do to migrate"),
         )
         .arg(
             Arg::with_name("info")

@@ -2,10 +2,36 @@
 use failure::ResultExt;
 use log::debug;
 use std::process::{Command, ExitStatus, Stdio};
+use std::fmt::{self, Display, Formatter};
 
-use crate::migrator::mig_error::{MigErrCtx, MigError, MigErrorKind};
+pub mod mig_error;
+use mig_error::{MigErrCtx, MigError, MigErrorKind};
+
+pub mod os_release;
 
 const MODULE: &str = "common";
+
+#[derive(Debug)]
+pub enum OSArch {
+    AMD64,
+    ARM64,
+    ARMEL,
+    ARMHF,
+    I386,
+    MIPS,
+    MIPSEL,
+    Powerpc,
+    PPC64EL,
+    S390EX,
+}
+
+impl Display for OSArch {
+    fn fmt(&self, f: &mut Formatter) -> fmt::Result {
+        write!(f, "{:?}", self)
+    }
+}
+
+
 
 #[derive(Debug)]
 pub(crate) struct CmdRes {
