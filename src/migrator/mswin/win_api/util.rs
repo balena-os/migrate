@@ -1,4 +1,4 @@
-use crate::{MigErrCtx, MigError, MigErrorKind};
+use crate::migrator::{MigErrCtx, MigError, MigErrorKind};
 use failure::ResultExt;
 use std::ffi::{OsStr};
 use std::iter::once;

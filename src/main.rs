@@ -2,6 +2,7 @@ use clap::{App, Arg, ArgMatches};
 use log::{info};
 
 mod migrator;
+
 use migrator::{ 
     mig_error::{MigError, MigErrorKind}, 
     Migrator
@@ -32,8 +33,8 @@ fn format_size_with_unit(size: u64) -> String {
 
 #[cfg(target_os = "windows")]
 fn test_com() -> Result<(), MigError> {
-    use balena_migrator::mswin::win_api::com_api::ComAPI;
-    use balena_migrator::mswin::win_api::wmi_api::WmiAPI;
+    use migrator::mswin::win_api::com_api::ComAPI;
+    use migrator::mswin::win_api::wmi_api::WmiAPI;
 
     info!("calling ComAPI::get_api()");
     let h_com_api = ComAPI::get_api()?;
@@ -72,7 +73,7 @@ fn test(migrator: &mut MSWMigrator) -> Result<(),MigError> {
 
 #[cfg(target_os = "windows")]
 fn print_drives(migrator: &mut MSWMigrator) -> Result<(),MigError> {
-    use balena_migrator::mswin::{WmiUtils};    
+    use migrator::mswin::{WmiUtils};    
     
     for phys_drive in WmiUtils::query_drives()? {
         println!("  type: PhysicalDrive");

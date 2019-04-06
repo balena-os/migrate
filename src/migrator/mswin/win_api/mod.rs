@@ -12,7 +12,7 @@ use winapi::um::fileapi::{FindFirstVolumeW, FindNextVolumeW, FindVolumeClose, Qu
 use winapi::um::handleapi::INVALID_HANDLE_VALUE;
 use winapi::um::winbase::GetFirmwareEnvironmentVariableW;
 
-use crate::mig_error::{MigErrCtx, MigError, MigErrorKind};
+use crate::migrator::{MigErrCtx, MigError, MigErrorKind};
 
 /* for testing
 pub(crate)mod util;

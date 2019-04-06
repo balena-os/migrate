@@ -1,11 +1,14 @@
 use std::rc::{Rc};
 
 use log::{debug};
-use crate::mig_error::{MigError};
-use crate::mswin::win_api::{ 
-    query_dos_device,
-    wmi_api::{WmiAPI}
+use crate::migrator::{
+    MigError,
+    mswin::win_api::{ 
+        query_dos_device,
+        wmi_api::{WmiAPI},
+    },
 };
+
 use super::{QueryRes, Partition, NS_CVIM2};
 
 const MODULE: &str = "mswin::wmi_utils::physical_drive";

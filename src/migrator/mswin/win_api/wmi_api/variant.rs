@@ -9,7 +9,7 @@ use winapi::{
 use failure::{ResultExt};
 use widestring::{WideCStr};
 
-use crate::mig_error::{MigError, MigErrorKind, MigErrCtx};
+use crate::migrator::{MigError, MigErrorKind, MigErrCtx};
 use super::iwbem_class_wr::{safe_to_str_array, safe_to_i32_array};
 
 const MODULE: &str = "mswin::win_api::wmi_api::variant";

@@ -6,9 +6,14 @@ use std::collections::HashMap;
 
 use failure::{ResultExt};
 
-use crate::mig_error::{MigErrCtx, MigError, MigErrorKind};
-use crate::{OSArch, OSRelease};
-use crate::mswin::win_api::wmi_api::{WmiAPI, Variant};
+use crate::migrator::{
+    MigErrCtx, 
+    MigError, 
+    MigErrorKind,
+    OSArch, 
+    OSRelease,
+    mswin::win_api::wmi_api::{WmiAPI, Variant}
+};
 
 mod physical_drive;
 pub use physical_drive::PhysicalDrive;

@@ -12,7 +12,7 @@ use winapi::{
 use log::{debug};
 use std::io::Error;
 
-use crate::mig_error::{MigError};
+use crate::migrator::{MigError};
 use super::{PMIEnumWbemClassObject, IWbemClassWrapper};
 
 const MODULE: &str = "mswin::win_api::wmi_api::query_result_enum";

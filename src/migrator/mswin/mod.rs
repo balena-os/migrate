@@ -9,8 +9,13 @@ use log::debug;
 
 pub use wmi_utils::{WmiUtils};
 use wmi_utils::{WMIOSInfo};
-use crate::mig_error::{MigError, MigErrorKind};
-use crate::{Migrator, OSArch, OSRelease};
+use crate::migrator::{
+    MigError, 
+    MigErrorKind,
+    Migrator, 
+    OSArch, 
+    OSRelease,
+};
 //use crate::mswin::drive_info::PhysicalDriveInfo;
 
 use powershell::PSInfo;

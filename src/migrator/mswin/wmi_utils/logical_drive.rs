@@ -2,9 +2,14 @@ use std::rc::{Rc};
 
 // use log::{debug};
 use regex::{Regex};
-use crate::mig_error::{MigError, MigErrorKind};
-use crate::mswin::MSWMigrator;
-use crate::mswin::win_api::wmi_api::{WmiAPI};
+use crate::migrator::{
+    MigError, 
+    MigErrorKind,
+    mswin::{ 
+        MSWMigrator, 
+        win_api::wmi_api::{WmiAPI},
+    },
+};
 use super::{QueryRes};
 
 const MODULE: &str = "mswin::wmi_utils::logical_drive";

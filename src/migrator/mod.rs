@@ -22,17 +22,12 @@ pub mod linux;
 // pub mod darwin;
 mod common;
 pub mod mig_error;
+pub use mig_error::{MigError, MigErrorKind, MigErrCtx};
 
-
-use mig_error::{MigError, MigErrorKind, MigErrCtx};
 use failure::ResultExt;
 use lazy_static::lazy_static;
 use regex::Regex;
 use std::fmt::{self, Display, Formatter};
-
-#[cfg(target_os = "windows")]    
-use crate::mig_error::{MigErrCtx, MigError, MigErrorKind};
-
 
 const OS_RELEASE_RE: &str = r"^(\d+)\.(\d+)\.(\d+)(-.*)?$";
 

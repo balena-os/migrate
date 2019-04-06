@@ -25,8 +25,11 @@ use winapi::{
     },
 };
 
-use crate::mswin::win_api::util::{report_win_api_error};
-use crate::mig_error::{MigError, MigErrorKind, MigErrCtx};
+use crate::migrator::{
+    mswin::win_api::util::{report_win_api_error},
+    MigError, MigErrorKind, MigErrCtx,
+};
+
 use super::PMIWbemClassObject;
 use super::variant::{Variant}; 
 
