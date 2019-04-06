@@ -33,7 +33,7 @@ use winapi::{
 
 use super::com_api::ComAPI;
 use super::util::to_wide_cstring;
-use crate::migrator::mig_error::{MigErrCtx, MigError, MigErrorKind};
+use crate::migrator::{MigErrCtx, MigError, MigErrorKind};
 
 
 type PMIWbemLocator = *mut IWbemLocator;
