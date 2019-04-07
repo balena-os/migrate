@@ -24,7 +24,7 @@ mod common;
 pub use common::mig_error::{MigError, MigErrorKind, MigErrCtx};
 pub use common::os_release::OSRelease;
 pub use common::OSArch;
-pub use common::config::Config;
+pub use common::config::{Config, YamlConfig};
 
 pub trait Migrator {
     fn get_os_name<'a>(&'a mut self) -> Result<&'a str, MigError>;
@@ -50,7 +50,7 @@ pub fn get_migrator() -> Result<Box<Migrator>, MigError> {
 }
 
 #[cfg(target_os = "linux")]
-pub fn get_migrator() -> Result<Box<Migrator>, MigError> {
+pub fn get_migrator(config: Config) -> Result<Box<Migrator>, MigError> {
     use linux::LinuxMigrator;
-    Ok(Box::new(LinuxMigrator::try_init()?))
+    Ok(Box::new(LinuxMigrator::try_init(config)?))
 }

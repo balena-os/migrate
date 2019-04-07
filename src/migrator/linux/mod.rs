@@ -15,7 +15,8 @@ use crate::migrator::{
     MigErrorKind,
     Migrator, 
     OSArch, 
-    OSRelease};
+    OSRelease, 
+    Config};
 
 use std::collections::hash_map::HashMap;
 
@@ -43,6 +44,7 @@ const MOKUTIL_CMD: &str = "mokutil";
 const MOKUTIL_ARGS_SB_STATE: [&str; 1] = ["--sb-state"];
 
 pub(crate) struct LinuxMigrator {
+    config: Config,
     os_name: Option<String>,
     os_release: Option<OSRelease>,
     os_arch: Option<OSArch>,
@@ -56,8 +58,10 @@ pub(crate) struct LinuxMigrator {
 }
 
 impl LinuxMigrator {
-    pub fn try_init() -> Result<LinuxMigrator, MigError> {
-        Ok(LinuxMigrator {
+    pub fn try_init(config: Config) -> Result<LinuxMigrator, MigError> {
+        debug!("{}::try_init: entered", MODULE);
+        let mut migrator = LinuxMigrator {
+            config,
             os_name: None,
             os_release: None,
             os_arch: None,
@@ -68,7 +72,13 @@ impl LinuxMigrator {
             mem_free: None,
             admin: None,
             sec_boot: None,
-        })
+        };
+        
+        if ! migrator.is_admin()? {
+            return Err(MigError::from_remark(MigErrorKind::InvState, &format!("{}::try_init: you need to run this program as root", MODULE)));
+        }
+
+        Ok(migrator)
     }
 }
 
@@ -314,6 +324,22 @@ impl Migrator for LinuxMigrator {
         }
     }
 
+#[cfg(debug_assertions)]
+    fn is_admin(&mut self) -> Result<bool, MigError> {
+        if self.config.debug.fake_admin == true {
+            Ok(true)
+        } else {
+            match self.admin {
+                Some(v) => Ok(v),
+                None => {
+                    self.admin = Some(unsafe { getuid() } == 0);
+                    Ok(self.admin.unwrap())
+                }
+            }
+        }
+    }
+
+#[cfg(not (debug_assertions))]
     fn is_admin(&mut self) -> Result<bool, MigError> {
         match self.admin {
             Some(v) => Ok(v),

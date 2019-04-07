@@ -5,8 +5,20 @@ migrate:
   log_to:
     drive: "/dev/sda1"
     fs_type: ext4
+  backup:       
 balena:
   image: image.gz
-  config: config.json
-backup: 
+  config: config.json  
+  api: 
+    host: "api.balena-cloud.com"
+    port: 443
+    check: true
+  vpn:
+    host: "api.balena-cloud.com"  
+    port: 443
+    check: true
+  check_timeout: 20
+debug:
+  fake_admin: true
+
         

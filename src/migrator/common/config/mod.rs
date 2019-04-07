@@ -4,18 +4,26 @@ use yaml_rust::{YamlLoader, Yaml};
 use std::fs::read_to_string;
 use failure::ResultExt;
 
-#[derive(Debug)]
-pub enum MigMode {
-    INVALID,
-    AGENT,
-    IMMEDIATE,
-}
-
 use crate::migrator::{ 
     MigError,
     MigErrorKind,
     MigErrCtx,
 };
+
+pub mod log_config;
+pub use log_config::LogConfig;
+
+pub mod migrate_config;
+pub use migrate_config::{MigrateConfig, MigMode};
+
+pub mod balena_config;
+pub use balena_config::{BalenaConfig};
+
+#[cfg(debug_assertions)]
+pub mod debug_config;
+#[cfg(debug_assertions)]
+pub use debug_config::{DebugConfig};
+
 
 /*
 
@@ -135,87 +143,20 @@ WARN_WRITE_SPEED=200
 */
 
 const MODULE: &str = "migrator::common::config";
-const DEFAULT_MODE: MigMode = MigMode::INVALID;
 
 // TODO: add trait ToYaml and implement for all sections
 
-#[derive(Debug)]
-pub struct LogConfig {
-    pub drive: String,
-    pub fs_type: String,
-}
-
-impl LogConfig {
-    fn to_yaml(&self, prefix: &str) -> String {
-        format!(
-            "{}log_to:\n{}  drive: '{}'\n{}  fs_type: '{}'\n", prefix, prefix, self.drive, prefix , self.fs_type)
-    }
-}
-
-
-#[derive(Debug)]
-pub struct MigrateConfig {
-    pub mode: MigMode,
-    pub reboot: Option<u64>,
-    pub all_wifis: bool,
-    pub log_to: Option<LogConfig>,
-} 
-
-impl MigrateConfig {
-    fn to_yaml(&self, prefix: &str) -> String {
-        let mut output = format!("{}migrate:\n{}  mode: '{:?}'\n{}  all_wifis: {}\n", prefix, prefix, self.mode, prefix, self.all_wifis);
-        if let Some(i) = self.reboot {
-            output += &format!("{}  reboot: {}\n", prefix, i);
-        }
-
-        let next_prefix = String::from(prefix) + "  ";        
-        if let Some(ref log_to) = self.log_to {
-            output += &log_to.to_yaml(&next_prefix);
-        }
-
-        output
-    }
-}
-
-
-#[derive(Debug)]
-pub struct BalenaConfig {
-    pub image: String,
-    pub config: String,
-} 
-
-impl BalenaConfig {
-    fn default() -> BalenaConfig {
-        BalenaConfig{
-            image: String::from(""),
-            config: String::from(""),
-        }
-    }
-
-    fn check(&self, mig_mode: &MigMode) -> Result<(),MigError> {
-        if let MigMode::IMMEDIATE = mig_mode {
-            if self.image.is_empty() {
-                return Err(MigError::from_remark(MigErrorKind::InvParam, &format!("{}::check: no balena OS image was specified in mode: IMMEDIATE", MODULE)));
-            }                
-
-            if self.config.is_empty() {
-                return Err(MigError::from_remark(MigErrorKind::InvParam, &format!("{}::check: no config.json was specified in mode: IMMEDIATE", MODULE)));
-            }  
-        }
-
-        Ok(())
-    }
-
-    fn to_yaml(&self, prefix: &str) -> String {
-        format!(
-            "{}balena:\n{}  image: '{}'\n{}  config: '{}'\n", prefix, prefix, self.image, prefix , self.config)
-    }
+pub trait YamlConfig {
+    fn to_yaml(&self, prefix: &str) -> String;
+    fn from_yaml(&mut self, yaml: & Yaml) -> Result<(),MigError>;    
 }
 
 #[derive(Debug)]
 pub struct Config {
     pub migrate: MigrateConfig,
     pub balena: Option<BalenaConfig>,
+#[cfg(debug_assertions)]
+    pub debug: DebugConfig,
 }
 
 
@@ -245,15 +186,27 @@ impl<'a> Config {
 
     fn default() -> Config {
         Config{ 
-            migrate: MigrateConfig{
-                mode: DEFAULT_MODE,
-                reboot: None,
-                all_wifis: false,
-                log_to: None,
-            },
+            migrate: MigrateConfig::default(),
             balena: None,            
+#[cfg(debug_assertions)]
+            debug: DebugConfig::default(),
         }
     }
+
+#[cfg(debug_assertions)]
+    fn get_debug_config(&mut self, yaml: &Yaml) -> Result<(),MigError> {
+        if let Some(section) = get_yaml_val(yaml, &["debug"])? {
+            self.debug.from_yaml(section)?
+        }           
+        Ok(())
+    }
+
+#[cfg(debug_assertions)]
+    fn print_debug_config(&self, prefix: &str, buffer: &mut String ) -> () {
+        *buffer += &self.debug.to_yaml(prefix)
+    }
+
+
 
     fn from_string(&mut self, config_str: &str) -> Result<(),MigError> {
         debug!("{}::from_string: entered", MODULE);
@@ -262,69 +215,7 @@ impl<'a> Config {
             return Err(MigError::from_remark(MigErrorKind::InvParam,&format!("{}::from_string: invalid number of configs in file: {}", MODULE, yaml_cfg.len())));
         }
         
-        let yaml_cfg = &yaml_cfg[0];
-        
-        
-        // Section Migrate:
-        if let Some(section) = get_yaml_val(yaml_cfg, &["migrate"])? {
-            // Params: mode
-            if let Some(mode) = get_yaml_str(section, &["mode"])? {
-                if mode.to_lowercase() == "immediate" {
-                    self.migrate.mode = MigMode::IMMEDIATE;
-                } else if mode.to_lowercase() == "agent" {
-                    self.migrate.mode = MigMode::AGENT;
-                } else {
-                    return Err(MigError::from_remark(MigErrorKind::InvParam, &format!("{}::from_string: invalid value for migrate mode '{}'", MODULE, mode)));
-                }            
-            }
-
-            // Param: reboot - must be > 0 
-            if let Some(reboot_timeout) = get_yaml_int(section, &["reboot"])? {
-                if reboot_timeout > 0 {
-                    self.migrate.reboot = Some(reboot_timeout as u64);      
-                } else {
-                    self.migrate.reboot = None;      
-                }
-            }
-
-            // Param: all_wifis - must be > 0 
-            if let Some(all_wifis) = get_yaml_bool(section, &["all_wifis"])? {
-                self.migrate.all_wifis = all_wifis;      
-            }
-
-            // Params: log_to: drive, fs_type 
-            if let Some(log_section) = get_yaml_val(section, &["log_to"])? {
-                if let Some(log_drive) = get_yaml_str(log_section, &["drive"])? {
-                    if let Some(log_fs_type) = get_yaml_str(log_section, &["fs_type"])? {
-                        self.migrate.log_to = Some(
-                            LogConfig{
-                                drive: String::from(log_drive),
-                                fs_type: String::from(log_fs_type),
-                        });
-                    }    
-                }
-            }
-        }
-
-        if let Some(section) = get_yaml_val(yaml_cfg, &["balena"])? {
-            // Params: balena_image 
-            let mut balena = BalenaConfig::default();
-            if let Some(balena_image) = get_yaml_str(section, &["image"])? {
-                balena.image = String::from(balena_image);
-            }
-
-            // Params: balena_config 
-            if let Some(balena_config) = get_yaml_str(section, &["config"])? {
-                balena.config = String::from(balena_config);                
-            }
-
-            self.balena = Some(balena);
-        }
-
-        // TODO: Eval yaml
-
-        Ok(())
-
+        self.from_yaml(&yaml_cfg[0])
     }
 
 
@@ -351,14 +242,43 @@ impl<'a> Config {
         Ok(())
     }
 
-    pub fn to_yaml(&self) -> String {
-        let mut output = self.migrate.to_yaml("");
+}
+
+impl YamlConfig for Config {
+    fn to_yaml(&self, prefix: &str) -> String {
+        let mut output = self.migrate.to_yaml(prefix);
         if let Some(ref balena) = self.balena {
-            output += &balena.to_yaml("");
+            output += &balena.to_yaml(prefix);
         }
+#[cfg(debug_assertions)]
+        self.print_debug_config(prefix, &mut output);
+        
         output
     }
+
+    fn from_yaml(&mut self, yaml: & Yaml) -> Result<(),MigError> {
+        if let Some(ref section) = get_yaml_val(yaml, &["migrate"])? {
+            self.migrate.from_yaml(section)?;
+        }
+
+        if let Some(section) = get_yaml_val(yaml, &["balena"])? {
+            // Params: balena_image            
+            if let Some(ref mut balena) = self.balena {
+                balena.from_yaml(section)?;    
+            } else {
+                let mut balena = BalenaConfig::default();       
+                balena.from_yaml(section)?;    
+                self.balena = Some(balena);             
+            }
+        }
+
+#[cfg(debug_assertions)]
+        self.get_debug_config(yaml)?;
+
+        Ok(())
+    }
 }
+
 
 fn get_yaml_val<'a>(doc: &'a Yaml, path: &[&str]) -> Result<Option<&'a Yaml>,MigError> {
     debug!("{}::get_yaml_val: looking for '{:?}'", MODULE, path);
@@ -466,8 +386,7 @@ balena:
 ";
 
 
-    fn assert_test_config1(config: &Config) -> () {
-        
+    fn assert_test_config1(config: &Config) -> () {        
         match config.migrate.mode {
             MigMode::IMMEDIATE => (),
             _ => { panic!("unexpected migrate mode"); }
@@ -511,7 +430,7 @@ balena:
         let mut config = Config::default();
         config.from_string(TEST_CONFIG).unwrap();  
         
-        let out = config.to_yaml();
+        let out = config.to_yaml("");
         
         let mut new_config = Config::default();
         new_config.from_string(&out).unwrap(); 

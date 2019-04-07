@@ -5,9 +5,10 @@ mod migrator;
 
 use migrator::{ 
     MigError, 
-    MigErrorKind, 
     Migrator,
     Config,
+    YamlConfig,
+    get_migrator,
 };
 
 #[cfg(target_os = "windows")]
@@ -194,7 +195,8 @@ fn process(arg_matches: &ArgMatches) -> Result<(),MigError> {
 #[cfg (not (target_os = "windows"))]
 fn process(arg_matches: &ArgMatches) -> Result<(),MigError> {
     let config = Config::new(arg_matches)?;
-    println!("config out:\n{}", config.to_yaml());
+    println!("config out:\n{}", config.to_yaml(""));
+    let _migrator = get_migrator(config)?;
     Ok(())    
 } 
 
