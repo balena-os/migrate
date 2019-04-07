@@ -12,6 +12,7 @@ lazy_static = "*"
 clap = "*"
 failure = "*"
 yaml-rust = "0.4"
+# tempfile = "3"
 
 [target.'cfg(unix)'.dependencies]
 libc = { git = "https://github.com/rust-lang/libc" } 

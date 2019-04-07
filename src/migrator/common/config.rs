@@ -134,6 +134,8 @@ MIN_WRITE_SPEED=
 WARN_WRITE_SPEED=200
 */
 
+const MODULE: &str = "migrator::common::config";
+const DEFAULT_MODE: MigMode = MigMode::INVALID;
 
 // TODO: add trait ToYaml and implement for all sections
 
@@ -143,6 +145,14 @@ pub struct LogConfig {
     pub fs_type: String,
 }
 
+impl LogConfig {
+    fn to_yaml(&self, prefix: &str) -> String {
+        format!(
+            "{}log_to:\n{}  drive: '{}'\n{}  fs_type: '{}'\n", prefix, prefix, self.drive, prefix , self.fs_type)
+    }
+}
+
+
 #[derive(Debug)]
 pub struct MigrateConfig {
     pub mode: MigMode,
@@ -150,6 +160,23 @@ pub struct MigrateConfig {
     pub all_wifis: bool,
     pub log_to: Option<LogConfig>,
 } 
+
+impl MigrateConfig {
+    fn to_yaml(&self, prefix: &str) -> String {
+        let mut output = format!("{}migrate:\n{}  mode: '{:?}'\n{}  all_wifis: {}\n", prefix, prefix, self.mode, prefix, self.all_wifis);
+        if let Some(i) = self.reboot {
+            output += &format!("{}  reboot: {}\n", prefix, i);
+        }
+
+        let next_prefix = String::from(prefix) + "  ";        
+        if let Some(ref log_to) = self.log_to {
+            output += &log_to.to_yaml(&next_prefix);
+        }
+
+        output
+    }
+}
+
 
 #[derive(Debug)]
 pub struct BalenaConfig {
@@ -178,6 +205,11 @@ impl BalenaConfig {
 
         Ok(())
     }
+
+    fn to_yaml(&self, prefix: &str) -> String {
+        format!(
+            "{}balena:\n{}  image: '{}'\n{}  config: '{}'\n", prefix, prefix, self.image, prefix , self.config)
+    }
 }
 
 #[derive(Debug)]
@@ -186,10 +218,6 @@ pub struct Config {
     pub balena: Option<BalenaConfig>,
 }
 
-const MODULE: &str = "migrator::common::config";
-
-
-const DEFAULT_MODE: MigMode = MigMode::INVALID;
 
 impl<'a> Config {    
     pub fn new(arg_matches: &ArgMatches) -> Result<Config, MigError> {
@@ -227,13 +255,11 @@ impl<'a> Config {
         }
     }
 
-    fn from_file(&mut self, file_name: &str) -> Result<(),MigError> {
-        debug!("{}::from_file: {} entered", MODULE, file_name);
-
-        let config_str = read_to_string(file_name).context(MigErrCtx::from_remark(MigErrorKind::Upstream, &format!("{}::from_file: failed to read {}", MODULE, file_name)))?;        
-        let yaml_cfg = YamlLoader::load_from_str(&config_str).context(MigErrCtx::from_remark(MigErrorKind::Upstream, &format!("{}::from_file: failed to parse {}", MODULE, file_name)))?;
+    fn from_string(&mut self, config_str: &str) -> Result<(),MigError> {
+        debug!("{}::from_string: entered", MODULE);
+        let yaml_cfg = YamlLoader::load_from_str(&config_str).context(MigErrCtx::from_remark(MigErrorKind::Upstream, &format!("{}::from_string: failed to parse", MODULE)))?;
         if yaml_cfg.len() != 1 {
-            return Err(MigError::from_remark(MigErrorKind::InvParam,&format!("{}::from_file: invalid number of configs in file: {} : {}", MODULE, file_name, yaml_cfg.len())));
+            return Err(MigError::from_remark(MigErrorKind::InvParam,&format!("{}::from_string: invalid number of configs in file: {}", MODULE, yaml_cfg.len())));
         }
         
         let yaml_cfg = &yaml_cfg[0];
@@ -248,7 +274,7 @@ impl<'a> Config {
                 } else if mode.to_lowercase() == "agent" {
                     self.migrate.mode = MigMode::AGENT;
                 } else {
-                    return Err(MigError::from_remark(MigErrorKind::InvParam, &format!("{}::from_file: invalid value for migrate mode '{}'", MODULE, mode)));
+                    return Err(MigError::from_remark(MigErrorKind::InvParam, &format!("{}::from_string: invalid value for migrate mode '{}'", MODULE, mode)));
                 }            
             }
 
@@ -298,6 +324,14 @@ impl<'a> Config {
         // TODO: Eval yaml
 
         Ok(())
+
+    }
+
+
+    fn from_file(&mut self, file_name: &str) -> Result<(),MigError> {
+        debug!("{}::from_file: {} entered", MODULE, file_name);
+
+        self.from_string(&read_to_string(file_name).context(MigErrCtx::from_remark(MigErrorKind::Upstream, &format!("{}::from_file: failed to read {}", MODULE, file_name)))?)
     }
 
     fn check(&self) -> Result<(),MigError> {
@@ -315,6 +349,14 @@ impl<'a> Config {
         }
 
         Ok(())
+    }
+
+    pub fn to_yaml(&self) -> String {
+        let mut output = self.migrate.to_yaml("");
+        if let Some(ref balena) = self.balena {
+            output += &balena.to_yaml("");
+        }
+        output
     }
 }
 
@@ -388,7 +430,7 @@ fn get_yaml_str<'a>(doc: &'a Yaml, path: &[&str]) -> Result<Option<&'a str>,MigE
     }
 }
 
-
+/*
 fn get_yaml_str_def<'a>(doc: &'a Yaml, path: &[&str], default: &'a str) -> Result<&'a str,MigError> {
     debug!("{}::get_yaml_str_def: looking for '{:?}', default: '{}'", MODULE, path, default);
     if let Some(value) = get_yaml_val(doc, path)? {
@@ -403,26 +445,79 @@ fn get_yaml_str_def<'a>(doc: &'a Yaml, path: &[&str], default: &'a str) -> Resul
         Ok(default)
     }
 }
-
+*/
 
 
 #[cfg(test)]
 mod tests {
     use super::*;
 
-    #[test]
-    fn test_sample_conf() -> () {
-        let mut config = Config::default();
-        config.from_file("config/sample-conf.yml").unwrap();  
+    const TEST_CONFIG: &str = "
+migrate:
+  mode: IMMEDIATE
+  all_wifis: true
+  reboot: 10
+  log_to:
+    drive: '/dev/sda1'
+    fs_type: ext4
+balena:
+  image: image.gz
+  config: config.json
+";
+
+
+    fn assert_test_config1(config: &Config) -> () {
         
+        match config.migrate.mode {
+            MigMode::IMMEDIATE => (),
+            _ => { panic!("unexpected migrate mode"); }
+        }; 
+            
+        assert!(config.migrate.all_wifis == true);
+
+        if let Some(i) = config.migrate.reboot {
+            assert!(i == 10);
+        } else {
+            panic!("missing parameter migarte.reboot");
+        }
+
         if let Some(ref log_to) = config.migrate.log_to {
-            assert!(log_to.drive == "/dev/sda1");
-            assert!(log_to.fs_type == "ext4");
+                assert!(log_to.drive == "/dev/sda1");
+                assert!(log_to.fs_type == "ext4");
         } else {
             panic!("no log config found");
         }
         
+        if let Some(ref balena) = config.balena {
+                assert!(balena.image == "image.gz");
+                assert!(balena.config == "config.json");
+        } else {
+            panic!("no balena config found");
+        }
+
         config.check().unwrap();
+    }
+
+    #[test]
+    fn read_sample_conf() -> () {
+        let mut config = Config::default();
+        config.from_string(TEST_CONFIG).unwrap();
+        assert_test_config1(&config);          
         ()
     }
+
+    #[test]
+    fn read_write() -> () {        
+        let mut config = Config::default();
+        config.from_string(TEST_CONFIG).unwrap();  
+        
+        let out = config.to_yaml();
+        
+        let mut new_config = Config::default();
+        new_config.from_string(&out).unwrap(); 
+        assert_test_config1(&new_config);           
+
+        ()
+    }
+
 }

@@ -193,7 +193,8 @@ fn process(arg_matches: &ArgMatches) -> Result<(),MigError> {
 
 #[cfg (not (target_os = "windows"))]
 fn process(arg_matches: &ArgMatches) -> Result<(),MigError> {
-    Config::new(arg_matches)?;
+    let config = Config::new(arg_matches)?;
+    println!("config out:\n{}", config.to_yaml());
     Ok(())    
 } 
 
