@@ -6,7 +6,8 @@ mod migrator;
 use migrator::{ 
     MigError, 
     MigErrorKind, 
-    Migrator
+    Migrator,
+    Config,
 };
 
 #[cfg(target_os = "windows")]
@@ -192,7 +193,8 @@ fn process(arg_matches: &ArgMatches) -> Result<(),MigError> {
 
 #[cfg (not (target_os = "windows"))]
 fn process(arg_matches: &ArgMatches) -> Result<(),MigError> {
-    Err(MigError::from(MigErrorKind::NotImpl))
+    Config::new(arg_matches)?;
+    Ok(())    
 } 
 
 fn main() {
@@ -202,7 +204,7 @@ fn main() {
         .author("Thomas Runte <thomasr@balena.io>")
         .about("Migrates devices to BalenaOS")
         .arg(Arg::with_name("immediate")
-                .short("i")
+                .short("m")
                 .long("immediate")
                 .help("select immediate mode"),
         )

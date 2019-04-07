@@ -1,0 +1,12 @@
+migrate:
+  mode: IMMEDIATE
+  all_wifis: true
+  reboot: 10
+  log_to:
+    drive: "/dev/sda1"
+    fs_type: ext4
+balena:
+  image: image.gz
+  config: config.json
+backup: 
+        

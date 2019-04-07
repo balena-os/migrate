@@ -24,6 +24,7 @@ mod common;
 pub use common::mig_error::{MigError, MigErrorKind, MigErrCtx};
 pub use common::os_release::OSRelease;
 pub use common::OSArch;
+pub use common::config::Config;
 
 pub trait Migrator {
     fn get_os_name<'a>(&'a mut self) -> Result<&'a str, MigError>;
@@ -43,7 +44,7 @@ pub trait Migrator {
 
 
 #[cfg(target_os = "windows")]
-pub fn get_migrator() -> Result<Box<Migrator>, MigError> {
+pub fn get_migrator() -> Result<Box<Migrator>, MigError> {    
     use mswin::MSWMigrator;
     Ok(Box::new(MSWMigrator::try_init()?))
 }
