@@ -16,6 +16,7 @@ const DEFAULT_MODE: MigMode = MigMode::INVALID;
 
 #[derive(Debug)]
 pub struct MigrateConfig {
+    pub home_dir: String,
     pub mode: MigMode,
     pub reboot: Option<u64>,
     pub all_wifis: bool,
@@ -25,6 +26,7 @@ pub struct MigrateConfig {
 impl MigrateConfig {
     pub fn default() -> MigrateConfig {
         MigrateConfig {
+            home_dir: String::from("."),
             mode: DEFAULT_MODE,
             reboot: None,
             all_wifis: false,
@@ -35,7 +37,7 @@ impl MigrateConfig {
 
 impl YamlConfig for MigrateConfig {
     fn to_yaml(&self, prefix: &str) -> String {
-        let mut output = format!("{}migrate:\n{}  mode: '{:?}'\n{}  all_wifis: {}\n", prefix, prefix, self.mode, prefix, self.all_wifis);
+        let mut output = format!("{}migrate:\n{}  home_dir: '{}'\n{}  mode: '{:?}'\n{}  all_wifis: {}\n", prefix, prefix, self.home_dir, prefix, self.mode, prefix, self.all_wifis);
         if let Some(i) = self.reboot {
             output += &format!("{}  reboot: {}\n", prefix, i);
         }
@@ -49,6 +51,11 @@ impl YamlConfig for MigrateConfig {
     }
 
     fn from_yaml(&mut self, yaml: & Yaml) -> Result<(),MigError> {
+
+        if let Some(home_dir) = get_yaml_str(yaml, &["home_dir"])? {
+            self.home_dir = String::from(home_dir);
+        }
+
         if let Some(mode) = get_yaml_str(yaml, &["mode"])? {
             if mode.to_lowercase() == "immediate" {
                 self.mode = MigMode::IMMEDIATE;

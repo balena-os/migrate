@@ -1,6 +1,7 @@
 use failure::{Context, ResultExt};
 use libc::{getuid, sysinfo};
-use log::{error, info, debug};
+use log::{error, info, debug, warn};
+use std::time::{Instant};
 
 // use std::os::linux::{};
 use lazy_static::lazy_static;
@@ -9,14 +10,15 @@ use regex::Regex;
 mod util;
 
 use crate::migrator::{
-    common::{call, CmdRes},
+    common::{call, CmdRes, check_tcp_connect},
     MigErrCtx, 
     MigError, 
     MigErrorKind,
     Migrator, 
     OSArch, 
     OSRelease, 
-    Config};
+    Config, 
+    };
 
 use std::collections::hash_map::HashMap;
 
@@ -60,7 +62,7 @@ pub(crate) struct LinuxMigrator {
 impl LinuxMigrator {
     pub fn try_init(config: Config) -> Result<LinuxMigrator, MigError> {
         debug!("{}::try_init: entered", MODULE);
-        let mut migrator = LinuxMigrator {
+        let migrator = LinuxMigrator {
             config,
             os_name: None,
             os_release: None,
@@ -74,9 +76,6 @@ impl LinuxMigrator {
             sec_boot: None,
         };
         
-        if ! migrator.is_admin()? {
-            return Err(MigError::from_remark(MigErrorKind::InvState, &format!("{}::try_init: you need to run this program as root", MODULE)));
-        }
 
         Ok(migrator)
     }
@@ -398,8 +397,39 @@ impl Migrator for LinuxMigrator {
     }
 
     fn can_migrate(&mut self) -> Result<bool, MigError> {
-        Err(MigError::from(MigErrorKind::NotImpl))
+        debug!("{}::can_migrate: entered", MODULE);
+        if ! self.is_admin()? {
+            warn!("{}::can_migrate: you need to run this program as root", MODULE);
+            return Ok(false);
+        }
+
+        if let Some(ref balena) = self.config.balena {
+            if balena.api_check == true {
+                info!("{}::try_init: checking connection api backend at to {}:{}", MODULE, balena.api_host, balena.api_port );
+                let now = Instant::now();
+                if let Err(why) = check_tcp_connect(&balena.api_host, balena.api_port, balena.check_timeout) {
+                    warn!("{}::can_migrate: connectivity check to {}:{} failed timeout {} seconds ", MODULE, balena.api_host, balena.api_port, balena.check_timeout );
+                    warn!("{}::can_migrate: check_tcp_connect returned: {:?} ", MODULE, why );
+                    return Ok(false);
+                }
+                info!("{}::try_init: successfully connected to api backend in {} ms", MODULE, now.elapsed().as_millis());
+            }
+
+            if balena.vpn_check == true {
+                info!("{}::try_init: checking connection vpn backend at to {}:{}", MODULE, balena.vpn_host, balena.vpn_port);
+                let now = Instant::now();
+                if let Err(why) = check_tcp_connect(&balena.vpn_host, balena.vpn_port, balena.check_timeout) {
+                    warn!("{}::can_migrate: connectivity check to {}:{} failed timeout {} seconds ", MODULE, balena.vpn_host, balena.vpn_port, balena.check_timeout );
+                    warn!("{}::can_migrate: check_tcp_connect returned: {:?} ", MODULE, why );
+                    return Ok(false);
+                }
+                info!("{}::try_init: successfully connected to vpn backend in {} ms", MODULE, now.elapsed().as_millis());
+            }
+        }        
+
+        Ok(true)
     }
+    
     fn migrate(&mut self) -> Result<(), MigError> {
         Err(MigError::from(MigErrorKind::NotImpl))
     }

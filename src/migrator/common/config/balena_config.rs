@@ -1,13 +1,19 @@
 use yaml_rust::{Yaml};
-use super::{YamlConfig, get_yaml_str, MigMode};
+use super::{
+    YamlConfig, 
+    get_yaml_str, 
+    get_yaml_int, 
+    get_yaml_bool, 
+    MigMode
+    };
 use crate::migrator::{MigError, MigErrorKind};
 
 const MODULE: &str = "common::config::balena_config"; 
 
 const DEFAULT_API_HOST: &str = "api.balena-cloud.com";
-const DEFAULT_API_PORT: u64 = 443;
+const DEFAULT_API_PORT: u16 = 443;
 const DEFAULT_VPN_HOST: &str = "vpn.balena-cloud.com";
-const DEFAULT_VPN_PORT: u64 = 443;
+const DEFAULT_VPN_PORT: u16 = 443;
 const DEFAULT_CHECK_TIMEOUT: u64 = 20;
 
 
@@ -16,10 +22,10 @@ pub struct BalenaConfig {
     pub image: String,
     pub config: String,
     pub api_host: String,
-    pub api_port: u64,
+    pub api_port: u16,
     pub api_check: bool,
     pub vpn_host: String,
-    pub vpn_port: u64,
+    pub vpn_port: u16,
     pub vpn_check: bool,
     pub check_timeout: u64,
 } 
@@ -71,6 +77,39 @@ impl YamlConfig for BalenaConfig {
         // Params: balena_config 
         if let Some(balena_config) = get_yaml_str(yaml, &["config"])? {
             self.config = String::from(balena_config);                
+        }
+
+
+        if let Some(api_host) = get_yaml_str(yaml, &["api","host"])? {
+            self.api_host = String::from(api_host);
+            if let Some(api_port) = get_yaml_int(yaml, &["api","port"])? {
+                if api_port > 0 && api_port <= 0xFFFF {
+                    self.api_port = api_port as u16;
+                } else {
+                    return Err(MigError::from_remark(MigErrorKind::InvParam, &format!("{}::from_yaml: invalid alue for port: {}", MODULE, api_port)));
+                }
+            }
+            if let Some(api_check) = get_yaml_bool(yaml, &["api","check"])? {
+                self.api_check = api_check;
+            }
+        }
+
+        if let Some(vpn_host) = get_yaml_str(yaml, &["vpn","host"])? {
+            self.vpn_host = String::from(vpn_host);
+            if let Some(vpn_port) = get_yaml_int(yaml, &["vpn","port"])? {
+                if vpn_port > 0 && vpn_port <= 0xFFFF {
+                    self.vpn_port = vpn_port as u16;
+                } else {
+                    return Err(MigError::from_remark(MigErrorKind::InvParam, &format!("{}::from_yaml: invalid alue for port: {}", MODULE, vpn_port)));
+                }
+            }
+            if let Some(vpn_check) = get_yaml_bool(yaml, &["vpn","check"])? {
+                self.vpn_check = vpn_check;
+            }
+        }
+
+        if let Some(check_timeout) = get_yaml_int(yaml, &["check_timeout"])? {
+            self.check_timeout = check_timeout as u64;
         }
 
         Ok(())

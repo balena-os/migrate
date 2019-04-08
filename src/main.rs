@@ -196,7 +196,8 @@ fn process(arg_matches: &ArgMatches) -> Result<(),MigError> {
 fn process(arg_matches: &ArgMatches) -> Result<(),MigError> {
     let config = Config::new(arg_matches)?;
     println!("config out:\n{}", config.to_yaml(""));
-    let _migrator = get_migrator(config)?;
+    let mut migrator = get_migrator(config)?;
+    migrator.can_migrate()?;
     Ok(())    
 } 
 
