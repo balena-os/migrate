@@ -54,8 +54,14 @@ impl<'a> MSWMigrator {
 impl Migrator for MSWMigrator {
     fn can_migrate(&mut self) -> Result<bool, MigError> {
         debug!("{}::can_migrate: entered", MODULE);
+        
         if ! self.is_admin()? {
             warn!("{}::can_migrate: you need to run this program as root", MODULE);
+            return Ok(false);
+        }
+
+        if self.is_secure_boot()? {
+            warn!("{}::can_migrate: secure boot appears to be enabled. Please disable secure boot in the firmaware settings.", MODULE);
             return Ok(false);
         }
 
