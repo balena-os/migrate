@@ -4,8 +4,10 @@ pub(crate) mod powershell;
 pub mod win_api;
 pub(crate) mod wmi_utils;
 
-use log::debug;
+use log::{debug, warn, info};
 // use std::collections::{HashMap};
+
+use std::time::Instant;
 
 pub use wmi_utils::{WmiUtils};
 use wmi_utils::{WMIOSInfo};
@@ -15,24 +17,28 @@ use crate::migrator::{
     Migrator, 
     OSArch, 
     OSRelease,
+    Config,
+    common::check_tcp_connect,
 };
 //use crate::mswin::drive_info::PhysicalDriveInfo;
 
 use powershell::PSInfo;
 
-
+const MODULE: &str = "migrator::mswin";
 
 // const MODULE: &str = "mswin";
 
 pub struct MSWMigrator {
+    config: Config,
     ps_info: PSInfo,
     os_info: Option<WMIOSInfo>,
     uefi_boot: Option<bool>,
 }
 
 impl<'a> MSWMigrator {
-    pub fn try_init() -> Result<MSWMigrator, MigError> {
+    pub fn try_init(config: Config) -> Result<MSWMigrator, MigError> {
         let msw_info = MSWMigrator {
+            config, 
             ps_info: PSInfo::try_init()?,            
             os_info: None,
             uefi_boot: None,
@@ -47,7 +53,37 @@ impl<'a> MSWMigrator {
 
 impl Migrator for MSWMigrator {
     fn can_migrate(&mut self) -> Result<bool, MigError> {
-        Err(MigError::from(MigErrorKind::NotImpl))
+        debug!("{}::can_migrate: entered", MODULE);
+        if ! self.is_admin()? {
+            warn!("{}::can_migrate: you need to run this program as root", MODULE);
+            return Ok(false);
+        }
+
+        if let Some(ref balena) = self.config.balena {
+            if balena.api_check == true {
+                info!("{}::can_migrate: checking connection api backend at to {}:{}", MODULE, balena.api_host, balena.api_port );
+                let now = Instant::now();
+                if let Err(why) = check_tcp_connect(&balena.api_host, balena.api_port, balena.check_timeout) {
+                    warn!("{}::can_migrate: connectivity check to {}:{} failed timeout {} seconds ", MODULE, balena.api_host, balena.api_port, balena.check_timeout );
+                    warn!("{}::can_migrate: check_tcp_connect returned: {:?} ", MODULE, why );
+                    return Ok(false);
+                }
+                info!("{}::can_migrate: successfully connected to api backend in {} ms", MODULE, now.elapsed().as_millis());
+            }
+
+            if balena.vpn_check == true {
+                info!("{}::can_migrate: checking connection vpn backend at to {}:{}", MODULE, balena.vpn_host, balena.vpn_port);
+                let now = Instant::now();
+                if let Err(why) = check_tcp_connect(&balena.vpn_host, balena.vpn_port, balena.check_timeout) {
+                    warn!("{}::can_migrate: connectivity check to {}:{} failed timeout {} seconds ", MODULE, balena.vpn_host, balena.vpn_port, balena.check_timeout );
+                    warn!("{}::can_migrate: check_tcp_connect returned: {:?} ", MODULE, why );
+                    return Ok(false);
+                }
+                info!("{}::can_migrate: successfully connected to vpn backend in {} ms", MODULE, now.elapsed().as_millis());
+            }
+        }        
+
+        Ok(true)
     }
 
     fn migrate(&mut self) -> Result<(), MigError> {
@@ -124,6 +160,16 @@ impl Migrator for MSWMigrator {
         }
     }
 
+#[cfg(debug_assertions)]
+    fn is_admin(&mut self) -> Result<bool, MigError> {
+        if self.config.debug.fake_admin == true {
+            Ok(true)
+        } else {
+            Ok(self.ps_info.is_admin()?)
+        }
+    }
+
+#[cfg(not(debug_assertions))]
     fn is_admin(&mut self) -> Result<bool, MigError> {
         Ok(self.ps_info.is_admin()?)
     }

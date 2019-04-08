@@ -44,9 +44,9 @@ pub trait Migrator {
 
 
 #[cfg(target_os = "windows")]
-pub fn get_migrator() -> Result<Box<Migrator>, MigError> {    
+pub fn get_migrator(config: Config) -> Result<Box<Migrator>, MigError> {    
     use mswin::MSWMigrator;
-    Ok(Box::new(MSWMigrator::try_init()?))
+    Ok(Box::new(MSWMigrator::try_init(config)?))
 }
 
 #[cfg(target_os = "linux")]

@@ -405,25 +405,25 @@ impl Migrator for LinuxMigrator {
 
         if let Some(ref balena) = self.config.balena {
             if balena.api_check == true {
-                info!("{}::try_init: checking connection api backend at to {}:{}", MODULE, balena.api_host, balena.api_port );
+                info!("{}::can_migrate: checking connection api backend at to {}:{}", MODULE, balena.api_host, balena.api_port );
                 let now = Instant::now();
                 if let Err(why) = check_tcp_connect(&balena.api_host, balena.api_port, balena.check_timeout) {
                     warn!("{}::can_migrate: connectivity check to {}:{} failed timeout {} seconds ", MODULE, balena.api_host, balena.api_port, balena.check_timeout );
                     warn!("{}::can_migrate: check_tcp_connect returned: {:?} ", MODULE, why );
                     return Ok(false);
                 }
-                info!("{}::try_init: successfully connected to api backend in {} ms", MODULE, now.elapsed().as_millis());
+                info!("{}::can_migrate: successfully connected to api backend in {} ms", MODULE, now.elapsed().as_millis());
             }
 
             if balena.vpn_check == true {
-                info!("{}::try_init: checking connection vpn backend at to {}:{}", MODULE, balena.vpn_host, balena.vpn_port);
+                info!("{}::can_migrate: checking connection vpn backend at to {}:{}", MODULE, balena.vpn_host, balena.vpn_port);
                 let now = Instant::now();
                 if let Err(why) = check_tcp_connect(&balena.vpn_host, balena.vpn_port, balena.check_timeout) {
                     warn!("{}::can_migrate: connectivity check to {}:{} failed timeout {} seconds ", MODULE, balena.vpn_host, balena.vpn_port, balena.check_timeout );
                     warn!("{}::can_migrate: check_tcp_connect returned: {:?} ", MODULE, why );
                     return Ok(false);
                 }
-                info!("{}::try_init: successfully connected to vpn backend in {} ms", MODULE, now.elapsed().as_millis());
+                info!("{}::can_migrate: successfully connected to vpn backend in {} ms", MODULE, now.elapsed().as_millis());
             }
         }        
 

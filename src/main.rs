@@ -171,7 +171,9 @@ fn print_sysinfo(s_info: &mut Migrator) -> () {
 
 #[cfg (target_os = "windows")]
 fn process(arg_matches: &ArgMatches) -> Result<(),MigError> {
-    let mut migrator = MSWMigrator::try_init()?;
+    let config = Config::new(arg_matches)?;
+    let mut migrator = MSWMigrator::try_init(config)?;
+    info!("can migrate: {}", migrator.can_migrate()?);
 
     if arg_matches.is_present("info") {        
         print_sysinfo(&mut migrator);
@@ -197,7 +199,7 @@ fn process(arg_matches: &ArgMatches) -> Result<(),MigError> {
     let config = Config::new(arg_matches)?;
     println!("config out:\n{}", config.to_yaml(""));
     let mut migrator = get_migrator(config)?;
-    migrator.can_migrate()?;
+    info!("can migrate: {}", migrator.can_migrate()?);
     Ok(())    
 } 
 
