@@ -60,7 +60,7 @@ impl<'a> PhysicalDrive {
         let q_res = WmiAPI::get_api(NS_CVIM2)?.raw_query(query)?;
         let mut result: Vec<Partition> = Vec::new();
         for res in q_res {
-            let res_map = QueryRes::new(res);
+            let res_map = QueryRes::new(&res);
             result.push(Partition::new(self.disk_index, res_map)?);
         }
         Ok(result)

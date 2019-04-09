@@ -9,7 +9,7 @@ use log::{debug, warn, info};
 
 use std::time::Instant;
 
-pub use wmi_utils::{WmiUtils};
+pub use wmi_utils::{WmiUtils, Partition};
 use wmi_utils::{WMIOSInfo};
 use crate::migrator::{
     MigError, 
@@ -54,11 +54,35 @@ impl<'a> MSWMigrator {
 impl Migrator for MSWMigrator {
     fn can_migrate(&mut self) -> Result<bool, MigError> {
         debug!("{}::can_migrate: entered", MODULE);
+
+        let os_name = String::from(self.get_os_name()?); 
+        let os_release = self.get_os_release()?;
+
+        info!("{}::can_migrate: running on {} release: {}", MODULE, os_name, os_release);
         
+        if  (os_release.get_mayor() < 6) || ((os_release.get_mayor() == 6) && (os_release.get_minor() < 3)) ||
+            (os_release.get_mayor() > 10) || ((os_release.get_mayor() == 10) && (os_release.get_minor() > 0))
+            {                    
+            warn!("{}::can_migrate: Windows OS releases < 8.1 (version < 6.3) or > 10 (version > 10.0) are current not supported", MODULE);
+            return Ok(false);
+        }
+
+        let os_arch = self.get_os_arch()?;
+        match  os_arch {
+            OSArch::AMD64 => {
+                info!("{}::can_migrate: using ARCH: {}", MODULE, os_arch);
+            },
+            _ => {
+                warn!("{}::can_migrate: the achitecture {} is not currently supported for this platform", MODULE, os_arch);
+                return Ok(false);
+            }
+        }
+
         if ! self.is_admin()? {
             warn!("{}::can_migrate: you need to run this program as root", MODULE);
             return Ok(false);
         }
+
 
         if self.is_secure_boot()? {
             warn!("{}::can_migrate: secure boot appears to be enabled. Please disable secure boot in the firmaware settings.", MODULE);
@@ -87,7 +111,11 @@ impl Migrator for MSWMigrator {
                 }
                 info!("{}::can_migrate: successfully connected to vpn backend in {} ms", MODULE, now.elapsed().as_millis());
             }
-        }        
+        }    
+
+        if self.is_uefi_boot()? == true {
+            let drive_letter = mount_efi_partition();
+        }    
 
         Ok(true)
     }
@@ -197,6 +225,59 @@ pub fn process() -> Result<(), MigError> {
     Ok(())
 }
 
+fn mount_efi_partition() -> Result<String, MigError> {
+    debug!("{}::mount_efi_partition: wmi query for boot partition", MODULE);
+    let boot_partition = Partition::get_boot_partition()?;
+    debug!("{}::mount_efi_partition: wmi query for boot partition returned {:?}", MODULE, boot_partition);
+    if boot_partition.len() != 1 {
+        return Err(MigError::from_remark(MigErrorKind::InvParam,&format!("{}::mount_efi_partition: encountered more than 1 boot partition", MODULE)));
+    } 
+        
+    if let Some(drive) = boot_partition[0].query_logical_drive()? {
+        return Ok(String::from(drive.get_name()));
+    }
+
+    // No logical drive mounted yet
+
+
+
+/*
+        let drive_letters = WmiUtils::query_drive_letters()?;                
+        let mut efi_mount = 'B' as u8;
+        let mut efi_drive_letter = format!("{}:",efi_mount as char);
+
+        if drive_letters.len() > 0 {            
+            if &drive_letters[0] <= &efi_drive_letter {
+                for letter in drive_letters {
+                    if letter == efi_drive_letter {
+                        if efi_drive_letter == "Z:" {
+                            warn!("{}::can_migrate: unable to find free drive letter for efi drive: ", MODULE, why );
+                        }
+                        efi_mount += 1;
+                        if()
+                        efi_drive_letter
+
+                    } else {
+                        if letter > efi_drive_letter {
+                            break;
+                        }
+                    }
+                }
+            }
+        }
+        let efi_mount = efi_mount as char;
+
+
+        for letter in drive_letters {
+            debug!("{}::can_migrate: drive letter: '{}'",MODULE, letter);
+        }
+
+*/
+
+    Err(MigError::from(MigErrorKind::NotImpl))
+} 
+
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -210,3 +291,5 @@ mod tests {
         assert!(!msw_info.get_mem_tot().unwrap() > 0);
     }
 }
+
+

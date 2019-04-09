@@ -83,3 +83,4 @@ pub fn report_win_api_error_with_deinit<T: Fn() -> ()>(module: &str, func: &str,
             MigErrorKind::WinApi,
             &format!("{}::{}: {} failed", module, func, called),)))
 }
+

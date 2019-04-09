@@ -100,13 +100,21 @@ fn print_drives(migrator: &mut MSWMigrator) -> Result<(),MigError> {
             println!("    type:             {}", partition.get_ptype());
             println!("    number of blocks: {}", partition.get_num_blocks());
             println!("    start offset:     {}", partition.get_start_offset());
-            println!("    size:             {}", format_size_with_unit(partition.get_size()));
+            println!("    size:             {}", format_size_with_unit(partition.get_size()));            
             if let Some(ld) = partition.query_logical_drive()? {
-                println!("    logical drive:    {}",ld.get_device_id());
+                println!("    logical drive:    {} {}",ld.get_name(), ld.get_device_id());
+                println!("      status:         {}",ld.get_status());
+                println!("      file system:    {}",ld.get_file_system());
+                println!("      media type:     {:?}",ld.get_media_type());
+                println!("      size:           {}",format_size_with_unit(ld.get_size()));
+                println!("      free:           {}",format_size_with_unit(ld.get_free_space()));
+                println!("      compressed:     {}",ld.is_compressed());
+                println!("      dirty:          {}",ld.is_dirty());
+
                 if migrator.is_admin()? == true {
                     let supp_sizes = ld.get_supported_sizes(migrator)?;
-                    println!("    min supp. size:   {}", format_size_with_unit(supp_sizes.0));
-                    println!("    max supp. size:   {}", format_size_with_unit(supp_sizes.1));
+                    println!("      min supp. size: {}", format_size_with_unit(supp_sizes.0));
+                    println!("      max supp. size: {}", format_size_with_unit(supp_sizes.1));
                 }
             }
             println!();
