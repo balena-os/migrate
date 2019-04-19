@@ -1,10 +1,12 @@
-use failure::{Context, ResultExt};
+use failure::{Fail, ResultExt};
 use libc::{getuid, sysinfo};
-use log::{error, info, debug, warn};
+use log::{error, info, debug, warn, trace};
 use std::time::{Instant};
 
+
+
 // use std::os::linux::{};
-use lazy_static::lazy_static;
+
 use regex::Regex;
 
 mod util;
@@ -21,15 +23,38 @@ use crate::migrator::{
 
 use std::collections::hash_map::HashMap;
 
+
+const SUPPORTED_OSSES: &'static [&'static str] = &[
+    "Ubuntu 18.04.2 LTS", 
+    "Ubuntu 16.04.2 LTS",
+    "Ubuntu 14.04.2 LTS"
+    ];
+
 const MODULE: &str = "LinuxMigrator";
 const OS_NAME_RE: &str = r#"^PRETTY_NAME="([^"]+)"$"#;
 
 const OS_RELEASE_FILE: &str = "/etc/os-release";
+const BOOT_DIR: &str = "/boot";
+const ROOT_DIR: &str = "/";
+const EFI_DIR: &str = "/boot/efi";
+
+const UNAME_CMD: &str = "uname";
+const UNAME_ARGS_OS_ARCH: [&str; 1] = ["-m"];
+
+const GRUB_INST_CMD: &str = "grub-install";
+const GRUB_INST_VERSION_ARGS: [&str; 1] = ["--version"];
+const GRUB_INST_VERSION_RE: &str = r#"^.*\s+\(GRUB\)\s+([0-9]+)\.([0-9]+)[^0-9].*$"#;
+const GRUB_MIN_VERSION: &str = "2";
+
+const MOKUTIL_CMD: &str = "mokutil";
+const MOKUTIL_ARGS_SB_STATE: [&str; 1] = ["--sb-state"];
+
+
+
 const OS_KERNEL_RELEASE_FILE: &str = "/proc/sys/kernel/osrelease";
 const OS_MEMINFO_FILE: &str = "/proc/meminfo";
 const SYS_UEFI_DIR: &str = "/sys/firmware/efi";
-const UNAME_CMD: &str = "uname";
-const UNAME_ARGS_OS_ARCH: [&str; 1] = ["-m"];
+
 
 const FINDMNT_CMD: &str = "findmnt";
 const FINDMNT_ARGS_BOOT: [&str; 5] = [
@@ -37,25 +62,58 @@ const FINDMNT_ARGS_BOOT: [&str; 5] = [
     "--canonicalize",
     "--output",
     "SOURCE",
-    "/boot",
+    BOOT_DIR,
 ];
-const FINDMNT_ARGS_ROOT: [&str; 5] = ["--noheadings", "--canonicalize", "--output", "SOURCE", "/"];
 
-const MOKUTIL_CMD: &str = "mokutil";
-const MOKUTIL_ARGS_SB_STATE: [&str; 1] = ["--sb-state"];
+const FINDMNT_ARGS_ROOT: [&str; 5] = [
+    "--noheadings", 
+    "--canonicalize", 
+    "--output", 
+    "SOURCE", 
+    ROOT_DIR];
 
-pub(crate) struct LinuxMigrator {
-    config: Config,
+const DISK_DRIVE_RE: &str = r#"^(/dev/([^/]+/)*.*)p[0-9]+$"#;
+
+struct SysInfo {
     os_name: Option<String>,
     os_release: Option<OSRelease>,
     os_arch: Option<OSArch>,
-    uefi_boot: Option<bool>,
-    boot_dev: Option<String>,
-    cmd_path: HashMap<String, String>,
-    mem_tot: Option<u64>,
-    mem_free: Option<u64>,
-    admin: Option<bool>,
-    sec_boot: Option<bool>,
+    efi_boot: Option<bool>,
+    secure_boot: Option<bool>,
+    boot_device: Option<String>,
+
+/*
+            os_name: None,
+            os_release: None,
+            os_arch: None,
+            uefi_boot: None,
+            boot_dev: None,
+            mem_tot: None,
+            mem_free: None,
+            admin: None,
+            sec_boot: None,
+*/
+}
+
+impl SysInfo {
+    pub fn default() -> SysInfo {
+        SysInfo{   
+            os_name: None, 
+            os_release: None,
+            os_arch: None,
+            efi_boot: None,
+            secure_boot: None,
+            boot_device: None, 
+            }
+    }
+}
+
+
+
+pub(crate) struct LinuxMigrator {
+    config: Config,
+    cmd_path: HashMap<String,String>,
+    sysinfo: SysInfo,
 }
 
 impl LinuxMigrator {
@@ -65,39 +123,104 @@ impl LinuxMigrator {
     }
 
     pub fn try_init(config: Config) -> Result<LinuxMigrator, MigError> {                        
-        debug!("{}::try_init: entered", MODULE);
-  
+        trace!("LinuxMigrator::try_init: entered");        
+        let mut migrator = LinuxMigrator {
+            config,
+            cmd_path: HashMap::new(),
+            sysinfo: SysInfo::default(),
+
+        };
+
         // fake admin is not honored in release mode
-        if ! util::is_admin(config.debug.fake_admin)? {
+        if ! migrator.is_admin()? {
             error!("please run this program as root");
             return Err(MigError::from_remark(MigErrorKind::InvState, &format!("{}::try_init: was run without admin privileges", MODULE)));
         } 
 
-        let migrator = LinuxMigrator {
-            config,
-            os_name: None,
-            os_release: None,
-            os_arch: None,
-            uefi_boot: None,
-            boot_dev: None,
-            cmd_path: HashMap::new(),
-            mem_tot: None,
-            mem_free: None,
-            admin: None,
-            sec_boot: None,
-        };
+        if util::dir_exists(BOOT_DIR)? == true {
+
+        } else {
+
+        }
+        
+        migrator.sysinfo.boot_device = Some(migrator.get_boot_dev()?);
+        if let Some(ref boot_device) = migrator.sysinfo.boot_device {
+            info!("Boot device is {}", boot_device); 
+        }            
+
+
+        migrator.sysinfo.os_name = Some(migrator.get_os_name()?);
+        if let Some(ref os_name) = migrator.sysinfo.os_name {            
+            info!("OS Name is {}", os_name); 
+            if let None = SUPPORTED_OSSES.iter().position(|&r| r == os_name) {
+                let message = format!("your OS '{}' is not in the list of operating systems supported by balena-migrate", os_name);                
+                error!("{}", &message);                
+                return Err(MigError::from_remark(MigErrorKind::InvState, &message));
+            }                        
+        }
+
+        migrator.sysinfo.os_arch = Some(migrator.get_os_arch()?);        
+        if let Some(ref os_arch) = migrator.sysinfo.os_arch {
+            info!("OS Architecture is {}", os_arch); 
+            match os_arch {
+                OSArch::ARMHF => { migrator.init_armhf()?; },
+                OSArch::AMD64 => { migrator.init_amd64()?;},
+                OSArch::I386 => { migrator.init_i386()?;},
+                _ => { return Err(MigError::from_remark(MigErrorKind::InvParam, &format!("{}::try_init: unexpected OsArch encountered: {}", MODULE, os_arch))); },
+            }
+        }
     
         Ok(migrator)
     }
-}
 
-impl LinuxMigrator {
+    fn init_armhf(&mut self) -> Result<(),MigError> {
+        Err(MigError::from(MigErrorKind::NotImpl))        
+    } 
+
+    fn init_amd64(&mut self) -> Result<(),MigError> {
+        trace!("LinuxMigrator::init_amd64: entered");
+
+        self.sysinfo.efi_boot = Some(self.is_uefi_boot()?);
+        if let Some(efi_boot) = self.sysinfo.efi_boot {
+            info!("System is booted in {} mode", match efi_boot { true => "EFI", false => "Legacy BIOS" });
+            if efi_boot == true {
+                self.sysinfo.secure_boot = Some(self.is_secure_boot()?);
+                if let Some(secure_boot) = self.sysinfo.secure_boot {
+                    info!("Secure boot is {}enabled", match secure_boot { true => "", false => "not " }); 
+                    if secure_boot == true {
+                        let message = format!("balena-migrate does not currently support systems with secure boot enabled.");
+                        error!("{}", &message);                
+                        return Err(MigError::from_remark(MigErrorKind::InvState, &message));
+                    }
+                }
+            } else {
+                self.sysinfo.secure_boot = Some(false);
+                info!("Assuming that Secure boot is not enabled for Legacy BIOS system"); 
+            }
+        }        
+
+        let grub_version = self.get_grub_version()?;
+        info!("grub-install version is {}.{}", grub_version.0, grub_version.1); 
+        if grub_version.0 < String::from(GRUB_MIN_VERSION) {
+            let message = format!("your version of grub-install ({}.{}) is not supported. balena-migrate requires grub version 2 or higher.", grub_version.0, grub_version.1);
+            error!("{}", &message);                
+            return Err(MigError::from_remark(MigErrorKind::InvState, &message));
+        }        
+
+        Ok(())        
+    } 
+
+    fn init_i386(&mut self) -> Result<(),MigError> {
+        Err(MigError::from(MigErrorKind::NotImpl))
+    } 
+
     fn call_cmd(
         &mut self,
         cmd: &str,
         args: &[&str],
         trim_stdout: bool,
     ) -> Result<CmdRes, MigError> {
+        trace!("LinuxMigrator::call_cmd: entered with cmd: '{}', args: {:?}, trim: {}", cmd, args, trim_stdout);
         Ok(call(
             self.cmd_path
                 .entry(String::from(cmd))
@@ -107,20 +230,230 @@ impl LinuxMigrator {
         )?)
     }
 
-    fn get_mem_info(&mut self) -> Result<(), MigError> {
+    #[cfg(not (debug_assertions))]
+    pub fn is_admin(&self) -> Result<bool, MigError> {
+        trace!("LinuxMigrator::is_admin: entered");
+        let admin = Some(unsafe { getuid() } == 0);
+        Ok(admin.unwrap())
+    }
+
+    #[cfg(debug_assertions)]
+    pub fn is_admin(&self) -> Result<bool, MigError> {    
+        trace!("LinuxMigrator::is_admin: entered");
+        let admin = Some(unsafe { getuid() } == 0);
+        Ok(admin.unwrap() | self.config.debug.fake_admin)
+    }
+
+    fn get_mem_info() -> Result<(u64,u64), MigError> {
+        trace!("LinuxMigrator::get_mem_info: entered");
+        // TODO: could add loads, uptime if needed
         use std::mem;
         let mut s_info: libc::sysinfo = unsafe { mem::uninitialized() };
         let res = unsafe { libc::sysinfo(&mut s_info) };
         if res == 0 {
-            self.mem_tot = Some(s_info.totalram as u64);
-            self.mem_free = Some(s_info.freeram as u64);
-            Ok(())
+            Ok((s_info.totalram as u64,s_info.freeram as u64))
         } else {
             Err(MigError::from(MigErrorKind::NotImpl))
         }
     }
 
+    fn get_os_arch(&mut self) -> Result<OSArch, MigError> {
+        trace!("LinuxMigrator::get_os_arch: entered");
+        let cmd_res = self
+            .call_cmd(UNAME_CMD, &UNAME_ARGS_OS_ARCH, true)
+            .context(MigErrCtx::from_remark(
+                MigErrorKind::Upstream,
+                &format!("{}::get_os_arch: call {}", MODULE, UNAME_CMD),
+            ))?;
+        
+        if cmd_res.status.success() {            
+            if cmd_res.stdout.to_lowercase() == "x86_64" {
+                Ok(OSArch::AMD64)
+            } else if cmd_res.stdout.to_lowercase() == "i386" {
+                Ok(OSArch::I386)
+            } else if cmd_res.stdout.to_lowercase() == "armv7l" {
+                Ok(OSArch::ARMHF)
+            } else {
+                Err(MigError::from_remark(
+                    MigErrorKind::InvParam,
+                    &format!(
+                        "{}::get_os_arch: unsupported architectute '{}'",
+                        MODULE, cmd_res.stdout
+                    ),
+                ))
+            }            
+        } else {
+            Err(MigError::from_remark(
+                MigErrorKind::ExecProcess,
+                &format!(
+                    "{}::get_os_arch: command failed: {}",
+                    MODULE,
+                    cmd_res.status.code().unwrap_or(0)
+                ),
+            ))
+        }
+    }
 
+
+    fn get_grub_version(&mut self) -> Result<(String,String),MigError> {
+        trace!("LinuxMigrator::get_grub_version: entered");
+        let cmd_res = self
+            .call_cmd(GRUB_INST_CMD, &GRUB_INST_VERSION_ARGS, true)
+            .context(MigErrCtx::from_remark(
+                MigErrorKind::Upstream,
+                &format!("{}::get_grub_version: call {}", MODULE, UNAME_CMD),
+            ))?;
+
+        if cmd_res.status.success() {            
+            let re = Regex::new(GRUB_INST_VERSION_RE).unwrap();
+            if let Some(captures) = re.captures(cmd_res.stdout.as_ref()) {
+                Ok((String::from(captures.get(1).unwrap().as_str()),String::from(captures.get(2).unwrap().as_str())))
+            } else {
+                Err(MigError::from_remark(
+                    MigErrorKind::InvParam,
+                    &format!(
+                        "{}::get_grub_version: failed to parse grub version string: {}",
+                        MODULE,
+                        cmd_res.stdout
+                    ),
+                ))
+            }           
+        } else {
+            Err(MigError::from_remark(
+                MigErrorKind::ExecProcess,
+                &format!(
+                    "{}::get_os_arch: command failed: {}",
+                    MODULE,
+                    cmd_res.status.code().unwrap_or(0)
+                ),
+            ))
+        }
+    }
+
+    fn is_uefi_boot(&mut self) -> Result<bool, MigError> {
+        trace!("LinuxMigrator::is_uefi_boot: entered");
+        match std::fs::metadata(SYS_UEFI_DIR) {
+            Ok(metadata) => {
+                Ok(metadata.file_type().is_dir())
+            }
+            Err(why) => {
+                match why.kind() {
+                    std::io::ErrorKind::NotFound => Ok(false),
+                    _ => Err(MigError::from(why.context(MigErrCtx::from_remark(MigErrorKind::Upstream,&format!("{}::is_uefi_boot: access {}",MODULE,SYS_UEFI_DIR))))),
+                }
+            }
+        }        
+    }
+
+    fn is_secure_boot(&mut self) -> Result<bool, MigError> {
+        trace!("LinuxMigrator::is_secure_boot: entered");
+        let cmd_res = match self.call_cmd(MOKUTIL_CMD, &MOKUTIL_ARGS_SB_STATE, true) {
+            Ok(cr) => {
+                debug!("{}::is_secure_boot: {} -> {:?}", MODULE, MOKUTIL_CMD, cr);
+                cr
+            }
+            Err(why) => {
+                debug!("{}::is_secure_boot: {} -> {:?}", MODULE, MOKUTIL_CMD, why);
+                match why.kind() {
+                    MigErrorKind::NotFound => {
+                        return Ok(false);
+                    }
+                    _ => {
+                        return Err(why);
+                    }
+                }
+            }
+        };
+
+        let regex = Regex::new(r"^SecureBoot\s+(disabled|enabled)$").unwrap();
+        let lines = cmd_res.stdout.lines();
+        for line in lines {
+            if let Some(cap) = regex.captures(line) {
+                if cap.get(1).unwrap().as_str() == "enabled" {
+                    return Ok(true);
+                } else {
+                    return Ok(false);                
+                }                
+            }
+        }
+        error!(
+            "{}::is_secure_boot: failed to parse command output: '{}'",
+            MODULE, cmd_res.stdout
+        );
+        Err(MigError::from_remark(
+            MigErrorKind::InvParam,
+            &format!("{}::is_secure_boot: failed to parse command output", MODULE),
+        ))
+    }
+
+
+    fn get_os_name(&self) -> Result<String, MigError> {
+        trace!("LinuxMigrator::get_os_name: entered");
+        if util::file_exists(OS_RELEASE_FILE) {
+            // TODO: ensure availabilty of method / file exists
+            if let Some(os_name) = util::parse_file(OS_RELEASE_FILE, &Regex::new(OS_NAME_RE).unwrap())? {
+                Ok(os_name)
+            } else {
+                Err(MigError::from_remark(MigErrorKind::NotFound, &format!("{}::get_os_name: could not be located in file {}", MODULE, OS_RELEASE_FILE)))    
+            }
+            
+        } else {
+            Err(MigError::from_remark(MigErrorKind::NotFound, &format!("{}::get_os_name: could not locate file {}", MODULE, OS_RELEASE_FILE)))
+        }
+    }
+
+
+    fn get_boot_dev(&mut self) -> Result<String, MigError> {
+        trace!("LinuxMigrator::get_boot_dev: entered");
+
+        // TODO: ensure /boot and / are same disk device 
+        // TODO: ensure result is a block device
+
+        if util::dir_exists(BOOT_DIR)? == false {
+            let message = format!("The systems boot directory could not be found: '{}'", BOOT_DIR); 
+            error!("{}", message);
+            return Err(MigError::from_remark(MigErrorKind::InvState, &message));
+        }
+
+        let mut cmd_res = self
+            .call_cmd(FINDMNT_CMD, &FINDMNT_ARGS_BOOT, true)
+            .context(MigErrCtx::from_remark(
+                MigErrorKind::Upstream,
+                &format!("{}::get_os_arch: call {}", MODULE, FINDMNT_CMD),
+            ))?;
+
+        debug!("LinuxMigrator::get_boot_dev: findmnt for /boot result: {:?}", cmd_res);
+
+        if !cmd_res.status.success() || cmd_res.stdout.is_empty() {
+            cmd_res = self
+                .call_cmd(FINDMNT_CMD, &FINDMNT_ARGS_ROOT, true)
+                .context(MigErrCtx::from_remark(
+                    MigErrorKind::Upstream,
+                    &format!("{}::get_os_arch: call {}", MODULE, FINDMNT_CMD),
+                ))?;
+
+            debug!("LinuxMigrator::get_boot_dev: findmnt for / result: {:?}", cmd_res);
+
+            if !cmd_res.status.success() || cmd_res.stdout.is_empty() {
+                return Err(MigError::from_remark(
+                    MigErrorKind::ExecProcess,
+                    &format!(
+                        "{}::get_boot_dev: command failed: {}",
+                        MODULE,
+                        cmd_res.status.code().unwrap_or(0)
+                    ),
+                ));
+            }
+        }
+
+        // now get disk device for mountpoint
+        let re = Regex::new(DISK_DRIVE_RE).unwrap();        
+        if let Some(captures) = re.captures(&cmd_res.stdout) {            
+            Ok(String::from(captures.get(1).unwrap().as_str()))
+        } else {
+            Err(MigError::from_remark(MigErrorKind::InvParam,&format!("{}::get_boot_dev: cannot derive disk device from partition {}", MODULE, cmd_res.stdout)))
+        }
+    }
 
     /*
     fn get_mem_info1(&mut self) -> Result<(),MigError> {
@@ -178,21 +511,6 @@ impl LinuxMigrator {
 
 /*
 impl Migrator for LinuxMigrator {
-    fn get_os_name<'a>(&'a mut self) -> Result<&'a str, MigError> {
-        // TODO: ensure availabilty of method
-        match self.os_name {
-            Some(ref s) => Ok(s),
-            None => {
-                lazy_static! {
-                    static ref RE: Regex = Regex::new(OS_NAME_RE).unwrap();
-                    // static ref RE: Regex = Regex::new("^PRETTY_NAME=\"([^\"]+)$").unwrap();
-                }
-
-                self.os_name = Some(util::parse_file("/etc/os-release", &RE)?);
-                Ok(self.os_name.as_ref().unwrap())
-            }
-        }
-    }
 
     fn get_os_release<'a>(&'a mut self) -> Result<&'a OSRelease, MigError> {
         match self.os_release {
@@ -212,109 +530,8 @@ impl Migrator for LinuxMigrator {
         }
     }
 
-    fn is_uefi_boot(&mut self) -> Result<bool, MigError> {
-        match self.uefi_boot {
-            Some(u) => Ok(u),
-            None => {
-                match std::fs::metadata(SYS_UEFI_DIR) {
-                    Ok(metadata) => {
-                        self.uefi_boot = Some(metadata.file_type().is_dir());
-                    }
-                    Err(why) => {
-                        match why.kind() {
-                            std::io::ErrorKind::NotFound => {
-                                self.uefi_boot = Some(false);
-                            }
-                            // TODO: figure out how to create a MigError with context manually
-                            _ => {
-                                return Err(MigError::from_remark(
-                                    MigErrorKind::Upstream,
-                                    &format!("{}::is_uefi_boot: access {}", MODULE, SYS_UEFI_DIR),
-                                ));
-                            }
-                            //_ => { return Err(MigError::from(why.context(MigErrCtx::from_remark(MigErrorKind::Upstream,&format!("{}::is_uefi_boot: access {}",MODULE,SYS_UEFI_DIR))))); },
-                        }
-                    }
-                }
-                Ok(self.uefi_boot.unwrap())
-            }
-        }
-    }
 
-    fn get_os_arch<'a>(&'a mut self) -> Result<&'a OSArch, MigError> {
-        match self.os_arch {
-            Some(ref u) => Ok(u),
-            None => {
-                let cmd_res = self
-                    .call_cmd(UNAME_CMD, &UNAME_ARGS_OS_ARCH, true)
-                    .context(MigErrCtx::from_remark(
-                        MigErrorKind::Upstream,
-                        &format!("{}::get_os_arch: call {}", MODULE, UNAME_CMD),
-                    ))?;
-                if cmd_res.status.success() {
-                    if cmd_res.stdout.to_lowercase() == "x86_64" {
-                        self.os_arch = Some(OSArch::AMD64);
-                    } else if cmd_res.stdout.to_lowercase() == "i386" {
-                        self.os_arch = Some(OSArch::I386);
-                    } else if cmd_res.stdout.to_lowercase() == "armv7l" {
-                        self.os_arch = Some(OSArch::ARMHF);
-                    } else {
-                        return Err(MigError::from_remark(
-                            MigErrorKind::InvParam,
-                            &format!(
-                                "{}::get_os_arch: unknown architectute '{}'",
-                                MODULE, cmd_res.stdout
-                            ),
-                        ));
-                    }
-                    Ok(self.os_arch.as_ref().unwrap())
-                } else {
-                    Err(MigError::from_remark(
-                        MigErrorKind::ExecProcess,
-                        &format!(
-                            "{}::get_os_arch: command failed: {}",
-                            MODULE,
-                            cmd_res.status.code().unwrap_or(0)
-                        ),
-                    ))
-                }
-            }
-        }
-    }
 
-    fn get_boot_dev<'a>(&'a mut self) -> Result<&'a str, MigError> {
-        match self.boot_dev {
-            Some(ref u) => Ok(u),
-            None => {
-                let mut cmd_res = self
-                    .call_cmd(FINDMNT_CMD, &FINDMNT_ARGS_BOOT, true)
-                    .context(MigErrCtx::from_remark(
-                        MigErrorKind::Upstream,
-                        &format!("{}::get_os_arch: call {}", MODULE, FINDMNT_CMD),
-                    ))?;
-                if !cmd_res.status.success() || cmd_res.stdout.is_empty() {
-                    cmd_res = self
-                        .call_cmd(FINDMNT_CMD, &FINDMNT_ARGS_ROOT, true)
-                        .context(MigErrCtx::from_remark(
-                            MigErrorKind::Upstream,
-                            &format!("{}::get_os_arch: call {}", MODULE, FINDMNT_CMD),
-                        ))?;
-                    if !cmd_res.status.success() || cmd_res.stdout.is_empty() {
-                        return Err(MigError::from_remark(
-                            MigErrorKind::ExecProcess,
-                            &format!(
-                                "{}::get_os_arch: command failed: {}",
-                                MODULE,
-                                cmd_res.status.code().unwrap_or(0)
-                            ),
-                        ));
-                    }
-                }
-                self.boot_dev = Some(cmd_res.stdout);
-                Ok(self.boot_dev.as_ref().unwrap())
-            }
-        }
-    }
 
     fn get_mem_tot(&mut self) -> Result<u64, MigError> {
         match self.mem_tot {
@@ -336,78 +553,6 @@ impl Migrator for LinuxMigrator {
         }
     }
 
-#[cfg(debug_assertions)]
-    fn is_admin(&mut self) -> Result<bool, MigError> {
-        if self.config.debug.fake_admin == true {
-            Ok(true)
-        } else {
-            match self.admin {
-                Some(v) => Ok(v),
-                None => {
-                    self.admin = Some(unsafe { getuid() } == 0);
-                    Ok(self.admin.unwrap())
-                }
-            }
-        }
-    }
-
-#[cfg(not (debug_assertions))]
-    fn is_admin(&mut self) -> Result<bool, MigError> {
-        match self.admin {
-            Some(v) => Ok(v),
-            None => {
-                self.admin = Some(unsafe { getuid() } == 0);
-                Ok(self.admin.unwrap())
-            }
-        }
-    }
-
-    fn is_secure_boot(&mut self) -> Result<bool, MigError> {
-        match self.sec_boot {
-            Some(v) => Ok(v),
-            None => {
-                let cmd_res = match self.call_cmd(MOKUTIL_CMD, &MOKUTIL_ARGS_SB_STATE, true) {
-                    Ok(cr) => {
-                        debug!("{}::is_secure_boot: {} -> {:?}", MODULE, MOKUTIL_CMD, cr);
-                        cr
-                    }
-                    Err(why) => {
-                        debug!("{}::is_secure_boot: {} -> {:?}", MODULE, MOKUTIL_CMD, why);
-                        match why.kind() {
-                            MigErrorKind::NotFound => {
-                                self.sec_boot = Some(false);
-                                return Ok(self.sec_boot.unwrap());
-                            }
-                            _ => {
-                                return Err(why);
-                            }
-                        }
-                    }
-                };
-
-                let regex = Regex::new(r"^SecureBoot\s+(disabled|enabled)$").unwrap();
-                let lines = cmd_res.stdout.lines();
-                for line in lines {
-                    if let Some(cap) = regex.captures(line) {
-                        if cap.get(1).unwrap().as_str() == "enabled" {
-                            self.sec_boot = Some(true);
-                        } else {
-                            self.sec_boot = Some(false);
-                        }
-                        return Ok(self.sec_boot.unwrap());
-                    }
-                }
-                error!(
-                    "{}::is_secure_boot: failed to parse command output: '{}'",
-                    MODULE, cmd_res.stdout
-                );
-                Err(MigError::from_remark(
-                    MigErrorKind::InvParam,
-                    &format!("{}::is_secure_boot: failed to parse command output", MODULE),
-                ))
-            }
-        }
-    }
 
     fn can_migrate(&mut self) -> Result<bool, MigError> {
         debug!("{}::can_migrate: entered", MODULE);

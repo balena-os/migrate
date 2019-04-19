@@ -1,10 +1,11 @@
-use failure::{Fail, ResultExt};
+use failure::{ResultExt};
 use log::debug;
 use regex::Regex;
 use std::fs::read_to_string;
-use std::io::Read;
+// use std::io::Read;
+use std::path::Path;
 
-use libc::{getuid, sysinfo};
+// use libc::{getuid, sysinfo};
 
 const MODULE: &str = "Linux::util";
 const WHEREIS_CMD: &str = "whereis";
@@ -16,20 +17,9 @@ use crate::migrator::{
     MigErrorKind,
     };
 
-#[cfg(not (debug_assertions))]
-pub fn is_admin(_fake_admin: bool) -> Result<bool, MigError> {
-    let admin = Some(unsafe { getuid() } == 0);
-    Ok(admin.unwrap())
-}
 
-#[cfg(debug_assertions)]
-pub fn is_admin(fake_admin: bool) -> Result<bool, MigError> {    
-    let admin = Some(unsafe { getuid() } == 0);
-    Ok(admin.unwrap() | fake_admin)
-}
-
-pub fn parse_file(fname: &str, regex: &Regex) -> Result<String, MigError> {
-    let os_info = std::fs::read_to_string(fname).context(MigErrCtx::from_remark(
+pub fn parse_file(fname: &str, regex: &Regex) -> Result<Option<String>, MigError> {
+    let os_info = read_to_string(fname).context(MigErrCtx::from_remark(
         MigErrorKind::Upstream,
         &format!("File read '{}'", fname),
     ))?;
@@ -38,15 +28,27 @@ pub fn parse_file(fname: &str, regex: &Regex) -> Result<String, MigError> {
         debug!("{}::parse_file: line: '{}'", MODULE, line);
 
         if let Some(cap) = regex.captures(line) {
-            return Ok(String::from(cap.get(1).unwrap().as_str()));
+            return Ok(Some(String::from(cap.get(1).unwrap().as_str())));
         };
     }
 
-    Err(MigError::from(MigErrorKind::NotFound))
+    Ok(None)
 }
 
-pub fn file_exists(cmd: &str) -> Result<bool, MigError> {
-    Err(MigError::from(MigErrorKind::NotImpl))
+pub fn dir_exists(name: &str) -> Result<bool,MigError> {
+    let path = Path::new(name);
+    if path.exists()  {
+        Ok(path.metadata()
+            .context(MigErrCtx::from_remark(MigErrorKind::Upstream,&format!("{}::dir_exists: failed to retrieve metadata for path: {}", MODULE, name)))?
+            .file_type().is_dir())
+    } else {
+        Ok(false)
+    }
+}
+
+
+pub fn file_exists(file: &str) -> bool {
+    Path::new(file).exists()    
 }
 
 pub fn whereis(cmd: &str) -> Result<String, MigError> {

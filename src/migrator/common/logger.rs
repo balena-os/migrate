@@ -1,4 +1,4 @@
-use log::{Log,Level,Metadata,Record};
+use log::{Log,Level,Metadata,Record, debug};
 use chrono::Local;
 use failure::{ResultExt};
 use std::collections::{HashMap};
@@ -28,7 +28,7 @@ impl Logger {
         // config:  &Option<LogConfig>) 
 
         let mut logger = Logger{
-            default_level: Logger::level_from_usize(default_log_level),
+            default_level: DEFAULT_LOG_LEVEL,
             mod_level: HashMap::new(),
         };
 
@@ -46,9 +46,6 @@ impl Logger {
                 if let Some(level) =  get_yaml_str(yaml_cfg, &["log_level"])? {
                     if let Ok(level) = Level::from_str(level.as_ref()) {
                         logger.default_level = level;
-                        if logger.default_level > max_level {
-                            max_level = logger.default_level;
-                        }
                     }
                 }
 
@@ -69,11 +66,17 @@ impl Logger {
                         }
                     }
                 }
-            }
+            }            
+        }
+    
+        if let Some(level) = Logger::level_from_usize(default_log_level) {
+            logger.default_level = level;
+        }
+        
+        if logger.default_level > max_level {
+            max_level = logger.default_level;
         }
 
-        // println!("{}::initialise: config: {:?}", MODULE, logger.mod_level);
-        // println!("{}::initialise: max_level: {:?}", MODULE, max_level);
         log::set_boxed_logger(Box::new(logger)).context(MigErrCtx::from_remark(MigErrorKind::Upstream,&format!("{}::initialise: failed to initialize logger", MODULE)))?;
         log::set_max_level(max_level.to_level_filter());
 
@@ -81,17 +84,15 @@ impl Logger {
     }
 
     // TODO: not my favorite solution but the corresponding level function is private
-    fn level_from_usize(level: usize) -> Level {        
+    fn level_from_usize(level: usize) -> Option<Level> {        
         match level {
-            1 => Level::Info,
-            2 => Level::Debug,
-            3 => Level::Trace,
-            _ => DEFAULT_LOG_LEVEL,
+            0 => None, 
+            1 => Some(Level::Info),
+            2 => Some(Level::Debug),
+            _ => Some(Level::Trace),
         }
     }
 }
-
-
 
 impl Log for Logger {
     fn enabled(&self, _metadata: &Metadata) -> bool {
@@ -121,7 +122,6 @@ impl Log for Logger {
                 Level::Debug => println!("{}",output.cyan()),
                 Level::Trace => println!("{}",output.blue()),
             };
-
         }
     }
 
