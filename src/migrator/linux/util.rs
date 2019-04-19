@@ -4,6 +4,8 @@ use regex::Regex;
 use std::fs::read_to_string;
 use std::io::Read;
 
+use libc::{getuid, sysinfo};
+
 const MODULE: &str = "Linux::util";
 const WHEREIS_CMD: &str = "whereis";
 
@@ -13,6 +15,18 @@ use crate::migrator::{
     MigError, 
     MigErrorKind,
     };
+
+#[cfg(not (debug_assertions))]
+pub fn is_admin(_fake_admin: bool) -> Result<bool, MigError> {
+    let admin = Some(unsafe { getuid() } == 0);
+    Ok(admin.unwrap())
+}
+
+#[cfg(debug_assertions)]
+pub fn is_admin(fake_admin: bool) -> Result<bool, MigError> {    
+    let admin = Some(unsafe { getuid() } == 0);
+    Ok(admin.unwrap() | fake_admin)
+}
 
 pub fn parse_file(fname: &str, regex: &Regex) -> Result<String, MigError> {
     let os_info = std::fs::read_to_string(fname).context(MigErrCtx::from_remark(

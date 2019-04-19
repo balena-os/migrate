@@ -1,7 +1,14 @@
-use clap::{App, Arg, ArgMatches};
+
+// use crate::balena_migrate::migrator;
+mod migrator;
+use migrator::{migrate};
+
+/*
+
 use log::{info};
 
 mod migrator;
+
 
 use migrator::{ 
     MigError, 
@@ -211,8 +218,17 @@ fn process(arg_matches: &ArgMatches) -> Result<(),MigError> {
     Ok(())    
 } 
 
-fn main() {
-    println!("balena-migrate-win started");
+*/
+
+fn main() {    
+    // TODO: display error 
+    if let Err(error) = migrator::migrate() {
+        println!("got error from migrator: {}", error);
+    }
+}
+
+/*
+
     let matches = App::new("balena-migrate-win")
         .version("0.1")
         .author("Thomas Runte <thomasr@balena.io>")
@@ -283,3 +299,4 @@ fn main() {
     process(&matches).unwrap();
 
 }
+*/

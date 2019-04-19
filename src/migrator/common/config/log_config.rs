@@ -1,6 +1,10 @@
 use yaml_rust::{Yaml};
-use super::{YamlConfig, get_yaml_str};
+use std::collections::{HashMap};
+use super::{YamlConfig, get_yaml_str, get_yaml_val};
 use crate::migrator::{MigError};
+
+
+
 
 #[derive(Debug)]
 pub struct LogConfig {
@@ -13,14 +17,15 @@ impl LogConfig {
         LogConfig{
             drive: String::from(""),
             fs_type: String::from(""),
-        }
+        }            
     }
 }
 
-impl YamlConfig for LogConfig {
+impl YamlConfig for LogConfig {    
     fn to_yaml(&self, prefix: &str) -> String {
         format!(
             "{}log_to:\n{}  drive: '{}'\n{}  fs_type: '{}'\n", prefix, prefix, self.drive, prefix , self.fs_type)
+        // TODO: incomplete add log_levels
     }
 
     fn from_yaml(&mut self, yaml: & Yaml) -> Result<(),MigError> {
@@ -30,6 +35,8 @@ impl YamlConfig for LogConfig {
                 self.fs_type =  String::from(log_fs_type);                
             }    
         }
+
+
         Ok(())
     }  
 }

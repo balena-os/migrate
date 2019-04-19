@@ -1,0 +1,4 @@
+log_level: 'warn'
+modules: 
+  - name: balena_migrate::migrator::common::config
+    level: 'info'

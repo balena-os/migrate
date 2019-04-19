@@ -9,6 +9,7 @@ pub enum MigMode {
     INVALID,
     AGENT,
     IMMEDIATE,
+    PRETEND,
 }
 
 const DEFAULT_MODE: MigMode = MigMode::INVALID;
@@ -21,6 +22,8 @@ pub struct MigrateConfig {
     pub reboot: Option<u64>,
     pub all_wifis: bool,
     pub log_to: Option<LogConfig>,
+    pub kernel_file: String,
+    pub initramfs_file: String,
 } 
 
 impl MigrateConfig {
@@ -31,6 +34,8 @@ impl MigrateConfig {
             reboot: None,
             all_wifis: false,
             log_to: None,
+            kernel_file: String::from(""),
+            initramfs_file: String::from(""),
         }
     }
 }
@@ -40,6 +45,14 @@ impl YamlConfig for MigrateConfig {
         let mut output = format!("{}migrate:\n{}  home_dir: '{}'\n{}  mode: '{:?}'\n{}  all_wifis: {}\n", prefix, prefix, self.home_dir, prefix, self.mode, prefix, self.all_wifis);
         if let Some(i) = self.reboot {
             output += &format!("{}  reboot: {}\n", prefix, i);
+        }
+
+        if self.kernel_file.is_empty() == false {
+            output += &format!("{}  kernel_file: {}\n", prefix, self.kernel_file);
+        }
+
+        if self.initramfs_file.is_empty() == false {
+            output += &format!("{}  initramfs_file: {}\n", prefix, self.initramfs_file);
         }
 
         let next_prefix = String::from(prefix) + "  ";        
@@ -54,6 +67,14 @@ impl YamlConfig for MigrateConfig {
 
         if let Some(home_dir) = get_yaml_str(yaml, &["home_dir"])? {
             self.home_dir = String::from(home_dir);
+        }
+
+        if let Some(kernel_file) = get_yaml_str(yaml, &["kernel_file"])? {
+            self.kernel_file = String::from(kernel_file);
+        }
+
+        if let Some(initramfs_file) = get_yaml_str(yaml, &["initramfs_file"])? {
+            self.initramfs_file = String::from(initramfs_file);
         }
 
         if let Some(mode) = get_yaml_str(yaml, &["mode"])? {
@@ -90,7 +111,7 @@ impl YamlConfig for MigrateConfig {
                 self.log_to = Some(log_to);
             }
         }
-
+        
         Ok(())
     }
 }

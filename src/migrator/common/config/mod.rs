@@ -1,14 +1,18 @@
-use clap::{ArgMatches};
+//use clap::{ArgMatches};
 use log::{info, debug};
 use yaml_rust::{YamlLoader, Yaml};
 use std::fs::read_to_string;
 use failure::ResultExt;
+
+use clap::{App, Arg};
 
 use crate::migrator::{ 
     MigError,
     MigErrorKind,
     MigErrCtx,
 };
+
+use super::logger::{Logger};
 
 pub mod log_config;
 pub use log_config::LogConfig;
@@ -25,122 +29,6 @@ pub mod debug_config;
 pub use debug_config::{DebugConfig};
 
 
-/*
-
-LOG_DRIVE= # /dev/sdb1
-LOG_FS_TYPE=ext4
-Ü
-################################################################################
-# where everything is
-HOME_DIR=./
-
-################################################################################
-# reboot automatically after script has finished by setting to number of seconds 
-# before rebboot
-DO_REBOOT= # 10
-
-################################################################################
-# name of the balenaOS image to flash (expected in $HOMEDIR)
-# must be set in /etc/balena-migrate.conf
-# IMAGE_NAME="resin-image-genericx86-64.resinos-img.gz"
-# IMAGE_NAME="resin-resintest-raspberrypi3-2.15.1+rev2-dev-v7.16.6.img.gz"
-
-
-################################################################################
-# create NM configs from all configs found in this system
-MIGRATE_ALL_WIFIS="FALSE" # migrate all wifis if set to "TRUE"
-
-################################################################################
-# only create NM wifi configs for ssids listed in this file
-# file with a list of wifi networks to migrate, one per line
-MIGRATE_WIFI_CFG="migrate-wifis"
-
-################################################################################
-# inject the config.json provided under the given filename into resin-boot
-# set to the path of a config.json file to copy to the image
-BALENA_CONFIG=
-
-################################################################################
-# if set to TRUE attempt to extract a wifi config from config.json given in
-# BALENA_CONFIG
-BALENA_WIFI=
-
-################################################################################
-# switch on initramfs / kernel debug mode by seting to "TRUE"
-DEBUG= # "TRUE"
-
-################################################################################
-# customer defined backup script to call
-BACKUP_SCRIPT=
-
-################################################################################
-# Backup definition file
-BACKUP_DEFINITION=
-
-################################################################################
-# Grub boot device in grub notation - usually not nee
-GRUB_BOOT_DEV="hd0"
-
-################################################################################
-# minimum free memory in stage 2
-# stage 2 script reads free memory
-#   subtracts size of image file & backup files
-#   fails if remaining space is less than the value given in MEM_MIN_FREE
-MEM_MIN_FREE_S2=65536   # 64 MB as kB
-
-################################################################################
-# minimum free memory in stage 1
-# stage 1 script reads total memory
-#   subtracts size of image file & backup files & initramfs
-#   fails if remaining space is less than the value given in MEM_MIN_FREE
-MEM_MIN_FREE_S1=65536   # 64 MB as kB
-
-################################################################################
-# DEBUG end initramfs scripts before unmounting root / flashing the image
-NO_FLASH= #"TRUE"
-
-################################################################################
-# DEBUG: do not modify config.txt, cmdline.txt, grub config if set to "TRUE"
-NO_SETUP= #{ }"TRUE"
-
-################################################################################
-# Test connectivity to API and VPN hosts"
-BALENA_API_HOST="api.balena-cloud.com"
-BALENA_API_PORT=443
-BALENA_VPN_HOST="vpn.balena-cloud.com"
-BALENA_VPN_PORT=443
-BALENA_CONNECT_TIMEOUT=20
-
-################################################################################
-# Fail if no network manager file is created
-REQUIRE_NMGR_FILE=TRUE
-
-################################################################################
-# DEBUG verbose build process
-MK_INITRAM_VERBOSE= # "TRUE"
-
-################################################################################
-# DEBUG keep initramfs layout
-MK_INITRAM_RETAIN= # "TRUE"
-
-################################################################################
-# Minimum required free diskspace in KB, default 10MB
-MIN_ROOT_AVAIL=10240 
-
-################################################################################
-# DEBUG enable DEBUG messages if set to TRUE
-LOG_DEBUG= # "TRUE"
-DEBUG_FUNCTS="main setupBootCfg_bb clean bbg_setup"
-
-################################################################################
-# Max acceptable bad blocks - a scan is only performed if value is set
-MAX_BADBLOCKS=
-
-################################################################################
-# Min acceptable device write speed
-MIN_WRITE_SPEED=
-WARN_WRITE_SPEED=200
-*/
 
 const MODULE: &str = "migrator::common::config";
 
@@ -159,20 +47,70 @@ pub struct Config {
     pub debug: DebugConfig,
 }
 
-
 impl<'a> Config {    
-    pub fn new(arg_matches: &ArgMatches) -> Result<Config, MigError> {
-        // defaults to 
+    pub fn new() -> Result<Config, MigError> {
+        let arg_matches = App::new("balena-migrate")
+            .version("0.1")
+            .author("Thomas Runte <thomasr@balena.io>")
+            .about("Migrates devices to BalenaOS")
+            .arg(
+                Arg::with_name("mode")
+                    .short("m")
+                    .long("mode")
+                    .value_name("MODE")
+                    .help("Mode of operation - agent, immediate or pretend"))
+            .arg(
+                Arg::with_name("config")
+                    .short("c")
+                    .long("config")
+                    .value_name("FILE")
+                    .help("use config file"),
+            )
+            .arg(
+                Arg::with_name("test")
+                    .short("t")
+                    .long("test")
+                    .help("tests what currently needs testing"),
+            )
+            .arg(
+                Arg::with_name("verbose")
+                    .short("v")
+                    .multiple(true)
+                    .help("Sets the level of verbosity"),
+            ).get_matches();
+            
+            Logger::initialise(arg_matches.occurrences_of("verbose") as usize)?;
+
+/*        
+
+        stderrlog::new()
+            .module(module_path!())
+            .verbosity(log_level)
+            .timestamp(stderrlog::Timestamp::Millisecond)
+            .init()
+            .unwrap();
+
+        println!("log mode initialized to {}", log_level);
+        info!("initialized logging");
+*/        
+
+
+        // defaults to
         let mut config = Config::default();
 
         if arg_matches.is_present("config") {
             config.from_file(arg_matches.value_of("config").unwrap())?;
         }
 
-        if arg_matches.is_present("immediate") {
-            config.migrate.mode = MigMode::IMMEDIATE;
-        } else if arg_matches.is_present("agent") {
-            config.migrate.mode = MigMode::AGENT;
+        if arg_matches.is_present("mode") {
+            if let Some(mode) = arg_matches.value_of("mode") {
+                config.migrate.mode = match mode {
+                    "immediate" => MigMode::IMMEDIATE,
+                    "agent" => MigMode::AGENT,
+                    "pretend" => MigMode::PRETEND,
+                    _ => { return Err(MigError::from_remark(MigErrorKind::InvParam, &format!("{}::new: invalid value for parameter mode: '{}'",MODULE, mode ))); },
+                }
+            }            
         }
 
         info!("{}::new: migrate mode: {:?}",MODULE, config.migrate.mode);
@@ -229,6 +167,8 @@ impl<'a> Config {
         match self.migrate.mode {
             MigMode::AGENT => {
             },
+            MigMode::PRETEND => {
+            },
             MigMode::IMMEDIATE => {
                 if let Some(balena) = &self.balena {
                     balena.check(&self.migrate.mode)?;
@@ -280,7 +220,7 @@ impl YamlConfig for Config {
 }
 
 
-fn get_yaml_val<'a>(doc: &'a Yaml, path: &[&str]) -> Result<Option<&'a Yaml>,MigError> {
+pub fn get_yaml_val<'a>(doc: &'a Yaml, path: &[&str]) -> Result<Option<&'a Yaml>,MigError> {
     debug!("{}::get_yaml_val: looking for '{:?}'", MODULE, path);
     let mut last = doc;
 
@@ -304,7 +244,7 @@ fn get_yaml_val<'a>(doc: &'a Yaml, path: &[&str]) -> Result<Option<&'a Yaml>,Mig
     Ok(Some(&last))
 }
 
-fn get_yaml_bool<'a>(doc: &'a Yaml, path: &[&str]) -> Result<Option<bool>,MigError> {
+pub fn get_yaml_bool<'a>(doc: &'a Yaml, path: &[&str]) -> Result<Option<bool>,MigError> {
     debug!("{}::get_yaml_bool: looking for '{:?}'", MODULE, path);
     if let Some(value) = get_yaml_val(doc, path)? {
         match value {
@@ -320,7 +260,7 @@ fn get_yaml_bool<'a>(doc: &'a Yaml, path: &[&str]) -> Result<Option<bool>,MigErr
 }
 
 
-fn get_yaml_int<'a>(doc: &'a Yaml, path: &[&str]) -> Result<Option<i64>,MigError> {
+pub fn get_yaml_int<'a>(doc: &'a Yaml, path: &[&str]) -> Result<Option<i64>,MigError> {
     debug!("{}::get_yaml_int: looking for '{:?}'", MODULE, path);
     if let Some(value) = get_yaml_val(doc, path)? {
         match value {
@@ -335,7 +275,7 @@ fn get_yaml_int<'a>(doc: &'a Yaml, path: &[&str]) -> Result<Option<i64>,MigError
     }
 }
 
-fn get_yaml_str<'a>(doc: &'a Yaml, path: &[&str]) -> Result<Option<&'a str>,MigError> {
+pub fn get_yaml_str<'a>(doc: &'a Yaml, path: &[&str]) -> Result<Option<&'a str>,MigError> {
     debug!("{}::get_yaml_str: looking for '{:?}'", MODULE, path);
     if let Some(value) = get_yaml_val(doc, path)? {
         match value {
@@ -384,7 +324,6 @@ balena:
   image: image.gz
   config: config.json
 ";
-
 
     fn assert_test_config1(config: &Config) -> () {        
         match config.migrate.mode {

@@ -10,11 +10,10 @@ use regex::Regex;
 mod util;
 
 use crate::migrator::{
-    common::{call, CmdRes, check_tcp_connect},
+    common::{call, CmdRes, check_tcp_connect, logger},
     MigErrCtx, 
     MigError, 
     MigErrorKind,
-    Migrator, 
     OSArch, 
     OSRelease, 
     Config, 
@@ -22,7 +21,7 @@ use crate::migrator::{
 
 use std::collections::hash_map::HashMap;
 
-const MODULE: &str = "Linux";
+const MODULE: &str = "LinuxMigrator";
 const OS_NAME_RE: &str = r#"^PRETTY_NAME="([^"]+)"$"#;
 
 const OS_RELEASE_FILE: &str = "/etc/os-release";
@@ -60,8 +59,20 @@ pub(crate) struct LinuxMigrator {
 }
 
 impl LinuxMigrator {
-    pub fn try_init(config: Config) -> Result<LinuxMigrator, MigError> {
+    pub fn migrate() -> Result<(),MigError> {                
+        let _migrator = LinuxMigrator::try_init(Config::new()?)?;        
+        Ok(())
+    }
+
+    pub fn try_init(config: Config) -> Result<LinuxMigrator, MigError> {                        
         debug!("{}::try_init: entered", MODULE);
+  
+        // fake admin is not honored in release mode
+        if ! util::is_admin(config.debug.fake_admin)? {
+            error!("please run this program as root");
+            return Err(MigError::from_remark(MigErrorKind::InvState, &format!("{}::try_init: was run without admin privileges", MODULE)));
+        } 
+
         let migrator = LinuxMigrator {
             config,
             os_name: None,
@@ -75,8 +86,7 @@ impl LinuxMigrator {
             admin: None,
             sec_boot: None,
         };
-        
-
+    
         Ok(migrator)
     }
 }
@@ -109,6 +119,8 @@ impl LinuxMigrator {
             Err(MigError::from(MigErrorKind::NotImpl))
         }
     }
+
+
 
     /*
     fn get_mem_info1(&mut self) -> Result<(),MigError> {
@@ -164,6 +176,7 @@ impl LinuxMigrator {
     */
 }
 
+/*
 impl Migrator for LinuxMigrator {
     fn get_os_name<'a>(&'a mut self) -> Result<&'a str, MigError> {
         // TODO: ensure availabilty of method
@@ -403,6 +416,11 @@ impl Migrator for LinuxMigrator {
             return Ok(false);
         }
 
+        if self.is_secure_boot()? {
+            warn!("{}::can_migrate: secure boot appears to be enabled. Please disable secure boot in the firmware settings.", MODULE);
+            return Ok(false);
+        }
+
         if let Some(ref balena) = self.config.balena {
             if balena.api_check == true {
                 info!("{}::can_migrate: checking connection api backend at to {}:{}", MODULE, balena.api_host, balena.api_port );
@@ -427,6 +445,15 @@ impl Migrator for LinuxMigrator {
             }
         }        
 
+        if self.config.migrate.kernel_file.is_empty() {
+            warn!("{}::can_migrate: no migration kernel file was confgured. Plaese adapt your configuration to supply a valid kernel file .", MODULE);
+        } 
+
+        if self.config.migrate.initramfs_file.is_empty() {
+            warn!("{}::can_migrate: no migration initramfs file was confgured. Plaese adapt your configuration to supply a valid initramfs file .", MODULE);
+        } 
+
+
         Ok(true)
     }
     
@@ -434,3 +461,4 @@ impl Migrator for LinuxMigrator {
         Err(MigError::from(MigErrorKind::NotImpl))
     }
 }
+*/

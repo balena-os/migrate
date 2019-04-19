@@ -11,6 +11,8 @@ pub mod os_release;
 
 pub mod config;
 
+pub mod logger;
+
 const MODULE: &str = "common";
 
 #[derive(Debug)]
