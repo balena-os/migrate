@@ -10,9 +10,12 @@ use std::time::{Instant};
 use regex::Regex;
 
 mod util;
+mod partition_info;
+
+use partition_info::PartitionInfo;
 
 use crate::migrator::{
-    common::{call, CmdRes, check_tcp_connect, logger},
+    common::{call, CmdRes, check_tcp_connect, logger, format_size_with_unit },
     MigErrCtx, 
     MigError, 
     MigErrorKind,
@@ -49,6 +52,7 @@ const GRUB_MIN_VERSION: &str = "2";
 const MOKUTIL_CMD: &str = "mokutil";
 const MOKUTIL_ARGS_SB_STATE: [&str; 1] = ["--sb-state"];
 
+const MIN_DISK_SIZE: u64 = 2 * 1024 * 1024 * 1024; // 2 GB 
 
 
 const OS_KERNEL_RELEASE_FILE: &str = "/proc/sys/kernel/osrelease";
@@ -74,13 +78,36 @@ const FINDMNT_ARGS_ROOT: [&str; 5] = [
 
 const DISK_DRIVE_RE: &str = r#"^(/dev/([^/]+/)*.*)p[0-9]+$"#;
 
+
+
+struct DiskInfo {    
+    disk_dev: String,
+    disk_size: u64,
+    root_part: Option<PartitionInfo>,
+    boot_part: Option<PartitionInfo>,
+    efi_part: Option<PartitionInfo>,
+}
+
+impl DiskInfo {
+    pub fn default() -> DiskInfo {
+        DiskInfo {
+            disk_dev: String::from(""),
+            disk_size: 0,
+            root_part: None,
+            boot_part: None,
+            efi_part: None,
+        }
+    }
+}
+
 struct SysInfo {
     os_name: Option<String>,
     os_release: Option<OSRelease>,
     os_arch: Option<OSArch>,
     efi_boot: Option<bool>,
     secure_boot: Option<bool>,
-    boot_device: Option<String>,
+    disk_info: Option<DiskInfo>,
+
 
 /*
             os_name: None,
@@ -103,12 +130,10 @@ impl SysInfo {
             os_arch: None,
             efi_boot: None,
             secure_boot: None,
-            boot_device: None, 
+            disk_info: None, 
             }
     }
 }
-
-
 
 pub(crate) struct LinuxMigrator {
     config: Config,
@@ -124,11 +149,11 @@ impl LinuxMigrator {
 
     pub fn try_init(config: Config) -> Result<LinuxMigrator, MigError> {                        
         trace!("LinuxMigrator::try_init: entered");        
+        
         let mut migrator = LinuxMigrator {
             config,
             cmd_path: HashMap::new(),
             sysinfo: SysInfo::default(),
-
         };
 
         // fake admin is not honored in release mode
@@ -136,16 +161,16 @@ impl LinuxMigrator {
             error!("please run this program as root");
             return Err(MigError::from_remark(MigErrorKind::InvState, &format!("{}::try_init: was run without admin privileges", MODULE)));
         } 
-
-        if util::dir_exists(BOOT_DIR)? == true {
-
-        } else {
-
-        }
         
-        migrator.sysinfo.boot_device = Some(migrator.get_boot_dev()?);
-        if let Some(ref boot_device) = migrator.sysinfo.boot_device {
-            info!("Boot device is {}", boot_device); 
+        migrator.sysinfo.disk_info = Some(migrator.get_disk_info()?);
+        if let Some(ref disk_info) = migrator.sysinfo.disk_info {
+            info!("Boot device is {}, size: {}", disk_info.disk_dev, format_size_with_unit(disk_info.disk_size)); 
+            if disk_info.disk_size < MIN_DISK_SIZE {
+                let message = format!("The size of your harddrive {} = {} is too small to install balenaOS", disk_info.disk_dev, format_size_with_unit(disk_info.disk_size));                
+                error!("{}", &message);                
+                return Err(MigError::from_remark(MigErrorKind::InvState, &message));
+            }
+            // TODO: check disk size and free size on /boot and
         }            
 
 
@@ -184,6 +209,8 @@ impl LinuxMigrator {
         if let Some(efi_boot) = self.sysinfo.efi_boot {
             info!("System is booted in {} mode", match efi_boot { true => "EFI", false => "Legacy BIOS" });
             if efi_boot == true {
+                // check for EFI dir & size
+
                 self.sysinfo.secure_boot = Some(self.is_secure_boot()?);
                 if let Some(secure_boot) = self.sysinfo.secure_boot {
                     info!("Secure boot is {}enabled", match secure_boot { true => "", false => "not " }); 
@@ -214,7 +241,7 @@ impl LinuxMigrator {
         Err(MigError::from(MigErrorKind::NotImpl))
     } 
 
-    fn call_cmd(
+    pub(crate) fn call_cmd(
         &mut self,
         cmd: &str,
         args: &[&str],
@@ -402,13 +429,31 @@ impl LinuxMigrator {
         }
     }
 
+    fn get_os_release(&mut self) -> Result<OSRelease, MigError> {
+        let os_info = std::fs::read_to_string(OS_KERNEL_RELEASE_FILE).context(
+            MigErrCtx::from_remark(
+                MigErrorKind::Upstream,
+                &format!("File read '{}'", OS_KERNEL_RELEASE_FILE),
+            ),
+        )?;
 
-    fn get_boot_dev(&mut self) -> Result<String, MigError> {
+        Ok(OSRelease::parse_from_str(&os_info.trim())?)
+    }
+
+    
+    fn get_part_info() -> Result<PartitionInfo, MigError> {
+    }
+
+    fn get_disk_info(&mut self) -> Result<DiskInfo, MigError> {
         trace!("LinuxMigrator::get_boot_dev: entered");
 
-        // TODO: ensure /boot and / are same disk device 
-        // TODO: ensure result is a block device
+        // TODO: extract into get_part_info
+        //   - Detect if path exists & is a mountpoint
+        //   - get the device name 
+        //   - get size & free space
 
+        let mut disk_info = DiskInfo::default();
+                
         if util::dir_exists(BOOT_DIR)? == false {
             let message = format!("The systems boot directory could not be found: '{}'", BOOT_DIR); 
             error!("{}", message);
@@ -424,32 +469,56 @@ impl LinuxMigrator {
 
         debug!("LinuxMigrator::get_boot_dev: findmnt for /boot result: {:?}", cmd_res);
 
-        if !cmd_res.status.success() || cmd_res.stdout.is_empty() {
-            cmd_res = self
-                .call_cmd(FINDMNT_CMD, &FINDMNT_ARGS_ROOT, true)
-                .context(MigErrCtx::from_remark(
-                    MigErrorKind::Upstream,
-                    &format!("{}::get_os_arch: call {}", MODULE, FINDMNT_CMD),
-                ))?;
+        let re = Regex::new(DISK_DRIVE_RE).unwrap();        
+        let mut boot_drive: Option<String> = None;
 
-            debug!("LinuxMigrator::get_boot_dev: findmnt for / result: {:?}", cmd_res);
-
-            if !cmd_res.status.success() || cmd_res.stdout.is_empty() {
-                return Err(MigError::from_remark(
-                    MigErrorKind::ExecProcess,
-                    &format!(
-                        "{}::get_boot_dev: command failed: {}",
-                        MODULE,
-                        cmd_res.status.code().unwrap_or(0)
-                    ),
-                ));
+        if cmd_res.status.success() && !cmd_res.stdout.is_empty() {
+            disk_info.boot_part_dev = String::from(cmd_res.stdout);
+            if let Some(captures) = re.captures(&disk_info.boot_part_dev) {  
+                let tmp_str = String::from(captures.get(1).unwrap().as_str());                
+                debug!("LinuxMigrator::get_boot_dev: {} found on {} -> {}", BOOT_DIR, cmd_res.stdout, &tmp_str);
+                boot_drive = Some(tmp_str);                
+            } else {
+                return Err(MigError::from_remark(MigErrorKind::InvParam,&format!("{}::get_boot_dev: cannot derive disk device from partition {}", MODULE, cmd_res.stdout)));
             }
         }
 
-        // now get disk device for mountpoint
-        let re = Regex::new(DISK_DRIVE_RE).unwrap();        
-        if let Some(captures) = re.captures(&cmd_res.stdout) {            
-            Ok(String::from(captures.get(1).unwrap().as_str()))
+        cmd_res = self
+            .call_cmd(FINDMNT_CMD, &FINDMNT_ARGS_ROOT, true)
+            .context(MigErrCtx::from_remark(
+                MigErrorKind::Upstream,
+                &format!("{}::get_os_arch: call {}", MODULE, FINDMNT_CMD),
+            ))?;
+
+        debug!("LinuxMigrator::get_boot_dev: findmnt for / result: {:?}", cmd_res);
+
+        if !cmd_res.status.success() || cmd_res.stdout.is_empty() {
+            return Err(MigError::from_remark(
+                MigErrorKind::ExecProcess,
+                &format!(
+                    "{}::get_boot_dev: command failed: {}",
+                    MODULE,
+                    cmd_res.status.code().unwrap_or(0)
+                ),
+            ));
+        }
+
+        disk_info.root_part_dev = String::from(cmd_res.stdout);
+        // now get disk device for mountpoint        
+        if let Some(captures) = re.captures(&disk_info.root_part_dev) {                                    
+            let root_drive = String::from(captures.get(1).unwrap().as_str());
+            debug!("LinuxMigrator::get_boot_dev: {} found on {} -> {}", ROOT_DIR, cmd_res.stdout, &root_drive);
+            if let Some(boot_drive) = boot_drive {
+                if boot_drive != root_drive {
+                    let message = format!("The systems drive layout is not comaptible with balena-migrate. {} is on {}, {} is on {}.", BOOT_DIR, boot_drive, ROOT_DIR, root_drive); 
+                    error!("{}", message);
+                    return Err(MigError::from_remark(MigErrorKind::InvState, &message));
+                }
+            }
+
+            disk_info.disk_dev = root_drive;
+
+            Ok(disk_info)
         } else {
             Err(MigError::from_remark(MigErrorKind::InvParam,&format!("{}::get_boot_dev: cannot derive disk device from partition {}", MODULE, cmd_res.stdout)))
         }
@@ -512,23 +581,6 @@ impl LinuxMigrator {
 /*
 impl Migrator for LinuxMigrator {
 
-    fn get_os_release<'a>(&'a mut self) -> Result<&'a OSRelease, MigError> {
-        match self.os_release {
-            Some(ref s) => Ok(s),
-            None => {
-                let os_info = std::fs::read_to_string(OS_KERNEL_RELEASE_FILE).context(
-                    MigErrCtx::from_remark(
-                        MigErrorKind::Upstream,
-                        &format!("File read '{}'", OS_KERNEL_RELEASE_FILE),
-                    ),
-                )?;
-
-                self.os_release = Some(OSRelease::parse_from_str(&os_info.trim())?);
-
-                Ok(self.os_release.as_ref().unwrap())
-            }
-        }
-    }
 
 
 

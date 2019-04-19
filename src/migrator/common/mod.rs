@@ -91,3 +91,20 @@ pub(crate) fn check_tcp_connect(host: &str, port: u16, timeout: u64) -> Result<(
         Err(MigError::from_remark(MigErrorKind::InvState, &format!("{}::check_tcp_connect: no results from name resolution for: '{}", MODULE, url)))
     }
 }
+
+const GB_SIZE: u64 = 1024 * 1024 * 1024;
+const MB_SIZE: u64 = 1024 * 1024;
+const KB_SIZE: u64 = 1024;
+
+pub fn format_size_with_unit(size: u64) -> String {
+    if size > (10 * GB_SIZE) {
+        format!("{} GiB", size / GB_SIZE)
+    } else if size > (10 * MB_SIZE) {
+        format!("{} MiB", size / MB_SIZE)
+    } else if size > (10 * KB_SIZE) {
+        format!("{} KiB", size / KB_SIZE)
+    } else {
+        format!("{} B", size)
+    }
+}
+
