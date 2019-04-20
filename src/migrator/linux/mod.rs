@@ -60,7 +60,7 @@ const OS_KERNEL_RELEASE_FILE: &str = "/proc/sys/kernel/osrelease";
 const OS_MEMINFO_FILE: &str = "/proc/meminfo";
 const SYS_UEFI_DIR: &str = "/sys/firmware/efi";
 
-const DISK_DRIVE_RE: &str = r#"^(/dev/([^/]+/)*.*)p[0-9]+$"#;
+
 
 struct DiskInfo {    
     disk_dev: String,
@@ -133,6 +133,8 @@ impl LinuxMigrator {
 
     pub fn try_init(config: Config) -> Result<LinuxMigrator, MigError> {                        
         trace!("LinuxMigrator::try_init: entered");        
+
+        info!("migrate mode: {:?}",config.migrate.mode);
         
         let mut migrator = LinuxMigrator {
             config,
@@ -146,6 +148,17 @@ impl LinuxMigrator {
             return Err(MigError::from_remark(MigErrorKind::InvState, &format!("{}::try_init: was run without admin privileges", MODULE)));
         } 
         
+
+        migrator.sysinfo.os_name = Some(migrator.get_os_name()?);
+        if let Some(ref os_name) = migrator.sysinfo.os_name {            
+            info!("OS Name is {}", os_name); 
+            if let None = SUPPORTED_OSSES.iter().position(|&r| r == os_name) {
+                let message = format!("your OS '{}' is not in the list of operating systems supported by balena-migrate", os_name);                
+                error!("{}", &message);                
+                return Err(MigError::from_remark(MigErrorKind::InvState, &message));
+            }                        
+        }
+
         migrator.sysinfo.disk_info = Some(migrator.get_disk_info()?);
         if let Some(ref disk_info) = migrator.sysinfo.disk_info {
             info!("Boot device is {}, size: {}", disk_info.disk_dev, format_size_with_unit(disk_info.disk_size)); 
@@ -157,16 +170,6 @@ impl LinuxMigrator {
             // TODO: check disk size and free size on /boot and
         }            
 
-
-        migrator.sysinfo.os_name = Some(migrator.get_os_name()?);
-        if let Some(ref os_name) = migrator.sysinfo.os_name {            
-            info!("OS Name is {}", os_name); 
-            if let None = SUPPORTED_OSSES.iter().position(|&r| r == os_name) {
-                let message = format!("your OS '{}' is not in the list of operating systems supported by balena-migrate", os_name);                
-                error!("{}", &message);                
-                return Err(MigError::from_remark(MigErrorKind::InvState, &message));
-            }                        
-        }
 
         migrator.sysinfo.os_arch = Some(migrator.get_os_arch()?);        
         if let Some(ref os_arch) = migrator.sysinfo.os_arch {
@@ -426,7 +429,7 @@ impl LinuxMigrator {
 
     
     fn get_disk_info(&mut self) -> Result<DiskInfo, MigError> {
-        trace!("LinuxMigrator::get_boot_dev: entered");
+        trace!("LinuxMigrator::get_disk_info: entered");
 
         // TODO: extract into get_part_info
         //   - Detect if path exists & is a mountpoint
@@ -435,50 +438,55 @@ impl LinuxMigrator {
 
         let mut disk_info = DiskInfo::default();
 
-        disk_info.boot_part = PartitionInfo::new(BOOT_DIR, self)?;        
+        disk_info.boot_part = PartitionInfo::new(BOOT_DIR, self)?;
         if let Some(ref boot_part) = disk_info.boot_part {
             info!("{}", boot_part);    
+        } else {
+            let message = format!("Unable to retrieve attributes for {} file system, giving up.", BOOT_DIR); 
+            error!("{}", message);
+            return Err(MigError::from_remark(MigErrorKind::InvState, &message));            
         }
-
+        
         disk_info.efi_part = PartitionInfo::new(EFI_DIR, self)?;
         if let Some(ref efi_part) = disk_info.efi_part {
             info!("{}", efi_part);    
         }
 
-        if let Some(root_part) = PartitionInfo::new(ROOT_DIR, self)? {
-            info!("{}", root_part);    
-            disk_info.root_part = Some(root_part)
-        } else {
-            let message = format!("Unable to retrieve attributes for {} file system, giving up.", ROOT_DIR); 
-            error!("{}", message);
-            return Err(MigError::from_remark(MigErrorKind::InvState, &message));            
-        }
+        disk_info.root_part = PartitionInfo::new(ROOT_DIR, self)?;
 
-        let re = Regex::new(DISK_DRIVE_RE).unwrap();              
-        
-        if let Some(root_part) = &disk_info.root_part {
-            if let Some(captures) = re.captures(&root_part.device) {  
-                let tmp_str = String::from(captures.get(1).unwrap().as_str());                
-                debug!("LinuxMigrator::get_disk_info: {} found on {} -> {}", root_part.path, root_part.device, &tmp_str);
-                disk_info.disk_dev = String::from(tmp_str);                
-            } else {
-                return Err(MigError::from_remark(MigErrorKind::InvParam,&format!("{}::get_boot_dev: cannot derive disk device from partition {}", MODULE, root_part.device)));
+        if let Some(ref root_part) = disk_info.root_part {
+            info!("{}", root_part);    
+
+            if let Some(ref boot_part) = disk_info.boot_part {
+                if root_part.drive != boot_part.drive {  
+                    let message = "Your device has a disk layout that is incompatible with balena-migrate. balena migrate requires the /boot /boot/efi and / partitions to be on one drive";
+                    error!("{}",message);
+                    return Err(MigError::from_remark(MigErrorKind::InvParam,&format!("{}::get_disk_info: {}", MODULE, message)));
+                } 
+            }
+
+            if let Some(ref efi_part) = disk_info.efi_part {
+                if root_part.drive != efi_part.drive {  
+                    let message = "Your device has a disk layout that is incompatible with balena-migrate. balena migrate requires the /boot /boot/efi and / partitions to be on one drive";
+                    error!("{}",message);
+                    return Err(MigError::from_remark(MigErrorKind::InvParam,&format!("{}::get_disk_info: {}", MODULE, message)));
+                } 
             }
 
             let args: Vec<&str> = vec![    
                 "-b",
                 "--output=SIZE,UUID",
-                &disk_info.disk_dev];
+                &root_part.drive];
             
             let cmd_res = self.call_cmd(LSBLK_CMD, &args, true)?;
             if !cmd_res.status.success() || cmd_res.stdout.is_empty() {
-                return Err(MigError::from_remark(MigErrorKind::ExecProcess , &format!("{}::new: failed to boot device attributes for {}", MODULE, &disk_info.disk_dev)));
+                return Err(MigError::from_remark(MigErrorKind::ExecProcess , &format!("{}::new: failed to retrieve device attributes for {}", MODULE, &root_part.drive)));
             }
 
             // debug!("lsblk output: {:?}",&cmd_res.stdout);
             let output: Vec<&str> = cmd_res.stdout.lines().collect();
             if output.len() < 2 {
-                return Err(MigError::from_remark(MigErrorKind::InvParam , &format!("{}::new: failed to parse block device attributes for {}", MODULE, &disk_info.disk_dev)));
+                return Err(MigError::from_remark(MigErrorKind::InvParam , &format!("{}::new: failed to parse block device attributes for {}", MODULE, &root_part.drive)));
             }
 
             debug!("lsblk output: {:?}",&output[1]);
@@ -488,12 +496,14 @@ impl LinuxMigrator {
                     disk_info.disk_uuid = String::from(cap.as_str());
                 }                
             }
+            disk_info.disk_dev = root_part.drive.clone();
 
+            Ok(disk_info)
         } else {
-            panic!("missing root partition");
-        }
-
-        Ok(disk_info)
+            let message = format!("Unable to retrieve attributes for {} file system, giving up.", ROOT_DIR); 
+            error!("{}", message);
+            Err(MigError::from_remark(MigErrorKind::InvState, &message))
+        }        
     }
 
     /*

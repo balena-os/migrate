@@ -113,7 +113,7 @@ impl<'a> Config {
             }            
         }
 
-        info!("{}::new: migrate mode: {:?}",MODULE, config.migrate.mode);
+        debug!("{}::new: migrate mode: {:?}",MODULE, config.migrate.mode);
 
         debug!("{}::new: got: {:?}", MODULE, config);
 
