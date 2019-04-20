@@ -1,8 +1,8 @@
 log_level: 'warn'
 modules: 
- - name: balena_migrate::migrator::common::config
+ - name: migrator::common::config
    level: 'info'
-#  - name: 'balena_migrate::migrator::common'
+#  - name: 'migrator::common'
 #    level: 'trace'  
- - name: 'balena_migrate::migrator::linux'
+ - name: 'migrator::linux'
    level: 'trace'  

@@ -8,6 +8,7 @@ extern crate log;
 extern crate chrono;
 extern crate stderrlog;
 extern crate colored;
+extern crate serde_json;
 
 #[cfg(target_os = "windows")]
 extern crate winapi;

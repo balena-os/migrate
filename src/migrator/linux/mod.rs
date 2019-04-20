@@ -459,7 +459,7 @@ impl LinuxMigrator {
         if let Some(root_part) = &disk_info.root_part {
             if let Some(captures) = re.captures(&root_part.device) {  
                 let tmp_str = String::from(captures.get(1).unwrap().as_str());                
-                debug!("LinuxMigrator::get_disk_info: {} found on {} -> {}", root_part.mountpoint, root_part.device, &tmp_str);
+                debug!("LinuxMigrator::get_disk_info: {} found on {} -> {}", root_part.path, root_part.device, &tmp_str);
                 disk_info.disk_dev = String::from(tmp_str);                
             } else {
                 return Err(MigError::from_remark(MigErrorKind::InvParam,&format!("{}::get_boot_dev: cannot derive disk device from partition {}", MODULE, root_part.device)));

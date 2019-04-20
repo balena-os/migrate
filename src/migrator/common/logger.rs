@@ -7,6 +7,7 @@ use std::env;
 use yaml_rust::{YamlLoader, Yaml};
 use std::fs::read_to_string;
 use colored::{*};
+use regex::{Regex,Captures};
 
 
 use crate::migrator::{MigError, MigErrorKind, MigErrCtx};
@@ -21,6 +22,7 @@ pub const DEFAULT_LOG_LEVEL: Level = Level::Warn;
 pub struct Logger {
     default_level: Level,
     mod_level: HashMap<String,Level>,
+    module_re: Regex,
 }
 
 impl Logger {
@@ -30,6 +32,7 @@ impl Logger {
         let mut logger = Logger{
             default_level: DEFAULT_LOG_LEVEL,
             mod_level: HashMap::new(),
+            module_re: Regex::new(r#"^[^:]+::(.*)$"#).unwrap()
         };
 
         let mut max_level = logger.default_level;
@@ -101,8 +104,15 @@ impl Log for Logger {
 
     fn log(&self, record: &Record) {        
         let mut level = self.default_level;
-        let mod_name = record.module_path().unwrap_or_default();
-        if let Some(mod_level) = self.mod_level.get(mod_name) {
+        
+        let mut mod_name = String::from("undefined");
+        if let Some(mod_path) = record.module_path() {
+            if let Some(ref captures) = self.module_re.captures(mod_path) {
+                mod_name = String::from(captures.get(1).unwrap().as_str());
+            }
+        }
+
+        if let Some(mod_level) = self.mod_level.get(&mod_name) {
             level = *mod_level;
         }
 
@@ -112,7 +122,7 @@ impl Log for Logger {
                 "{} {:<5} [{}] {}",
                 Local::now().format("%Y-%m-%d %H:%M:%S"),
                 record.level().to_string(),
-                record.module_path().unwrap_or_default(),
+                &mod_name,
                 record.args());
 
             match curr_level {

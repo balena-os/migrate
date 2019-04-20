@@ -15,7 +15,7 @@ failure = "*"
 yaml-rust = "0.4"
 colored = "1.7"
 #serde = "*"
-#serde_json = "*"
+serde_json = "*"
 #serde_derive = "*"
 
 # tempfile = "3"
