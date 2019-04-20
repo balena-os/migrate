@@ -3,8 +3,6 @@ use libc::{getuid, sysinfo};
 use log::{error, info, debug, warn, trace};
 use std::time::{Instant};
 
-
-
 // use std::os::linux::{};
 
 use regex::Regex;
@@ -15,7 +13,7 @@ mod partition_info;
 use partition_info::PartitionInfo;
 
 use crate::migrator::{
-    common::{call, CmdRes, check_tcp_connect, logger, format_size_with_unit },
+    common::{call, CmdRes, format_size_with_unit },
     MigErrCtx, 
     MigError, 
     MigErrorKind,
@@ -49,6 +47,9 @@ const GRUB_INST_VERSION_ARGS: [&str; 1] = ["--version"];
 const GRUB_INST_VERSION_RE: &str = r#"^.*\s+\(GRUB\)\s+([0-9]+)\.([0-9]+)[^0-9].*$"#;
 const GRUB_MIN_VERSION: &str = "2";
 
+const LSBLK_CMD: &str = "lsblk";
+const LSBLK_REGEX: &str = r#"^(\d+)(\s+(.*))?$"#;
+
 const MOKUTIL_CMD: &str = "mokutil";
 const MOKUTIL_ARGS_SB_STATE: [&str; 1] = ["--sb-state"];
 
@@ -59,30 +60,12 @@ const OS_KERNEL_RELEASE_FILE: &str = "/proc/sys/kernel/osrelease";
 const OS_MEMINFO_FILE: &str = "/proc/meminfo";
 const SYS_UEFI_DIR: &str = "/sys/firmware/efi";
 
-
-const FINDMNT_CMD: &str = "findmnt";
-const FINDMNT_ARGS_BOOT: [&str; 5] = [
-    "--noheadings",
-    "--canonicalize",
-    "--output",
-    "SOURCE",
-    BOOT_DIR,
-];
-
-const FINDMNT_ARGS_ROOT: [&str; 5] = [
-    "--noheadings", 
-    "--canonicalize", 
-    "--output", 
-    "SOURCE", 
-    ROOT_DIR];
-
 const DISK_DRIVE_RE: &str = r#"^(/dev/([^/]+/)*.*)p[0-9]+$"#;
-
-
 
 struct DiskInfo {    
     disk_dev: String,
     disk_size: u64,
+    disk_uuid: String,
     root_part: Option<PartitionInfo>,
     boot_part: Option<PartitionInfo>,
     efi_part: Option<PartitionInfo>,
@@ -92,6 +75,7 @@ impl DiskInfo {
     pub fn default() -> DiskInfo {
         DiskInfo {
             disk_dev: String::from(""),
+            disk_uuid: String::from(""),
             disk_size: 0,
             root_part: None,
             boot_part: None,
@@ -441,9 +425,6 @@ impl LinuxMigrator {
     }
 
     
-    fn get_part_info() -> Result<PartitionInfo, MigError> {
-    }
-
     fn get_disk_info(&mut self) -> Result<DiskInfo, MigError> {
         trace!("LinuxMigrator::get_boot_dev: entered");
 
@@ -453,75 +434,66 @@ impl LinuxMigrator {
         //   - get size & free space
 
         let mut disk_info = DiskInfo::default();
-                
-        if util::dir_exists(BOOT_DIR)? == false {
-            let message = format!("The systems boot directory could not be found: '{}'", BOOT_DIR); 
-            error!("{}", message);
-            return Err(MigError::from_remark(MigErrorKind::InvState, &message));
+
+        disk_info.boot_part = PartitionInfo::new(BOOT_DIR, self)?;        
+        if let Some(ref boot_part) = disk_info.boot_part {
+            info!("{}", boot_part);    
         }
 
-        let mut cmd_res = self
-            .call_cmd(FINDMNT_CMD, &FINDMNT_ARGS_BOOT, true)
-            .context(MigErrCtx::from_remark(
-                MigErrorKind::Upstream,
-                &format!("{}::get_os_arch: call {}", MODULE, FINDMNT_CMD),
-            ))?;
-
-        debug!("LinuxMigrator::get_boot_dev: findmnt for /boot result: {:?}", cmd_res);
-
-        let re = Regex::new(DISK_DRIVE_RE).unwrap();        
-        let mut boot_drive: Option<String> = None;
-
-        if cmd_res.status.success() && !cmd_res.stdout.is_empty() {
-            disk_info.boot_part_dev = String::from(cmd_res.stdout);
-            if let Some(captures) = re.captures(&disk_info.boot_part_dev) {  
-                let tmp_str = String::from(captures.get(1).unwrap().as_str());                
-                debug!("LinuxMigrator::get_boot_dev: {} found on {} -> {}", BOOT_DIR, cmd_res.stdout, &tmp_str);
-                boot_drive = Some(tmp_str);                
-            } else {
-                return Err(MigError::from_remark(MigErrorKind::InvParam,&format!("{}::get_boot_dev: cannot derive disk device from partition {}", MODULE, cmd_res.stdout)));
-            }
+        disk_info.efi_part = PartitionInfo::new(EFI_DIR, self)?;
+        if let Some(ref efi_part) = disk_info.efi_part {
+            info!("{}", efi_part);    
         }
 
-        cmd_res = self
-            .call_cmd(FINDMNT_CMD, &FINDMNT_ARGS_ROOT, true)
-            .context(MigErrCtx::from_remark(
-                MigErrorKind::Upstream,
-                &format!("{}::get_os_arch: call {}", MODULE, FINDMNT_CMD),
-            ))?;
-
-        debug!("LinuxMigrator::get_boot_dev: findmnt for / result: {:?}", cmd_res);
-
-        if !cmd_res.status.success() || cmd_res.stdout.is_empty() {
-            return Err(MigError::from_remark(
-                MigErrorKind::ExecProcess,
-                &format!(
-                    "{}::get_boot_dev: command failed: {}",
-                    MODULE,
-                    cmd_res.status.code().unwrap_or(0)
-                ),
-            ));
-        }
-
-        disk_info.root_part_dev = String::from(cmd_res.stdout);
-        // now get disk device for mountpoint        
-        if let Some(captures) = re.captures(&disk_info.root_part_dev) {                                    
-            let root_drive = String::from(captures.get(1).unwrap().as_str());
-            debug!("LinuxMigrator::get_boot_dev: {} found on {} -> {}", ROOT_DIR, cmd_res.stdout, &root_drive);
-            if let Some(boot_drive) = boot_drive {
-                if boot_drive != root_drive {
-                    let message = format!("The systems drive layout is not comaptible with balena-migrate. {} is on {}, {} is on {}.", BOOT_DIR, boot_drive, ROOT_DIR, root_drive); 
-                    error!("{}", message);
-                    return Err(MigError::from_remark(MigErrorKind::InvState, &message));
-                }
-            }
-
-            disk_info.disk_dev = root_drive;
-
-            Ok(disk_info)
+        if let Some(root_part) = PartitionInfo::new(ROOT_DIR, self)? {
+            info!("{}", root_part);    
+            disk_info.root_part = Some(root_part)
         } else {
-            Err(MigError::from_remark(MigErrorKind::InvParam,&format!("{}::get_boot_dev: cannot derive disk device from partition {}", MODULE, cmd_res.stdout)))
+            let message = format!("Unable to retrieve attributes for {} file system, giving up.", ROOT_DIR); 
+            error!("{}", message);
+            return Err(MigError::from_remark(MigErrorKind::InvState, &message));            
         }
+
+        let re = Regex::new(DISK_DRIVE_RE).unwrap();              
+        
+        if let Some(root_part) = &disk_info.root_part {
+            if let Some(captures) = re.captures(&root_part.device) {  
+                let tmp_str = String::from(captures.get(1).unwrap().as_str());                
+                debug!("LinuxMigrator::get_disk_info: {} found on {} -> {}", root_part.mountpoint, root_part.device, &tmp_str);
+                disk_info.disk_dev = String::from(tmp_str);                
+            } else {
+                return Err(MigError::from_remark(MigErrorKind::InvParam,&format!("{}::get_boot_dev: cannot derive disk device from partition {}", MODULE, root_part.device)));
+            }
+
+            let args: Vec<&str> = vec![    
+                "-b",
+                "--output=SIZE,UUID",
+                &disk_info.disk_dev];
+            
+            let cmd_res = self.call_cmd(LSBLK_CMD, &args, true)?;
+            if !cmd_res.status.success() || cmd_res.stdout.is_empty() {
+                return Err(MigError::from_remark(MigErrorKind::ExecProcess , &format!("{}::new: failed to boot device attributes for {}", MODULE, &disk_info.disk_dev)));
+            }
+
+            // debug!("lsblk output: {:?}",&cmd_res.stdout);
+            let output: Vec<&str> = cmd_res.stdout.lines().collect();
+            if output.len() < 2 {
+                return Err(MigError::from_remark(MigErrorKind::InvParam , &format!("{}::new: failed to parse block device attributes for {}", MODULE, &disk_info.disk_dev)));
+            }
+
+            debug!("lsblk output: {:?}",&output[1]);
+            if let Some(captures) = Regex::new(LSBLK_REGEX).unwrap().captures(&output[1]) {
+                disk_info.disk_size = captures.get(1).unwrap().as_str().parse::<u64>().unwrap();
+                if let Some(cap) = captures.get(3) {
+                    disk_info.disk_uuid = String::from(cap.as_str());
+                }                
+            }
+
+        } else {
+            panic!("missing root partition");
+        }
+
+        Ok(disk_info)
     }
 
     /*
