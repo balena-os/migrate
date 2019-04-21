@@ -3,25 +3,21 @@ use std::fmt::{self, Display, Formatter};
 use log::{trace, debug, warn};
 use regex::Regex;
 use lazy_static::lazy_static;
+use serde_json::{Value};
 
-use crate::migrator::{
+use crate::migrator::{    
     MigError, 
     MigErrorKind,
     MigErrCtx,
     common::{format_size_with_unit},
+    linux::util::{dir_exists, call_cmd, DF_CMD, MOUNT_CMD, LSBLK_CMD}    
     };
 
-use serde_json::{Value};
 
-use super::LinuxMigrator;
-use super::util::{dir_exists};
 
 const MODULE: &str = "migrator::linux::partition_info";
 //const FINDMNT_CMD: &str = "findmnt";
 
-const DF_CMD: &str = "df";
-const LSBLK_CMD: &str = "lsblk";
-const MOUNT_CMD: &str = "mount";
 
 const SIZE_REGEX: &str = r#"^(\d+)K?$"#;
 const LSBLK_REGEX: &str = r#"^(\S+)\s+(\d+)\s+(\S+)\s+(\S+)(\s+(.*))?$"#;
@@ -60,11 +56,10 @@ impl PartitionInfo {
             part_size: 0,
             fs_size: 0,
             fs_free: 0,
-
         }
     }
 
-    pub fn new(path: &str, migrator: &mut LinuxMigrator) -> Result<Option<PartitionInfo>,MigError> {
+    pub fn new(path: &str) -> Result<Option<PartitionInfo>,MigError> {
         trace!("PartitionInfo::new: entered with: '{}'", path);
 
         if ! dir_exists(path)? {           
@@ -86,7 +81,7 @@ impl PartitionInfo {
             "--output=source,size,used",
             path];
         
-        let cmd_res = migrator.call_cmd(DF_CMD, &args, true)?;
+        let cmd_res = call_cmd(DF_CMD, &args, true)?;
 
         if !cmd_res.status.success() || cmd_res.stdout.is_empty() {
             return Err(MigError::from_remark(MigErrorKind::InvParam , &format!("{}::new: failed to find mountpoint for {}", MODULE, path)));
@@ -108,7 +103,7 @@ impl PartitionInfo {
         debug!("PartitionInfo::new: '{}' df result: {:?}", path, &words);
 
         let args: Vec<&str> = vec![];
-        let cmd_res = migrator.call_cmd(MOUNT_CMD, &args, true)?;
+        let cmd_res = call_cmd(MOUNT_CMD, &args, true)?;
         if !cmd_res.status.success() || cmd_res.stdout.is_empty() {
             return Err(MigError::from_remark(MigErrorKind::InvParam , &format!("{}::new: failed to find mountpoint for {}", MODULE, path)));
         }
@@ -183,7 +178,7 @@ impl PartitionInfo {
 
         // TODO: use distinct calls for UUIDs or --json format to tolerate missing/empty UUIDs
 
-        let cmd_res = migrator.call_cmd(LSBLK_CMD, &args, true)?;
+        let cmd_res = call_cmd(LSBLK_CMD, &args, true)?;
         if !cmd_res.status.success() || cmd_res.stdout.is_empty() {
             return Err(MigError::from_remark(MigErrorKind::ExecProcess , &format!("{}::new: failed to determine mountpoint attributes for {}", MODULE, path)));
         }
@@ -196,16 +191,6 @@ impl PartitionInfo {
         if let Some(ref devs) = parse_res.get("blockdevices") {
             if let Some(device) = devs.get(0) {                
                 
-                /*
-                if let Some(ref val) = device.get("fstype") {
-                    debug!("fs_type res: {:?}", val);
-                    if let Value::String(ref s) = val {
-                        debug!("fs_type res: {:?}", s);
-                        result.fs_type = String::from(s.as_ref());
-                    }
-                }
-                */
-
                 if let Some(ref val) = device.get("size") {
                     if let Value::String(ref s) = val {
                         result.part_size = s.parse::<u64>()

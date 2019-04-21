@@ -67,6 +67,13 @@ impl<'a> Config {
                     .help("use config file"),
             )
             .arg(
+                Arg::with_name("work_dir")
+                    .short("w")
+                    .long("work_dir")
+                    .value_name("DIR")
+                    .help("Work directory"),
+            )
+            .arg(
                 Arg::with_name("test")
                     .short("t")
                     .long("test")
@@ -99,7 +106,15 @@ impl<'a> Config {
         let mut config = Config::default();
 
         if arg_matches.is_present("config") {
-            config.from_file(arg_matches.value_of("config").unwrap())?;
+            if let Some(cfg) = arg_matches.value_of("config") {
+                config.from_file(cfg)?;
+            }
+        }
+
+        if arg_matches.is_present("work_dir") {
+            if let Some(work_dir) = arg_matches.value_of("work_dir") {
+                config.migrate.work_dir = String::from(work_dir);
+            }
         }
 
         if arg_matches.is_present("mode") {

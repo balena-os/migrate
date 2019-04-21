@@ -13,7 +13,8 @@ mod partition_info;
 use partition_info::PartitionInfo;
 
 use crate::migrator::{
-    common::{call, CmdRes, format_size_with_unit },
+    common::{format_size_with_unit },
+    linux::util::{call_cmd, GRUB_INSTALL_CMD, UNAME_CMD, LSBLK_CMD, MOKUTIL_CMD },
     MigErrCtx, 
     MigError, 
     MigErrorKind,
@@ -21,9 +22,6 @@ use crate::migrator::{
     OSRelease, 
     Config, 
     };
-
-use std::collections::hash_map::HashMap;
-
 
 const SUPPORTED_OSSES: &'static [&'static str] = &[
     "Ubuntu 18.04.2 LTS", 
@@ -40,18 +38,16 @@ const BOOT_DIR: &str = "/boot";
 const ROOT_DIR: &str = "/";
 const EFI_DIR: &str = "/boot/efi";
 
-const UNAME_CMD: &str = "uname";
+
 const UNAME_ARGS_OS_ARCH: [&str; 1] = ["-m"];
 
-const GRUB_INST_CMD: &str = "grub-install";
+
 const GRUB_INST_VERSION_ARGS: [&str; 1] = ["--version"];
 const GRUB_INST_VERSION_RE: &str = r#"^.*\s+\(GRUB\)\s+([0-9]+)\.([0-9]+)[^0-9].*$"#;
 const GRUB_MIN_VERSION: &str = "2";
 
-const LSBLK_CMD: &str = "lsblk";
 const LSBLK_REGEX: &str = r#"^(\d+)(\s+(.*))?$"#;
 
-const MOKUTIL_CMD: &str = "mokutil";
 const MOKUTIL_ARGS_SB_STATE: [&str; 1] = ["--sb-state"];
 
 const MIN_DISK_SIZE: u64 = 2 * 1024 * 1024 * 1024; // 2 GB 
@@ -120,9 +116,8 @@ impl SysInfo {
     }
 }
 
-pub(crate) struct LinuxMigrator {
-    config: Config,
-    cmd_path: HashMap<String,String>,
+pub struct LinuxMigrator {
+    config: Config,    
     sysinfo: SysInfo,
 }
 
@@ -138,10 +133,28 @@ impl LinuxMigrator {
         info!("migrate mode: {:?}",config.migrate.mode);
         
         let mut migrator = LinuxMigrator {
-            config,
-            cmd_path: HashMap::new(),
+            config,            
             sysinfo: SysInfo::default(),
         };
+
+        if ! util::dir_exists(&migrator.config.migrate.work_dir)? {
+            let message = format!("The work directory '{}' can not be accessed", &migrator.config.migrate.work_dir);              
+            error!("{}", message);
+            return Err(MigError::from_remark(MigErrorKind::InvParam, &message));
+        }
+        
+        if let Some(ref balena_cfg) = migrator.config.balena {
+            if ! balena_cfg.image.is_empty() {
+                if let Some(file_info) = util::check_work_file(&balena_cfg.image, &migrator.config.migrate.work_dir)? {
+                    debug!("{} -> {:?}", &balena_cfg.image, file_info);
+                } else {
+                    let message = format!("The balena image file '{}' can not be accessed", &balena_cfg.image);              
+                    error!("{}", message);
+                    return Err(MigError::from_remark(MigErrorKind::InvParam, &message));
+                }
+            }
+        }
+
 
         // fake admin is not honored in release mode
         if ! migrator.is_admin()? {
@@ -229,21 +242,6 @@ impl LinuxMigrator {
         Err(MigError::from(MigErrorKind::NotImpl))
     } 
 
-    pub(crate) fn call_cmd(
-        &mut self,
-        cmd: &str,
-        args: &[&str],
-        trim_stdout: bool,
-    ) -> Result<CmdRes, MigError> {
-        trace!("LinuxMigrator::call_cmd: entered with cmd: '{}', args: {:?}, trim: {}", cmd, args, trim_stdout);
-        Ok(call(
-            self.cmd_path
-                .entry(String::from(cmd))
-                .or_insert(util::whereis(cmd)?),
-            args,
-            trim_stdout,
-        )?)
-    }
 
     #[cfg(not (debug_assertions))]
     pub fn is_admin(&self) -> Result<bool, MigError> {
@@ -274,8 +272,7 @@ impl LinuxMigrator {
 
     fn get_os_arch(&mut self) -> Result<OSArch, MigError> {
         trace!("LinuxMigrator::get_os_arch: entered");
-        let cmd_res = self
-            .call_cmd(UNAME_CMD, &UNAME_ARGS_OS_ARCH, true)
+        let cmd_res = call_cmd(UNAME_CMD, &UNAME_ARGS_OS_ARCH, true)
             .context(MigErrCtx::from_remark(
                 MigErrorKind::Upstream,
                 &format!("{}::get_os_arch: call {}", MODULE, UNAME_CMD),
@@ -312,8 +309,7 @@ impl LinuxMigrator {
 
     fn get_grub_version(&mut self) -> Result<(String,String),MigError> {
         trace!("LinuxMigrator::get_grub_version: entered");
-        let cmd_res = self
-            .call_cmd(GRUB_INST_CMD, &GRUB_INST_VERSION_ARGS, true)
+        let cmd_res = call_cmd(GRUB_INSTALL_CMD, &GRUB_INST_VERSION_ARGS, true)
             .context(MigErrCtx::from_remark(
                 MigErrorKind::Upstream,
                 &format!("{}::get_grub_version: call {}", MODULE, UNAME_CMD),
@@ -362,7 +358,7 @@ impl LinuxMigrator {
 
     fn is_secure_boot(&mut self) -> Result<bool, MigError> {
         trace!("LinuxMigrator::is_secure_boot: entered");
-        let cmd_res = match self.call_cmd(MOKUTIL_CMD, &MOKUTIL_ARGS_SB_STATE, true) {
+        let cmd_res = match call_cmd(MOKUTIL_CMD, &MOKUTIL_ARGS_SB_STATE, true) {
             Ok(cr) => {
                 debug!("{}::is_secure_boot: {} -> {:?}", MODULE, MOKUTIL_CMD, cr);
                 cr
@@ -439,7 +435,7 @@ impl LinuxMigrator {
 
         let mut disk_info = DiskInfo::default();
 
-        disk_info.boot_part = PartitionInfo::new(BOOT_DIR, self)?;
+        disk_info.boot_part = PartitionInfo::new(BOOT_DIR)?;
         if let Some(ref boot_part) = disk_info.boot_part {
             info!("{}", boot_part);    
         } else {
@@ -448,12 +444,12 @@ impl LinuxMigrator {
             return Err(MigError::from_remark(MigErrorKind::InvState, &message));            
         }
         
-        disk_info.efi_part = PartitionInfo::new(EFI_DIR, self)?;
+        disk_info.efi_part = PartitionInfo::new(EFI_DIR)?;
         if let Some(ref efi_part) = disk_info.efi_part {
             info!("{}", efi_part);    
         }
 
-        disk_info.root_part = PartitionInfo::new(ROOT_DIR, self)?;
+        disk_info.root_part = PartitionInfo::new(ROOT_DIR)?;
 
         if let Some(ref root_part) = disk_info.root_part {
             info!("{}", root_part);    
@@ -479,7 +475,7 @@ impl LinuxMigrator {
                 "--output=SIZE,UUID",
                 &root_part.drive];
             
-            let cmd_res = self.call_cmd(LSBLK_CMD, &args, true)?;
+            let cmd_res = call_cmd(LSBLK_CMD, &args, true)?;
             if !cmd_res.status.success() || cmd_res.stdout.is_empty() {
                 return Err(MigError::from_remark(MigErrorKind::ExecProcess , &format!("{}::new: failed to retrieve device attributes for {}", MODULE, &root_part.drive)));
             }

@@ -27,7 +27,7 @@ pub struct BalenaConfig {
     pub vpn_host: String,
     pub vpn_port: u16,
     pub vpn_check: bool,
-    pub check_timeout: u64,
+    pub check_timeout: u64,    
 } 
 
 impl BalenaConfig {

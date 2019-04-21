@@ -1,5 +1,6 @@
 migrate:
   mode: IMMEDIATE
+  home_dir: './work/'
   all_wifis: true
   reboot: 10
   log_to:
@@ -13,7 +14,8 @@ migrate:
     stage2_home: ""
 balena:
   image: image.gz
-  config: config.json  
+  config: config.json
+  app_name: 'test' 
   api: 
     host: "api.balena-cloud.com"
     port: 443

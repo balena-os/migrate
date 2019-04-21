@@ -17,19 +17,19 @@ const DEFAULT_MODE: MigMode = MigMode::INVALID;
 
 #[derive(Debug)]
 pub struct MigrateConfig {
-    pub home_dir: String,
+    pub work_dir: String,
     pub mode: MigMode,
     pub reboot: Option<u64>,
     pub all_wifis: bool,
     pub log_to: Option<LogConfig>,
     pub kernel_file: String,
-    pub initramfs_file: String,
+    pub initramfs_file: String,    
 } 
 
 impl MigrateConfig {
     pub fn default() -> MigrateConfig {
         MigrateConfig {
-            home_dir: String::from("."),
+            work_dir: String::from("."),
             mode: DEFAULT_MODE,
             reboot: None,
             all_wifis: false,
@@ -42,7 +42,7 @@ impl MigrateConfig {
 
 impl YamlConfig for MigrateConfig {
     fn to_yaml(&self, prefix: &str) -> String {
-        let mut output = format!("{}migrate:\n{}  home_dir: '{}'\n{}  mode: '{:?}'\n{}  all_wifis: {}\n", prefix, prefix, self.home_dir, prefix, self.mode, prefix, self.all_wifis);
+        let mut output = format!("{}migrate:\n{}  work_dir: '{}'\n{}  mode: '{:?}'\n{}  all_wifis: {}\n", prefix, prefix, self.work_dir, prefix, self.mode, prefix, self.all_wifis);
         if let Some(i) = self.reboot {
             output += &format!("{}  reboot: {}\n", prefix, i);
         }
@@ -65,8 +65,8 @@ impl YamlConfig for MigrateConfig {
 
     fn from_yaml(&mut self, yaml: & Yaml) -> Result<(),MigError> {
 
-        if let Some(home_dir) = get_yaml_str(yaml, &["home_dir"])? {
-            self.home_dir = String::from(home_dir);
+        if let Some(work_dir) = get_yaml_str(yaml, &["work_dir"])? {
+            self.work_dir = String::from(work_dir);
         }
 
         if let Some(kernel_file) = get_yaml_str(yaml, &["kernel_file"])? {
