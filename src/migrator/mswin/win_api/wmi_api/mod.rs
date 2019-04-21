@@ -1,8 +1,8 @@
 use failure::Fail;
 use log::{debug, warn};
+use std::collections::HashMap;
 use std::io::Error;
 use std::ptr::{self, null_mut};
-use std::collections::HashMap;
 
 use winapi::{
     shared::{
@@ -12,22 +12,14 @@ use winapi::{
             RPC_C_IMP_LEVEL_IMPERSONATE,
         },
         wtypesbase::CLSCTX_INPROC_SERVER,
-    },    
+    },
     um::{
+        combaseapi::{CoCreateInstance, CoSetProxyBlanket},
         objidl::EOAC_NONE,
-        combaseapi::{
-                    CoCreateInstance, 
-                    CoSetProxyBlanket
-                    },                
-        wbemcli::{  IEnumWbemClassObject,
-                    IWbemClassObject,
-                    CLSID_WbemLocator, 
-                    IID_IWbemLocator, 
-                    IWbemLocator, 
-                    IWbemServices, 
-                    WBEM_FLAG_FORWARD_ONLY, 
-                    WBEM_FLAG_RETURN_IMMEDIATELY,
-                    },
+        wbemcli::{
+            CLSID_WbemLocator, IEnumWbemClassObject, IID_IWbemLocator, IWbemClassObject,
+            IWbemLocator, IWbemServices, WBEM_FLAG_FORWARD_ONLY, WBEM_FLAG_RETURN_IMMEDIATELY,
+        },
     },
 };
 
@@ -35,16 +27,15 @@ use super::com_api::ComAPI;
 use super::util::to_wide_cstring;
 use crate::migrator::{MigErrCtx, MigError, MigErrorKind};
 
-
 type PMIWbemLocator = *mut IWbemLocator;
 type PMIWbemServices = *mut IWbemServices;
 type PMIEnumWbemClassObject = *mut IEnumWbemClassObject;
 type PMIWbemClassObject = *mut IWbemClassObject;
 
 mod variant;
-pub use variant::{Variant};
+pub use variant::Variant;
 mod iwbem_class_wr;
-pub use iwbem_class_wr::{IWbemClassWrapper};
+pub use iwbem_class_wr::IWbemClassWrapper;
 mod query_result_enum;
 pub use query_result_enum::QueryResultEnumerator;
 
@@ -53,7 +44,7 @@ const MODULE: &str = "mswin::win_api::wmi_api";
 // TODO: make singleton like ComAPI
 
 #[derive(Debug)]
-pub struct WmiAPI {    
+pub struct WmiAPI {
     _com_api: ComAPI,
     p_svc: PMIWbemServices,
     namespace: String,
@@ -65,7 +56,10 @@ impl<'a> WmiAPI {
     }
 
     pub fn get_api_from_hcom(h_com_api: ComAPI, namespace: &str) -> Result<WmiAPI, MigError> {
-        debug!("{}::get_api_from_hcom: Calling CoCreateInstance for CLSID_WbemLocator", MODULE);
+        debug!(
+            "{}::get_api_from_hcom: Calling CoCreateInstance for CLSID_WbemLocator",
+            MODULE
+        );
 
         let mut p_loc = NULL;
 
@@ -120,7 +114,7 @@ impl<'a> WmiAPI {
             ))));
         }
 
-        debug!("{}::get_api_from_hcom: Got services {:?}",MODULE, p_svc);
+        debug!("{}::get_api_from_hcom: Got services {:?}", MODULE, p_svc);
 
         let wmi_api = Self {
             _com_api: h_com_api,
@@ -157,7 +151,7 @@ impl<'a> WmiAPI {
         Ok(wmi_api)
     }
 
-    pub fn raw_query(&self, query: &str) -> Result<Vec<HashMap<String,Variant>>,MigError> {
+    pub fn raw_query(&self, query: &str) -> Result<Vec<HashMap<String, Variant>>, MigError> {
         debug!("{}::raw_query: entered with {}", MODULE, query);
         let query_language = to_wide_cstring("WQL");
         let query = to_wide_cstring(query);
@@ -171,7 +165,9 @@ impl<'a> WmiAPI {
                 (WBEM_FLAG_FORWARD_ONLY | WBEM_FLAG_RETURN_IMMEDIATELY) as i32,
                 ptr::null_mut(),
                 &mut p_enumerator,
-            ) } != 0 {
+            )
+        } != 0
+        {
             let os_err = Error::last_os_error();
             warn!(
                 "{}::raw_query: ExecQuery returned os error: {:?} ",
@@ -185,20 +181,20 @@ impl<'a> WmiAPI {
 
         debug!("{}::raw_query: Got enumerator {:?}", MODULE, p_enumerator);
 
-        let mut result: Vec<HashMap<String,Variant>> = Vec::new();
+        let mut result: Vec<HashMap<String, Variant>> = Vec::new();
         for iwbem_obj in QueryResultEnumerator::new(p_enumerator) {
-            debug!("{}::raw_query: got object", MODULE);            
+            debug!("{}::raw_query: got object", MODULE);
             match iwbem_obj {
                 Ok(obj) => {
                     result.push(obj.to_map()?);
-/*                    debug!("{}::raw_query:   is object", MODULE);                    
-                    for prop in obj.list_properties()? {
-                        debug!("{}::raw_query:     has property: {:?}", MODULE, prop);                    
-                    }
-*/                    
-                }, 
+                    /*                    debug!("{}::raw_query:   is object", MODULE);
+                                        for prop in obj.list_properties()? {
+                                            debug!("{}::raw_query:     has property: {:?}", MODULE, prop);
+                                        }
+                    */
+                }
                 Err(why) => {
-                    warn!("{}::raw_query:   is error result: {:?}", MODULE, why);                    
+                    warn!("{}::raw_query:   is error result: {:?}", MODULE, why);
                 }
             }
         }
@@ -218,13 +214,13 @@ mod tests {
     fn init_wmi_api() {
         let wmi_api = WmiAPI::get_api("ROOT\\CVIM2").unwrap();
         let query_res = wmi_api.raw_query("SELECT Caption,Version,OSArchitecture, BootDevice, TotalVisibleMemorySize,FreePhysicalMemory FROM Win32_OperatingSystem").unwrap();
-        assert_eq!(query_res.len(),1);
+        assert_eq!(query_res.len(), 1);
         let res_amp = query_res.get(0).unwrap();
         let caption = res_amp.get("Caption").unwrap();
         if let Variant::STRING(s) = caption {
             assert!(!s.is_empty());
         } else {
             panic!("caption should be a string");
-        }        
+        }
     }
 }

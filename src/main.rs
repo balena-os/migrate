@@ -1,7 +1,6 @@
-
 // use crate::balena_migrate::migrator;
 mod migrator;
-use migrator::{migrate};
+use migrator::migrate;
 
 /*
 
@@ -10,8 +9,8 @@ use log::{info};
 mod migrator;
 
 
-use migrator::{ 
-    MigError, 
+use migrator::{
+    MigError,
     Migrator,
     Config,
     YamlConfig,
@@ -83,8 +82,8 @@ fn test(migrator: &mut MSWMigrator) -> Result<(),MigError> {
 
 #[cfg(target_os = "windows")]
 fn print_drives(migrator: &mut MSWMigrator) -> Result<(),MigError> {
-    use migrator::mswin::{WmiUtils};    
-    
+    use migrator::mswin::{WmiUtils};
+
     for phys_drive in WmiUtils::query_drives()? {
         println!("  type: PhysicalDrive");
         println!("  harddisk index:     {}", phys_drive.get_index());
@@ -94,7 +93,7 @@ fn print_drives(migrator: &mut MSWMigrator) -> Result<(),MigError> {
         println!("  bytes per sector:   {}", phys_drive.get_bytes_per_sector());
         println!("  partitions:         {}", phys_drive.get_partitions());
         println!("  compression_method: {}", phys_drive.get_compression_method());
-        println!("  size:               {}", format_size_with_unit(phys_drive.get_size()));    
+        println!("  size:               {}", format_size_with_unit(phys_drive.get_size()));
         println!("  status:             {}\n", phys_drive.get_status());
 
         for partition in phys_drive.query_partitions()? {
@@ -103,11 +102,11 @@ fn print_drives(migrator: &mut MSWMigrator) -> Result<(),MigError> {
             println!("    partition index:  {}", partition.get_part_index());
             println!("    device :          {}", partition.get_device());
             println!("    boot device:      {}", partition.is_boot_device());
-            println!("    bootable:         {}", partition.is_bootable());                    
+            println!("    bootable:         {}", partition.is_bootable());
             println!("    type:             {}", partition.get_ptype());
             println!("    number of blocks: {}", partition.get_num_blocks());
             println!("    start offset:     {}", partition.get_start_offset());
-            println!("    size:             {}", format_size_with_unit(partition.get_size()));            
+            println!("    size:             {}", format_size_with_unit(partition.get_size()));
             if let Some(ld) = partition.query_logical_drive()? {
                 println!("    logical drive:    {} {}",ld.get_name(), ld.get_device_id());
                 println!("      status:         {}",ld.get_status());
@@ -125,7 +124,7 @@ fn print_drives(migrator: &mut MSWMigrator) -> Result<(),MigError> {
                 }
             }
             println!();
-        }        
+        }
     }
 
     Ok(())
@@ -190,7 +189,7 @@ fn process(arg_matches: &ArgMatches) -> Result<(),MigError> {
     let mut migrator = MSWMigrator::try_init(config)?;
     info!("can migrate: {}", migrator.can_migrate()?);
 
-    if arg_matches.is_present("info") {        
+    if arg_matches.is_present("info") {
         print_sysinfo(&mut migrator);
     }
 
@@ -207,7 +206,7 @@ fn process(arg_matches: &ArgMatches) -> Result<(),MigError> {
     }
 
     Ok(())
-} 
+}
 
 #[cfg (not (target_os = "windows"))]
 fn process(arg_matches: &ArgMatches) -> Result<(),MigError> {
@@ -215,13 +214,13 @@ fn process(arg_matches: &ArgMatches) -> Result<(),MigError> {
     println!("config out:\n{}", config.to_yaml(""));
     let mut migrator = get_migrator(config)?;
     info!("can migrate: {}", migrator.can_migrate()?);
-    Ok(())    
-} 
+    Ok(())
+}
 
 */
 
-fn main() {    
-    // TODO: display error 
+fn main() {
+    // TODO: display error
     if let Err(error) = migrator::migrate() {
         println!("got error from migrator: {}", error);
     }
@@ -295,7 +294,7 @@ fn main() {
         .init()
         .unwrap();
 
-    
+
     process(&matches).unwrap();
 
 }

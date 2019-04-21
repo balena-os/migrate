@@ -1,11 +1,11 @@
 use crate::migrator::{MigErrCtx, MigError, MigErrorKind};
+use failure::Fail;
 use failure::ResultExt;
-use std::ffi::{OsStr};
+use log::warn;
+use std::ffi::OsStr;
+use std::io::Error;
 use std::iter::once;
 use std::os::windows::prelude::*;
-use log::{warn};
-use std::io::Error;
-use failure::{Fail};
 
 pub fn to_string(os_str_buf: &[u16]) -> Result<String, MigError> {
     match os_str_buf.iter().position(|&x| x == 0) {
@@ -62,13 +62,18 @@ pub fn report_win_api_error(module: &str, func: &str, called: &str) -> MigError 
         module, func, called, os_err
     );
 
-    MigError::from(
-        os_err.context(MigErrCtx::from_remark(
-            MigErrorKind::WinApi,
-            &format!("{}::{}: {} failed", module, func, called),)))
+    MigError::from(os_err.context(MigErrCtx::from_remark(
+        MigErrorKind::WinApi,
+        &format!("{}::{}: {} failed", module, func, called),
+    )))
 }
 
-pub fn report_win_api_error_with_deinit<T: Fn() -> ()>(module: &str, func: &str, called: &str, deinit: T) -> MigError {
+pub fn report_win_api_error_with_deinit<T: Fn() -> ()>(
+    module: &str,
+    func: &str,
+    called: &str,
+    deinit: T,
+) -> MigError {
     let os_err = Error::last_os_error();
 
     warn!(
@@ -78,9 +83,8 @@ pub fn report_win_api_error_with_deinit<T: Fn() -> ()>(module: &str, func: &str,
 
     deinit();
 
-    MigError::from(
-        os_err.context(MigErrCtx::from_remark(
-            MigErrorKind::WinApi,
-            &format!("{}::{}: {} failed", module, func, called),)))
+    MigError::from(os_err.context(MigErrCtx::from_remark(
+        MigErrorKind::WinApi,
+        &format!("{}::{}: {} failed", module, func, called),
+    )))
 }
-

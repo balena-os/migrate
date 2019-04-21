@@ -1,34 +1,31 @@
 use failure::{Fail, ResultExt};
 use libc::{getuid, sysinfo};
-use log::{error, info, debug, warn, trace};
-use std::time::{Instant};
+use log::{debug, error, info, trace, warn};
+use std::time::Instant;
 
 // use std::os::linux::{};
 
 use regex::Regex;
 
-mod util;
 mod partition_info;
+mod util;
 
 use partition_info::PartitionInfo;
 
 use crate::migrator::{
-    common::{format_size_with_unit },
-    linux::util::{call_cmd, GRUB_INSTALL_CMD, UNAME_CMD, LSBLK_CMD, MOKUTIL_CMD },
-    MigErrCtx, 
-    MigError, 
-    MigErrorKind,
-    OSArch, 
-    OSRelease, 
-    Config, 
-    };
+    common::format_size_with_unit,
+    linux::util::{
+        call_cmd, get_file_info, FileInfo, GRUB_INSTALL_CMD, LSBLK_CMD, MOKUTIL_CMD, UNAME_CMD,
+    },
+    Config, MigErrCtx, MigError, MigErrorKind, OSArch, OSRelease,
+};
 
 const SUPPORTED_OSSES: &'static [&'static str] = &[
-    "Ubuntu 18.04.2 LTS", 
+    "Ubuntu 18.04.2 LTS",
     "Ubuntu 16.04.2 LTS",
     "Ubuntu 14.04.2 LTS",
     "Raspbian GNU/Linux 9 (stretch)",
-    ];
+];
 
 const MODULE: &str = "LinuxMigrator";
 const OS_NAME_RE: &str = r#"^PRETTY_NAME="([^"]+)"$"#;
@@ -38,9 +35,7 @@ const BOOT_DIR: &str = "/boot";
 const ROOT_DIR: &str = "/";
 const EFI_DIR: &str = "/boot/efi";
 
-
 const UNAME_ARGS_OS_ARCH: [&str; 1] = ["-m"];
-
 
 const GRUB_INST_VERSION_ARGS: [&str; 1] = ["--version"];
 const GRUB_INST_VERSION_RE: &str = r#"^.*\s+\(GRUB\)\s+([0-9]+)\.([0-9]+)[^0-9].*$"#;
@@ -50,16 +45,13 @@ const LSBLK_REGEX: &str = r#"^(\d+)(\s+(.*))?$"#;
 
 const MOKUTIL_ARGS_SB_STATE: [&str; 1] = ["--sb-state"];
 
-const MIN_DISK_SIZE: u64 = 2 * 1024 * 1024 * 1024; // 2 GB 
-
+const MIN_DISK_SIZE: u64 = 2 * 1024 * 1024 * 1024; // 2 GB
 
 const OS_KERNEL_RELEASE_FILE: &str = "/proc/sys/kernel/osrelease";
 const OS_MEMINFO_FILE: &str = "/proc/meminfo";
 const SYS_UEFI_DIR: &str = "/sys/firmware/efi";
 
-
-
-struct DiskInfo {    
+struct DiskInfo {
     disk_dev: String,
     disk_size: u64,
     disk_uuid: String,
@@ -88,162 +80,213 @@ struct SysInfo {
     efi_boot: Option<bool>,
     secure_boot: Option<bool>,
     disk_info: Option<DiskInfo>,
-
-
-/*
-            os_name: None,
-            os_release: None,
-            os_arch: None,
-            uefi_boot: None,
-            boot_dev: None,
-            mem_tot: None,
-            mem_free: None,
-            admin: None,
-            sec_boot: None,
-*/
+    image_info: Option<FileInfo>,
+    /*
+                os_name: None,
+                os_release: None,
+                os_arch: None,
+                uefi_boot: None,
+                boot_dev: None,
+                mem_tot: None,
+                mem_free: None,
+                admin: None,
+                sec_boot: None,
+    */
 }
 
 impl SysInfo {
     pub fn default() -> SysInfo {
-        SysInfo{   
-            os_name: None, 
+        SysInfo {
+            os_name: None,
             os_release: None,
             os_arch: None,
             efi_boot: None,
             secure_boot: None,
-            disk_info: None, 
-            }
+            disk_info: None,
+            image_info: None,
+        }
     }
 }
 
 pub struct LinuxMigrator {
-    config: Config,    
+    config: Config,
     sysinfo: SysInfo,
 }
 
 impl LinuxMigrator {
-    pub fn migrate() -> Result<(),MigError> {                
-        let _migrator = LinuxMigrator::try_init(Config::new()?)?;        
+    pub fn migrate() -> Result<(), MigError> {
+        let _migrator = LinuxMigrator::try_init(Config::new()?)?;
         Ok(())
     }
 
-    pub fn try_init(config: Config) -> Result<LinuxMigrator, MigError> {                        
-        trace!("LinuxMigrator::try_init: entered");        
+    pub fn try_init(config: Config) -> Result<LinuxMigrator, MigError> {
+        trace!("LinuxMigrator::try_init: entered");
 
-        info!("migrate mode: {:?}",config.migrate.mode);
-        
+        info!("migrate mode: {:?}", config.migrate.mode);
+
         let mut migrator = LinuxMigrator {
-            config,            
+            config,
             sysinfo: SysInfo::default(),
         };
 
-        if ! util::dir_exists(&migrator.config.migrate.work_dir)? {
-            let message = format!("The work directory '{}' can not be accessed", &migrator.config.migrate.work_dir);              
+        if !util::dir_exists(&migrator.config.migrate.work_dir)? {
+            let message = format!(
+                "The work directory '{}' can not be accessed",
+                &migrator.config.migrate.work_dir
+            );
             error!("{}", message);
             return Err(MigError::from_remark(MigErrorKind::InvParam, &message));
         }
-        
+
         if let Some(ref balena_cfg) = migrator.config.balena {
-            if ! balena_cfg.image.is_empty() {
-                if let Some(file_info) = util::check_work_file(&balena_cfg.image, &migrator.config.migrate.work_dir)? {
-                    debug!("{} -> {:?}", &balena_cfg.image, file_info);
+            if !balena_cfg.image.is_empty() {
+                if let Some(file_info) =
+                    get_file_info(&balena_cfg.image, &migrator.config.migrate.work_dir)?
+                {
+                    debug!("{} -> {:?}", &balena_cfg.image, &file_info);
+                    if !file_info.ftype.starts_with("gzip compressed data,") {
+                        let message = format!("balena image {} is in invalid format, expected gzip compressed data, got {}", &file_info.path, &file_info.ftype);
+                        error!("{}", message);
+                        return Err(MigError::from_remark(MigErrorKind::InvParam, &message));
+                    }
+                    info!("BalenaOS image looks OK: {}", &file_info.path);
+                    migrator.sysinfo.image_info = Some(file_info);
                 } else {
-                    let message = format!("The balena image file '{}' can not be accessed", &balena_cfg.image);              
+                    let message = format!(
+                        "The balena image file '{}' can not be accessed",
+                        &balena_cfg.image
+                    );
                     error!("{}", message);
                     return Err(MigError::from_remark(MigErrorKind::InvParam, &message));
                 }
             }
         }
 
-
         // fake admin is not honored in release mode
-        if ! migrator.is_admin()? {
+        if !migrator.is_admin()? {
             error!("please run this program as root");
-            return Err(MigError::from_remark(MigErrorKind::InvState, &format!("{}::try_init: was run without admin privileges", MODULE)));
-        } 
-        
+            return Err(MigError::from_remark(
+                MigErrorKind::InvState,
+                &format!("{}::try_init: was run without admin privileges", MODULE),
+            ));
+        }
 
         migrator.sysinfo.os_name = Some(migrator.get_os_name()?);
-        if let Some(ref os_name) = migrator.sysinfo.os_name {            
-            info!("OS Name is {}", os_name); 
+        if let Some(ref os_name) = migrator.sysinfo.os_name {
+            info!("OS Name is {}", os_name);
             if let None = SUPPORTED_OSSES.iter().position(|&r| r == os_name) {
-                let message = format!("your OS '{}' is not in the list of operating systems supported by balena-migrate", os_name);                
-                error!("{}", &message);                
+                let message = format!("your OS '{}' is not in the list of operating systems supported by balena-migrate", os_name);
+                error!("{}", &message);
                 return Err(MigError::from_remark(MigErrorKind::InvState, &message));
-            }                        
+            }
         }
 
         migrator.sysinfo.disk_info = Some(migrator.get_disk_info()?);
         if let Some(ref disk_info) = migrator.sysinfo.disk_info {
-            info!("Boot device is {}, size: {}", disk_info.disk_dev, format_size_with_unit(disk_info.disk_size)); 
+            info!(
+                "Boot device is {}, size: {}",
+                disk_info.disk_dev,
+                format_size_with_unit(disk_info.disk_size)
+            );
             if disk_info.disk_size < MIN_DISK_SIZE {
-                let message = format!("The size of your harddrive {} = {} is too small to install balenaOS", disk_info.disk_dev, format_size_with_unit(disk_info.disk_size));                
-                error!("{}", &message);                
+                let message = format!(
+                    "The size of your harddrive {} = {} is too small to install balenaOS",
+                    disk_info.disk_dev,
+                    format_size_with_unit(disk_info.disk_size)
+                );
+                error!("{}", &message);
                 return Err(MigError::from_remark(MigErrorKind::InvState, &message));
             }
             // TODO: check disk size and free size on /boot and
-        }            
+        }
 
-
-        migrator.sysinfo.os_arch = Some(migrator.get_os_arch()?);        
+        migrator.sysinfo.os_arch = Some(migrator.get_os_arch()?);
         if let Some(ref os_arch) = migrator.sysinfo.os_arch {
-            info!("OS Architecture is {}", os_arch); 
+            info!("OS Architecture is {}", os_arch);
             match os_arch {
-                OSArch::ARMHF => { migrator.init_armhf()?; },
-                OSArch::AMD64 => { migrator.init_amd64()?;},
-                OSArch::I386 => { migrator.init_i386()?;},
-                _ => { return Err(MigError::from_remark(MigErrorKind::InvParam, &format!("{}::try_init: unexpected OsArch encountered: {}", MODULE, os_arch))); },
+                OSArch::ARMHF => {
+                    migrator.init_armhf()?;
+                }
+                OSArch::AMD64 => {
+                    migrator.init_amd64()?;
+                }
+                OSArch::I386 => {
+                    migrator.init_i386()?;
+                }
+                _ => {
+                    return Err(MigError::from_remark(
+                        MigErrorKind::InvParam,
+                        &format!(
+                            "{}::try_init: unexpected OsArch encountered: {}",
+                            MODULE, os_arch
+                        ),
+                    ));
+                }
             }
         }
-    
+
         Ok(migrator)
     }
 
-    fn init_armhf(&mut self) -> Result<(),MigError> {
-        Err(MigError::from(MigErrorKind::NotImpl))        
-    } 
+    fn init_armhf(&mut self) -> Result<(), MigError> {
+        Err(MigError::from(MigErrorKind::NotImpl))
+    }
 
-    fn init_amd64(&mut self) -> Result<(),MigError> {
+    fn init_amd64(&mut self) -> Result<(), MigError> {
         trace!("LinuxMigrator::init_amd64: entered");
 
         self.sysinfo.efi_boot = Some(self.is_uefi_boot()?);
         if let Some(efi_boot) = self.sysinfo.efi_boot {
-            info!("System is booted in {} mode", match efi_boot { true => "EFI", false => "Legacy BIOS" });
+            info!(
+                "System is booted in {} mode",
+                match efi_boot {
+                    true => "EFI",
+                    false => "Legacy BIOS",
+                }
+            );
             if efi_boot == true {
                 // check for EFI dir & size
 
                 self.sysinfo.secure_boot = Some(self.is_secure_boot()?);
                 if let Some(secure_boot) = self.sysinfo.secure_boot {
-                    info!("Secure boot is {}enabled", match secure_boot { true => "", false => "not " }); 
+                    info!(
+                        "Secure boot is {}enabled",
+                        match secure_boot {
+                            true => "",
+                            false => "not ",
+                        }
+                    );
                     if secure_boot == true {
                         let message = format!("balena-migrate does not currently support systems with secure boot enabled.");
-                        error!("{}", &message);                
+                        error!("{}", &message);
                         return Err(MigError::from_remark(MigErrorKind::InvState, &message));
                     }
                 }
             } else {
                 self.sysinfo.secure_boot = Some(false);
-                info!("Assuming that Secure boot is not enabled for Legacy BIOS system"); 
+                info!("Assuming that Secure boot is not enabled for Legacy BIOS system");
             }
-        }        
+        }
 
         let grub_version = self.get_grub_version()?;
-        info!("grub-install version is {}.{}", grub_version.0, grub_version.1); 
+        info!(
+            "grub-install version is {}.{}",
+            grub_version.0, grub_version.1
+        );
         if grub_version.0 < String::from(GRUB_MIN_VERSION) {
             let message = format!("your version of grub-install ({}.{}) is not supported. balena-migrate requires grub version 2 or higher.", grub_version.0, grub_version.1);
-            error!("{}", &message);                
+            error!("{}", &message);
             return Err(MigError::from_remark(MigErrorKind::InvState, &message));
-        }        
+        }
 
-        Ok(())        
-    } 
+        Ok(())
+    }
 
-    fn init_i386(&mut self) -> Result<(),MigError> {
+    fn init_i386(&mut self) -> Result<(), MigError> {
         Err(MigError::from(MigErrorKind::NotImpl))
-    } 
+    }
 
-
-    #[cfg(not (debug_assertions))]
+    #[cfg(not(debug_assertions))]
     pub fn is_admin(&self) -> Result<bool, MigError> {
         trace!("LinuxMigrator::is_admin: entered");
         let admin = Some(unsafe { getuid() } == 0);
@@ -251,20 +294,20 @@ impl LinuxMigrator {
     }
 
     #[cfg(debug_assertions)]
-    pub fn is_admin(&self) -> Result<bool, MigError> {    
+    pub fn is_admin(&self) -> Result<bool, MigError> {
         trace!("LinuxMigrator::is_admin: entered");
         let admin = Some(unsafe { getuid() } == 0);
         Ok(admin.unwrap() | self.config.debug.fake_admin)
     }
 
-    fn get_mem_info() -> Result<(u64,u64), MigError> {
+    fn get_mem_info() -> Result<(u64, u64), MigError> {
         trace!("LinuxMigrator::get_mem_info: entered");
         // TODO: could add loads, uptime if needed
         use std::mem;
         let mut s_info: libc::sysinfo = unsafe { mem::uninitialized() };
         let res = unsafe { libc::sysinfo(&mut s_info) };
         if res == 0 {
-            Ok((s_info.totalram as u64,s_info.freeram as u64))
+            Ok((s_info.totalram as u64, s_info.freeram as u64))
         } else {
             Err(MigError::from(MigErrorKind::NotImpl))
         }
@@ -272,13 +315,13 @@ impl LinuxMigrator {
 
     fn get_os_arch(&mut self) -> Result<OSArch, MigError> {
         trace!("LinuxMigrator::get_os_arch: entered");
-        let cmd_res = call_cmd(UNAME_CMD, &UNAME_ARGS_OS_ARCH, true)
-            .context(MigErrCtx::from_remark(
+        let cmd_res =
+            call_cmd(UNAME_CMD, &UNAME_ARGS_OS_ARCH, true).context(MigErrCtx::from_remark(
                 MigErrorKind::Upstream,
                 &format!("{}::get_os_arch: call {}", MODULE, UNAME_CMD),
             ))?;
-        
-        if cmd_res.status.success() {            
+
+        if cmd_res.status.success() {
             if cmd_res.stdout.to_lowercase() == "x86_64" {
                 Ok(OSArch::AMD64)
             } else if cmd_res.stdout.to_lowercase() == "i386" {
@@ -293,7 +336,7 @@ impl LinuxMigrator {
                         MODULE, cmd_res.stdout
                     ),
                 ))
-            }            
+            }
         } else {
             Err(MigError::from_remark(
                 MigErrorKind::ExecProcess,
@@ -306,29 +349,31 @@ impl LinuxMigrator {
         }
     }
 
-
-    fn get_grub_version(&mut self) -> Result<(String,String),MigError> {
+    fn get_grub_version(&mut self) -> Result<(String, String), MigError> {
         trace!("LinuxMigrator::get_grub_version: entered");
-        let cmd_res = call_cmd(GRUB_INSTALL_CMD, &GRUB_INST_VERSION_ARGS, true)
-            .context(MigErrCtx::from_remark(
+        let cmd_res = call_cmd(GRUB_INSTALL_CMD, &GRUB_INST_VERSION_ARGS, true).context(
+            MigErrCtx::from_remark(
                 MigErrorKind::Upstream,
                 &format!("{}::get_grub_version: call {}", MODULE, UNAME_CMD),
-            ))?;
+            ),
+        )?;
 
-        if cmd_res.status.success() {            
+        if cmd_res.status.success() {
             let re = Regex::new(GRUB_INST_VERSION_RE).unwrap();
             if let Some(captures) = re.captures(cmd_res.stdout.as_ref()) {
-                Ok((String::from(captures.get(1).unwrap().as_str()),String::from(captures.get(2).unwrap().as_str())))
+                Ok((
+                    String::from(captures.get(1).unwrap().as_str()),
+                    String::from(captures.get(2).unwrap().as_str()),
+                ))
             } else {
                 Err(MigError::from_remark(
                     MigErrorKind::InvParam,
                     &format!(
                         "{}::get_grub_version: failed to parse grub version string: {}",
-                        MODULE,
-                        cmd_res.stdout
+                        MODULE, cmd_res.stdout
                     ),
                 ))
-            }           
+            }
         } else {
             Err(MigError::from_remark(
                 MigErrorKind::ExecProcess,
@@ -344,16 +389,15 @@ impl LinuxMigrator {
     fn is_uefi_boot(&mut self) -> Result<bool, MigError> {
         trace!("LinuxMigrator::is_uefi_boot: entered");
         match std::fs::metadata(SYS_UEFI_DIR) {
-            Ok(metadata) => {
-                Ok(metadata.file_type().is_dir())
-            }
-            Err(why) => {
-                match why.kind() {
-                    std::io::ErrorKind::NotFound => Ok(false),
-                    _ => Err(MigError::from(why.context(MigErrCtx::from_remark(MigErrorKind::Upstream,&format!("{}::is_uefi_boot: access {}",MODULE,SYS_UEFI_DIR))))),
-                }
-            }
-        }        
+            Ok(metadata) => Ok(metadata.file_type().is_dir()),
+            Err(why) => match why.kind() {
+                std::io::ErrorKind::NotFound => Ok(false),
+                _ => Err(MigError::from(why.context(MigErrCtx::from_remark(
+                    MigErrorKind::Upstream,
+                    &format!("{}::is_uefi_boot: access {}", MODULE, SYS_UEFI_DIR),
+                )))),
+            },
+        }
     }
 
     fn is_secure_boot(&mut self) -> Result<bool, MigError> {
@@ -383,8 +427,8 @@ impl LinuxMigrator {
                 if cap.get(1).unwrap().as_str() == "enabled" {
                     return Ok(true);
                 } else {
-                    return Ok(false);                
-                }                
+                    return Ok(false);
+                }
             }
         }
         error!(
@@ -397,110 +441,141 @@ impl LinuxMigrator {
         ))
     }
 
-
     fn get_os_name(&self) -> Result<String, MigError> {
         trace!("LinuxMigrator::get_os_name: entered");
         if util::file_exists(OS_RELEASE_FILE) {
             // TODO: ensure availabilty of method / file exists
-            if let Some(os_name) = util::parse_file(OS_RELEASE_FILE, &Regex::new(OS_NAME_RE).unwrap())? {
+            if let Some(os_name) =
+                util::parse_file(OS_RELEASE_FILE, &Regex::new(OS_NAME_RE).unwrap())?
+            {
                 Ok(os_name)
             } else {
-                Err(MigError::from_remark(MigErrorKind::NotFound, &format!("{}::get_os_name: could not be located in file {}", MODULE, OS_RELEASE_FILE)))    
+                Err(MigError::from_remark(
+                    MigErrorKind::NotFound,
+                    &format!(
+                        "{}::get_os_name: could not be located in file {}",
+                        MODULE, OS_RELEASE_FILE
+                    ),
+                ))
             }
-            
         } else {
-            Err(MigError::from_remark(MigErrorKind::NotFound, &format!("{}::get_os_name: could not locate file {}", MODULE, OS_RELEASE_FILE)))
+            Err(MigError::from_remark(
+                MigErrorKind::NotFound,
+                &format!(
+                    "{}::get_os_name: could not locate file {}",
+                    MODULE, OS_RELEASE_FILE
+                ),
+            ))
         }
     }
 
     fn get_os_release(&mut self) -> Result<OSRelease, MigError> {
-        let os_info = std::fs::read_to_string(OS_KERNEL_RELEASE_FILE).context(
-            MigErrCtx::from_remark(
+        let os_info =
+            std::fs::read_to_string(OS_KERNEL_RELEASE_FILE).context(MigErrCtx::from_remark(
                 MigErrorKind::Upstream,
                 &format!("File read '{}'", OS_KERNEL_RELEASE_FILE),
-            ),
-        )?;
+            ))?;
 
         Ok(OSRelease::parse_from_str(&os_info.trim())?)
     }
 
-    
     fn get_disk_info(&mut self) -> Result<DiskInfo, MigError> {
         trace!("LinuxMigrator::get_disk_info: entered");
 
         // TODO: extract into get_part_info
         //   - Detect if path exists & is a mountpoint
-        //   - get the device name 
+        //   - get the device name
         //   - get size & free space
 
         let mut disk_info = DiskInfo::default();
 
         disk_info.boot_part = PartitionInfo::new(BOOT_DIR)?;
         if let Some(ref boot_part) = disk_info.boot_part {
-            info!("{}", boot_part);    
+            info!("{}", boot_part);
         } else {
-            let message = format!("Unable to retrieve attributes for {} file system, giving up.", BOOT_DIR); 
+            let message = format!(
+                "Unable to retrieve attributes for {} file system, giving up.",
+                BOOT_DIR
+            );
             error!("{}", message);
-            return Err(MigError::from_remark(MigErrorKind::InvState, &message));            
+            return Err(MigError::from_remark(MigErrorKind::InvState, &message));
         }
-        
+
         disk_info.efi_part = PartitionInfo::new(EFI_DIR)?;
         if let Some(ref efi_part) = disk_info.efi_part {
-            info!("{}", efi_part);    
+            info!("{}", efi_part);
         }
 
         disk_info.root_part = PartitionInfo::new(ROOT_DIR)?;
 
         if let Some(ref root_part) = disk_info.root_part {
-            info!("{}", root_part);    
+            info!("{}", root_part);
 
             if let Some(ref boot_part) = disk_info.boot_part {
-                if root_part.drive != boot_part.drive {  
+                if root_part.drive != boot_part.drive {
                     let message = "Your device has a disk layout that is incompatible with balena-migrate. balena migrate requires the /boot /boot/efi and / partitions to be on one drive";
-                    error!("{}",message);
-                    return Err(MigError::from_remark(MigErrorKind::InvParam,&format!("{}::get_disk_info: {}", MODULE, message)));
-                } 
+                    error!("{}", message);
+                    return Err(MigError::from_remark(
+                        MigErrorKind::InvParam,
+                        &format!("{}::get_disk_info: {}", MODULE, message),
+                    ));
+                }
             }
 
             if let Some(ref efi_part) = disk_info.efi_part {
-                if root_part.drive != efi_part.drive {  
+                if root_part.drive != efi_part.drive {
                     let message = "Your device has a disk layout that is incompatible with balena-migrate. balena migrate requires the /boot /boot/efi and / partitions to be on one drive";
-                    error!("{}",message);
-                    return Err(MigError::from_remark(MigErrorKind::InvParam,&format!("{}::get_disk_info: {}", MODULE, message)));
-                } 
+                    error!("{}", message);
+                    return Err(MigError::from_remark(
+                        MigErrorKind::InvParam,
+                        &format!("{}::get_disk_info: {}", MODULE, message),
+                    ));
+                }
             }
 
-            let args: Vec<&str> = vec![    
-                "-b",
-                "--output=SIZE,UUID",
-                &root_part.drive];
-            
+            let args: Vec<&str> = vec!["-b", "--output=SIZE,UUID", &root_part.drive];
+
             let cmd_res = call_cmd(LSBLK_CMD, &args, true)?;
             if !cmd_res.status.success() || cmd_res.stdout.is_empty() {
-                return Err(MigError::from_remark(MigErrorKind::ExecProcess , &format!("{}::new: failed to retrieve device attributes for {}", MODULE, &root_part.drive)));
+                return Err(MigError::from_remark(
+                    MigErrorKind::ExecProcess,
+                    &format!(
+                        "{}::new: failed to retrieve device attributes for {}",
+                        MODULE, &root_part.drive
+                    ),
+                ));
             }
 
             // debug!("lsblk output: {:?}",&cmd_res.stdout);
             let output: Vec<&str> = cmd_res.stdout.lines().collect();
             if output.len() < 2 {
-                return Err(MigError::from_remark(MigErrorKind::InvParam , &format!("{}::new: failed to parse block device attributes for {}", MODULE, &root_part.drive)));
+                return Err(MigError::from_remark(
+                    MigErrorKind::InvParam,
+                    &format!(
+                        "{}::new: failed to parse block device attributes for {}",
+                        MODULE, &root_part.drive
+                    ),
+                ));
             }
 
-            debug!("lsblk output: {:?}",&output[1]);
+            debug!("lsblk output: {:?}", &output[1]);
             if let Some(captures) = Regex::new(LSBLK_REGEX).unwrap().captures(&output[1]) {
                 disk_info.disk_size = captures.get(1).unwrap().as_str().parse::<u64>().unwrap();
                 if let Some(cap) = captures.get(3) {
                     disk_info.disk_uuid = String::from(cap.as_str());
-                }                
+                }
             }
             disk_info.disk_dev = root_part.drive.clone();
 
             Ok(disk_info)
         } else {
-            let message = format!("Unable to retrieve attributes for {} file system, giving up.", ROOT_DIR); 
+            let message = format!(
+                "Unable to retrieve attributes for {} file system, giving up.",
+                ROOT_DIR
+            );
             error!("{}", message);
             Err(MigError::from_remark(MigErrorKind::InvState, &message))
-        }        
+        }
     }
 
     /*
@@ -619,20 +694,20 @@ impl Migrator for LinuxMigrator {
                 }
                 info!("{}::can_migrate: successfully connected to vpn backend in {} ms", MODULE, now.elapsed().as_millis());
             }
-        }        
+        }
 
         if self.config.migrate.kernel_file.is_empty() {
             warn!("{}::can_migrate: no migration kernel file was confgured. Plaese adapt your configuration to supply a valid kernel file .", MODULE);
-        } 
+        }
 
         if self.config.migrate.initramfs_file.is_empty() {
             warn!("{}::can_migrate: no migration initramfs file was confgured. Plaese adapt your configuration to supply a valid initramfs file .", MODULE);
-        } 
+        }
 
 
         Ok(true)
     }
-    
+
     fn migrate(&mut self) -> Result<(), MigError> {
         Err(MigError::from(MigErrorKind::NotImpl))
     }

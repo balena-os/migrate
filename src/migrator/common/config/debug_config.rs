@@ -1,6 +1,6 @@
-use yaml_rust::{Yaml};
-use super::{YamlConfig, get_yaml_bool};
-use crate::migrator::{MigError};
+use super::{get_yaml_bool, YamlConfig};
+use crate::migrator::MigError;
+use yaml_rust::Yaml;
 
 #[derive(Debug)]
 pub struct DebugConfig {
@@ -9,19 +9,22 @@ pub struct DebugConfig {
 
 impl DebugConfig {
     pub fn default() -> DebugConfig {
-        DebugConfig{ fake_admin: false }
+        DebugConfig { fake_admin: false }
     }
 }
 
 impl YamlConfig for DebugConfig {
     fn to_yaml(&self, prefix: &str) -> String {
-        format!("{}debug:\n{}  fake_admin: {}\n", prefix, prefix, self.fake_admin)
+        format!(
+            "{}debug:\n{}  fake_admin: {}\n",
+            prefix, prefix, self.fake_admin
+        )
     }
-    fn from_yaml(&mut self, yaml: &Yaml) -> Result<(),MigError> {
+    fn from_yaml(&mut self, yaml: &Yaml) -> Result<(), MigError> {
         if let Some(value) = get_yaml_bool(yaml, &["fake_admin"])? {
-            self.fake_admin = value;      
+            self.fake_admin = value;
         }
 
         Ok(())
-    } 
+    }
 }

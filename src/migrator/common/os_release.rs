@@ -3,7 +3,7 @@ use lazy_static::lazy_static;
 use regex::Regex;
 use std::fmt::{self, Display, Formatter};
 
-pub use crate::migrator::{MigError, MigErrorKind, MigErrCtx};
+pub use crate::migrator::{MigErrCtx, MigError, MigErrorKind};
 
 const OS_RELEASE_RE: &str = r"^(\d+)\.(\d+)\.(\d+)(-.*)?$";
 
@@ -18,7 +18,7 @@ impl OSRelease {
     pub fn get_minor(&self) -> u32 {
         self.1
     }
-    
+
     pub fn get_build(&self) -> u32 {
         self.2
     }
@@ -30,34 +30,37 @@ impl OSRelease {
 
         let captures = match RE_OS_VER.captures(os_release) {
             Some(c) => c,
-            None => return Err(MigError::from_remark(
-                MigErrorKind::InvParam,
-                &format!(
+            None => {
+                return Err(MigError::from_remark(
+                    MigErrorKind::InvParam,
+                    &format!(
                     "OSRelease::parse_from_str: parse regex failed to parse release string: '{}'",
                     os_release
                 ),
-            )),
+                ));
+            }
         };
 
-        let parse_capture =
-            |i: usize| -> Result<u32, MigError> {
-                match captures.get(i) {
-                    Some(s) => Ok(s.as_str().parse::<u32>().context(MigErrCtx::from_remark(
-                        MigErrorKind::InvParam,
-                        &format!(
-                            "OSRelease::parse_from_str: failed to parse {} part {} to u32",
-                            os_release, i
-                        ),
-                    ))?),
-                    None => return Err(MigError::from_remark(
+        let parse_capture = |i: usize| -> Result<u32, MigError> {
+            match captures.get(i) {
+                Some(s) => Ok(s.as_str().parse::<u32>().context(MigErrCtx::from_remark(
+                    MigErrorKind::InvParam,
+                    &format!(
+                        "OSRelease::parse_from_str: failed to parse {} part {} to u32",
+                        os_release, i
+                    ),
+                ))?),
+                None => {
+                    return Err(MigError::from_remark(
                         MigErrorKind::InvParam,
                         &format!(
                             "OSRelease::parse_from_str: failed to get release part {} from: '{}'",
                             i, os_release
                         ),
-                    )),
+                    ));
                 }
-            };
+            }
+        };
 
         if let Ok(n0) = parse_capture(1) {
             if let Ok(n1) = parse_capture(2) {

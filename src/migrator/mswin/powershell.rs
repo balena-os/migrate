@@ -15,7 +15,7 @@ const PS_ARGS_VERSION_PARAMS: [&'static str; 1] = ["$PSVersionTable.PSVersion"];
 
 use crate::migrator::{MigErrCtx, MigError, MigErrorKind};
 
-use failure::{ResultExt};
+use failure::ResultExt;
 use std::io::Write;
 
 use lazy_static::lazy_static;
@@ -151,13 +151,11 @@ impl PSInfo {
 
         debug!(
             "{}::get_ps_ver(): powershell stdout: {}",
-            MODULE,
-            output.stdout
+            MODULE, output.stdout
         );
         debug!(
             "{}::get_ps_ver(): powershell stderr {}",
-            MODULE,
-            output.stderr
+            MODULE, output.stderr
         );
 
         let lines: Vec<&str> = output.stdout.lines().collect();
@@ -203,26 +201,27 @@ impl PSInfo {
         Ok(self.version.unwrap())
     }
 
-    
     pub fn get_drive_supported_size(&mut self, driveletter: &str) -> Result<(u64, u64), MigError> {
         if !self.is_admin()? {
             return Err(MigError::from(MigErrorKind::AuthError));
         }
 
-        const COMMAND: &str = "Get-PartitionSupportedSize"; 
+        const COMMAND: &str = "Get-PartitionSupportedSize";
         if !self.has_command(COMMAND)? {
-            return Err(MigError::from_remark(MigErrorKind::FeatureMissing, &format!("{}::get_part_supported_size: command not supported by powershell: '{}'", MODULE, COMMAND)));
+            return Err(MigError::from_remark(
+                MigErrorKind::FeatureMissing,
+                &format!(
+                    "{}::get_part_supported_size: command not supported by powershell: '{}'",
+                    MODULE, COMMAND
+                ),
+            ));
         }
-        
-        let cmd_str = format!("{} -DriveLetter {} ",COMMAND, driveletter);
+
+        let cmd_str = format!("{} -DriveLetter {} ", COMMAND, driveletter);
         let output = call_from_stdin(&cmd_str, true)?;
 
         if !output.ps_ok || !output.stderr.is_empty() {
-            return Err(ps_failed_call(
-                        &output,
-                        &cmd_str,
-                        "get_part_supported_size",
-                    ));
+            return Err(ps_failed_call(&output, &cmd_str, "get_part_supported_size"));
         }
 
         let lines: Vec<&str> = output.stdout.lines().collect();
@@ -246,25 +245,35 @@ impl PSInfo {
 
         let headers: Vec<&str> = lines[0].split_whitespace().collect();
         let values: Vec<&str> = lines[2].split_whitespace().collect();
-        let mut sizes: (u64,u64) = (0,0);
+        let mut sizes: (u64, u64) = (0, 0);
 
-        for (idx,hdr) in headers.iter().enumerate() {
+        for (idx, hdr) in headers.iter().enumerate() {
             if hdr == &"SizeMin" {
                 sizes.0 = if let Some(val) = values.get(idx) {
-                    val.parse::<u64>()
-                        .context(MigErrCtx::from_remark(MigErrorKind::InvParam,&format!("{}::get_part_supported_size: failed to parse value to u64: '{}'", MODULE, val)))?
+                    val.parse::<u64>().context(MigErrCtx::from_remark(
+                        MigErrorKind::InvParam,
+                        &format!(
+                            "{}::get_part_supported_size: failed to parse value to u64: '{}'",
+                            MODULE, val
+                        ),
+                    ))?
                 } else {
-                    return Err(MigError::from_remark(MigErrorKind::InvParam, &format!("{}::get_part_supported_size: missing value encountered in powershell version output: {}", MODULE, output.stdout)))    
+                    return Err(MigError::from_remark(MigErrorKind::InvParam, &format!("{}::get_part_supported_size: missing value encountered in powershell version output: {}", MODULE, output.stdout)));
                 }
             } else if hdr == &"SizeMax" {
                 sizes.1 = if let Some(val) = values.get(idx) {
-                    val.parse::<u64>()
-                        .context(MigErrCtx::from_remark(MigErrorKind::InvParam,&format!("{}::get_part_supported_size: failed to parse value to u64: '{}'", MODULE, val)))?
+                    val.parse::<u64>().context(MigErrCtx::from_remark(
+                        MigErrorKind::InvParam,
+                        &format!(
+                            "{}::get_part_supported_size: failed to parse value to u64: '{}'",
+                            MODULE, val
+                        ),
+                    ))?
                 } else {
-                    return Err(MigError::from_remark(MigErrorKind::InvParam, &format!("{}::get_part_supported_size: missing value encountered in powershell version output: {}", MODULE, output.stdout)))    
+                    return Err(MigError::from_remark(MigErrorKind::InvParam, &format!("{}::get_part_supported_size: missing value encountered in powershell version output: {}", MODULE, output.stdout)));
                 }
             } else {
-                return Err(MigError::from_remark(MigErrorKind::InvParam, &format!("{}::get_part_supported_size: invalid header encountered in powershell version output: {}", MODULE, output.stdout)))
+                return Err(MigError::from_remark(MigErrorKind::InvParam, &format!("{}::get_part_supported_size: invalid header encountered in powershell version output: {}", MODULE, output.stdout)));
             }
         }
 
@@ -374,10 +383,7 @@ impl PSInfo {
 fn call_from_stdin(cmd_str: &str, trim_stdout: bool) -> Result<PSRes, MigError> {
     debug!(
         "{}::call_from_stdin(): called with {:?} < '{}'  trim_stdout: {}",
-        MODULE,
-        PS_ARGS_FROM_STDIN,
-        cmd_str,
-        trim_stdout
+        MODULE, PS_ARGS_FROM_STDIN, cmd_str, trim_stdout
     );
     let mut command = Command::new(POWERSHELL)
         .args(&PS_ARGS_FROM_STDIN)
@@ -436,9 +442,7 @@ fn call_from_stdin(cmd_str: &str, trim_stdout: bool) -> Result<PSRes, MigError> 
 fn call(args: &[&str], trim_stdout: bool) -> Result<PSRes, MigError> {
     debug!(
         "{}::call_to_string(): called with {:?}, {}",
-        MODULE,
-        args,
-        trim_stdout
+        MODULE, args, trim_stdout
     );
 
     let output = Command::new(POWERSHELL)

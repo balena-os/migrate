@@ -22,7 +22,6 @@ use crate::migrator::{MigErrCtx, MigError, MigErrorKind};
 
 const MODULE: &str = "mswin::win_api::com_api";
 
-
 type RefCount = Arc<Mutex<u64>>;
 
 #[derive(Debug)]
@@ -31,7 +30,7 @@ pub struct ComAPI {
 }
 
 impl ComAPI {
-    pub fn get_api() -> Result<ComAPI,MigError> {
+    pub fn get_api() -> Result<ComAPI, MigError> {
         debug!("{}::new: entered", MODULE);
         lazy_static! {
             static ref COM_REF: RefCount = Arc::new(Mutex::new(0));
@@ -75,10 +74,12 @@ impl ComAPI {
                         MigErrorKind::WinApi,
                         &format!("{}::get_api: CoInitializeSecurity failed", MODULE),
                     ))));
-                }                
-            } 
+                }
+            }
             *use_count += 1;
-            Ok( ComAPI{uc: COM_REF.clone() })            
+            Ok(ComAPI {
+                uc: COM_REF.clone(),
+            })
         } else {
             Err(MigError::from(MigErrorKind::MutAccess))
         }
@@ -92,8 +93,8 @@ impl Drop for ComAPI {
             if *v == 1 {
                 debug!("{}::drop: deinitializing com", MODULE);
                 unsafe { CoUninitialize() };
-            } 
-            *v -= 1;    
+            }
+            *v -= 1;
         }
     }
 }
@@ -101,7 +102,7 @@ impl Drop for ComAPI {
 #[cfg(test)]
 mod tests {
     use super::ComAPI;
-    #[test]    
+    #[test]
     fn it_works1() {
         {
             let _h_com_api = ComAPI::get_api().unwrap();

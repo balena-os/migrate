@@ -1,17 +1,12 @@
-use std::rc::{Rc};
-use log::{debug};
+use super::{LogicalDrive, QueryRes, NS_CVIM2};
 use crate::migrator::{
-    MigError, 
-    MigErrorKind,
-    mswin::win_api::{ 
-        query_dos_device,
-        wmi_api::{WmiAPI},
-    },
+    mswin::win_api::{query_dos_device, wmi_api::WmiAPI},
+    MigError, MigErrorKind,
 };
-use super::{QueryRes, LogicalDrive, NS_CVIM2};
+use log::debug;
+use std::rc::Rc;
 
 const MODULE: &str = "mswin::wmi_utils::partition";
-
 
 #[derive(Debug)]
 pub struct Partition {
@@ -29,55 +24,78 @@ pub struct Partition {
 }
 
 impl<'a> Partition {
-    pub(crate) fn new(disk_index: u64, res_map: QueryRes ) -> Result<Partition,MigError> {
+    pub(crate) fn new(disk_index: u64, res_map: QueryRes) -> Result<Partition, MigError> {
         let partition_index = res_map.get_int_property("Index")? as u64;
-        
-        Ok(Partition { 
+
+        Ok(Partition {
             name: String::from(res_map.get_string_property("Caption")?),
             device_id: String::from(res_map.get_string_property("DeviceID")?),
-            device: String::from(query_dos_device(Some(&format!("Harddisk{}Partition{}",disk_index, partition_index + 1)))?.get(0).unwrap().as_ref()),
-            bootable: res_map.get_bool_property("Bootable")?, 
+            device: String::from(
+                query_dos_device(Some(&format!(
+                    "Harddisk{}Partition{}",
+                    disk_index,
+                    partition_index + 1
+                )))?
+                .get(0)
+                .unwrap()
+                .as_ref(),
+            ),
+            bootable: res_map.get_bool_property("Bootable")?,
             size: res_map.get_uint_property("Size")?,
             number_of_blocks: res_map.get_uint_property("NumberOfBlocks")?,
-            ptype: String::from(res_map.get_string_property("Type")?), // TODO: parse this value GPT / System 
+            ptype: String::from(res_map.get_string_property("Type")?), // TODO: parse this value GPT / System
             boot_partition: res_map.get_bool_property("BootPartition")?,
-            start_offset: res_map.get_uint_property("StartingOffset")?,            
+            start_offset: res_map.get_uint_property("StartingOffset")?,
             disk_index,
             partition_index,
         })
     }
 
-
-    fn from_query(res_map: &QueryRes) -> Result<Partition,MigError> {
+    fn from_query(res_map: &QueryRes) -> Result<Partition, MigError> {
         let device_id = res_map.get_string_property("DeviceID")?;
         let query = &format!("ASSOCIATORS OF {{Win32_DiskPartition.DeviceID='{}'}} WHERE AssocClass = Win32_DiskDriveToDiskPartition", device_id);
         let mut q_res = WmiAPI::get_api(NS_CVIM2)?.raw_query(query)?;
-        if q_res.len() == 1 {            
+        if q_res.len() == 1 {
             let disk_index = QueryRes::new(&q_res[0]).get_int_property("Index")? as u64;
             let partition_index = res_map.get_int_property("Index")? as u64;
-        
-            Ok(Partition { 
+
+            Ok(Partition {
                 name: String::from(res_map.get_string_property("Caption")?),
                 device_id: String::from(res_map.get_string_property("DeviceID")?),
-                device: String::from(query_dos_device(Some(&format!("Harddisk{}Partition{}",disk_index, partition_index + 1)))?.get(0).unwrap().as_ref()),
-                bootable: res_map.get_bool_property("Bootable")?, 
+                device: String::from(
+                    query_dos_device(Some(&format!(
+                        "Harddisk{}Partition{}",
+                        disk_index,
+                        partition_index + 1
+                    )))?
+                    .get(0)
+                    .unwrap()
+                    .as_ref(),
+                ),
+                bootable: res_map.get_bool_property("Bootable")?,
                 size: res_map.get_uint_property("Size")?,
                 number_of_blocks: res_map.get_uint_property("NumberOfBlocks")?,
-                ptype: String::from(res_map.get_string_property("Type")?), // TODO: parse this value GPT / System 
+                ptype: String::from(res_map.get_string_property("Type")?), // TODO: parse this value GPT / System
                 boot_partition: res_map.get_bool_property("BootPartition")?,
-                start_offset: res_map.get_uint_property("StartingOffset")?,            
+                start_offset: res_map.get_uint_property("StartingOffset")?,
                 disk_index,
                 partition_index,
             })
         } else {
-            Err(MigError::from_remark(MigErrorKind::NotFound, &format!("{}::from_query: unable to find disk from partition {}", MODULE, device_id)))
+            Err(MigError::from_remark(
+                MigErrorKind::NotFound,
+                &format!(
+                    "{}::from_query: unable to find disk from partition {}",
+                    MODULE, device_id
+                ),
+            ))
         }
     }
 
     pub fn get_boot_partition() -> Result<Vec<Partition>, MigError> {
-        const QUERY: &str = "SELECT Caption, Index, DeviceID, Bootable, Size, NumberOfBlocks, Type, BootPartition, StartingOffset FROM Win32_DiskPartition WHERE BootPartition=true";        
+        const QUERY: &str = "SELECT Caption, Index, DeviceID, Bootable, Size, NumberOfBlocks, Type, BootPartition, StartingOffset FROM Win32_DiskPartition WHERE BootPartition=true";
         let mut q_res = WmiAPI::get_api(NS_CVIM2)?.raw_query(QUERY)?;
-        let mut result: Vec<Partition> = Vec::new(); 
+        let mut result: Vec<Partition> = Vec::new();
         for res in q_res {
             result.push(Partition::from_query(&QueryRes::new(&res))?);
         }
@@ -87,17 +105,27 @@ impl<'a> Partition {
 
     pub fn query_logical_drive(&self) -> Result<Option<LogicalDrive>, MigError> {
         let query = &format!("ASSOCIATORS OF {{Win32_DiskPartition.DeviceID='{}'}} WHERE AssocClass = Win32_LogicalDiskToPartition",self.device_id);
-        debug!("{}::query_logical_drive: performing WMI Query: '{}'", MODULE, query);
-        
+        debug!(
+            "{}::query_logical_drive: performing WMI Query: '{}'",
+            MODULE, query
+        );
+
         let mut q_res = WmiAPI::get_api(NS_CVIM2)?.raw_query(query)?;
         match q_res.len() {
-            0 => Ok(None), 
+            0 => Ok(None),
             1 => {
                 let res = q_res.pop().unwrap();
                 let res_map = QueryRes::new(&res);
                 Ok(Some(LogicalDrive::new(res_map)?))
-            },
-            _ => Err(MigError::from_remark(MigErrorKind::InvParam, &format!("{}::query_logical_drive: invalid result cout for query, expected 1, got  {}",MODULE, q_res.len()))), 
+            }
+            _ => Err(MigError::from_remark(
+                MigErrorKind::InvParam,
+                &format!(
+                    "{}::query_logical_drive: invalid result cout for query, expected 1, got  {}",
+                    MODULE,
+                    q_res.len()
+                ),
+            )),
         }
     }
 
@@ -144,5 +172,4 @@ impl<'a> Partition {
     pub fn get_device(&'a self) -> &'a str {
         &self.device
     }
-
 }

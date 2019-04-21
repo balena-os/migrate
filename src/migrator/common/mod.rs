@@ -1,8 +1,8 @@
 //pub mod mig_error;
 use failure::ResultExt;
-use log::{trace,debug};
-use std::process::{Command, ExitStatus, Stdio};
+use log::{debug, trace};
 use std::fmt::{self, Display, Formatter};
+use std::process::{Command, ExitStatus, Stdio};
 
 pub mod mig_error;
 use mig_error::{MigErrCtx, MigError, MigErrorKind};
@@ -20,14 +20,13 @@ pub enum OSArch {
     AMD64,
     ARMHF,
     I386,
- /*   ARM64,
+    /*   ARM64,
     ARMEL,
     MIPS,
     MIPSEL,
     Powerpc,
     PPC64EL,
     S390EX, */
-
 }
 
 impl Display for OSArch {
@@ -44,12 +43,7 @@ pub(crate) struct CmdRes {
 }
 
 pub(crate) fn call(cmd: &str, args: &[&str], trim_stdout: bool) -> Result<CmdRes, MigError> {
-    trace!(
-        "call(): '{}' called with {:?}, {}",
-        cmd,
-        args,
-        trim_stdout
-    );
+    trace!("call(): '{}' called with {:?}, {}", cmd, args, trim_stdout);
 
     let output = Command::new(cmd)
         .args(args)
@@ -74,21 +68,39 @@ pub(crate) fn call(cmd: &str, args: &[&str], trim_stdout: bool) -> Result<CmdRes
     })
 }
 
-pub(crate) fn check_tcp_connect(host: &str, port: u16, timeout: u64) -> Result<(),MigError> {
+pub(crate) fn check_tcp_connect(host: &str, port: u16, timeout: u64) -> Result<(), MigError> {
+    use std::net::{Shutdown, TcpStream, ToSocketAddrs};
     use std::time::Duration;
-    use std::net::{TcpStream, ToSocketAddrs, Shutdown };
-    let url = format!("{}:{}",host, port);
-    let mut addrs_iter = url.to_socket_addrs()
-        .context(MigErrCtx::from_remark(MigErrorKind::Upstream, &format!("{}::check_tcp_connect: failed to resolve host address: '{}'", MODULE, url)))?;
+    let url = format!("{}:{}", host, port);
+    let mut addrs_iter = url.to_socket_addrs().context(MigErrCtx::from_remark(
+        MigErrorKind::Upstream,
+        &format!(
+            "{}::check_tcp_connect: failed to resolve host address: '{}'",
+            MODULE, url
+        ),
+    ))?;
 
     if let Some(ref sock_addr) = addrs_iter.next() {
-        let tcp_stream = TcpStream::connect_timeout(sock_addr, Duration::new(timeout, 0))
-            .context(MigErrCtx::from_remark(MigErrorKind::Upstream, &format!("{}::check_tcp_connect: failed to connect to: '{}' with timeout: {}", MODULE, url, timeout)))?;
+        let tcp_stream = TcpStream::connect_timeout(sock_addr, Duration::new(timeout, 0)).context(
+            MigErrCtx::from_remark(
+                MigErrorKind::Upstream,
+                &format!(
+                    "{}::check_tcp_connect: failed to connect to: '{}' with timeout: {}",
+                    MODULE, url, timeout
+                ),
+            ),
+        )?;
 
-        let _res = tcp_stream.shutdown(Shutdown::Both);    
-         Ok(())
+        let _res = tcp_stream.shutdown(Shutdown::Both);
+        Ok(())
     } else {
-        Err(MigError::from_remark(MigErrorKind::InvState, &format!("{}::check_tcp_connect: no results from name resolution for: '{}", MODULE, url)))
+        Err(MigError::from_remark(
+            MigErrorKind::InvState,
+            &format!(
+                "{}::check_tcp_connect: no results from name resolution for: '{}",
+                MODULE, url
+            ),
+        ))
     }
 }
 
@@ -107,4 +119,3 @@ pub fn format_size_with_unit(size: u64) -> String {
         format!("{} B", size)
     }
 }
-

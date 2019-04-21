@@ -2,13 +2,13 @@
 extern crate lazy_static;
 extern crate regex;
 
+extern crate chrono;
 extern crate clap;
+extern crate colored;
 extern crate failure;
 extern crate log;
-extern crate chrono;
-extern crate stderrlog;
-extern crate colored;
 extern crate serde_json;
+extern crate stderrlog;
 
 #[cfg(target_os = "windows")]
 extern crate winapi;
@@ -26,17 +26,17 @@ mod linux;
 
 mod common;
 
-pub use common::mig_error::{MigError, MigErrorKind, MigErrCtx};
+pub use common::config::{Config, YamlConfig};
+pub use common::mig_error::{MigErrCtx, MigError, MigErrorKind};
 pub use common::os_release::OSRelease;
 pub use common::OSArch;
-pub use common::config::{Config, YamlConfig};
 
 #[cfg(target_os = "windows")]
-pub fn migrate() -> Result<(),MigError> { 
+pub fn migrate() -> Result<(), MigError> {
     Ok(mswin::MSWMigrator::migrate()?)
 }
 
 #[cfg(target_os = "linux")]
-pub fn migrate() -> Result<(),MigError> {            
+pub fn migrate() -> Result<(), MigError> {
     Ok(linux::LinuxMigrator::migrate()?)
 }

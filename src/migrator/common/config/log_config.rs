@@ -1,10 +1,7 @@
-use yaml_rust::{Yaml};
-use std::collections::{HashMap};
-use super::{YamlConfig, get_yaml_str, get_yaml_val};
-use crate::migrator::{MigError};
-
-
-
+use super::{get_yaml_str, get_yaml_val, YamlConfig};
+use crate::migrator::MigError;
+use std::collections::HashMap;
+use yaml_rust::Yaml;
 
 #[derive(Debug)]
 pub struct LogConfig {
@@ -14,29 +11,30 @@ pub struct LogConfig {
 
 impl LogConfig {
     pub fn default() -> LogConfig {
-        LogConfig{
+        LogConfig {
             drive: String::from(""),
             fs_type: String::from(""),
-        }            
+        }
     }
 }
 
-impl YamlConfig for LogConfig {    
+impl YamlConfig for LogConfig {
     fn to_yaml(&self, prefix: &str) -> String {
         format!(
-            "{}log_to:\n{}  drive: '{}'\n{}  fs_type: '{}'\n", prefix, prefix, self.drive, prefix , self.fs_type)
+            "{}log_to:\n{}  drive: '{}'\n{}  fs_type: '{}'\n",
+            prefix, prefix, self.drive, prefix, self.fs_type
+        )
         // TODO: incomplete add log_levels
     }
 
-    fn from_yaml(&mut self, yaml: & Yaml) -> Result<(),MigError> {
+    fn from_yaml(&mut self, yaml: &Yaml) -> Result<(), MigError> {
         if let Some(log_drive) = get_yaml_str(yaml, &["drive"])? {
             if let Some(log_fs_type) = get_yaml_str(yaml, &["fs_type"])? {
                 self.drive = String::from(log_drive);
-                self.fs_type =  String::from(log_fs_type);                
-            }    
+                self.fs_type = String::from(log_fs_type);
+            }
         }
 
-
         Ok(())
-    }  
+    }
 }

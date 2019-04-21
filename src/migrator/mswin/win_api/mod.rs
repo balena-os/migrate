@@ -1,5 +1,5 @@
 // extern crate winapi;
-use failure::{Fail};
+use failure::Fail;
 use log::{debug, warn};
 use std::ffi::OsStr;
 use std::io::Error;
