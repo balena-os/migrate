@@ -1,6 +1,6 @@
 use failure::{ResultExt};
 use std::fmt::{self, Display, Formatter};
-use log::{trace, debug};
+use log::{trace, debug, warn};
 use regex::Regex;
 use lazy_static::lazy_static;
 
@@ -21,11 +21,15 @@ const MODULE: &str = "migrator::linux::partition_info";
 
 const DF_CMD: &str = "df";
 const LSBLK_CMD: &str = "lsblk";
+const MOUNT_CMD: &str = "mount";
 
 const SIZE_REGEX: &str = r#"^(\d+)K?$"#;
 const LSBLK_REGEX: &str = r#"^(\S+)\s+(\d+)\s+(\S+)\s+(\S+)(\s+(.*))?$"#;
 
 const DRIVE_REGEX: &str = r#"^(/dev/([^/]+/)*.*)p[0-9]+$"#;
+
+const MOUNT_REGEX: &str = r#"^(\S+)\s+on\s+(\S+)\s+type\s+(\S+)\s+\(([^\)]+)\).*$"#;
+// /dev/mmcblk0p2 on / type ext4 (rw,noatime,data=ordered)
 
 #[derive(Debug)]
 pub(crate) struct PartitionInfo {    
@@ -33,6 +37,7 @@ pub(crate) struct PartitionInfo {
     pub device: String,
     pub drive: String,
     pub fs_type: String,
+    pub mount_opts: String,
     pub uuid: String,
     pub part_uuid: String,
     pub part_label: String,    
@@ -48,6 +53,7 @@ impl PartitionInfo {
             device: String::from(""),
             drive: String::from(""),
             fs_type: String::from(""),
+            mount_opts: String::from(""),
             uuid: String::from(""),
             part_uuid: String::from(""),
             part_label: String::from(""),    
@@ -68,7 +74,8 @@ impl PartitionInfo {
         lazy_static! {
             static ref LSBLK_RE: Regex = Regex::new(LSBLK_REGEX).unwrap();
             static ref SIZE_RE: Regex = Regex::new(SIZE_REGEX).unwrap();
-            static ref DRIVE_RE: Regex = Regex::new(DRIVE_REGEX).unwrap();
+            static ref DRIVE_RE: Regex = Regex::new(DRIVE_REGEX).unwrap();            
+            static ref MOUNT_RE: Regex = Regex::new(MOUNT_REGEX).unwrap();
         }
 
         let mut result = PartitionInfo::default(path);
@@ -90,7 +97,7 @@ impl PartitionInfo {
             return Err(MigError::from_remark(MigErrorKind::InvParam , &format!("{}::new: failed to parse mountpoint attributes for {}", MODULE, path)));
         }
         
-        debug!("PartitionInfo::new: '{}' df result: {:?}", path, &output[1]);
+        // debug!("PartitionInfo::new: '{}' df result: {:?}", path, &output[1]);
 
         let words: Vec<&str> = output[1].split_whitespace().collect();
         if words.len() != 3 {
@@ -100,7 +107,44 @@ impl PartitionInfo {
 
         debug!("PartitionInfo::new: '{}' df result: {:?}", path, &words);
 
-        result.device = String::from(words[0]);
+        let args: Vec<&str> = vec![];
+        let cmd_res = migrator.call_cmd(MOUNT_CMD, &args, true)?;
+        if !cmd_res.status.success() || cmd_res.stdout.is_empty() {
+            return Err(MigError::from_remark(MigErrorKind::InvParam , &format!("{}::new: failed to find mountpoint for {}", MODULE, path)));
+        }
+
+        let mut found = false;    
+        for mount in cmd_res.stdout.lines() {    
+            debug!("looking at '{}'", mount);
+            if let Some(captures) = MOUNT_RE.captures(mount) {
+                if words[0] == "/dev/root" {                    
+                    // look for root mount
+                    if captures.get(2).unwrap().as_str() == "/" {
+                        result.device = String::from(captures.get(1).unwrap().as_str());                      
+                    } else {
+                        continue;
+                    }
+                } else {
+                    if captures.get(1).unwrap().as_str() == words[0] {
+                        result.device = String::from(words[0]);                      
+                    } else {
+                        continue;
+                    }
+                }
+
+                result.fs_type = String::from(captures.get(3).unwrap().as_str());                      
+                result.mount_opts = String::from(captures.get(4).unwrap().as_str());                      
+
+                found = true;
+                break;
+            } else {
+                warn!("unable to parse mount '{}'", mount);
+            }
+        }
+
+        if ! found {
+            return Err(MigError::from_remark(MigErrorKind::InvParam,&format!("{}::new: failed to find device in mounts: '{}' ", MODULE, words[0])));
+        }
 
         if let Some(captures) = DRIVE_RE.captures(&result.device) {
             result.drive = String::from(captures.get(1).unwrap().as_str());
@@ -133,7 +177,7 @@ impl PartitionInfo {
 
         let args: Vec<&str> = vec![    
             "-b",
-            "--output=FSTYPE,SIZE,UUID,PARTUUID,PARTLABEL",
+            "--output=SIZE,UUID,PARTUUID,PARTLABEL",
             "--json",
             &result.device];
 
@@ -152,6 +196,7 @@ impl PartitionInfo {
         if let Some(ref devs) = parse_res.get("blockdevices") {
             if let Some(device) = devs.get(0) {                
                 
+                /*
                 if let Some(ref val) = device.get("fstype") {
                     debug!("fs_type res: {:?}", val);
                     if let Value::String(ref s) = val {
@@ -159,6 +204,7 @@ impl PartitionInfo {
                         result.fs_type = String::from(s.as_ref());
                     }
                 }
+                */
 
                 if let Some(ref val) = device.get("size") {
                     if let Value::String(ref s) = val {

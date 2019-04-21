@@ -28,7 +28,8 @@ use std::collections::hash_map::HashMap;
 const SUPPORTED_OSSES: &'static [&'static str] = &[
     "Ubuntu 18.04.2 LTS", 
     "Ubuntu 16.04.2 LTS",
-    "Ubuntu 14.04.2 LTS"
+    "Ubuntu 14.04.2 LTS",
+    "Raspbian GNU/Linux 9 (stretch)",
     ];
 
 const MODULE: &str = "LinuxMigrator";
