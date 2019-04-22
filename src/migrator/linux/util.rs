@@ -1,6 +1,6 @@
 use failure::ResultExt;
 use log::debug;
-use regex::{Regex,Captures};
+use regex::{Captures, Regex};
 use std::fs::{metadata, read_to_string};
 // use std::io::Read;
 use lazy_static::lazy_static;
@@ -112,26 +112,38 @@ pub(crate) fn get_file_info(file: &str, work_dir: &str) -> Result<Option<FileInf
         work_dir
     );
 
-    let checked_path = 
-        if file.starts_with("/") || file.starts_with("./") || file.starts_with("../") {
-            if let Ok(mdata) = metadata(file) {                    
-                Some(FileInfo::default(&std::fs::canonicalize(Path::new(file)).unwrap().to_str().unwrap(), mdata.len()))
-            } else {
-                None
-            }
+    let checked_path = if file.starts_with("/") || file.starts_with("./") || file.starts_with("../")
+    {
+        if let Ok(mdata) = metadata(file) {
+            Some(FileInfo::default(
+                &std::fs::canonicalize(Path::new(file))
+                    .unwrap()
+                    .to_str()
+                    .unwrap(),
+                mdata.len(),
+            ))
         } else {
-            let search = if work_dir.ends_with("/") {
-                format!("{}{}", work_dir, file)
-            } else {
-                format!("{}/{}", work_dir, file)
-            };
-
-            if let Ok(mdata) = metadata(&search) {
-                Some(FileInfo::default(&std::fs::canonicalize(Path::new(&search)).unwrap().to_str().unwrap(), mdata.len()))
-            } else {
-                None
-            }
+            None
+        }
+    } else {
+        let search = if work_dir.ends_with("/") {
+            format!("{}{}", work_dir, file)
+        } else {
+            format!("{}/{}", work_dir, file)
         };
+
+        if let Ok(mdata) = metadata(&search) {
+            Some(FileInfo::default(
+                &std::fs::canonicalize(Path::new(&search))
+                    .unwrap()
+                    .to_str()
+                    .unwrap(),
+                mdata.len(),
+            ))
+        } else {
+            None
+        }
+    };
 
     debug!(
         "{}::check_work_file: checked path for '{}': '{:?}'",
@@ -203,12 +215,21 @@ pub fn dir_exists(name: &str) -> Result<bool, MigError> {
     }
 }
 
-pub fn expect_file(file: &str, descr: &str, expected: &str, work_dir: &str, type_regex: &Regex) -> Result<Option<FileInfo>,MigError> {
-    if ! file.is_empty() {
+pub fn expect_file(
+    file: &str,
+    descr: &str,
+    expected: &str,
+    work_dir: &str,
+    type_regex: &Regex,
+) -> Result<Option<FileInfo>, MigError> {
+    if !file.is_empty() {
         if let Some(file_info) = get_file_info(&file, work_dir)? {
-            debug!("{} -> {:?}", file, &file_info);                    
-            if ! type_regex.is_match(&file_info.ftype) {                    
-                let message = format!("{} '{}' is in an invalid format, expected {}, got {}", descr, &file, expected, &file_info.ftype);
+            debug!("{} -> {:?}", file, &file_info);
+            if !type_regex.is_match(&file_info.ftype) {
+                let message = format!(
+                    "{} '{}' is in an invalid format, expected {}, got {}",
+                    descr, &file, expected, &file_info.ftype
+                );
                 error!("{}", message);
                 return Err(MigError::from_remark(MigErrorKind::InvParam, &message));
             }
@@ -226,8 +247,8 @@ pub fn expect_file(file: &str, descr: &str, expected: &str, work_dir: &str, type
                 if let Some(file_info) =
                     get_file_info(&balena_cfg.image, &work_dir)?
                 {
-                    debug!("{} -> {:?}", &balena_cfg.image, &file_info);                    
-                    if ! Regex::new(OS_IMG_FTYPE_REGEX).unwrap().is_match(&file_info.ftype) {                    
+                    debug!("{} -> {:?}", &balena_cfg.image, &file_info);
+                    if ! Regex::new(OS_IMG_FTYPE_REGEX).unwrap().is_match(&file_info.ftype) {
                         let message = format!("balena image {} is in invalid format, expected DOS/MBR boot sector in gzip compressed data, got {}", &file_info.path, &file_info.ftype);
                         error!("{}", message);
                         return Err(MigError::from_remark(MigErrorKind::InvParam, &message));
@@ -249,7 +270,7 @@ pub fn expect_file(file: &str, descr: &str, expected: &str, work_dir: &str, type
             }
 
 
-} 
+}
 */
 pub fn file_exists(file: &str) -> bool {
     Path::new(file).exists()

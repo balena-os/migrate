@@ -1,10 +1,10 @@
 use failure::{Fail, ResultExt};
 use libc::{getuid, sysinfo};
 use log::{debug, error, info, trace, warn};
-use std::time::Instant;
 use serde_json::Value;
-use std::io::{BufReader, Read};
 use std::fs::File;
+use std::io::{BufReader, Read};
+use std::time::Instant;
 
 // use std::os::linux::{};
 
@@ -18,7 +18,8 @@ use path_info::PathInfo;
 use crate::migrator::{
     common::format_size_with_unit,
     linux::util::{
-        call_cmd, expect_file, get_file_info, FileInfo, GRUB_INSTALL_CMD, LSBLK_CMD, MOKUTIL_CMD, UNAME_CMD,
+        call_cmd, expect_file, get_file_info, FileInfo, GRUB_INSTALL_CMD, LSBLK_CMD, MOKUTIL_CMD,
+        UNAME_CMD,
     },
     Config, MigErrCtx, MigError, MigErrorKind, OSArch, OSRelease,
 };
@@ -41,7 +42,6 @@ const OS_NAME_REGEX: &str = r#"^PRETTY_NAME="([^"]+)"$"#;
 const OS_IMG_FTYPE_REGEX: &str = r#"^DOS/MBR boot sector.*\(gzip compressed data.*\)$"#;
 const OS_CFG_FTYPE_REGEX: &str = r#"^ASCII text$"#;
 
-
 const OS_RELEASE_FILE: &str = "/etc/os-release";
 const BOOT_DIR: &str = "/boot";
 const ROOT_DIR: &str = "/";
@@ -58,7 +58,6 @@ const LSBLK_REGEX: &str = r#"^(\d+)(\s+(.*))?$"#;
 const MOKUTIL_ARGS_SB_STATE: [&str; 1] = ["--sb-state"];
 
 const MIN_DISK_SIZE: u64 = 2 * 1024 * 1024 * 1024; // 2 GB
-
 
 const OS_KERNEL_RELEASE_FILE: &str = "/proc/sys/kernel/osrelease";
 const OS_MEMINFO_FILE: &str = "/proc/meminfo";
@@ -140,7 +139,7 @@ impl LinuxMigrator {
 
         info!("migrate mode: {:?}", config.migrate.mode);
 
-        // create default 
+        // create default
         let mut migrator = LinuxMigrator {
             config,
             sysinfo: SysInfo::default(),
@@ -165,7 +164,7 @@ impl LinuxMigrator {
                 return Err(MigError::from_remark(MigErrorKind::InvState, &message));
             }
         }
-        
+
         let mut work_dir = String::from("");
 
         // Check out relevant paths
@@ -188,43 +187,58 @@ impl LinuxMigrator {
 
             if let Some(ref work_dir_info) = disk_info.work_path {
                 work_dir = work_dir_info.path.clone();
-                // TODO: check available space ..
-
+            // TODO: check available space ..
             } else {
-                let message = format!("the working directory '{}' could not be accessed", migrator.config.migrate.work_dir);
+                let message = format!(
+                    "the working directory '{}' could not be accessed",
+                    migrator.config.migrate.work_dir
+                );
                 error!("{}", &message);
                 return Err(MigError::from_remark(MigErrorKind::InvState, &message));
             }
         }
 
-
-        if let Some(ref balena_cfg) = migrator.config.balena {            
-            // check balena os image 
-            // TODO: save fileinfo ? 
-            if let Some(file_info) = expect_file(&balena_cfg.image,"balena image", "DOS/MBR boot sector in gzip compressed data", &work_dir, &Regex::new(OS_IMG_FTYPE_REGEX).unwrap())? {
+        if let Some(ref balena_cfg) = migrator.config.balena {
+            // check balena os image            
+            if let Some(file_info) = expect_file(
+                &balena_cfg.image,
+                "balena image",
+                "DOS/MBR boot sector in gzip compressed data",
+                &work_dir,
+                &Regex::new(OS_IMG_FTYPE_REGEX).unwrap(),
+            )? {
                 info!("The balena OS image looks ok: '{}'", file_info.path);
-            } else {    
+                migrator.sysinfo.image_info = Some(file_info);
+            } else {
                 let message = String::from("The balena image has not been specified or cannot be accessed. Automatic download is not yet implemented, so you need to specify and supply all required files");
                 error!("{}", message);
                 return Err(MigError::from_remark(MigErrorKind::InvParam, &message));
-            }             
+            }
 
-            if let Some(ref file_info) = expect_file(&balena_cfg.config,"balena config", "got ASCII text", &work_dir, &Regex::new(OS_CFG_FTYPE_REGEX).unwrap())? {
+            if let Some(ref file_info) = expect_file(
+                &balena_cfg.config,
+                "balena config",
+                "got ASCII text",
+                &work_dir,
+                &Regex::new(OS_CFG_FTYPE_REGEX).unwrap(),
+            )? {
                 // TODO: check if valid, contents, report app
-                let parse_res: Value =
-                    serde_json::from_reader(
-                        BufReader::new(
-                            File::open(&file_info.path).context(MigErrCtx::from_remark(MigErrorKind::Upstream,&format!("{}::try_init:cannot open file '{}'", MODULE, &file_info.path)))?
-                            )).context(MigErrCtx::from_remark(
+                let parse_res: Value = serde_json::from_reader(BufReader::new(
+                    File::open(&file_info.path).context(MigErrCtx::from_remark(
                         MigErrorKind::Upstream,
-                            &format!(
-                            "{}::new: failed to parse '{}'",
+                        &format!(
+                            "{}::try_init:cannot open file '{}'",
                             MODULE, &file_info.path
                         ),
+                    ))?,
+                ))
+                .context(MigErrCtx::from_remark(
+                    MigErrorKind::Upstream,
+                    &format!("{}::new: failed to parse '{}'", MODULE, &file_info.path),
                 ))?;
 
                 if let Some(app) = parse_res.get("applicationName") {
-                    info!("Configured for application: {}", app);    
+                    info!("Configured for application: {}", app);
                 } else {
                     let message = String::from("The balena config does not contain some required fields, please supply a valid config.json");
                     error!("{}", message);
@@ -232,22 +246,19 @@ impl LinuxMigrator {
                 }
 
                 if let Some(dev_type) = parse_res.get("deviceType") {
-                    info!("Configured for device type: {}", dev_type);    
+                    info!("Configured for device type: {}", dev_type);
                 } else {
                     let message = String::from("The balena config does not contain some required fields, please supply a valid config.json");
                     error!("{}", message);
                     return Err(MigError::from_remark(MigErrorKind::InvParam, &message));
                 }
 
-
-
                 info!("The balena OS config looks ok: '{}'", file_info.path);
-            } else {    
+            } else {
                 let message = String::from("The balena config has not been specified or cannot be accessed. Automatic download is not yet implemented, so you need to specify and supply all required files");
                 error!("{}", message);
                 return Err(MigError::from_remark(MigErrorKind::InvParam, &message));
-            }             
-
+            }
         } else {
             let message = String::from("The balena section of the configuration is empty. Automatic download is not yet implemented, so you need to specify and supply all required files and options.");
             error!("{}", message);
@@ -287,32 +298,60 @@ impl LinuxMigrator {
         trace!("LinuxMigrator::init_armhf: entered");
         // Raspberry Pi 3 Model B Rev 1.2
 
-        let dev_tree_model = std::fs::read_to_string(DEVICE_TREE_MODEL)
-            .context(MigErrCtx::from_remark(MigErrorKind::Upstream, &format!("{}::init_armhf: unable to determine model due to inaccessible file '{}'", MODULE, DEVICE_TREE_MODEL)))?;
+        let dev_tree_model =
+            std::fs::read_to_string(DEVICE_TREE_MODEL).context(MigErrCtx::from_remark(
+                MigErrorKind::Upstream,
+                &format!(
+                    "{}::init_armhf: unable to determine model due to inaccessible file '{}'",
+                    MODULE, DEVICE_TREE_MODEL
+                ),
+            ))?;
 
-        if let Some(captures) = Regex::new(RPI_MODEL_REGEX).unwrap().captures(&dev_tree_model) {            
-            self.init_rpi(captures.get(1).unwrap().as_str(),  captures.get(2).unwrap().as_str())?;
-        }    
-        
-        if let Some(captures) = Regex::new(BB_MODEL_REGEX).unwrap().captures(&dev_tree_model) {            
-            self.init_bb(captures.get(1).unwrap().as_str(),  captures.get(3).unwrap().as_str())?;
-        }    
+        if let Some(captures) = Regex::new(RPI_MODEL_REGEX)
+            .unwrap()
+            .captures(&dev_tree_model)
+        {
+            self.init_rpi(
+                captures.get(1).unwrap().as_str(),
+                captures.get(2).unwrap().as_str(),
+            )?;
+        }
 
-        let message = format!("Your device type: '{}' is not supported by balena-migrate.", dev_tree_model);
+        if let Some(captures) = Regex::new(BB_MODEL_REGEX)
+            .unwrap()
+            .captures(&dev_tree_model)
+        {
+            self.init_bb(
+                captures.get(1).unwrap().as_str(),
+                captures.get(3).unwrap().as_str(),
+            )?;
+        }
+
+        let message = format!(
+            "Your device type: '{}' is not supported by balena-migrate.",
+            dev_tree_model
+        );
         error!("{}", message);
-        Err(MigError::from_remark(MigErrorKind::InvState,&message))
+        Err(MigError::from_remark(MigErrorKind::InvState, &message))
     }
 
-    fn init_rpi(&mut self, version: &str, model: &str) -> Result<(),MigError> {
-        trace!("LinuxMigrator::init_rpi: entered with type: '{}', model: '{}'", version, model);
-        Err(MigError::from( MigErrorKind::NotImpl))
+    fn init_rpi(&mut self, version: &str, model: &str) -> Result<(), MigError> {
+        trace!(
+            "LinuxMigrator::init_rpi: entered with type: '{}', model: '{}'",
+            version,
+            model
+        );
+        Err(MigError::from(MigErrorKind::NotImpl))
     }
 
-    fn init_bb(&mut self, cpu: &str, model: &str) -> Result<(),MigError> {
-        trace!("LinuxMigrator::init_bb: entered with type: '{}', model: '{}'", cpu, model);
-        Err(MigError::from( MigErrorKind::NotImpl))
+    fn init_bb(&mut self, cpu: &str, model: &str) -> Result<(), MigError> {
+        trace!(
+            "LinuxMigrator::init_bb: entered with type: '{}', model: '{}'",
+            cpu,
+            model
+        );
+        Err(MigError::from(MigErrorKind::NotImpl))
     }
-
 
     fn init_amd64(&mut self) -> Result<(), MigError> {
         trace!("LinuxMigrator::init_amd64: entered");
@@ -587,7 +626,6 @@ impl LinuxMigrator {
         if let Some(ref work_part) = disk_info.work_path {
             debug!("{}", work_part);
         }
-
 
         disk_info.root_path = PathInfo::new(ROOT_DIR)?;
 

@@ -4,7 +4,7 @@ use log::{debug, trace, warn};
 use regex::Regex;
 use serde_json::Value;
 use std::fmt::{self, Display, Formatter};
-use std::path::{Path};
+use std::path::Path;
 
 use crate::migrator::{
     common::format_size_with_unit,
@@ -41,7 +41,7 @@ pub(crate) struct PathInfo {
 impl PathInfo {
     fn default(path: &str) -> PathInfo {
         PathInfo {
-            path: String::from(path),            
+            path: String::from(path),
             device: String::from(""),
             drive: String::from(""),
             fs_type: String::from(""),
@@ -62,14 +62,18 @@ impl PathInfo {
             return Ok(None);
         }
 
-        let abs_path = std::fs::canonicalize(Path::new(path))
-            .context(MigErrCtx::from_remark(MigErrorKind::Upstream,&format!("{}::new: failed to create absolute path from {}", MODULE, path)))?;
-        
+        let abs_path = std::fs::canonicalize(Path::new(path)).context(MigErrCtx::from_remark(
+            MigErrorKind::Upstream,
+            &format!(
+                "{}::new: failed to create absolute path from {}",
+                MODULE, path
+            ),
+        ))?;
 
         lazy_static! {
             static ref LSBLK_RE: Regex = Regex::new(LSBLK_REGEX).unwrap();
-            static ref SIZE_RE: Regex = Regex::new(SIZE_REGEX).unwrap();            
-            static ref MOUNT_RE: Regex = Regex::new(MOUNT_REGEX).unwrap();            
+            static ref SIZE_RE: Regex = Regex::new(SIZE_REGEX).unwrap();
+            static ref MOUNT_RE: Regex = Regex::new(MOUNT_REGEX).unwrap();
         }
 
         let mut result = PathInfo::default(abs_path.to_str().unwrap());
@@ -81,7 +85,10 @@ impl PathInfo {
         if !cmd_res.status.success() || cmd_res.stdout.is_empty() {
             return Err(MigError::from_remark(
                 MigErrorKind::InvParam,
-                &format!("{}::new: failed to find mountpoint for {}", MODULE, result.path),
+                &format!(
+                    "{}::new: failed to find mountpoint for {}",
+                    MODULE, result.path
+                ),
             ));
         }
 
@@ -116,13 +123,16 @@ impl PathInfo {
 
         debug!("PathInfo::new: '{}' df result: {:?}", path, &words);
 
-        if words[0] == "/dev/root" { 
+        if words[0] == "/dev/root" {
             let args: Vec<&str> = vec![];
             let cmd_res = call_cmd(MOUNT_CMD, &args, true)?;
             if !cmd_res.status.success() || cmd_res.stdout.is_empty() {
                 return Err(MigError::from_remark(
                     MigErrorKind::InvParam,
-                    &format!("{}::new: failed to find mountpoint for {}", MODULE, result.path),
+                    &format!(
+                        "{}::new: failed to find mountpoint for {}",
+                        MODULE, result.path
+                    ),
                 ));
             }
 
@@ -138,7 +148,7 @@ impl PathInfo {
                 } else {
                     warn!("unable to parse mount '{}'", mount);
                 }
-            } 
+            }
             if !found {
                 return Err(MigError::from_remark(
                     MigErrorKind::InvParam,
@@ -212,11 +222,10 @@ impl PathInfo {
                 ),
             ))?;
 
-
         if let Some(dev_name) = Path::new(&result.device).file_name() {
             let dev_name = dev_name.to_str().unwrap();
             if let Value::Array(devs) = parse_res.get("blockdevices").unwrap() {
-                // iterate over lock devices                
+                // iterate over lock devices
                 debug!("device: '{}' got devices", dev_name);
                 for device in devs {
                     if let Value::String(ref name) = device.get("name").unwrap() {
@@ -229,7 +238,7 @@ impl PathInfo {
                                 // iterate over children -> partitions
                                 for child_dev in children {
                                     if let Value::String(name) = child_dev.get("name").unwrap() {
-                                        if  name == &dev_name {
+                                        if name == &dev_name {
                                             // found our partition
                                             debug!("device: {} found {}", dev_name, name);
                                             if let Some(ref val) = child_dev.get("size") {
@@ -258,7 +267,6 @@ impl PathInfo {
                                                     result.fs_type = String::from(s.as_ref());
                                                 }
                                             }
-
 
                                             if let Some(ref val) = child_dev.get("uuid") {
                                                 if let Value::String(ref s) = val {
