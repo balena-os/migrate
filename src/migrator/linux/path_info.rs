@@ -24,7 +24,7 @@ const MOUNT_REGEX: &str = r#"^(\S+)\s+on\s+(\S+)\s+type\s+(\S+)\s+\(([^\)]+)\).*
 // /dev/mmcblk0p2 on / type ext4 (rw,noatime,data=ordered)
 
 #[derive(Debug)]
-pub(crate) struct PartitionInfo {
+pub(crate) struct PathInfo {
     pub path: String,
     pub device: String,
     pub drive: String,
@@ -38,10 +38,10 @@ pub(crate) struct PartitionInfo {
     pub fs_free: u64,
 }
 
-impl PartitionInfo {
-    fn default(path: &str) -> PartitionInfo {
-        PartitionInfo {
-            path: String::from(path),
+impl PathInfo {
+    fn default(path: &str) -> PathInfo {
+        PathInfo {
+            path: String::from(path),            
             device: String::from(""),
             drive: String::from(""),
             fs_type: String::from(""),
@@ -55,12 +55,16 @@ impl PartitionInfo {
         }
     }
 
-    pub fn new(path: &str) -> Result<Option<PartitionInfo>, MigError> {
-        trace!("PartitionInfo::new: entered with: '{}'", path);
+    pub fn new(path: &str) -> Result<Option<PathInfo>, MigError> {
+        trace!("PathInfo::new: entered with: '{}'", path);
 
         if !dir_exists(path)? {
             return Ok(None);
         }
+
+        let abs_path = std::fs::canonicalize(Path::new(path))
+            .context(MigErrCtx::from_remark(MigErrorKind::Upstream,&format!("{}::new: failed to create absolute path from {}", MODULE, path)))?;
+        
 
         lazy_static! {
             static ref LSBLK_RE: Regex = Regex::new(LSBLK_REGEX).unwrap();
@@ -68,16 +72,16 @@ impl PartitionInfo {
             static ref MOUNT_RE: Regex = Regex::new(MOUNT_REGEX).unwrap();            
         }
 
-        let mut result = PartitionInfo::default(path);
+        let mut result = PathInfo::default(abs_path.to_str().unwrap());
 
-        let args: Vec<&str> = vec!["--block-size=K", "--output=source,size,used", path];
+        let args: Vec<&str> = vec!["--block-size=K", "--output=source,size,used", &result.path];
 
         let cmd_res = call_cmd(DF_CMD, &args, true)?;
 
         if !cmd_res.status.success() || cmd_res.stdout.is_empty() {
             return Err(MigError::from_remark(
                 MigErrorKind::InvParam,
-                &format!("{}::new: failed to find mountpoint for {}", MODULE, path),
+                &format!("{}::new: failed to find mountpoint for {}", MODULE, result.path),
             ));
         }
 
@@ -87,30 +91,30 @@ impl PartitionInfo {
                 MigErrorKind::InvParam,
                 &format!(
                     "{}::new: failed to parse mountpoint attributes for {}",
-                    MODULE, path
+                    MODULE, result.path
                 ),
             ));
         }
 
-        // debug!("PartitionInfo::new: '{}' df result: {:?}", path, &output[1]);
+        // debug!("PathInfo::new: '{}' df result: {:?}", path, &output[1]);
 
         let words: Vec<&str> = output[1].split_whitespace().collect();
         if words.len() != 3 {
             debug!(
-                "PartitionInfo::new: '{}' df result: words {}",
-                path,
+                "PathInfo::new: '{}' df result: words {}",
+                result.path,
                 words.len()
             );
             return Err(MigError::from_remark(
                 MigErrorKind::InvParam,
                 &format!(
                     "{}::new: failed to parse mountpoint attributes for {}",
-                    MODULE, path
+                    MODULE, result.path
                 ),
             ));
         }
 
-        debug!("PartitionInfo::new: '{}' df result: {:?}", path, &words);
+        debug!("PathInfo::new: '{}' df result: {:?}", path, &words);
 
         if words[0] == "/dev/root" { 
             let args: Vec<&str> = vec![];
@@ -118,7 +122,7 @@ impl PartitionInfo {
             if !cmd_res.status.success() || cmd_res.stdout.is_empty() {
                 return Err(MigError::from_remark(
                     MigErrorKind::InvParam,
-                    &format!("{}::new: failed to find mountpoint for {}", MODULE, path),
+                    &format!("{}::new: failed to find mountpoint for {}", MODULE, result.path),
                 ));
             }
 
@@ -194,7 +198,7 @@ impl PartitionInfo {
                 MigErrorKind::ExecProcess,
                 &format!(
                     "{}::new: failed to determine block device attributes for '{}'",
-                    MODULE, path
+                    MODULE, result.path
                 ),
             ));
         }
@@ -212,18 +216,21 @@ impl PartitionInfo {
         if let Some(dev_name) = Path::new(&result.device).file_name() {
             let dev_name = dev_name.to_str().unwrap();
             if let Value::Array(devs) = parse_res.get("blockdevices").unwrap() {
-                
+                // iterate over lock devices                
                 debug!("device: '{}' got devices", dev_name);
                 for device in devs {
                     if let Value::String(ref name) = device.get("name").unwrap() {
                         trace!("device: '{}' looking at '{}'", dev_name, name);
                         if dev_name.starts_with(name) {
+                            // found our block device
                             debug!("device: {} found {}", dev_name, name);
                             result.drive = format!("/dev/{}", name);
                             if let Value::Array(children) = device.get("children").unwrap() {
+                                // iterate over children -> partitions
                                 for child_dev in children {
                                     if let Value::String(name) = child_dev.get("name").unwrap() {
                                         if  name == &dev_name {
+                                            // found our partition
                                             debug!("device: {} found {}", dev_name, name);
                                             if let Some(ref val) = child_dev.get("size") {
                                                 if let Value::String(ref s) = val {
@@ -283,21 +290,21 @@ impl PartitionInfo {
                 MigErrorKind::InvParam,
                 &format!(
                     "{}::new: failed to parse block device attributes for {} from lsblk output",
-                    MODULE, path
+                    MODULE, result.path
                 ),
             ));
         }
 
         debug!(
-            "PartitionInfo::new: '{}' lsblk result: '{:?}'",
-            path, result
+            "PathInfo::new: '{}' lsblk result: '{:?}'",
+            result.path, result
         );
         if result.fs_type.is_empty() || result.part_size == 0 {
             return Err(MigError::from_remark(
                 MigErrorKind::InvParam,
                 &format!(
                     "{}::new: failed to parse block device attributes for {} from lsblk output",
-                    MODULE, path
+                    MODULE, result.path
                 ),
             ));
         }
@@ -306,7 +313,7 @@ impl PartitionInfo {
     }
 }
 
-impl Display for PartitionInfo {
+impl Display for PathInfo {
     fn fmt(&self, f: &mut Formatter) -> fmt::Result {
         write!(
             f,

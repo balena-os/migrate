@@ -1,6 +1,6 @@
 use failure::ResultExt;
 use log::debug;
-use regex::Regex;
+use regex::{Regex,Captures};
 use std::fs::{metadata, read_to_string};
 // use std::io::Read;
 use lazy_static::lazy_static;
@@ -90,6 +90,7 @@ pub struct FileInfo {
     pub path: String,
     pub ftype: String,
     pub size: u64,
+    pub in_work_dir: bool,
 }
 
 impl FileInfo {
@@ -98,6 +99,7 @@ impl FileInfo {
             path: String::from(path),
             ftype: String::from(""),
             size,
+            in_work_dir: false,
         }
     }
 }
@@ -110,26 +112,26 @@ pub(crate) fn get_file_info(file: &str, work_dir: &str) -> Result<Option<FileInf
         work_dir
     );
 
-    let checked_path = if file.starts_with("/") || file.starts_with("./") || file.starts_with("../")
-    {
-        if let Ok(mdata) = metadata(file) {
-            Some(FileInfo::default(file, mdata.len()))
+    let checked_path = 
+        if file.starts_with("/") || file.starts_with("./") || file.starts_with("../") {
+            if let Ok(mdata) = metadata(file) {                    
+                Some(FileInfo::default(&std::fs::canonicalize(Path::new(file)).unwrap().to_str().unwrap(), mdata.len()))
+            } else {
+                None
+            }
         } else {
-            None
-        }
-    } else {
-        let search = if work_dir.ends_with("/") {
-            format!("{}{}", work_dir, file)
-        } else {
-            format!("{}/{}", work_dir, file)
-        };
+            let search = if work_dir.ends_with("/") {
+                format!("{}{}", work_dir, file)
+            } else {
+                format!("{}/{}", work_dir, file)
+            };
 
-        if let Ok(mdata) = metadata(&search) {
-            Some(FileInfo::default(&search, mdata.len()))
-        } else {
-            None
-        }
-    };
+            if let Ok(mdata) = metadata(&search) {
+                Some(FileInfo::default(&std::fs::canonicalize(Path::new(&search)).unwrap().to_str().unwrap(), mdata.len()))
+            } else {
+                None
+            }
+        };
 
     debug!(
         "{}::check_work_file: checked path for '{}': '{:?}'",
@@ -137,8 +139,10 @@ pub(crate) fn get_file_info(file: &str, work_dir: &str) -> Result<Option<FileInf
     );
 
     if let Some(mut file_info) = checked_path {
-        let args: Vec<&str> = vec!["-b", &file_info.path];
-        let cmd_res = call_cmd("file", &args, true)?;
+        file_info.in_work_dir = file_info.path.starts_with(work_dir);
+
+        let args: Vec<&str> = vec!["-bz", &file_info.path];
+        let cmd_res = call_cmd(FILE_CMD, &args, true)?;
         if !cmd_res.status.success() || cmd_res.stdout.is_empty() {
             return Err(MigError::from_remark(
                 MigErrorKind::InvParam,
@@ -155,7 +159,7 @@ pub(crate) fn get_file_info(file: &str, work_dir: &str) -> Result<Option<FileInf
     }
 }
 
-pub fn parse_file(fname: &str, regex: &Regex) -> Result<Option<String>, MigError> {
+pub fn parse_file(fname: &str, regex: &Regex) -> Result<Option<Vec<String>>, MigError> {
     let os_info = read_to_string(fname).context(MigErrCtx::from_remark(
         MigErrorKind::Upstream,
         &format!("File read '{}'", fname),
@@ -164,8 +168,16 @@ pub fn parse_file(fname: &str, regex: &Regex) -> Result<Option<String>, MigError
     for line in os_info.lines() {
         debug!("{}::parse_file: line: '{}'", MODULE, line);
 
-        if let Some(cap) = regex.captures(line) {
-            return Ok(Some(String::from(cap.get(1).unwrap().as_str())));
+        if let Some(ref captures) = regex.captures(line) {
+            let mut results: Vec<String> = Vec::new();
+            for cap in captures.iter() {
+                if let Some(cap) = cap {
+                    results.push(String::from(cap.as_str()));
+                } else {
+                    results.push(String::from(""));
+                }
+            }
+            return Ok(Some(results));
         };
     }
 
@@ -191,6 +203,54 @@ pub fn dir_exists(name: &str) -> Result<bool, MigError> {
     }
 }
 
+pub fn expect_file(file: &str, descr: &str, expected: &str, work_dir: &str, type_regex: &Regex) -> Result<Option<FileInfo>,MigError> {
+    if ! file.is_empty() {
+        if let Some(file_info) = get_file_info(&file, work_dir)? {
+            debug!("{} -> {:?}", file, &file_info);                    
+            if ! type_regex.is_match(&file_info.ftype) {                    
+                let message = format!("{} '{}' is in an invalid format, expected {}, got {}", descr, &file, expected, &file_info.ftype);
+                error!("{}", message);
+                return Err(MigError::from_remark(MigErrorKind::InvParam, &message));
+            }
+
+            Ok(Some(file_info))
+        } else {
+            Ok(None)
+        }
+    } else {
+        Ok(None)
+    }
+}
+
+/*            if !balena_cfg.image.is_empty() {
+                if let Some(file_info) =
+                    get_file_info(&balena_cfg.image, &work_dir)?
+                {
+                    debug!("{} -> {:?}", &balena_cfg.image, &file_info);                    
+                    if ! Regex::new(OS_IMG_FTYPE_REGEX).unwrap().is_match(&file_info.ftype) {                    
+                        let message = format!("balena image {} is in invalid format, expected DOS/MBR boot sector in gzip compressed data, got {}", &file_info.path, &file_info.ftype);
+                        error!("{}", message);
+                        return Err(MigError::from_remark(MigErrorKind::InvParam, &message));
+                    }
+                    info!("BalenaOS image looks OK: {}", &file_info.path);
+                    migrator.sysinfo.image_info = Some(file_info);
+                } else {
+                    let message = format!(
+                        "The balena image file '{}' can not be accessed",
+                        &balena_cfg.image
+                    );
+                    error!("{}", message);
+                    return Err(MigError::from_remark(MigErrorKind::InvParam, &message));
+                }
+            } else {
+                let message = String::from("The balena image has not been specified. Automatic download is not yet implemented, so you need to specify and supply all required files");
+                error!("{}", message);
+                return Err(MigError::from_remark(MigErrorKind::InvParam, &message));
+            }
+
+
+} 
+*/
 pub fn file_exists(file: &str) -> bool {
     Path::new(file).exists()
 }

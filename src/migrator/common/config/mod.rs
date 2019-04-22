@@ -2,6 +2,7 @@
 use failure::ResultExt;
 use log::{debug, info};
 use std::fs::read_to_string;
+use std::path::{Path};
 use yaml_rust::{Yaml, YamlLoader};
 
 use clap::{App, Arg};
@@ -102,9 +103,35 @@ impl<'a> Config {
 
         if arg_matches.is_present("config") {
             if let Some(cfg) = arg_matches.value_of("config") {
+                info!("reading config from default location: '{}'", cfg);
                 config.from_file(cfg)?;
             }
+        } else {            
+            let work_dir = 
+                if arg_matches.is_present("work_dir") {
+                    if let Some(dir) = arg_matches.value_of("work_dir") {
+                        dir
+                    } else {
+                        "./"
+                    }
+                } else {
+                    "./"
+                };
+                                    
+            let config_path = 
+                if work_dir.ends_with("/") {
+                    format!("{}balena-migrate.yml", work_dir)
+                } else {
+                    format!("{}/balena-migrate.yml", work_dir)
+                };
+
+            debug!("{}::new: no config option given, looking for default in '{}'", MODULE, config_path);  
+            if Path::new(&config_path).exists() {
+                info!("reading config from default location: '{}'", config_path);
+                config.from_file(&config_path)?;
+            }    
         }
+
 
         if arg_matches.is_present("work_dir") {
             if let Some(work_dir) = arg_matches.value_of("work_dir") {
