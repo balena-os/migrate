@@ -5,29 +5,34 @@ use std::fmt::{self, Display, Formatter};
 use std::process::{Command, ExitStatus, Stdio};
 
 pub mod mig_error;
-use mig_error::{MigErrCtx, MigError, MigErrorKind};
+use self::mig_error::{MigErrCtx, MigError, MigErrorKind};
 
 pub mod os_release;
+pub use os_release::OSRelease;
 
 pub mod config;
 
 pub mod logger;
 
-const MODULE: &str = "common";
+const MODULE: &str = "migrator::common";
 
 #[derive(Debug)]
 pub enum OSArch {
     AMD64,
     ARMHF,
     I386,
-    /*   ARM64,
+/*   
+    ARM64,
     ARMEL,
     MIPS,
     MIPSEL,
     Powerpc,
     PPC64EL,
-    S390EX, */
+    S390EX, 
+*/
 }
+
+
 
 impl Display for OSArch {
     fn fmt(&self, f: &mut Formatter) -> fmt::Result {
@@ -104,17 +109,17 @@ pub(crate) fn check_tcp_connect(host: &str, port: u16, timeout: u64) -> Result<(
     }
 }
 
-const GB_SIZE: u64 = 1024 * 1024 * 1024;
-const MB_SIZE: u64 = 1024 * 1024;
-const KB_SIZE: u64 = 1024;
+const GIB_SIZE: u64 = 1024 * 1024 * 1024;
+const MIB_SIZE: u64 = 1024 * 1024;
+const KIB_SIZE: u64 = 1024;
 
 pub fn format_size_with_unit(size: u64) -> String {
-    if size > (10 * GB_SIZE) {
-        format!("{} GiB", size / GB_SIZE)
-    } else if size > (10 * MB_SIZE) {
-        format!("{} MiB", size / MB_SIZE)
-    } else if size > (10 * KB_SIZE) {
-        format!("{} KiB", size / KB_SIZE)
+    if size > (10 * GIB_SIZE) {
+        format!("{} GiB", size / GIB_SIZE)
+    } else if size > (10 * MIB_SIZE) {
+        format!("{} MiB", size / MIB_SIZE)
+    } else if size > (10 * KIB_SIZE) {
+        format!("{} KiB", size / KIB_SIZE)
     } else {
         format!("{} B", size)
     }

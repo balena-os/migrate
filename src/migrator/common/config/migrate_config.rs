@@ -23,6 +23,7 @@ pub struct MigrateConfig {
     pub log_to: Option<LogConfig>,
     pub kernel_file: String,
     pub initramfs_file: String,
+    pub force_slug: Option<String>,
 }
 
 impl MigrateConfig {
@@ -35,6 +36,7 @@ impl MigrateConfig {
             log_to: None,
             kernel_file: String::from(""),
             initramfs_file: String::from(""),
+            force_slug: None,
         }
     }
 }
@@ -55,6 +57,10 @@ impl YamlConfig for MigrateConfig {
 
         if self.initramfs_file.is_empty() == false {
             output += &format!("{}  initramfs_file: {}\n", prefix, self.initramfs_file);
+        }
+
+        if let Some(slug) = &self.force_slug {
+            output += &format!("{}  force_slug: '{}'\n", prefix, slug);
         }
 
         let next_prefix = String::from(prefix) + "  ";
@@ -83,6 +89,8 @@ impl YamlConfig for MigrateConfig {
                 self.mode = MigMode::IMMEDIATE;
             } else if mode.to_lowercase() == "agent" {
                 self.mode = MigMode::AGENT;
+            } else if mode.to_lowercase() == "pretend" {
+                self.mode = MigMode::PRETEND;
             } else {
                 return Err(MigError::from_remark(
                     MigErrorKind::InvParam,
@@ -117,6 +125,11 @@ impl YamlConfig for MigrateConfig {
                 log_to.from_yaml(log_section)?;
                 self.log_to = Some(log_to);
             }
+        }
+
+        // Param: all_wifis - must be > 0
+        if let Some(force_slug) = get_yaml_str(yaml, &["force_slug"])? {
+            self.force_slug = Some(String::from(force_slug));
         }
 
         Ok(())

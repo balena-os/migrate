@@ -141,7 +141,7 @@ impl<'a> Config {
 
         if arg_matches.is_present("mode") {
             if let Some(mode) = arg_matches.value_of("mode") {
-                config.migrate.mode = match mode {
+                config.migrate.mode = match mode.to_lowercase().as_str() {
                     "immediate" => MigMode::IMMEDIATE,
                     "agent" => MigMode::AGENT,
                     "pretend" => MigMode::PRETEND,
