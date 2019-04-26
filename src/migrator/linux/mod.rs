@@ -80,17 +80,6 @@ struct SysInfo {
     kernel_info: Option<FileInfo>,
     initrd_info: Option<FileInfo>,
     device_slug: Option<String>,
-    /*
-                os_name: None,
-                os_release: None,
-                os_arch: None,
-                uefi_boot: None,
-                boot_dev: None,
-                mem_tot: None,
-                mem_free: None,
-                admin: None,
-                sec_boot: None,
-    */
 }
 
 impl SysInfo {
