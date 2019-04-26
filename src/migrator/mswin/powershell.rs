@@ -90,6 +90,7 @@ impl PSInfo {
         }
     }
 
+    
     pub fn is_admin(&self) -> Result<bool, MigError> {
         let output = call_from_stdin(PS_CMD_IS_ADMIN, true)?;
         if !output.ps_ok {
