@@ -4,21 +4,17 @@ pub(crate) mod powershell;
 pub mod win_api;
 pub(crate) mod wmi_utils;
 
-use log::{debug, warn, info, trace, error};
+use log::{debug, error, info, trace, warn};
 // use std::collections::{HashMap};
 
 use std::time::Instant;
 
-pub use wmi_utils::{WmiUtils, Partition};
-use wmi_utils::{WMIOSInfo};
 use crate::migrator::{
-    MigError, 
-    MigErrorKind,
-    OSArch, 
-    OSRelease,
-    Config,
-    common::{check_tcp_connect, config::{MigMode}},
+    common::{check_tcp_connect, config::MigMode},
+    Config, MigError, MigErrorKind, OSArch, OSRelease,
 };
+use wmi_utils::WMIOSInfo;
+pub use wmi_utils::{Partition, WmiUtils};
 //use crate::mswin::drive_info::PhysicalDriveInfo;
 
 use powershell::PSInfo;
@@ -31,13 +27,13 @@ struct SysInfo {
     os_arch: Option<OSArch>,
     efi_boot: Option<bool>,
     secure_boot: Option<bool>,
-/*
-    disk_info: Option<DiskInfo>,
-    image_info: Option<FileInfo>,
-    kernel_info: Option<FileInfo>,
-    initrd_info: Option<FileInfo>,
-    device_slug: Option<String>,
-*/
+    /*
+        disk_info: Option<DiskInfo>,
+        image_info: Option<FileInfo>,
+        kernel_info: Option<FileInfo>,
+        initrd_info: Option<FileInfo>,
+        device_slug: Option<String>,
+    */
 }
 
 impl SysInfo {
@@ -48,13 +44,13 @@ impl SysInfo {
             os_arch: None,
             efi_boot: None,
             secure_boot: None,
-/*
-            disk_info: None,
-            image_info: None,
-            kernel_info: None,
-            initrd_info: None,
-            device_slug: None,
-*/            
+            /*
+                        disk_info: None,
+                        image_info: None,
+                        kernel_info: None,
+                        initrd_info: None,
+                        device_slug: None,
+            */
         }
     }
 
@@ -66,7 +62,6 @@ impl SysInfo {
         }
     }
 }
-
 
 // const MODULE: &str = "mswin";
 
@@ -92,18 +87,18 @@ impl<'a> MSWMigrator {
         trace!("MSWMigrator::try_int: entered");
 
         let migrator = MSWMigrator {
-            config, 
-            ps_info: PSInfo::try_init()?,            
+            config,
+            ps_info: PSInfo::try_init()?,
             os_info: None,
             uefi_boot: None,
             sysinfo: SysInfo::default(),
-        };        
+        };
 
         // **********************************************************************
         // We need to be root to do this
         // note: fake admin is not honored in release mode
 
-        if ! migrator.is_admin()? {
+        if !migrator.is_admin()? {
             error!("please run this program as root");
             return Err(MigError::from_remark(
                 MigErrorKind::InvState,
@@ -118,180 +113,179 @@ impl<'a> MSWMigrator {
         Err(MigError::from(MigErrorKind::NotImpl))
     }
 
-    fn get_ps_info(&'a mut self) -> &'a mut  PSInfo {
+    fn get_ps_info(&'a mut self) -> &'a mut PSInfo {
         &mut self.ps_info
     }
 
     #[cfg(not(debug_assertions))]
-    fn is_admin(&self) -> Result<bool, MigError> {        
+    fn is_admin(&self) -> Result<bool, MigError> {
         trace!("LinuxMigrator::is_admin: entered");
         Ok(self.ps_info.is_admin()?)
     }
 
     #[cfg(debug_assertions)]
-    fn is_admin(&self) -> Result<bool, MigError> {        
+    fn is_admin(&self) -> Result<bool, MigError> {
         trace!("LinuxMigrator::is_admin: entered");
         Ok(self.ps_info.is_admin()? || self.config.debug.fake_admin)
     }
 
+    /*
+        fn can_migrate(&mut self) -> Result<bool, MigError> {
+            debug!("{}::can_migrate: entered", MODULE);
 
-/*
-    fn can_migrate(&mut self) -> Result<bool, MigError> {
-        debug!("{}::can_migrate: entered", MODULE);
+            let os_name = String::from(self.get_os_name()?);
+            let os_release = self.get_os_release()?;
 
-        let os_name = String::from(self.get_os_name()?); 
-        let os_release = self.get_os_release()?;
+            info!("{}::can_migrate: running on {} release: {}", MODULE, os_name, os_release);
 
-        info!("{}::can_migrate: running on {} release: {}", MODULE, os_name, os_release);
-        
-        if  (os_release.get_mayor() < 6) || ((os_release.get_mayor() == 6) && (os_release.get_minor() < 3)) ||
-            (os_release.get_mayor() > 10) || ((os_release.get_mayor() == 10) && (os_release.get_minor() > 0))
-            {                    
-            warn!("{}::can_migrate: Windows OS releases < 8.1 (version < 6.3) or > 10 (version > 10.0) are current not supported", MODULE);
-            return Ok(false);
-        }
-
-        let os_arch = self.get_os_arch()?;
-        match  os_arch {
-            OSArch::AMD64 => {
-                info!("{}::can_migrate: using ARCH: {}", MODULE, os_arch);
-            },
-            _ => {
-                warn!("{}::can_migrate: the achitecture {} is not currently supported for this platform", MODULE, os_arch);
+            if  (os_release.get_mayor() < 6) || ((os_release.get_mayor() == 6) && (os_release.get_minor() < 3)) ||
+                (os_release.get_mayor() > 10) || ((os_release.get_mayor() == 10) && (os_release.get_minor() > 0))
+                {
+                warn!("{}::can_migrate: Windows OS releases < 8.1 (version < 6.3) or > 10 (version > 10.0) are current not supported", MODULE);
                 return Ok(false);
             }
-        }
 
-        if ! self.is_admin()? {
-            warn!("{}::can_migrate: you need to run this program as admin", MODULE);
-            return Ok(false);
-        }
-
-
-        if self.is_secure_boot()? {
-            warn!("{}::can_migrate: secure boot appears to be enabled. Please disable secure boot in the firmaware settings.", MODULE);
-            return Ok(false);
-        }
-
-        if let Some(ref balena) = self.config.balena {
-            if balena.api_check == true {
-                info!("{}::can_migrate: checking connection api backend at to {}:{}", MODULE, balena.api_host, balena.api_port );
-                let now = Instant::now();
-                if let Err(why) = check_tcp_connect(&balena.api_host, balena.api_port, balena.check_timeout) {
-                    warn!("{}::can_migrate: connectivity check to {}:{} failed timeout {} seconds ", MODULE, balena.api_host, balena.api_port, balena.check_timeout );
-                    warn!("{}::can_migrate: check_tcp_connect returned: {:?} ", MODULE, why );
+            let os_arch = self.get_os_arch()?;
+            match  os_arch {
+                OSArch::AMD64 => {
+                    info!("{}::can_migrate: using ARCH: {}", MODULE, os_arch);
+                },
+                _ => {
+                    warn!("{}::can_migrate: the achitecture {} is not currently supported for this platform", MODULE, os_arch);
                     return Ok(false);
                 }
-                info!("{}::can_migrate: successfully connected to api backend in {} ms", MODULE, now.elapsed().as_millis());
             }
 
-            if balena.vpn_check == true {
-                info!("{}::can_migrate: checking connection vpn backend at to {}:{}", MODULE, balena.vpn_host, balena.vpn_port);
-                let now = Instant::now();
-                if let Err(why) = check_tcp_connect(&balena.vpn_host, balena.vpn_port, balena.check_timeout) {
-                    warn!("{}::can_migrate: connectivity check to {}:{} failed timeout {} seconds ", MODULE, balena.vpn_host, balena.vpn_port, balena.check_timeout );
-                    warn!("{}::can_migrate: check_tcp_connect returned: {:?} ", MODULE, why );
-                    return Ok(false);
+            if ! self.is_admin()? {
+                warn!("{}::can_migrate: you need to run this program as admin", MODULE);
+                return Ok(false);
+            }
+
+
+            if self.is_secure_boot()? {
+                warn!("{}::can_migrate: secure boot appears to be enabled. Please disable secure boot in the firmaware settings.", MODULE);
+                return Ok(false);
+            }
+
+            if let Some(ref balena) = self.config.balena {
+                if balena.api_check == true {
+                    info!("{}::can_migrate: checking connection api backend at to {}:{}", MODULE, balena.api_host, balena.api_port );
+                    let now = Instant::now();
+                    if let Err(why) = check_tcp_connect(&balena.api_host, balena.api_port, balena.check_timeout) {
+                        warn!("{}::can_migrate: connectivity check to {}:{} failed timeout {} seconds ", MODULE, balena.api_host, balena.api_port, balena.check_timeout );
+                        warn!("{}::can_migrate: check_tcp_connect returned: {:?} ", MODULE, why );
+                        return Ok(false);
+                    }
+                    info!("{}::can_migrate: successfully connected to api backend in {} ms", MODULE, now.elapsed().as_millis());
                 }
-                info!("{}::can_migrate: successfully connected to vpn backend in {} ms", MODULE, now.elapsed().as_millis());
+
+                if balena.vpn_check == true {
+                    info!("{}::can_migrate: checking connection vpn backend at to {}:{}", MODULE, balena.vpn_host, balena.vpn_port);
+                    let now = Instant::now();
+                    if let Err(why) = check_tcp_connect(&balena.vpn_host, balena.vpn_port, balena.check_timeout) {
+                        warn!("{}::can_migrate: connectivity check to {}:{} failed timeout {} seconds ", MODULE, balena.vpn_host, balena.vpn_port, balena.check_timeout );
+                        warn!("{}::can_migrate: check_tcp_connect returned: {:?} ", MODULE, why );
+                        return Ok(false);
+                    }
+                    info!("{}::can_migrate: successfully connected to vpn backend in {} ms", MODULE, now.elapsed().as_millis());
+                }
             }
-        }    
 
-        if self.is_uefi_boot()? == true {
-            let _drive_letter = mount_efi_partition();
-        }    
-
-        Ok(true)
-    } 
-  
-    fn is_uefi_boot(&mut self) -> Result<bool, MigError> {
-        match self.uefi_boot {
-            Some(v) => Ok(v),
-            None => {
-                self.uefi_boot = Some(win_api::is_uefi_boot()?);
-                Ok(self.uefi_boot.unwrap())
+            if self.is_uefi_boot()? == true {
+                let _drive_letter = mount_efi_partition();
             }
-        }
-    }
 
-    fn get_os_name<'a>(&'a mut self) -> Result<&'a str, MigError> {
-        match self.os_info {
-            Some(ref info) => Ok(&info.os_name),
-            None => {
-                self.os_info = Some(WmiUtils::init_os_info()?);
-                Ok(&self.os_info.as_ref().unwrap().os_name)
-            }
-        }
-    }
-
-    fn get_os_release(&mut self) -> Result<OSRelease, MigError> {
-        match self.os_info {
-            Some(ref info) => Ok(info.os_release),
-            None => {
-                self.os_info = Some(WmiUtils::init_os_info()?);
-                Ok(&self.os_info.as_ref().unwrap().os_release)
-            }
-        }
-    }
-
-    fn get_os_arch<'a>(&'a mut self) -> Result<&'a OSArch, MigError> {
-        match self.os_info {
-            Some(ref info) => Ok(&info.os_arch),
-            None => {
-                self.os_info = Some(WmiUtils::init_os_info()?);
-                Ok(&self.os_info.as_ref().unwrap().os_arch)
-            }
-        }
-    }
-
-    fn get_mem_tot(&mut self) -> Result<u64, MigError> {
-        match self.os_info {
-            Some(ref info) => Ok(info.mem_tot),
-            None => {
-                self.os_info = Some(WmiUtils::init_os_info()?);
-                Ok(self.os_info.as_ref().unwrap().mem_tot)
-            }
-        }
-    }
-
-    fn get_mem_avail(&mut self) -> Result<u64, MigError> {
-        match self.os_info {
-            Some(ref info) => Ok(info.mem_avail),
-            None => {
-                self.os_info = Some(WmiUtils::init_os_info()?);
-                Ok(self.os_info.as_ref().unwrap().mem_avail)
-            }
-        }
-    }
-
-    fn get_boot_dev<'a>(&'a mut self) -> Result<&'a str, MigError> {
-        match self.os_info {
-            Some(ref info) => Ok(&info.boot_dev),
-            None => {
-                self.os_info = Some(WmiUtils::init_os_info()?);
-                Ok(&self.os_info.as_ref().unwrap().boot_dev)
-            }
-        }
-    }
-
-#[cfg(debug_assertions)]
-    fn is_admin(&mut self) -> Result<bool, MigError> {
-        if self.config.debug.fake_admin == true {
             Ok(true)
-        } else {
+        }
+
+        fn is_uefi_boot(&mut self) -> Result<bool, MigError> {
+            match self.uefi_boot {
+                Some(v) => Ok(v),
+                None => {
+                    self.uefi_boot = Some(win_api::is_uefi_boot()?);
+                    Ok(self.uefi_boot.unwrap())
+                }
+            }
+        }
+
+        fn get_os_name<'a>(&'a mut self) -> Result<&'a str, MigError> {
+            match self.os_info {
+                Some(ref info) => Ok(&info.os_name),
+                None => {
+                    self.os_info = Some(WmiUtils::init_os_info()?);
+                    Ok(&self.os_info.as_ref().unwrap().os_name)
+                }
+            }
+        }
+
+        fn get_os_release(&mut self) -> Result<OSRelease, MigError> {
+            match self.os_info {
+                Some(ref info) => Ok(info.os_release),
+                None => {
+                    self.os_info = Some(WmiUtils::init_os_info()?);
+                    Ok(&self.os_info.as_ref().unwrap().os_release)
+                }
+            }
+        }
+
+        fn get_os_arch<'a>(&'a mut self) -> Result<&'a OSArch, MigError> {
+            match self.os_info {
+                Some(ref info) => Ok(&info.os_arch),
+                None => {
+                    self.os_info = Some(WmiUtils::init_os_info()?);
+                    Ok(&self.os_info.as_ref().unwrap().os_arch)
+                }
+            }
+        }
+
+        fn get_mem_tot(&mut self) -> Result<u64, MigError> {
+            match self.os_info {
+                Some(ref info) => Ok(info.mem_tot),
+                None => {
+                    self.os_info = Some(WmiUtils::init_os_info()?);
+                    Ok(self.os_info.as_ref().unwrap().mem_tot)
+                }
+            }
+        }
+
+        fn get_mem_avail(&mut self) -> Result<u64, MigError> {
+            match self.os_info {
+                Some(ref info) => Ok(info.mem_avail),
+                None => {
+                    self.os_info = Some(WmiUtils::init_os_info()?);
+                    Ok(self.os_info.as_ref().unwrap().mem_avail)
+                }
+            }
+        }
+
+        fn get_boot_dev<'a>(&'a mut self) -> Result<&'a str, MigError> {
+            match self.os_info {
+                Some(ref info) => Ok(&info.boot_dev),
+                None => {
+                    self.os_info = Some(WmiUtils::init_os_info()?);
+                    Ok(&self.os_info.as_ref().unwrap().boot_dev)
+                }
+            }
+        }
+
+    #[cfg(debug_assertions)]
+        fn is_admin(&mut self) -> Result<bool, MigError> {
+            if self.config.debug.fake_admin == true {
+                Ok(true)
+            } else {
+                Ok(self.ps_info.is_admin()?)
+            }
+        }
+
+    #[cfg(not(debug_assertions))]
+        fn is_admin(&mut self) -> Result<bool, MigError> {
             Ok(self.ps_info.is_admin()?)
         }
-    }
 
-#[cfg(not(debug_assertions))]
-    fn is_admin(&mut self) -> Result<bool, MigError> {
-        Ok(self.ps_info.is_admin()?)
-    }
-
-    fn is_secure_boot(&mut self) -> Result<bool, MigError> {
-        Ok(self.ps_info.is_secure_boot()?)
-    }    
-*/    
+        fn is_secure_boot(&mut self) -> Result<bool, MigError> {
+            Ok(self.ps_info.is_secure_boot()?)
+        }
+    */
 }
 
 /*
@@ -313,8 +307,8 @@ fn mount_efi_partition() -> Result<String, MigError> {
     debug!("{}::mount_efi_partition: wmi query for boot partition returned {:?}", MODULE, boot_partition);
     if boot_partition.len() != 1 {
         return Err(MigError::from_remark(MigErrorKind::InvParam,&format!("{}::mount_efi_partition: encountered more than 1 boot partition", MODULE)));
-    } 
-        
+    }
+
     if let Some(drive) = boot_partition[0].query_logical_drive()? {
         return Ok(String::from(drive.get_name()));
     }
@@ -324,11 +318,11 @@ fn mount_efi_partition() -> Result<String, MigError> {
 
 
 /*
-        let drive_letters = WmiUtils::query_drive_letters()?;                
+        let drive_letters = WmiUtils::query_drive_letters()?;
         let mut efi_mount = 'B' as u8;
         let mut efi_drive_letter = format!("{}:",efi_mount as char);
 
-        if drive_letters.len() > 0 {            
+        if drive_letters.len() > 0 {
             if &drive_letters[0] <= &efi_drive_letter {
                 for letter in drive_letters {
                     if letter == efi_drive_letter {
@@ -355,9 +349,8 @@ fn mount_efi_partition() -> Result<String, MigError> {
         }
 
 */
-
-    Err(MigError::from(MigErrorKind::NotImpl))
-} 
+Err(MigError::from(MigErrorKind::NotImpl))
+}
 */
 
 #[cfg(test)]
@@ -373,5 +366,3 @@ mod tests {
         //assert!(!msw_info.get_mem_tot().unwrap() > 0);
     }
 }
-
-

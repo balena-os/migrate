@@ -19,7 +19,6 @@ const LSBLK_REGEX: &str = r#"^(\S+)\s+(\d+)\s+(\S+)\s+(\S+)(\s+(.*))?$"#;
 
 const MOUNT_REGEX: &str = r#"^(\S+)\s+on\s+(\S+)\s+type\s+(\S+)\s+\(([^\)]+)\).*$"#;
 
-
 #[derive(Debug)]
 pub(crate) struct PathInfo {
     pub path: String,

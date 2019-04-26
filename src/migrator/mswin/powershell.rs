@@ -95,7 +95,7 @@ impl PSInfo {
         if !output.ps_ok {
             return Err(ps_failed_stdin(&output, &PS_CMD_IS_ADMIN, "is_admin"));
         }
-        Ok(output.stdout.to_lowercase() == "true")        
+        Ok(output.stdout.to_lowercase() == "true")
     }
 
     pub fn is_secure_boot(&self) -> Result<bool, MigError> {
