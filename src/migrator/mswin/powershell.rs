@@ -46,8 +46,6 @@ struct PSRes {
 pub(crate) struct PSInfo {
     version: Option<PSVER>,
     cmdlets: HashMap<String, bool>,
-    admin: Option<bool>,
-    secure_boot: Option<bool>,
 }
 
 trait PsFailed<T> {
@@ -59,8 +57,6 @@ impl PSInfo {
         let mut ps_info = PSInfo {
             version: None,
             cmdlets: HashMap::new(),
-            admin: None,
-            secure_boot: None,
         };
 
         ps_info.get_ps_ver()?;
@@ -94,47 +90,34 @@ impl PSInfo {
         }
     }
 
-    pub fn is_admin(&mut self) -> Result<bool, MigError> {
-        if let Some(v) = self.admin {
-            Ok(v)
-        } else {
-            let output = call_from_stdin(PS_CMD_IS_ADMIN, true)?;
-            if !output.ps_ok {
-                return Err(ps_failed_stdin(&output, &PS_CMD_IS_ADMIN, "is_admin"));
-            }
-            self.admin = Some(output.stdout.to_lowercase() == "true");
-            Ok(self.admin.unwrap())
+    pub fn is_admin(&self) -> Result<bool, MigError> {
+        let output = call_from_stdin(PS_CMD_IS_ADMIN, true)?;
+        if !output.ps_ok {
+            return Err(ps_failed_stdin(&output, &PS_CMD_IS_ADMIN, "is_admin"));
         }
+        Ok(output.stdout.to_lowercase() == "true")        
     }
 
-    pub fn is_secure_boot(&mut self) -> Result<bool, MigError> {
-        if let Some(v) = self.secure_boot {
-            Ok(v)
-        } else {
-            if !self.is_admin()? {
-                return Err(MigError::from(MigErrorKind::AuthError));
-            }
-            let output = call_from_stdin(&PS_CMD_IS_SECURE_BOOT, true)?;
-            debug!("{}::is_secure_boot: command result: {:?}", MODULE, output);
-            if !output.ps_ok || !output.stderr.is_empty() {
-                // 'Confirm-SecureBootUEFI : Variable is currently undefined: 0xC0000100'
-                let regex = Regex::new(
-                    r"Confirm-SecureBootUEFI\s*:\s*Variable\s+is\s+currently\s+undefined:.*",
-                )
-                .unwrap();
-                if regex.is_match(&output.stderr) {
-                    self.secure_boot = Some(output.stdout.to_lowercase() == "true");
-                } else {
-                    return Err(ps_failed_call(
-                        &output,
-                        &PS_CMD_IS_SECURE_BOOT,
-                        "is_secure_boot",
-                    ));
-                }
+    pub fn is_secure_boot(&self) -> Result<bool, MigError> {
+        let output = call_from_stdin(&PS_CMD_IS_SECURE_BOOT, true)?;
+        debug!("{}::is_secure_boot: command result: {:?}", MODULE, output);
+        if !output.ps_ok || !output.stderr.is_empty() {
+            // 'Confirm-SecureBootUEFI : Variable is currently undefined: 0xC0000100'
+            let regex = Regex::new(
+                r"Confirm-SecureBootUEFI\s*:\s*Variable\s+is\s+currently\s+undefined:.*",
+            )
+            .unwrap();
+            if regex.is_match(&output.stderr) {
+                Ok(output.stdout.to_lowercase() == "true")
             } else {
-                self.secure_boot = Some(output.stdout.to_lowercase() == "true");
+                return Err(ps_failed_call(
+                    &output,
+                    &PS_CMD_IS_SECURE_BOOT,
+                    "is_secure_boot",
+                ));
             }
-            Ok(self.secure_boot.unwrap())
+        } else {
+            Ok(output.stdout.to_lowercase() == "true")
         }
     }
 

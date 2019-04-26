@@ -6,13 +6,12 @@ const MODULE: &str = "common::config::migrate_config";
 
 #[derive(Debug, PartialEq)]
 pub enum MigMode {
-    //INVALID,
     AGENT,
     IMMEDIATE,
     PRETEND,
 }
 
-const DEFAULT_MODE: MigMode = MigMode::IMMEDIATE;
+const DEFAULT_MODE: MigMode = MigMode::PRETEND;
 
 #[derive(Debug)]
 pub struct MigrateConfig {

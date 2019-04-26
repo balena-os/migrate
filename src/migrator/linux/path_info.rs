@@ -13,15 +13,12 @@ use crate::migrator::{
 };
 
 const MODULE: &str = "migrator::linux::partition_info";
-//const FINDMNT_CMD: &str = "findmnt";
 
 const SIZE_REGEX: &str = r#"^(\d+)K?$"#;
 const LSBLK_REGEX: &str = r#"^(\S+)\s+(\d+)\s+(\S+)\s+(\S+)(\s+(.*))?$"#;
 
-// const DRIVE_REGEX: &str = r#"^(/dev/([^/]+/)*.*)p[0-9]+$"#;
-
 const MOUNT_REGEX: &str = r#"^(\S+)\s+on\s+(\S+)\s+type\s+(\S+)\s+\(([^\)]+)\).*$"#;
-// /dev/mmcblk0p2 on / type ext4 (rw,noatime,data=ordered)
+
 
 #[derive(Debug)]
 pub(crate) struct PathInfo {
