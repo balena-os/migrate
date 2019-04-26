@@ -12,8 +12,9 @@ mod util;
 use path_info::PathInfo;
 
 use crate::migrator::{
-    common::{format_size_with_unit, config::{MigMode}, }, linux::util::*, Config, MigErrCtx, MigError, MigErrorKind,
-    OSArch, OSRelease,
+    common::{config::MigMode, format_size_with_unit},
+    linux::util::*,
+    Config, MigErrCtx, MigError, MigErrorKind, OSArch, OSRelease,
 };
 
 const SUPPORTED_OSSES: &'static [&'static str] = &[
@@ -128,7 +129,7 @@ impl LinuxMigrator {
         match migrator.config.migrate.mode {
             MigMode::IMMEDIATE => migrator.do_migrate(),
             MigMode::PRETEND => Ok(()),
-            MigMode::AGENT => Err(MigError::from(MigErrorKind::NotImpl)),            
+            MigMode::AGENT => Err(MigError::from(MigErrorKind::NotImpl)),
         }
     }
 
@@ -433,8 +434,8 @@ impl LinuxMigrator {
     // ** Start the actual migration
     // **********************************************************************
 
-    fn do_migrate(&self) -> Result<(),MigError> {        
-        if let Some(ref device_slug) = self.sysinfo.device_slug {            
+    fn do_migrate(&self) -> Result<(), MigError> {
+        if let Some(ref device_slug) = self.sysinfo.device_slug {
             match device_slug.as_ref() {
                 "beaglebone-green" => {
                     self.setup_bbg()?;
@@ -543,9 +544,12 @@ impl LinuxMigrator {
 
     fn setup_bbg(&self) -> Result<(), MigError> {
         trace!(
-            "LinuxMigrator::setup_bb: entered with type: '{}'", match &self.sysinfo.device_slug { Some(s) => s , _ => panic!("no device type slug found"), });
-
-
+            "LinuxMigrator::setup_bb: entered with type: '{}'",
+            match &self.sysinfo.device_slug {
+                Some(s) => s,
+                _ => panic!("no device type slug found"),
+            }
+        );
 
         Ok(())
     }

@@ -4,7 +4,7 @@ use yaml_rust::Yaml;
 
 const MODULE: &str = "common::config::migrate_config";
 
-#[derive(Debug,PartialEq)]
+#[derive(Debug, PartialEq)]
 pub enum MigMode {
     //INVALID,
     AGENT,
