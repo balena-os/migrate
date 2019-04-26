@@ -2,7 +2,7 @@ use failure::{Fail, ResultExt};
 use log::{debug, error, info, trace, warn};
 use serde_json::Value;
 use std::fs::File;
-use std::io::{BufReader};
+use std::io::BufReader;
 
 use regex::Regex;
 
@@ -12,9 +12,8 @@ mod util;
 use path_info::PathInfo;
 
 use crate::migrator::{
-    common::format_size_with_unit,
-    linux::util::*,    
-    Config, MigErrCtx, MigError, MigErrorKind, OSArch, OSRelease,
+    common::{format_size_with_unit, config::{MigMode}, }, linux::util::*, Config, MigErrCtx, MigError, MigErrorKind,
+    OSArch, OSRelease,
 };
 
 const SUPPORTED_OSSES: &'static [&'static str] = &[
@@ -30,23 +29,20 @@ const RPI_MODEL_REGEX: &str = r#"^Raspberry\s+Pi\s+(\S+)\s+Model\s+(.*)$"#;
 const BB_MODEL_REGEX: &str = r#"^((\S+\s+)*\S+)\s+BeagleBone\s+(\S+)$"#;
 const MODULE: &str = "migrator::linux";
 
-
 const OS_IMG_FTYPE_REGEX: &str = r#"^DOS/MBR boot sector.*\(gzip compressed data.*\)$"#;
-const OS_CFG_FTYPE_REGEX: &str = r#"^ASCII text$"#;
+const INITRD_FTYPE_REGEX: &str = r#"^ASCII cpio archive.*\(gzip compressed data.*\)$"#;
+
+const OS_CFG_FTYPE_REGEX: &str = r#"^ASCII text.*$"#;
 
 const BOOT_DIR: &str = "/boot";
 const ROOT_DIR: &str = "/";
 const EFI_DIR: &str = "/boot/efi";
 
-
 const GRUB_MIN_VERSION: &str = "2";
 
 const LSBLK_REGEX: &str = r#"^(\d+)(\s+(.*))?$"#;
 
-
-
 const MIN_DISK_SIZE: u64 = 2 * 1024 * 1024 * 1024; // 2 GB
-
 
 struct DiskInfo {
     disk_dev: String,
@@ -80,8 +76,9 @@ struct SysInfo {
     secure_boot: Option<bool>,
     disk_info: Option<DiskInfo>,
     image_info: Option<FileInfo>,
+    kernel_info: Option<FileInfo>,
+    initrd_info: Option<FileInfo>,
     device_slug: Option<String>,
-
     /*
                 os_name: None,
                 os_release: None,
@@ -105,7 +102,17 @@ impl SysInfo {
             secure_boot: None,
             disk_info: None,
             image_info: None,
+            kernel_info: None,
+            initrd_info: None,
             device_slug: None,
+        }
+    }
+
+    pub fn is_efi_boot(&self) -> bool {
+        if let Some(efi_boot) = self.efi_boot {
+            efi_boot
+        } else {
+            false
         }
     }
 }
@@ -117,8 +124,12 @@ pub struct LinuxMigrator {
 
 impl LinuxMigrator {
     pub fn migrate() -> Result<(), MigError> {
-        let _migrator = LinuxMigrator::try_init(Config::new()?)?;
-        Ok(())
+        let migrator = LinuxMigrator::try_init(Config::new()?)?;
+        match migrator.config.migrate.mode {
+            MigMode::IMMEDIATE => migrator.do_migrate(),
+            MigMode::PRETEND => Ok(()),
+            MigMode::AGENT => Err(MigError::from(MigErrorKind::NotImpl)),            
+        }
     }
 
     // **********************************************************************
@@ -136,7 +147,10 @@ impl LinuxMigrator {
             sysinfo: SysInfo::default(),
         };
 
-        // fake admin is not honored in release mode
+        // **********************************************************************
+        // We need to be root to do this
+        // note: fake admin is not honored in release mode
+
         if !is_admin(migrator.config.debug.fake_admin)? {
             error!("please run this program as root");
             return Err(MigError::from_remark(
@@ -145,7 +159,10 @@ impl LinuxMigrator {
             ));
         }
 
-        // is it even a supported OS ?
+        // **********************************************************************
+        // Check if we are on a supported OS.
+        // Add OS string to SUPPORTED_OSSES list above  once tested
+
         migrator.sysinfo.os_name = Some(get_os_name()?);
         if let Some(ref os_name) = migrator.sysinfo.os_name {
             info!("OS Name is {}", os_name);
@@ -156,9 +173,11 @@ impl LinuxMigrator {
             }
         }
 
+        // **********************************************************************
+        // Run the architecture dependent part of initialization
+        // Add further architectures / functons here
 
         migrator.sysinfo.os_arch = Some(get_os_arch()?);
-
         if let Some(ref os_arch) = migrator.sysinfo.os_arch {
             info!("OS Architecture is {}", os_arch);
             match os_arch {
@@ -183,10 +202,20 @@ impl LinuxMigrator {
             }
         }
 
+        // **********************************************************************
+        // Set the custom device slug here if configured
+
         if let Some(ref force_slug) = migrator.config.migrate.force_slug {
-            warn!("setting device type to '{}' using 'force_slug, detected type was '{}'", force_slug, migrator.sysinfo.device_slug.unwrap());
+            warn!(
+                "setting device type to '{}' using 'force_slug, detected type was '{}'",
+                force_slug,
+                migrator.sysinfo.device_slug.unwrap()
+            );
             migrator.sysinfo.device_slug = Some(force_slug.clone());
-        } 
+        }
+
+        // **********************************************************************
+        // Check the disk for required paths / structure / size
 
         let mut work_dir = String::from("");
 
@@ -198,6 +227,10 @@ impl LinuxMigrator {
                 disk_info.disk_dev,
                 format_size_with_unit(disk_info.disk_size)
             );
+
+            // **********************************************************************
+            // Require a minimum disk device size for installation
+
             if disk_info.disk_size < MIN_DISK_SIZE {
                 let message = format!(
                     "The size of your harddrive {} = {} is too small to install balenaOS",
@@ -207,6 +240,9 @@ impl LinuxMigrator {
                 error!("{}", &message);
                 return Err(MigError::from_remark(MigErrorKind::InvState, &message));
             }
+
+            // **********************************************************************
+            // Check if work_dir was found
 
             if let Some(ref work_dir_info) = disk_info.work_path {
                 work_dir = work_dir_info.path.clone();
@@ -221,8 +257,90 @@ impl LinuxMigrator {
             }
         }
 
+        // **********************************************************************
+        // Check migrate config section
+
+        let kernel_regex = if let Some(ref os_arch) = migrator.sysinfo.os_arch {
+            match os_arch {
+                    OSArch::AMD64 => r#"^Linux kernel x86 boot executable bzImage, version \d+\.\d+\.\d+-yocto-standard.*$"#,
+                    OSArch::ARMHF => r#"^Linux kernel ARM boot executable zImage \(little-endian\).*$"#,
+                    _ => { panic!("unexpected OS Architecture: {:?}", os_arch); },
+                }
+        } else {
+            panic!("unset OS Architecture");
+        };
+
+        // TODO: this extra space would be somehow dependent on FS block size & other overheads
+        let mut boot_required_space: u64 = 8192;
+
+        if let Some(file_info) = expect_file(
+            &migrator.config.migrate.kernel_file,
+            "migrate kernel",
+            "Linux Kernel",
+            &work_dir,
+            &Regex::new(kernel_regex).unwrap(),
+        )? {
+            info!("The balena migrate kernel looks ok: '{}'", &file_info.path);
+            boot_required_space += file_info.size;
+            migrator.sysinfo.kernel_info = Some(file_info);
+        } else {
+            let message = String::from("The migrate kernel has not been specified or cannot be accessed. Automatic download is not yet implemented, so you need to specify and supply all required files");
+            error!("{}", message);
+            return Err(MigError::from_remark(MigErrorKind::InvParam, &message));
+        }
+
+        if let Some(file_info) = expect_file(
+            &migrator.config.migrate.initramfs_file,
+            "migrate initramfs",
+            "ASCII cpio archive",
+            &work_dir,
+            &Regex::new(INITRD_FTYPE_REGEX).unwrap(),
+        )? {
+            info!(
+                "The balena migrate initramfs looks ok: '{}'",
+                &file_info.path
+            );
+            boot_required_space += file_info.size;
+            migrator.sysinfo.kernel_info = Some(file_info);
+        } else {
+            let message = String::from("The migrate initramfs has not been specified or cannot be accessed. Automatic download is not yet implemented, so you need to specify and supply all required files");
+            error!("{}", message);
+            return Err(MigError::from_remark(MigErrorKind::InvParam, &message));
+        }
+
+        // **********************************************************************
+        // Check available space on /boot / /boot/efi
+
+        let kernel_path_info = if let Some(ref disk_info) = migrator.sysinfo.disk_info {
+            if migrator.sysinfo.is_efi_boot() == true {
+                if let Some(ref efi_path) = disk_info.efi_path {
+                    // TODO: add required space for efi boot files
+                    efi_path
+                } else {
+                    panic!("no {} path info found", EFI_DIR)
+                }
+            } else {
+                if let Some(ref boot_path) = disk_info.boot_path {
+                    boot_path
+                } else {
+                    panic!("no {} path info found", BOOT_DIR)
+                }
+            }
+        } else {
+            panic!("no disk info found")
+        };
+
+        if kernel_path_info.fs_free < boot_required_space {
+            let message = format!("We have not found sufficient space for the migrate boot environment in {}. {} of free space are required.", kernel_path_info.path, format_size_with_unit(boot_required_space));
+            error!("{}", message);
+            return Err(MigError::from_remark(MigErrorKind::InvParam, &message));
+        }
+
+        // **********************************************************************
+        // Check balena config section
+
         if let Some(ref balena_cfg) = migrator.config.balena {
-            // check balena os image            
+            // check balena os image
             if let Some(file_info) = expect_file(
                 &balena_cfg.image,
                 "balena image",
@@ -238,7 +356,7 @@ impl LinuxMigrator {
                 return Err(MigError::from_remark(MigErrorKind::InvParam, &message));
             }
 
-            // check balena os config            
+            // check balena os config
             if let Some(ref file_info) = expect_file(
                 &balena_cfg.config,
                 "balena config",
@@ -261,6 +379,8 @@ impl LinuxMigrator {
                     &format!("{}::new: failed to parse '{}'", MODULE, &file_info.path),
                 ))?;
 
+                // TODO: basic sanity test on config.json
+
                 if let Some(app) = parse_res.get("applicationName") {
                     info!("Configured for application: {}", app);
                 } else {
@@ -281,13 +401,13 @@ impl LinuxMigrator {
                             }
                         } else {
                             panic!("migrator.sysinfo.device_slug should not be empty");
-                        }                    
+                        }
                     } else {
                         let message = String::from("The balena config does contains an invalid value in the device_type field (not string),  please supply a valid config.json");
                         error!("{}", message);
                         return Err(MigError::from_remark(MigErrorKind::InvParam, &message));
                     }
-                    // TODO: check device type
+                // TODO: check device type
                 } else {
                     let message = String::from("The balena config does not contain some required fields, please supply a valid config.json");
                     error!("{}", message);
@@ -306,8 +426,32 @@ impl LinuxMigrator {
             return Err(MigError::from_remark(MigErrorKind::InvParam, &message));
         }
 
-
         Ok(migrator)
+    }
+
+    // **********************************************************************
+    // ** Start the actual migration
+    // **********************************************************************
+
+    fn do_migrate(&self) -> Result<(),MigError> {        
+        if let Some(ref device_slug) = self.sysinfo.device_slug {            
+            match device_slug.as_ref() {
+                "beaglebone-green" => {
+                    self.setup_bbg()?;
+                }
+                _ => {
+                    return Err(MigError::from_remark(
+                        MigErrorKind::InvParam,
+                        &format!(
+                            "{}::try_init: unexpected device type encountered: {}",
+                            MODULE, &device_slug
+                        ),
+                    ));
+                }
+            }
+        }
+
+        Ok(())
     }
 
     // **********************************************************************
@@ -331,20 +475,28 @@ impl LinuxMigrator {
             .unwrap()
             .captures(&dev_tree_model)
         {
-            self.init_rpi(
+            return Ok(self.init_rpi(
                 captures.get(1).unwrap().as_str(),
-                captures.get(2).unwrap().as_str(),
-            )?;
+                captures
+                    .get(2)
+                    .unwrap()
+                    .as_str()
+                    .trim_matches(char::from(0)),
+            )?);
         }
 
         if let Some(captures) = Regex::new(BB_MODEL_REGEX)
             .unwrap()
             .captures(&dev_tree_model)
         {
-            self.init_bb(
+            return Ok(self.init_bb(
                 captures.get(1).unwrap().as_str(),
-                captures.get(3).unwrap().as_str(),
-            )?;
+                captures
+                    .get(3)
+                    .unwrap()
+                    .as_str()
+                    .trim_matches(char::from(0)),
+            )?);
         }
 
         let message = format!(
@@ -376,7 +528,26 @@ impl LinuxMigrator {
             cpu,
             model
         );
-        Err(MigError::from(MigErrorKind::NotImpl))
+
+        self.sysinfo.device_slug = match model {
+            "Green" => Some(String::from("beaglebone-green")),
+            _ => {
+                let message = format!("The beaglebone model reported by your device ('{}') is not supported by balena-migrate", model);
+                error!("{}", message);
+                return Err(MigError::from_remark(MigErrorKind::InvParam, &message));
+            }
+        };
+
+        Ok(())
+    }
+
+    fn setup_bbg(&self) -> Result<(), MigError> {
+        trace!(
+            "LinuxMigrator::setup_bb: entered with type: '{}'", match &self.sysinfo.device_slug { Some(s) => s , _ => panic!("no device type slug found"), });
+
+
+
+        Ok(())
     }
 
     // **********************************************************************
@@ -386,38 +557,37 @@ impl LinuxMigrator {
     fn init_amd64(&mut self) -> Result<(), MigError> {
         trace!("LinuxMigrator::init_amd64: entered");
 
-        self.sysinfo.device_slug = Some(String::from("intel-nuc")); 
+        self.sysinfo.device_slug = Some(String::from("intel-nuc"));
         self.sysinfo.efi_boot = Some(is_uefi_boot()?);
-        if let Some(efi_boot) = self.sysinfo.efi_boot {
-            info!(
-                "System is booted in {} mode",
-                match efi_boot {
-                    true => "EFI",
-                    false => "Legacy BIOS",
-                }
-            );
-            if efi_boot == true {
-                // check for EFI dir & size
 
-                self.sysinfo.secure_boot = Some(is_secure_boot()?);
-                if let Some(secure_boot) = self.sysinfo.secure_boot {
-                    info!(
-                        "Secure boot is {}enabled",
-                        match secure_boot {
-                            true => "",
-                            false => "not ",
-                        }
-                    );
-                    if secure_boot == true {
-                        let message = format!("balena-migrate does not currently support systems with secure boot enabled.");
-                        error!("{}", &message);
-                        return Err(MigError::from_remark(MigErrorKind::InvState, &message));
-                    }
-                }
-            } else {
-                self.sysinfo.secure_boot = Some(false);
-                info!("Assuming that Secure boot is not enabled for Legacy BIOS system");
+        info!(
+            "System is booted in {} mode",
+            match self.sysinfo.is_efi_boot() {
+                true => "EFI",
+                false => "Legacy BIOS",
             }
+        );
+
+        if self.sysinfo.is_efi_boot() == true {
+            // check for EFI dir & size
+            self.sysinfo.secure_boot = Some(is_secure_boot()?);
+            if let Some(secure_boot) = self.sysinfo.secure_boot {
+                info!(
+                    "Secure boot is {}enabled",
+                    match secure_boot {
+                        true => "",
+                        false => "not ",
+                    }
+                );
+                if secure_boot == true {
+                    let message = format!("balena-migrate does not currently support systems with secure boot enabled.");
+                    error!("{}", &message);
+                    return Err(MigError::from_remark(MigErrorKind::InvState, &message));
+                }
+            }
+        } else {
+            self.sysinfo.secure_boot = Some(false);
+            info!("Assuming that Secure boot is not enabled for Legacy BIOS system");
         }
 
         let grub_version = get_grub_version()?;
@@ -434,7 +604,6 @@ impl LinuxMigrator {
         Ok(())
     }
 
-
     // **********************************************************************
     // ** I386 specific initialisation
     // **********************************************************************
@@ -444,14 +613,16 @@ impl LinuxMigrator {
     }
 
     // **********************************************************************
-    // ** Comon helper functions
+    // ** Check required paths on disk
     // **********************************************************************
-
 
     fn get_disk_info(&mut self) -> Result<DiskInfo, MigError> {
         trace!("LinuxMigrator::get_disk_info: entered");
 
         let mut disk_info = DiskInfo::default();
+
+        // **********************************************************************
+        // check /boot
 
         disk_info.boot_path = PathInfo::new(BOOT_DIR)?;
         if let Some(ref boot_part) = disk_info.boot_path {
@@ -465,20 +636,34 @@ impl LinuxMigrator {
             return Err(MigError::from_remark(MigErrorKind::InvState, &message));
         }
 
-        disk_info.efi_path = PathInfo::new(EFI_DIR)?;
-        if let Some(ref efi_part) = disk_info.efi_path {
-            debug!("{}", efi_part);
+        if self.sysinfo.is_efi_boot() == true {
+            // **********************************************************************
+            // check /boot/efi
+            // TODO: detect efi dir in other locations (via parted / mount)
+            disk_info.efi_path = PathInfo::new(EFI_DIR)?;
+            if let Some(ref efi_part) = disk_info.efi_path {
+                debug!("{}", efi_part);
+            }
         }
+
+        // **********************************************************************
+        // check work_dir
 
         disk_info.work_path = PathInfo::new(&self.config.migrate.work_dir)?;
         if let Some(ref work_part) = disk_info.work_path {
             debug!("{}", work_part);
         }
 
+        // **********************************************************************
+        // check /
+
         disk_info.root_path = PathInfo::new(ROOT_DIR)?;
 
         if let Some(ref root_part) = disk_info.root_path {
             debug!("{}", root_part);
+
+            // **********************************************************************
+            // Make sure all relevant paths are on one drive
 
             if let Some(ref boot_part) = disk_info.boot_path {
                 if root_part.drive != boot_part.drive {
@@ -501,6 +686,9 @@ impl LinuxMigrator {
                     ));
                 }
             }
+
+            // **********************************************************************
+            // get size & UUID of installation drive
 
             let args: Vec<&str> = vec!["-b", "--output=SIZE,UUID", &root_part.drive];
 

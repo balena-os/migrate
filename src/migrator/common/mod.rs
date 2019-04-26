@@ -21,18 +21,16 @@ pub enum OSArch {
     AMD64,
     ARMHF,
     I386,
-/*   
-    ARM64,
-    ARMEL,
-    MIPS,
-    MIPSEL,
-    Powerpc,
-    PPC64EL,
-    S390EX, 
-*/
+    /*
+        ARM64,
+        ARMEL,
+        MIPS,
+        MIPSEL,
+        Powerpc,
+        PPC64EL,
+        S390EX,
+    */
 }
-
-
 
 impl Display for OSArch {
     fn fmt(&self, f: &mut Formatter) -> fmt::Result {

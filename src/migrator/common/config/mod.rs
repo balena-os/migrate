@@ -234,13 +234,7 @@ impl<'a> Config {
                         ),
                     ));
                 }
-            }
-            MigMode::INVALID => {
-                return Err(MigError::from_remark(
-                    MigErrorKind::InvParam,
-                    &format!("{}::check: no migrate mode was selected", MODULE),
-                ));
-            }
+            },
         }
 
         Ok(())
@@ -407,6 +401,8 @@ fn get_yaml_str_def<'a>(doc: &'a Yaml, path: &[&str], default: &'a str) -> Resul
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    // TODO: update this to current config
 
     const TEST_CONFIG: &str = "
 migrate:

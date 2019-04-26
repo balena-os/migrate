@@ -4,15 +4,15 @@ use yaml_rust::Yaml;
 
 const MODULE: &str = "common::config::migrate_config";
 
-#[derive(Debug)]
+#[derive(Debug,PartialEq)]
 pub enum MigMode {
-    INVALID,
+    //INVALID,
     AGENT,
     IMMEDIATE,
     PRETEND,
 }
 
-const DEFAULT_MODE: MigMode = MigMode::INVALID;
+const DEFAULT_MODE: MigMode = MigMode::IMMEDIATE;
 
 #[derive(Debug)]
 pub struct MigrateConfig {

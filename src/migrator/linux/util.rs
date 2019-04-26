@@ -1,13 +1,13 @@
-use failure::{Fail,ResultExt};
-use log::debug;
-use regex::{Regex};
-use std::fs::{metadata, read_to_string};
+use failure::{Fail, ResultExt};
 use lazy_static::lazy_static;
+use log::debug;
 use log::{error, trace};
+use regex::Regex;
 use std::collections::HashMap;
+use std::fs::{metadata, read_to_string};
 use std::path::Path;
 
-use libc::{getuid};
+use libc::getuid;
 
 const MODULE: &str = "Linux::util";
 const WHEREIS_CMD: &str = "whereis";
@@ -20,10 +20,8 @@ pub const UNAME_CMD: &str = "uname";
 pub const MOKUTIL_CMD: &str = "mokutil";
 pub const GRUB_INSTALL_CMD: &str = "grub-install";
 
-
 const GRUB_INST_VERSION_ARGS: [&str; 1] = ["--version"];
 const GRUB_INST_VERSION_RE: &str = r#"^.*\s+\(GRUB\)\s+([0-9]+)\.([0-9]+)[^0-9].*$"#;
-
 
 const UNAME_ARGS_OS_ARCH: [&str; 1] = ["-m"];
 const MOKUTIL_ARGS_SB_STATE: [&str; 1] = ["--sb-state"];
@@ -39,7 +37,6 @@ const OS_RELEASE_FILE: &str = "/etc/os-release";
 const OS_NAME_REGEX: &str = r#"^PRETTY_NAME="([^"]+)"$"#;
 
 const SYS_UEFI_DIR: &str = "/sys/firmware/efi";
-
 
 use crate::migrator::{
     common::{call, CmdRes, OSArch, OSRelease},
@@ -59,8 +56,6 @@ pub(crate) fn is_admin(fake_admin: bool) -> Result<bool, MigError> {
     let admin = Some(unsafe { getuid() } == 0);
     Ok(admin.unwrap() | fake_admin)
 }
-
-
 
 pub(crate) fn call_cmd(cmd: &str, args: &[&str], trim_stdout: bool) -> Result<CmdRes, MigError> {
     lazy_static! {
@@ -364,7 +359,6 @@ pub(crate) fn get_os_arch() -> Result<OSArch, MigError> {
     }
 }
 
-
 pub(crate) fn get_grub_version() -> Result<(String, String), MigError> {
     trace!("LinuxMigrator::get_grub_version: entered");
     let cmd_res = call_cmd(GRUB_INSTALL_CMD, &GRUB_INST_VERSION_ARGS, true).context(
@@ -461,9 +455,7 @@ pub(crate) fn get_os_name() -> Result<String, MigError> {
     trace!("LinuxMigrator::get_os_name: entered");
     if file_exists(OS_RELEASE_FILE) {
         // TODO: ensure availabilty of method / file exists
-        if let Some(os_name) =
-            parse_file(OS_RELEASE_FILE, &Regex::new(OS_NAME_REGEX).unwrap())?
-        {
+        if let Some(os_name) = parse_file(OS_RELEASE_FILE, &Regex::new(OS_NAME_REGEX).unwrap())? {
             Ok(os_name[1].clone())
         } else {
             Err(MigError::from_remark(
