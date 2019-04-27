@@ -291,7 +291,7 @@ impl LinuxMigrator {
                 &file_info.path
             );
             boot_required_space += file_info.size;
-            migrator.sysinfo.kernel_info = Some(file_info);
+            migrator.sysinfo.initrd_info = Some(file_info);
         } else {
             let message = String::from("The migrate initramfs has not been specified or cannot be accessed. Automatic download is not yet implemented, so you need to specify and supply all required files");
             error!("{}", message);
@@ -378,6 +378,8 @@ impl LinuxMigrator {
                     error!("{}", message);
                     return Err(MigError::from_remark(MigErrorKind::InvParam, &message));
                 }
+
+                if 
 
                 if let Some(dev_type) = parse_res.get("deviceType") {
                     if let Value::String(dev_type) = dev_type {
