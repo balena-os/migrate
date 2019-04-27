@@ -1,6 +1,8 @@
-use super::{get_yaml_str, get_yaml_val, YamlConfig};
+use super::YamlConfig;
+use crate::migrator::common::config_helper::get_yaml_str;
+
 use crate::migrator::MigError;
-use std::collections::HashMap;
+
 use yaml_rust::Yaml;
 
 #[derive(Debug)]

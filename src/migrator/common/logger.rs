@@ -9,7 +9,7 @@ use std::fs::read_to_string;
 use std::str::FromStr;
 use yaml_rust::{Yaml, YamlLoader};
 
-use super::config::{get_yaml_str, get_yaml_val};
+use crate::migrator::common::config_helper::{get_yaml_str, get_yaml_val};
 use crate::migrator::{MigErrCtx, MigError, MigErrorKind};
 
 const MODULE: &str = "migrator::common::logger";

@@ -1,8 +1,5 @@
-use failure::{Fail, ResultExt};
+use failure::ResultExt;
 use log::{debug, error, info, trace, warn};
-use serde_json::Value;
-use std::fs::File;
-use std::io::BufReader;
 
 use regex::Regex;
 
@@ -12,7 +9,7 @@ mod util;
 use path_info::PathInfo;
 
 use crate::migrator::{
-    common::{config::MigMode, format_size_with_unit},
+    common::{balena_cfg_json::BalenaCfgJson, config::MigMode, format_size_with_unit},
     linux::util::*,
     Config, MigErrCtx, MigError, MigErrorKind, OSArch, OSRelease,
 };
@@ -354,59 +351,13 @@ impl LinuxMigrator {
                 &work_dir,
                 &Regex::new(OS_CFG_FTYPE_REGEX).unwrap(),
             )? {
-                // TODO: check if valid, contents, report app
-                let parse_res: Value = serde_json::from_reader(BufReader::new(
-                    File::open(&file_info.path).context(MigErrCtx::from_remark(
-                        MigErrorKind::Upstream,
-                        &format!(
-                            "{}::try_init:cannot open file '{}'",
-                            MODULE, &file_info.path
-                        ),
-                    ))?,
-                ))
-                .context(MigErrCtx::from_remark(
-                    MigErrorKind::Upstream,
-                    &format!("{}::new: failed to parse '{}'", MODULE, &file_info.path),
-                ))?;
-
-                // TODO: basic sanity test on config.json
-
-                if let Some(app) = parse_res.get("applicationName") {
-                    info!("Configured for application: {}", app);
+                if let Some(ref device_slug) = migrator.sysinfo.device_slug {
+                    let balena_cfg_json = BalenaCfgJson::new(&file_info.path)?;
+                    balena_cfg_json.check(device_slug)?;
                 } else {
-                    let message = String::from("The balena config does not contain some required fields, please supply a valid config.json");
-                    error!("{}", message);
-                    return Err(MigError::from_remark(MigErrorKind::InvParam, &message));
+                    panic!("no device slug given in sysinfo");
                 }
-
-                if 
-
-                if let Some(dev_type) = parse_res.get("deviceType") {
-                    if let Value::String(dev_type) = dev_type {
-                        if let Some(ref xpctd_type) = migrator.sysinfo.device_slug {
-                            if xpctd_type == dev_type {
-                                info!("Configured for device type: {}", dev_type);
-                            } else {
-                                let message = format!("The device type configured in the config.json file supplied does not match the hardware device type found, expected {}, found {}", xpctd_type, dev_type);
-                                error!("{}", message);
-                                return Err(MigError::from_remark(MigErrorKind::InvParam, &message));
-                            }
-                        } else {
-                            panic!("migrator.sysinfo.device_slug should not be empty");
-                        }
-                    } else {
-                        let message = String::from("The balena config does contains an invalid value in the device_type field (not string),  please supply a valid config.json");
-                        error!("{}", message);
-                        return Err(MigError::from_remark(MigErrorKind::InvParam, &message));
-                    }
-                // TODO: check device type
-                } else {
-                    let message = String::from("The balena config does not contain some required fields, please supply a valid config.json");
-                    error!("{}", message);
-                    return Err(MigError::from_remark(MigErrorKind::InvParam, &message));
-                }
-
-                info!("The balena OS config looks ok: '{}'", file_info.path);
+            // TODO: check if valid, contents, report app
             } else {
                 let message = String::from("The balena config has not been specified or cannot be accessed. Automatic download is not yet implemented, so you need to specify and supply all required files");
                 error!("{}", message);

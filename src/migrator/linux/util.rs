@@ -5,7 +5,7 @@ use log::{error, trace};
 use regex::Regex;
 use std::collections::HashMap;
 use std::fs::{metadata, read_to_string};
-use std::path::Path;
+use std::path::{Path, MAIN_SEPARATOR};
 
 use libc::getuid;
 
@@ -138,32 +138,29 @@ pub(crate) fn get_file_info(file: &str, work_dir: &str) -> Result<Option<FileInf
         work_dir
     );
 
-    let checked_path = if file.starts_with("/") || file.starts_with("./") || file.starts_with("../")
-    {
+    let path = Path::new(file);
+
+    let mut non_work_path = path.is_absolute() || path.starts_with("./") || path.starts_with("../");
+    if MAIN_SEPARATOR != '/' {
+        non_work_path = non_work_path
+            || path.starts_with(&format!(".{}", MAIN_SEPARATOR))
+            || path.starts_with(&format!("..{}", MAIN_SEPARATOR));
+    }
+
+    let checked_path = if non_work_path {
         if let Ok(mdata) = metadata(file) {
             Some(FileInfo::default(
-                &std::fs::canonicalize(Path::new(file))
-                    .unwrap()
-                    .to_str()
-                    .unwrap(),
+                &path.canonicalize().unwrap().to_str().unwrap(),
                 mdata.len(),
             ))
         } else {
             None
         }
     } else {
-        let search = if work_dir.ends_with("/") {
-            format!("{}{}", work_dir, file)
-        } else {
-            format!("{}/{}", work_dir, file)
-        };
-
-        if let Ok(mdata) = metadata(&search) {
+        let search_path = Path::new(work_dir).join(path);
+        if let Ok(mdata) = metadata(&search_path.to_str().unwrap()) {
             Some(FileInfo::default(
-                &std::fs::canonicalize(Path::new(&search))
-                    .unwrap()
-                    .to_str()
-                    .unwrap(),
+                search_path.canonicalize().unwrap().to_str().unwrap(),
                 mdata.len(),
             ))
         } else {

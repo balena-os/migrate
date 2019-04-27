@@ -1,18 +1,20 @@
 //pub mod mig_error;
 use failure::ResultExt;
-use log::{debug, trace};
+use log::trace;
 use std::fmt::{self, Display, Formatter};
 use std::process::{Command, ExitStatus, Stdio};
 
 pub mod mig_error;
-use self::mig_error::{MigErrCtx, MigError, MigErrorKind};
 
 pub mod os_release;
 pub use os_release::OSRelease;
 
+pub mod balena_cfg_json;
 pub mod config;
-
+pub mod config_helper;
 pub mod logger;
+
+use self::mig_error::{MigErrCtx, MigError, MigErrorKind};
 
 const MODULE: &str = "migrator::common";
 
@@ -71,7 +73,7 @@ pub(crate) fn call(cmd: &str, args: &[&str], trim_stdout: bool) -> Result<CmdRes
     })
 }
 
-pub(crate) fn check_tcp_connect(host: &str, port: u16, timeout: u64) -> Result<(), MigError> {
+pub fn check_tcp_connect(host: &str, port: u16, timeout: u64) -> Result<(), MigError> {
     use std::net::{Shutdown, TcpStream, ToSocketAddrs};
     use std::time::Duration;
     let url = format!("{}:{}", host, port);

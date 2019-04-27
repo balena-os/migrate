@@ -1,5 +1,7 @@
-use super::{get_yaml_bool, get_yaml_int, get_yaml_str, MigMode, YamlConfig};
+use super::{MigMode, YamlConfig};
+use crate::migrator::common::config_helper::{get_yaml_bool, get_yaml_int, get_yaml_str};
 use crate::migrator::{MigError, MigErrorKind};
+
 use yaml_rust::Yaml;
 
 const MODULE: &str = "common::config::balena_config";
