@@ -12,6 +12,7 @@ pub use os_release::OSRelease;
 pub mod balena_cfg_json;
 pub mod config;
 pub mod config_helper;
+pub mod file_info;
 pub mod logger;
 
 use self::mig_error::{MigErrCtx, MigError, MigErrorKind};

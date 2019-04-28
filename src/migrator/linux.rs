@@ -4,12 +4,14 @@ use log::{debug, error, info, trace, warn};
 use regex::Regex;
 
 mod path_info;
-mod util;
+pub(crate) mod util;
 
 use path_info::PathInfo;
 
 use crate::migrator::{
-    common::{balena_cfg_json::BalenaCfgJson, config::MigMode, format_size_with_unit},
+    common::{
+        balena_cfg_json::BalenaCfgJson, config::MigMode, file_info::FileInfo, format_size_with_unit,
+    },
     linux::util::*,
     Config, MigErrCtx, MigError, MigErrorKind, OSArch, OSRelease,
 };

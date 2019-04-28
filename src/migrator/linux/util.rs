@@ -4,8 +4,8 @@ use log::debug;
 use log::{error, trace};
 use regex::Regex;
 use std::collections::HashMap;
-use std::fs::{metadata, read_to_string};
-use std::path::{Path, MAIN_SEPARATOR};
+use std::fs::read_to_string;
+use std::path::Path;
 
 use libc::getuid;
 
@@ -39,7 +39,7 @@ const OS_NAME_REGEX: &str = r#"^PRETTY_NAME="([^"]+)"$"#;
 const SYS_UEFI_DIR: &str = "/sys/firmware/efi";
 
 use crate::migrator::{
-    common::{call, CmdRes, OSArch, OSRelease},
+    common::{call, file_info::FileInfo, CmdRes, OSArch, OSRelease},
     MigErrCtx, MigError, MigErrorKind,
 };
 
@@ -111,89 +111,6 @@ pub(crate) fn call_cmd(cmd: &str, args: &[&str], trim_stdout: bool) -> Result<Cm
     }
 }
 
-#[derive(Debug)]
-pub struct FileInfo {
-    pub path: String,
-    pub ftype: String,
-    pub size: u64,
-    pub in_work_dir: bool,
-}
-
-impl FileInfo {
-    pub fn default(path: &str, size: u64) -> FileInfo {
-        FileInfo {
-            path: String::from(path),
-            ftype: String::from(""),
-            size,
-            in_work_dir: false,
-        }
-    }
-}
-
-pub(crate) fn get_file_info(file: &str, work_dir: &str) -> Result<Option<FileInfo>, MigError> {
-    trace!(
-        "{}::check_work_file: entered with file: '{}', work_dir: '{}'",
-        MODULE,
-        file,
-        work_dir
-    );
-
-    let path = Path::new(file);
-
-    let mut non_work_path = path.is_absolute() || path.starts_with("./") || path.starts_with("../");
-    if MAIN_SEPARATOR != '/' {
-        non_work_path = non_work_path
-            || path.starts_with(&format!(".{}", MAIN_SEPARATOR))
-            || path.starts_with(&format!("..{}", MAIN_SEPARATOR));
-    }
-
-    let checked_path = if non_work_path {
-        if let Ok(mdata) = metadata(file) {
-            Some(FileInfo::default(
-                &path.canonicalize().unwrap().to_str().unwrap(),
-                mdata.len(),
-            ))
-        } else {
-            None
-        }
-    } else {
-        let search_path = Path::new(work_dir).join(path);
-        if let Ok(mdata) = metadata(&search_path.to_str().unwrap()) {
-            Some(FileInfo::default(
-                search_path.canonicalize().unwrap().to_str().unwrap(),
-                mdata.len(),
-            ))
-        } else {
-            None
-        }
-    };
-
-    debug!(
-        "{}::check_work_file: checked path for '{}': '{:?}'",
-        MODULE, file, &checked_path
-    );
-
-    if let Some(mut file_info) = checked_path {
-        file_info.in_work_dir = file_info.path.starts_with(work_dir);
-
-        let args: Vec<&str> = vec!["-bz", &file_info.path];
-        let cmd_res = call_cmd(FILE_CMD, &args, true)?;
-        if !cmd_res.status.success() || cmd_res.stdout.is_empty() {
-            return Err(MigError::from_remark(
-                MigErrorKind::InvParam,
-                &format!(
-                    "{}::new: failed determine type for file {}",
-                    MODULE, &file_info.path
-                ),
-            ));
-        }
-        file_info.ftype = String::from(cmd_res.stdout);
-        Ok(Some(file_info))
-    } else {
-        Ok(None)
-    }
-}
-
 pub fn parse_file(fname: &str, regex: &Regex) -> Result<Option<Vec<String>>, MigError> {
     let os_info = read_to_string(fname).context(MigErrCtx::from_remark(
         MigErrorKind::Upstream,
@@ -246,17 +163,18 @@ pub fn expect_file(
     type_regex: &Regex,
 ) -> Result<Option<FileInfo>, MigError> {
     if !file.is_empty() {
-        if let Some(file_info) = get_file_info(&file, work_dir)? {
+        if let Some(file_info) = FileInfo::new(&file, work_dir)? {
             debug!("{} -> {:?}", file, &file_info);
-            if !type_regex.is_match(&file_info.ftype) {
-                let message = format!(
-                    "{} '{}' is in an invalid format, expected {}, got {}",
-                    descr, &file, expected, &file_info.ftype
-                );
-                error!("{}", message);
-                return Err(MigError::from_remark(MigErrorKind::InvParam, &message));
+            if let Some(ref ftype) = file_info.ftype {
+                if !type_regex.is_match(ftype) {
+                    let message = format!(
+                        "{} '{}' is in an invalid format, expected {}, got {}",
+                        descr, &file, expected, ftype
+                    );
+                    error!("{}", message);
+                    return Err(MigError::from_remark(MigErrorKind::InvParam, &message));
+                }
             }
-
             Ok(Some(file_info))
         } else {
             Ok(None)
