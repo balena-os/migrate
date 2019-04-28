@@ -10,7 +10,10 @@ use path_info::PathInfo;
 
 use crate::migrator::{
     common::{
-        balena_cfg_json::BalenaCfgJson, config::MigMode, file_info::FileInfo, format_size_with_unit,
+        balena_cfg_json::BalenaCfgJson,
+        config::MigMode,
+        file_info::{FileInfo, FileType},
+        format_size_with_unit,
     },
     linux::util::*,
     Config, MigErrCtx, MigError, MigErrorKind, OSArch, OSRelease,
@@ -28,11 +31,6 @@ const DEVICE_TREE_MODEL: &str = "/proc/device-tree/model";
 const RPI_MODEL_REGEX: &str = r#"^Raspberry\s+Pi\s+(\S+)\s+Model\s+(.*)$"#;
 const BB_MODEL_REGEX: &str = r#"^((\S+\s+)*\S+)\s+BeagleBone\s+(\S+)$"#;
 const MODULE: &str = "migrator::linux";
-
-const OS_IMG_FTYPE_REGEX: &str = r#"^DOS/MBR boot sector.*\(gzip compressed data.*\)$"#;
-const INITRD_FTYPE_REGEX: &str = r#"^ASCII cpio archive.*\(gzip compressed data.*\)$"#;
-
-const OS_CFG_FTYPE_REGEX: &str = r#"^ASCII text.*$"#;
 
 const BOOT_DIR: &str = "/boot";
 const ROOT_DIR: &str = "/";
@@ -249,26 +247,20 @@ impl LinuxMigrator {
         // **********************************************************************
         // Check migrate config section
 
-        let kernel_regex = if let Some(ref os_arch) = migrator.sysinfo.os_arch {
-            match os_arch {
-                    OSArch::AMD64 => r#"^Linux kernel x86 boot executable bzImage, version \d+\.\d+\.\d+-yocto-standard.*$"#,
-                    OSArch::ARMHF => r#"^Linux kernel ARM boot executable zImage \(little-endian\).*$"#,
-                    _ => { panic!("unexpected OS Architecture: {:?}", os_arch); },
-                }
-        } else {
-            panic!("unset OS Architecture");
-        };
-
         // TODO: this extra space would be somehow dependent on FS block size & other overheads
         let mut boot_required_space: u64 = 8192;
 
-        if let Some(file_info) = expect_file(
-            &migrator.config.migrate.kernel_file,
-            "migrate kernel",
-            "Linux Kernel",
-            &work_dir,
-            &Regex::new(kernel_regex).unwrap(),
-        )? {
+        if let Some(file_info) = FileInfo::new(&migrator.config.migrate.kernel_file, &work_dir)? {
+            file_info.expect_type(if let Some(ref os_arch) = migrator.sysinfo.os_arch {
+                match os_arch {
+                    OSArch::AMD64 => &FileType::KernelAMD64,
+                    OSArch::ARMHF => &FileType::KernelARMHF,
+                    OSArch::I386 => &FileType::KernelI386,
+                }
+            } else {
+                panic!("unset OSArch");
+            })?;
+
             info!("The balena migrate kernel looks ok: '{}'", &file_info.path);
             boot_required_space += file_info.size;
             migrator.sysinfo.kernel_info = Some(file_info);
@@ -278,13 +270,9 @@ impl LinuxMigrator {
             return Err(MigError::from_remark(MigErrorKind::InvParam, &message));
         }
 
-        if let Some(file_info) = expect_file(
-            &migrator.config.migrate.initramfs_file,
-            "migrate initramfs",
-            "ASCII cpio archive",
-            &work_dir,
-            &Regex::new(INITRD_FTYPE_REGEX).unwrap(),
-        )? {
+        if let Some(file_info) = FileInfo::new(&migrator.config.migrate.initramfs_file, &work_dir)?
+        {
+            file_info.expect_type(&FileType::InitRD)?;
             info!(
                 "The balena migrate initramfs looks ok: '{}'",
                 &file_info.path
@@ -327,16 +315,11 @@ impl LinuxMigrator {
 
         // **********************************************************************
         // Check balena config section
-
         if let Some(ref balena_cfg) = migrator.config.balena {
             // check balena os image
-            if let Some(file_info) = expect_file(
-                &balena_cfg.image,
-                "balena image",
-                "DOS/MBR boot sector in gzip compressed data",
-                &work_dir,
-                &Regex::new(OS_IMG_FTYPE_REGEX).unwrap(),
-            )? {
+
+            if let Some(file_info) = FileInfo::new(&balena_cfg.image, &work_dir)? {
+                file_info.expect_type(&FileType::OSImage)?;
                 info!("The balena OS image looks ok: '{}'", file_info.path);
                 migrator.sysinfo.image_info = Some(file_info);
             } else {
@@ -346,13 +329,9 @@ impl LinuxMigrator {
             }
 
             // check balena os config
-            if let Some(ref file_info) = expect_file(
-                &balena_cfg.config,
-                "balena config",
-                "ASCII text",
-                &work_dir,
-                &Regex::new(OS_CFG_FTYPE_REGEX).unwrap(),
-            )? {
+
+            if let Some(file_info) = FileInfo::new(&balena_cfg.config, &work_dir)? {
+                file_info.expect_type(&FileType::Json)?;
                 if let Some(ref device_slug) = migrator.sysinfo.device_slug {
                     let balena_cfg_json = BalenaCfgJson::new(&file_info.path)?;
                     balena_cfg_json.check(device_slug)?;

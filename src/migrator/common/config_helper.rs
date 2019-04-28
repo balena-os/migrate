@@ -1,4 +1,4 @@
-use crate::migrator::{MigErrCtx, MigError, MigErrorKind};
+use crate::migrator::{MigError, MigErrorKind};
 use log::debug;
 use serde_json::{value::Index, Value};
 use yaml_rust::Yaml;

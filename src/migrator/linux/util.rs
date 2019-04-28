@@ -155,35 +155,6 @@ pub fn dir_exists(name: &str) -> Result<bool, MigError> {
     }
 }
 
-pub fn expect_file(
-    file: &str,
-    descr: &str,
-    expected: &str,
-    work_dir: &str,
-    type_regex: &Regex,
-) -> Result<Option<FileInfo>, MigError> {
-    if !file.is_empty() {
-        if let Some(file_info) = FileInfo::new(&file, work_dir)? {
-            debug!("{} -> {:?}", file, &file_info);
-            if let Some(ref ftype) = file_info.ftype {
-                if !type_regex.is_match(ftype) {
-                    let message = format!(
-                        "{} '{}' is in an invalid format, expected {}, got {}",
-                        descr, &file, expected, ftype
-                    );
-                    error!("{}", message);
-                    return Err(MigError::from_remark(MigErrorKind::InvParam, &message));
-                }
-            }
-            Ok(Some(file_info))
-        } else {
-            Ok(None)
-        }
-    } else {
-        Ok(None)
-    }
-}
-
 pub fn file_exists(file: &str) -> bool {
     Path::new(file).exists()
 }

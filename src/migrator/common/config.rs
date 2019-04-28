@@ -25,7 +25,7 @@ pub mod debug_config;
 #[cfg(debug_assertions)]
 pub use debug_config::DebugConfig;
 
-use super::config_helper::{get_yaml_str, get_yaml_val};
+use super::config_helper::get_yaml_val;
 
 const MODULE: &str = "migrator::common::config";
 

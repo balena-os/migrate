@@ -1,8 +1,8 @@
 use chrono::Local;
 use colored::*;
 use failure::ResultExt;
-use log::{debug, Level, Log, Metadata, Record};
-use regex::{Captures, Regex};
+use log::{Level, Log, Metadata, Record};
+use regex::Regex;
 use std::collections::HashMap;
 use std::env;
 use std::fs::read_to_string;
