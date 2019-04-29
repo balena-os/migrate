@@ -1,7 +1,11 @@
 use failure::ResultExt;
 use log::{debug, error, info, trace, warn};
-
+use chrono::Local;
 use regex::Regex;
+use std::fs::File;
+use std::io::prelude::*;
+use std::time::{Duration};
+use std::thread;
 
 mod path_info;
 pub(crate) mod util;
@@ -16,7 +20,7 @@ use crate::migrator::{
         format_size_with_unit,
     },
     linux::util::*,
-    Config, MigErrCtx, MigError, MigErrorKind, OSArch, OSRelease,
+    Config, MigErrCtx, MigError, MigErrorKind, OSArch,
 };
 
 const SUPPORTED_OSSES: &'static [&'static str] = &[
@@ -30,6 +34,7 @@ const SUPPORTED_OSSES: &'static [&'static str] = &[
 const DEVICE_TREE_MODEL: &str = "/proc/device-tree/model";
 const RPI_MODEL_REGEX: &str = r#"^Raspberry\s+Pi\s+(\S+)\s+Model\s+(.*)$"#;
 const BB_MODEL_REGEX: &str = r#"^((\S+\s+)*\S+)\s+BeagleBone\s+(\S+)$"#;
+const BB_DRIVE_REGEX: &str = r#"^/dev/mmcblk(\d+)p(\d+)$"#;
 const MODULE: &str = "migrator::linux";
 
 const BOOT_DIR: &str = "/boot";
@@ -38,9 +43,41 @@ const EFI_DIR: &str = "/boot/efi";
 
 const GRUB_MIN_VERSION: &str = "2";
 
+const MEM_THRESHOLD: u64 = 128 * 1024 * 1024; // 128 MiB
+
 const LSBLK_REGEX: &str = r#"^(\d+)(\s+(.*))?$"#;
 
-const MIN_DISK_SIZE: u64 = 2 * 1024 * 1024 * 1024; // 2 GB
+const MIN_DISK_SIZE: u64 = 2 * 1024 * 1024 * 1024; // 2 GiB
+
+const BBG_MIG_KERNEL_PATH: &str = "/boot/balena-migrate.zImage";
+const BBG_MIG_INITRD_PATH: &str = "/boot/balena-migrate.initrd";
+const BBG_UENV_PATH: &str = "/uEnv.txt";
+const UENV_TXT: &str = r###"
+##Rename as: uEnv.txt to override old bootloader in eMMC
+##These are needed to be compliant with Angstrom's 2013.06.20 u-boot.
+
+loadaddr=0x82000000
+fdtaddr=0x88000000
+rdaddr=0x88080000
+
+initrd_high=0xffffffff
+fdt_high=0xffffffff
+
+##These are needed to be compliant with Debian 2014-05-14 u-boot.
+
+loadximage=echo debug: [__KERNEL_PATH__] ... ; load mmc __DRIVE__:__PARTITION__ ${loadaddr} __KERNEL_PATH__
+loadxfdt=echo debug: [/boot/dtbs/${uname_r}/${fdtfile}] ... ;load mmc __DRIVE__:__PARTITION__ ${fdtaddr} /boot/dtbs/${uname_r}/${fdtfile}
+loadxrd=echo debug: [__INITRD_PATH__] ... ; load mmc __DRIVE__:__PARTITION__ ${rdaddr} __INITRD_PATH__; setenv rdsize ${filesize}
+loaduEnvtxt=load mmc __DRIVE__:__PARTITION__ ${loadaddr} /boot/uEnv.txt ; env import -t ${loadaddr} ${filesize};
+check_dtb=if test -n ${dtb}; then setenv fdtfile ${dtb};fi;
+check_uboot_overlays=if test -n ${enable_uboot_overlays}; then setenv enable_uboot_overlays ;fi;
+loadall=run loaduEnvtxt; run check_dtb; run check_uboot_overlays; run loadximage; run loadxrd; run loadxfdt;
+
+mmcargs=setenv bootargs console=tty0 console=${console} ${optargs} ${cape_disable} ${cape_enable} root=/dev/mmcblk0p1 rootfstype=${mmcrootfstype} ${cmdline}
+
+uenvcmd=run loadall; run mmcargs; echo debug: [${bootargs}] ... ; echo debug: [bootz ${loadaddr} ${rdaddr}:${rdsize} ${fdtaddr}] ... ; bootz ${loadaddr} ${rdaddr}:${rdsize} ${fdtaddr};
+"###;
+
 
 struct DiskInfo {
     disk_dev: String,
@@ -68,7 +105,7 @@ impl DiskInfo {
 
 struct SysInfo {
     os_name: Option<String>,
-    os_release: Option<OSRelease>,
+    // os_release: Option<OSRelease>,
     os_arch: Option<OSArch>,
     efi_boot: Option<bool>,
     secure_boot: Option<bool>,
@@ -83,7 +120,7 @@ impl SysInfo {
     pub fn default() -> SysInfo {
         SysInfo {
             os_name: None,
-            os_release: None,
+            // os_release: None,
             os_arch: None,
             efi_boot: None,
             secure_boot: None,
@@ -321,6 +358,15 @@ impl LinuxMigrator {
             if let Some(file_info) = FileInfo::new(&balena_cfg.image, &work_dir)? {
                 file_info.expect_type(&FileType::OSImage)?;
                 info!("The balena OS image looks ok: '{}'", file_info.path);
+                // TODO: make sure there is enough memory for OSImage
+                
+                let required_mem = file_info.size + MEM_THRESHOLD;
+                if get_mem_info()?.0 < required_mem {
+                    let message = format!("We have not found sufficient memory to store the balena OS image in ram. at least {} of memory is required.", format_size_with_unit(required_mem));
+                    error!("{}", message);
+                    return Err(MigError::from_remark(MigErrorKind::InvParam, &message));
+                }
+
                 migrator.sysinfo.image_info = Some(file_info);
             } else {
                 let message = String::from("The balena image has not been specified or cannot be accessed. Automatic download is not yet implemented, so you need to specify and supply all required files");
@@ -358,6 +404,15 @@ impl LinuxMigrator {
     // **********************************************************************
 
     fn do_migrate(&self) -> Result<(), MigError> {
+        
+        // TODO: create migrate config in /etc/balena-migrate.json / yaml or in boot
+        // save path to homedir / disk / partition of homedir
+        // log dir
+        // config.json
+        // Balena OS Image
+        // System Info (arch, boot / efi etc)
+
+        
         if let Some(ref device_slug) = self.sysinfo.device_slug {
             match device_slug.as_ref() {
                 "beaglebone-green" => {
@@ -373,6 +428,14 @@ impl LinuxMigrator {
                     ));
                 }
             }
+        }
+
+        if let Some(delay) = self.config.migrate.reboot {
+            println!("Migration stage 1 was successfull, rebooting system in {} seconds", delay); 
+            let delay = Duration::new(delay, 0);
+            thread::sleep(delay);
+            println!("Rebooting now.."); 
+            call_cmd(REBOOT_CMD, &["-f"], false)?;
         }
 
         Ok(())
@@ -466,6 +529,7 @@ impl LinuxMigrator {
     }
 
     fn setup_bbg(&self) -> Result<(), MigError> {
+
         trace!(
             "LinuxMigrator::setup_bb: entered with type: '{}'",
             match &self.sysinfo.device_slug {
@@ -474,6 +538,59 @@ impl LinuxMigrator {
             }
         );
 
+        // **********************************************************************
+        // ** copy new kernel & iniramfs
+        let drive_num = 
+            if let Some(ref disk_info) = self.sysinfo.disk_info {
+                if let Some(ref boot_path) = disk_info.boot_path {
+                    if let Some(captures) = Regex::new(BB_DRIVE_REGEX).unwrap().captures(&boot_path.device) {
+                        (captures.get(1).unwrap().as_str(),captures.get(2).unwrap().as_str())
+                    } else {
+                        return Err(MigError::from_remark(MigErrorKind::InvParam, &format!("failed to parse drive & partition numbers from boot device name '{}'",&boot_path.device)));
+                    }
+                } else {
+                    panic!("no boot device info");
+                }
+            } else {
+                panic!("no boot disk info");
+            };
+
+        // **********************************************************************
+        // ** copy new kernel & iniramfs
+        if let Some(ref file_info) = self.sysinfo.kernel_info {
+            std::fs::copy(&file_info.path, BBG_MIG_KERNEL_PATH).context(MigErrCtx::from_remark(MigErrorKind::Upstream, &format!("failed to copy kernel file '{}' to '{}'", &file_info.path, BBG_MIG_KERNEL_PATH)))?;            
+            info!("copied kernel: '{}' -> '{}'", file_info.path, BBG_MIG_KERNEL_PATH);
+            call_cmd(CHMOD_CMD, &["+x", BBG_MIG_KERNEL_PATH ], false)?; 
+        } else {
+            panic!("no kernel file info found");
+        }
+        
+        if let Some(ref file_info) = self.sysinfo.initrd_info {
+            std::fs::copy(&file_info.path, BBG_MIG_INITRD_PATH).context(MigErrCtx::from_remark(MigErrorKind::Upstream, &format!("failed to copy initrd file '{}' to '{}'", &file_info.path, BBG_MIG_KERNEL_PATH)))?;            
+            info!("copied initrd: '{}' -> '{}'", file_info.path, BBG_MIG_INITRD_PATH);
+        } else {
+            panic!("no initrd file info found");
+        }
+
+        // **********************************************************************
+        // ** backup /uEnv.txt if exists
+
+        if file_exists(BBG_UENV_PATH) {            
+            // TODO: backup file
+            let backup_uenv = format!("{}-{}", BBG_UENV_PATH, Local::now().format("%s"));
+            std::fs::copy(BBG_UENV_PATH, &backup_uenv).context(MigErrCtx::from_remark(MigErrorKind::Upstream, &format!("failed to file '{}' to '{}'", BBG_UENV_PATH, &backup_uenv)))?;
+            info!("copied backup of '{}' to '{}'", BBG_UENV_PATH, &backup_uenv);
+        }
+        
+        // **********************************************************************
+        // ** create new /uEnv.txt
+        let mut uenv_text = UENV_TXT.replace("__KERNEL_PATH__", BBG_MIG_KERNEL_PATH);
+        uenv_text = uenv_text.replace("__INITRD_PATH__", BBG_MIG_INITRD_PATH);
+        uenv_text = uenv_text.replace("__DRIVE__", drive_num.0);
+        uenv_text = uenv_text.replace("__PARTITION__", drive_num.1);
+        let mut uenv_file = File::create(BBG_UENV_PATH).context(MigErrCtx::from_remark(MigErrorKind::Upstream, &format!("failed to create new '{}'", BBG_UENV_PATH)))?;
+        uenv_file.write_all(uenv_text.as_bytes()).context(MigErrCtx::from_remark(MigErrorKind::Upstream, &format!("failed to write new '{}'", BBG_UENV_PATH)))?;
+        info!("created new file in '{}'", BBG_UENV_PATH);
         Ok(())
     }
 

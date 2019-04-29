@@ -70,15 +70,8 @@ impl BalenaCfgJson {
         self.get_string_cfg("vpnEndpoint")
     }
 
-    pub fn get_vpn_port<'a>(&self) -> Result<u16, MigError> {
-        let vpn_port = self.get_string_cfg("vpnPort")?;
-        Ok(vpn_port.parse::<u16>().context(MigErrCtx::from_remark(
-            MigErrorKind::Upstream,
-            &format!(
-                "The key 'vpnEndpoint' is invalid in the config.json supplied in: '{}'.",
-                self.file
-            ),
-        ))?)
+    pub fn get_vpn_port<'a>(&self) -> Result<u16, MigError> {        
+        Ok(self.get_u16_cfg("vpnPort")?)
     }
 
     fn get_string_cfg(&self, name: &str) -> Result<&str, MigError> {
@@ -100,6 +93,21 @@ impl BalenaCfgJson {
                     name, self.file
                 ),
             )))),
+        }
+    }
+
+    fn get_u16_cfg(&self, name: &str) -> Result<u16, MigError> {
+        if let Some(ref value) = self.doc.get(name) {
+            match value {
+                Value::String(sval) => Ok(sval.parse::<u16>()
+                                            .context(MigErrCtx::from_remark(
+                                                        MigErrorKind::Upstream, 
+                                                        &format!("invalid value for key '{}' found in '{}'", name, &self.file)))?),
+                Value::Number(nval) => Ok(nval.as_u64().unwrap()  as u16),
+                _ => Err(MigError::from_remark(MigErrorKind::InvParam, &format!("invalid type {:?} for key '{}' found in '{}'", value, name, &self.file))),
+            }
+        } else {
+            Err(MigError::from_remark(MigErrorKind::NotFound, &format!("could not find value for '{}' in '{}'", name, &self.file)))
         }
     }
 }

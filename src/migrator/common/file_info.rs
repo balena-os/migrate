@@ -1,7 +1,7 @@
 // expecting work_path to be absolute
 use failure::ResultExt;
 use lazy_static::lazy_static;
-use log::{error, trace};
+use log::{error, trace, debug};
 use regex::Regex;
 use std::path::{Path, PathBuf, MAIN_SEPARATOR};
 
@@ -9,8 +9,9 @@ const OS_IMG_FTYPE_REGEX: &str = r#"^DOS/MBR boot sector.*\(gzip compressed data
 const INITRD_FTYPE_REGEX: &str = r#"^ASCII cpio archive.*\(gzip compressed data.*\)$"#;
 const OS_CFG_FTYPE_REGEX: &str = r#"^ASCII text.*$"#;
 const KERNEL_AMD64_FTYPE_REGEX: &str = r#"^Linux kernel x86 boot executable bzImage.*$"#;
-const KERNEL_ARMHF_FTYPE_REGEX: &str = r#"^Linux kernel ARMHF boot executable bzImage.*$"#;
+const KERNEL_ARMHF_FTYPE_REGEX: &str = r#"^Linux kernel ARM boot executable zImage.*$"#;
 const KERNEL_I386_FTYPE_REGEX: &str = r#"^Linux kernel i386 boot executable bzImage.*$"#;
+
 
 #[cfg(target_os = "linux")]
 use crate::migrator::linux::util::{call_cmd, FILE_CMD};
@@ -28,6 +29,19 @@ pub enum FileType {
     InitRD,
     Json,
 }
+ 
+ impl FileType {
+     pub fn get_descr(&self) -> &str {
+         match self {
+            FileType::OSImage  => "balena OS image",
+            FileType::KernelAMD64  => "balena migrate kernel image for AMD64",
+            FileType::KernelARMHF  => "balena migrate kernel image for ARMHF",
+            FileType::KernelI386  => "balena migrate kernel image for I386",
+            FileType::InitRD   => "balena migrate initramfs",
+            FileType::Json => "balena config.json file"
+         }
+     }
+ }
 
 #[derive(Debug)]
 pub struct FileInfo {
@@ -83,8 +97,8 @@ impl FileInfo {
     pub fn expect_type(&self, ftype: &FileType) -> Result<(), MigError> {
         if !self.is_type(ftype)? {
             let message = format!(
-                "Could not determine expected file type {:?} for file '{}'",
-                ftype, &self.path
+                "Could not determine expected file type '{}' for file '{}'",
+                ftype.get_descr(), &self.path
             );
             error!("{}", message);
             Err(MigError::from_remark(MigErrorKind::InvParam, &message))
@@ -116,6 +130,7 @@ impl FileInfo {
             static ref KERNEL_I386_FTYPE_RE: Regex = Regex::new(KERNEL_I386_FTYPE_REGEX).unwrap();
         }
 
+        debug!("FileInfo::is_type: looking for: {}, found {}", ftype.get_descr(), cmd_res.stdout);
         match ftype {
             FileType::OSImage => Ok(OS_IMG_FTYPE_RE.is_match(&cmd_res.stdout)),
             FileType::InitRD => Ok(INITRD_FTYPE_RE.is_match(&cmd_res.stdout)),

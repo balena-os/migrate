@@ -19,6 +19,9 @@ pub const FILE_CMD: &str = "file";
 pub const UNAME_CMD: &str = "uname";
 pub const MOKUTIL_CMD: &str = "mokutil";
 pub const GRUB_INSTALL_CMD: &str = "grub-install";
+pub const REBOOT_CMD: &str = "reboot";
+pub const CHMOD_CMD: &str = "chmod";
+
 
 const GRUB_INST_VERSION_ARGS: [&str; 1] = ["--version"];
 const GRUB_INST_VERSION_RE: &str = r#"^.*\s+\(GRUB\)\s+([0-9]+)\.([0-9]+)[^0-9].*$"#;
@@ -26,12 +29,12 @@ const GRUB_INST_VERSION_RE: &str = r#"^.*\s+\(GRUB\)\s+([0-9]+)\.([0-9]+)[^0-9].
 const UNAME_ARGS_OS_ARCH: [&str; 1] = ["-m"];
 const MOKUTIL_ARGS_SB_STATE: [&str; 1] = ["--sb-state"];
 
-const REQUIRED_CMDS: &'static [&'static str] = &[DF_CMD, LSBLK_CMD, MOUNT_CMD, FILE_CMD, UNAME_CMD];
+const REQUIRED_CMDS: &'static [&'static str] = &[DF_CMD, LSBLK_CMD, MOUNT_CMD, FILE_CMD, UNAME_CMD, REBOOT_CMD, CHMOD_CMD];
 
 const OPTIONAL_CMDS: &'static [&'static str] = &[MOKUTIL_CMD, GRUB_INSTALL_CMD];
 
-const OS_KERNEL_RELEASE_FILE: &str = "/proc/sys/kernel/osrelease";
-const OS_MEMINFO_FILE: &str = "/proc/meminfo";
+// const OS_KERNEL_RELEASE_FILE: &str = "/proc/sys/kernel/osrelease";
+// const OS_MEMINFO_FILE: &str = "/proc/meminfo";
 
 const OS_RELEASE_FILE: &str = "/etc/os-release";
 const OS_NAME_REGEX: &str = r#"^PRETTY_NAME="([^"]+)"$"#;
@@ -39,7 +42,7 @@ const OS_NAME_REGEX: &str = r#"^PRETTY_NAME="([^"]+)"$"#;
 const SYS_UEFI_DIR: &str = "/sys/firmware/efi";
 
 use crate::migrator::{
-    common::{call, file_info::FileInfo, CmdRes, OSArch, OSRelease},
+    common::{call, CmdRes, OSArch},
     MigErrCtx, MigError, MigErrorKind,
 };
 
@@ -196,7 +199,7 @@ pub fn whereis(cmd: &str) -> Result<String, MigError> {
     }
 }
 
-fn get_mem_info() -> Result<(u64, u64), MigError> {
+pub(crate) fn get_mem_info() -> Result<(u64, u64), MigError> {
     trace!("LinuxMigrator::get_mem_info: entered");
     // TODO: could add loads, uptime if needed
     use std::mem;
@@ -363,6 +366,7 @@ pub(crate) fn get_os_name() -> Result<String, MigError> {
     }
 }
 
+/*
 pub(crate) fn get_os_release() -> Result<OSRelease, MigError> {
     let os_info =
         std::fs::read_to_string(OS_KERNEL_RELEASE_FILE).context(MigErrCtx::from_remark(
@@ -372,11 +376,4 @@ pub(crate) fn get_os_release() -> Result<OSRelease, MigError> {
 
     Ok(OSRelease::parse_from_str(&os_info.trim())?)
 }
-
-pub fn command_exists(cmd: &str) -> Result<bool, MigError> {
-    Err(MigError::from(MigErrorKind::NotImpl))
-}
-
-pub fn exec_command(cmd: &str) -> Result<bool, MigError> {
-    Err(MigError::from(MigErrorKind::NotImpl))
-}
+*/
