@@ -7,33 +7,51 @@ use std::io::prelude::*;
 use std::time::{Duration};
 use std::thread;
 
-mod path_info;
 mod util;
 
-use path_info::PathInfo;
-
 use crate::common::{
-        balena_cfg_json::BalenaCfgJson,        
-        FileInfo, 
-        FileType,
-        format_size_with_unit,
-        Config, 
-        MigMode,
-        MigErrCtx, 
-        MigError, 
-        MigErrorKind, 
-        OSArch
+    balena_cfg_json::BalenaCfgJson,        
+    FileInfo, 
+    FileType,
+    format_size_with_unit,
+    Config, 
+    MigMode,
+    MigErrCtx, 
+    MigError, 
+    MigErrorKind, 
+    OSArch
 };
 
-use crate::linux_common::{*};
-
-use self::util::{   
-    REBOOT_CMD, 
+use crate::linux_common::{
+    ensure_cmds, 
+    call_cmd,
+    is_admin,
+    get_os_name,
+    get_mem_info,
+    file_exists,
+    is_efi_boot,
+    path_info::PathInfo,
     get_os_arch, 
-    call_cmd, 
+    DF_CMD, 
+    LSBLK_CMD, 
+    MOUNT_CMD, 
+    FILE_CMD, 
+    UNAME_CMD, 
+    REBOOT_CMD, 
+    CHMOD_CMD, 
+    MOKUTIL_CMD, 
+    GRUB_INSTALL_CMD,
+    };
+
+
+use self::util::{       
     is_secure_boot, 
     get_grub_version,
     };
+
+const REQUIRED_CMDS: &'static [&'static str] = &[DF_CMD, LSBLK_CMD, MOUNT_CMD, FILE_CMD, UNAME_CMD, REBOOT_CMD, CHMOD_CMD];
+const OPTIONAL_CMDS: &'static [&'static str] = &[MOKUTIL_CMD, GRUB_INSTALL_CMD];
+
 
 const SUPPORTED_OSSES: &'static [&'static str] = &[
     "Ubuntu 18.04.2 LTS",
@@ -174,6 +192,8 @@ impl LinuxMigrator {
 
     pub fn try_init(config: Config) -> Result<LinuxMigrator, MigError> {
         trace!("LinuxMigrator::try_init: entered");
+
+        ensure_cmds(REQUIRED_CMDS,OPTIONAL_CMDS)?;
 
         info!("migrate mode: {:?}", config.migrate.mode);
 
@@ -614,7 +634,7 @@ impl LinuxMigrator {
         trace!("LinuxMigrator::init_amd64: entered");
 
         self.sysinfo.device_slug = Some(String::from("intel-nuc"));
-        self.sysinfo.efi_boot = Some(is_uefi_boot()?);
+        self.sysinfo.efi_boot = Some(is_efi_boot()?);
 
         info!(
             "System is booted in {} mode",

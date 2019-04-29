@@ -5,6 +5,7 @@ use log::{error, trace, debug};
 use regex::Regex;
 use std::path::{Path, PathBuf, MAIN_SEPARATOR};
 
+
 const OS_IMG_FTYPE_REGEX: &str = r#"^DOS/MBR boot sector.*\(gzip compressed data.*\)$"#;
 const INITRD_FTYPE_REGEX: &str = r#"^ASCII cpio archive.*\(gzip compressed data.*\)$"#;
 const OS_CFG_FTYPE_REGEX: &str = r#"^ASCII text.*$"#;
@@ -12,10 +13,10 @@ const KERNEL_AMD64_FTYPE_REGEX: &str = r#"^Linux kernel x86 boot executable bzIm
 const KERNEL_ARMHF_FTYPE_REGEX: &str = r#"^Linux kernel ARM boot executable zImage.*$"#;
 const KERNEL_I386_FTYPE_REGEX: &str = r#"^Linux kernel i386 boot executable bzImage.*$"#;
 
-const FILE_CMD: &str = "file";
-
 #[cfg(target_os = "linux")]
-use crate::common::{MigErrCtx, MigError, MigErrorKind, call};
+use crate::common::{MigErrCtx, MigError, MigErrorKind};
+#[cfg(target_os = "linux")]
+use crate::linux_common::{call_cmd, FILE_CMD};
 
 const MODULE: &str = "balean_migrate::common::file_info";
 
@@ -109,8 +110,8 @@ impl FileInfo {
     #[cfg(target_os = "linux")]
     pub fn is_type(&self, ftype: &FileType) -> Result<bool, MigError> {
         let args: Vec<&str> = vec!["-bz", &self.path];
-        // TODO: FILE_CMD is not guarateed to exist, might make sense not to fail if it is not available  
-        let cmd_res = call(FILE_CMD, &args, true)?;
+        
+        let cmd_res = call_cmd(FILE_CMD, &args, true)?;
         if !cmd_res.status.success() || cmd_res.stdout.is_empty() {
             return Err(MigError::from_remark(
                 MigErrorKind::InvParam,

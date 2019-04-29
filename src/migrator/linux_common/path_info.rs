@@ -13,8 +13,13 @@ use crate::common::{
     MigErrorKind,
     };
 
-use super::util::{call_cmd,  DF_CMD, LSBLK_CMD, MOUNT_CMD};
-use crate::linux_common::{dir_exists};
+use crate::linux_common::{
+    dir_exists, 
+    call_cmd, 
+    DF_CMD, 
+    LSBLK_CMD, 
+    MOUNT_CMD,
+    };
 
 const MODULE: &str = "migrator::linux::partition_info";
 
