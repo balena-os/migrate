@@ -8,7 +8,7 @@ use std::time::{Duration};
 use std::thread;
 
 mod path_info;
-pub(crate) mod util;
+mod util;
 
 use path_info::PathInfo;
 
@@ -25,7 +25,15 @@ use crate::common::{
         OSArch
 };
 
-use self::util::*;
+use crate::linux_common::{*};
+
+use self::util::{   
+    REBOOT_CMD, 
+    get_os_arch, 
+    call_cmd, 
+    is_secure_boot, 
+    get_grub_version,
+    };
 
 const SUPPORTED_OSSES: &'static [&'static str] = &[
     "Ubuntu 18.04.2 LTS",
