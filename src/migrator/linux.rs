@@ -12,16 +12,20 @@ pub(crate) mod util;
 
 use path_info::PathInfo;
 
-use crate::migrator::{
-    common::{
-        balena_cfg_json::BalenaCfgJson,
-        config::MigMode,
-        file_info::{FileInfo, FileType},
+use crate::common::{
+        balena_cfg_json::BalenaCfgJson,        
+        FileInfo, 
+        FileType,
         format_size_with_unit,
-    },
-    linux::util::*,
-    Config, MigErrCtx, MigError, MigErrorKind, OSArch,
+        Config, 
+        MigMode,
+        MigErrCtx, 
+        MigError, 
+        MigErrorKind, 
+        OSArch
 };
+
+use self::util::*;
 
 const SUPPORTED_OSSES: &'static [&'static str] = &[
     "Ubuntu 18.04.2 LTS",

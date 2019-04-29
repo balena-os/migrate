@@ -4,8 +4,12 @@ use serde_json::Value;
 use std::fs::File;
 use std::io::BufReader;
 
-use crate::migrator::common::{
-    check_tcp_connect, config_helper::get_json_str, MigErrCtx, MigError, MigErrorKind,
+use super::{
+    check_tcp_connect, 
+    config_helper::get_json_str, 
+    MigErrCtx, 
+    MigError, 
+    MigErrorKind,
 };
 
 const MODULE: &str = "migrator::common::balena_cfg_json";

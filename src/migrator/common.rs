@@ -15,7 +15,11 @@ pub mod config_helper;
 pub mod file_info;
 pub mod logger;
 
-use self::mig_error::{MigErrCtx, MigError, MigErrorKind};
+pub use self::mig_error::{MigErrCtx, MigError, MigErrorKind};
+pub use self::config::{Config, MigMode};
+pub use self::file_info::{FileInfo, FileType};
+
+
 
 const MODULE: &str = "migrator::common";
 

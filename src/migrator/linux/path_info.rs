@@ -6,11 +6,14 @@ use serde_json::Value;
 use std::fmt::{self, Display, Formatter};
 use std::path::Path;
 
-use crate::migrator::{
-    common::format_size_with_unit,
-    linux::util::{call_cmd, dir_exists, DF_CMD, LSBLK_CMD, MOUNT_CMD},
-    MigErrCtx, MigError, MigErrorKind,
-};
+use crate::common::{
+    format_size_with_unit,
+    MigErrCtx, 
+    MigError, 
+    MigErrorKind,
+    };
+    
+use super::util::{call_cmd, dir_exists, DF_CMD, LSBLK_CMD, MOUNT_CMD};
 
 const MODULE: &str = "migrator::linux::partition_info";
 

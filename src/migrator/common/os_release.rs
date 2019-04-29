@@ -3,7 +3,7 @@ use lazy_static::lazy_static;
 use regex::Regex;
 use std::fmt::{self, Display, Formatter};
 
-pub use crate::migrator::{MigErrCtx, MigError, MigErrorKind};
+pub use crate::common::{MigErrCtx, MigError, MigErrorKind};
 
 const OS_RELEASE_RE: &str = r"^(\d+)\.(\d+)\.(\d+)(-.*)?$";
 

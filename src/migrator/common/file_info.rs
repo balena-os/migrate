@@ -14,11 +14,11 @@ const KERNEL_I386_FTYPE_REGEX: &str = r#"^Linux kernel i386 boot executable bzIm
 
 
 #[cfg(target_os = "linux")]
-use crate::migrator::linux::util::{call_cmd, FILE_CMD};
+use crate::linux::util::{call_cmd, FILE_CMD};
 
-use crate::migrator::common::{MigErrCtx, MigError, MigErrorKind};
+use crate::common::{MigErrCtx, MigError, MigErrorKind};
 
-const MODULE: &str = "migrator::common::file_info";
+const MODULE: &str = "balean_migrate::common::file_info";
 
 #[derive(Debug)]
 pub enum FileType {

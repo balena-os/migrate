@@ -9,10 +9,15 @@ use std::fs::read_to_string;
 use std::str::FromStr;
 use yaml_rust::{Yaml, YamlLoader};
 
-use crate::migrator::common::config_helper::{get_yaml_str, get_yaml_val};
-use crate::migrator::{MigErrCtx, MigError, MigErrorKind};
+use crate::common::{
+    config_helper::{
+        get_yaml_str, 
+        get_yaml_val}, 
+        MigErrCtx, 
+        MigError, 
+        MigErrorKind};
 
-const MODULE: &str = "migrator::common::logger";
+const MODULE: &str = "balena_migrate::common::logger";
 
 pub const DEFAULT_LOG_LEVEL: Level = Level::Warn;
 

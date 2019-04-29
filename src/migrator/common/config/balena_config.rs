@@ -1,6 +1,12 @@
 use super::{MigMode, YamlConfig};
-use crate::migrator::common::config_helper::{get_yaml_bool, get_yaml_int, get_yaml_str};
-use crate::migrator::{MigError, MigErrorKind};
+use crate::common::{
+    config_helper::{
+        get_yaml_bool, 
+        get_yaml_int, 
+        get_yaml_str},
+        MigError, 
+        MigErrorKind,
+        };
 
 use yaml_rust::Yaml;
 

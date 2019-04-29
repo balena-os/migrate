@@ -41,9 +41,13 @@ const OS_NAME_REGEX: &str = r#"^PRETTY_NAME="([^"]+)"$"#;
 
 const SYS_UEFI_DIR: &str = "/sys/firmware/efi";
 
-use crate::migrator::{
-    common::{call, CmdRes, OSArch},
-    MigErrCtx, MigError, MigErrorKind,
+use crate::common::{
+    call, 
+    CmdRes, 
+    OSArch, 
+    MigErrCtx, 
+    MigError, 
+    MigErrorKind,
 };
 
 #[cfg(not(debug_assertions))]

@@ -7,9 +7,11 @@ use yaml_rust::{Yaml, YamlLoader};
 
 use clap::{App, Arg};
 
-use crate::migrator::{MigErrCtx, MigError, MigErrorKind};
-
-use super::logger::Logger;
+use super::{
+    MigErrCtx, 
+    MigError, 
+    MigErrorKind,
+    logger::Logger};
 
 pub mod log_config;
 pub use log_config::LogConfig;

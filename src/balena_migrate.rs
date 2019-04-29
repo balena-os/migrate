@@ -1,6 +1,5 @@
 // use crate::balena_migrate::migrator;
-mod migrator;
-use migrator::migrate;
+use balena_migrate::migrate;
 
 /*
 
@@ -205,7 +204,7 @@ fn process(arg_matches: &ArgMatches) -> Result<(),MigError> {
 
 fn main() {
     // TODO: display error
-    if let Err(error) = migrator::migrate() {
+    if let Err(error) = migrate() {
         println!("got error from migrator: {}", error);
     }
 }
