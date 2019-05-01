@@ -122,7 +122,7 @@ pub struct LinuxMigrator {
 
 impl<'a> LinuxMigrator {
     pub fn migrate() -> Result<(), MigError> {
-        let migrator = LinuxMigrator::try_init(Config::new()?)?;
+        let mut migrator = LinuxMigrator::try_init(Config::new()?)?;
         match migrator.config.migrate.mode {
             MigMode::IMMEDIATE => migrator.do_migrate(),
             MigMode::PRETEND => Ok(()),
@@ -331,7 +331,7 @@ impl<'a> LinuxMigrator {
                     return Err(MigError::from_remark(MigErrorKind::InvParam, &message));
                 }
 
-                migrator.mig_info.image_info = Some(file_info);
+                migrator.mig_info.os_image_info = Some(file_info);
             } else {
                 let message = String::from("The balena image has not been specified or cannot be accessed. Automatic download is not yet implemented, so you need to specify and supply all required files");
                 error!("{}", message);
@@ -344,6 +344,7 @@ impl<'a> LinuxMigrator {
                 file_info.expect_type(&FileType::Json)?;
                 let balena_cfg_json = BalenaCfgJson::new(&file_info.path)?;
                 balena_cfg_json.check(migrator.mig_info.get_device_slug())?;
+                migrator.mig_info.os_config_info = Some(file_info);
             } else {
                 let message = String::from("The balena config has not been specified or cannot be accessed. Automatic download is not yet implemented, so you need to specify and supply all required files");
                 error!("{}", message);
@@ -362,7 +363,7 @@ impl<'a> LinuxMigrator {
     // ** Start the actual migration
     // **********************************************************************
 
-    fn do_migrate(&self) -> Result<(), MigError> {
+    fn do_migrate(&mut self) -> Result<(), MigError> {
         
         // TODO: create migrate config in /etc/balena-migrate.json / yaml or in boot
         // save path to homedir / disk / partition of homedir
@@ -371,23 +372,22 @@ impl<'a> LinuxMigrator {
         // Balena OS Image
         // System Info (arch, boot / efi etc)
 
-        
-        if let Some(ref device_slug) = self.mig_info.device_slug {
-            match device_slug.as_ref() {
-                "beaglebone-green" => {
-                    self.setup_bbg()?;
-                }
-                _ => {
-                    return Err(MigError::from_remark(
-                        MigErrorKind::InvParam,
-                        &format!(
-                            "{}::try_init: unexpected device type encountered: {}",
-                            MODULE, &device_slug
-                        ),
-                    ));
-                }
+        match self.mig_info.get_device_slug() {
+            "beaglebone-green" => {
+                self.setup_bbg()?;
+            }
+            _ => {
+                return Err(MigError::from_remark(
+                    MigErrorKind::InvParam,
+                    &format!(
+                        "{}::try_init: unexpected device type encountered: {}",
+                        MODULE, self.mig_info.get_device_slug()
+                    ),
+                ));
             }
         }
+
+        self.mig_info.write_stage2_cfg()?;
 
         if let Some(delay) = self.config.migrate.reboot {
             println!("Migration stage 1 was successfull, rebooting system in {} seconds", delay); 
@@ -487,7 +487,7 @@ impl<'a> LinuxMigrator {
         Ok(())
     }
 
-    fn setup_bbg(&self) -> Result<(), MigError> {
+    fn setup_bbg(&mut self) -> Result<(), MigError> {
 
         trace!(
             "LinuxMigrator::setup_bb: entered with type: '{}'",
@@ -499,13 +499,15 @@ impl<'a> LinuxMigrator {
 
         // **********************************************************************
         // ** copy new kernel & iniramfs
-        let dev_name = self.mig_info.get_boot_device();
-        let drive_num =             
+        let drive_num = {
+            let dev_name = self.mig_info.get_boot_device();
+        
             if let Some(captures) = Regex::new(BB_DRIVE_REGEX).unwrap().captures(dev_name) {
-                (captures.get(1).unwrap().as_str(),captures.get(2).unwrap().as_str())
+                (String::from(captures.get(1).unwrap().as_str()),String::from(captures.get(2).unwrap().as_str()))
             } else {
                 return Err(MigError::from_remark(MigErrorKind::InvParam, &format!("failed to parse drive & partition numbers from boot device name '{}'",dev_name)));
-            };
+            }
+        };
 
         // **********************************************************************
         // ** copy new kernel & iniramfs
@@ -532,14 +534,16 @@ impl<'a> LinuxMigrator {
             let backup_uenv = format!("{}-{}", BBG_UENV_PATH, Local::now().format("%s"));
             std::fs::copy(BBG_UENV_PATH, &backup_uenv).context(MigErrCtx::from_remark(MigErrorKind::Upstream, &format!("failed to file '{}' to '{}'", BBG_UENV_PATH, &backup_uenv)))?;
             info!("copied backup of '{}' to '{}'", BBG_UENV_PATH, &backup_uenv);
+            self.mig_info.boot_cfg_bckup.push((String::from(BBG_UENV_PATH),backup_uenv));
+            
         }
         
         // **********************************************************************
         // ** create new /uEnv.txt
         let mut uenv_text = UENV_TXT.replace("__KERNEL_PATH__", BBG_MIG_KERNEL_PATH);
         uenv_text = uenv_text.replace("__INITRD_PATH__", BBG_MIG_INITRD_PATH);
-        uenv_text = uenv_text.replace("__DRIVE__", drive_num.0);
-        uenv_text = uenv_text.replace("__PARTITION__", drive_num.1);
+        uenv_text = uenv_text.replace("__DRIVE__", &drive_num.0);
+        uenv_text = uenv_text.replace("__PARTITION__", &drive_num.1);
         uenv_text = uenv_text.replace("__ROOT_DEV__", self.mig_info.get_root_device());
 
         let mut uenv_file = File::create(BBG_UENV_PATH).context(MigErrCtx::from_remark(MigErrorKind::Upstream, &format!("failed to create new '{}'", BBG_UENV_PATH)))?;

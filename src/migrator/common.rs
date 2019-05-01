@@ -29,6 +29,7 @@ pub use self::config::{Config, MigMode};
 pub use self::file_info::{FileInfo, FileType};
 
 const MODULE: &str = "migrator::common";
+pub const STAGE2_CFG_FILE: &str = "/etc/balena-stage2.yml";
 
 #[derive(Debug)]
 pub enum OSArch {
