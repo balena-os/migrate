@@ -1,25 +1,32 @@
 use failure::{Fail, ResultExt};
 
-use log::debug;
 use log::{error, trace, warn};
 use regex::Regex;
 use std::collections::HashMap;
-use std::fs::read_to_string;
-use std::path::Path;
 use std::cell::{RefCell};
 
 use libc::getuid;
 
 use crate::common::{
     call, 
+    file_exists,
+    parse_file,
     CmdRes, 
+    Config,
     OSArch,
     MigErrCtx, 
     MigError, 
     MigErrorKind,
 };
 
+pub(crate) mod disk_info;
+pub(crate) use disk_info::DiskInfo;
+
+pub(crate) mod migrate_info;
+pub(crate) use migrate_info::MigrateInfo;
+
 pub(crate) mod path_info;
+pub(crate) use path_info::PathInfo;
 
 const MODULE: &str = "balena-migrate::linux_common";
 const WHEREIS_CMD: &str = "whereis";
@@ -36,6 +43,9 @@ pub const CHMOD_CMD: &str = "chmod";
 
 
 const UNAME_ARGS_OS_ARCH: [&str; 1] = ["-m"];
+
+// TODO: make this more complete
+const BIN_DIRS: &[&str] = &["/bin", "/usr/bin", "/sbin" ];
 
 // const OS_KERNEL_RELEASE_FILE: &str = "/proc/sys/kernel/osrelease";
 // const OS_MEMINFO_FILE: &str = "/proc/meminfo";
@@ -105,17 +115,17 @@ pub(crate) fn call_cmd(cmd: &str, args: &[&str], trim_stdout: bool) -> Result<Cm
 }
 
 #[cfg(not(debug_assertions))]
-pub(crate) fn is_admin(_fake_admin: bool) -> Result<bool, MigError> {
+pub(crate) fn is_admin(_config: &Config) -> Result<bool, MigError> {
     trace!("LinuxMigrator::is_admin: entered");
     let admin = Some(unsafe { getuid() } == 0);
     Ok(admin.unwrap())
 }
 
 #[cfg(debug_assertions)]
-pub(crate) fn is_admin(fake_admin: bool) -> Result<bool, MigError> {
+pub(crate) fn is_admin(config: &Config) -> Result<bool, MigError> {
     trace!("LinuxMigrator::is_admin: entered");
     let admin = Some(unsafe { getuid() } == 0);
-    Ok(admin.unwrap() | fake_admin)
+    Ok(admin.unwrap() | config.debug.fake_admin)
 }
 
 
@@ -141,60 +151,23 @@ pub(crate) fn is_admin(fake_admin: bool) -> Result<bool, MigError> {
 }
 */
 
-pub fn parse_file(fname: &str, regex: &Regex) -> Result<Option<Vec<String>>, MigError> {
-    let os_info = read_to_string(fname).context(MigErrCtx::from_remark(
-        MigErrorKind::Upstream,
-        &format!("File read '{}'", fname),
-    ))?;
-
-    for line in os_info.lines() {
-        debug!("parse_file: line: '{}'", line);
-
-        if let Some(ref captures) = regex.captures(line) {
-            let mut results: Vec<String> = Vec::new();
-            for cap in captures.iter() {
-                if let Some(cap) = cap {
-                    results.push(String::from(cap.as_str()));
-                } else {
-                    results.push(String::from(""));
-                }
-            }
-            return Ok(Some(results));
-        };
-    }
-
-    Ok(None)
-}
-
-pub fn dir_exists(name: &str) -> Result<bool, MigError> {
-    let path = Path::new(name);
-    if path.exists() {
-        Ok(path
-            .metadata()
-            .context(MigErrCtx::from_remark(
-                MigErrorKind::Upstream,
-                &format!(
-                    "{}::dir_exists: failed to retrieve metadata for path: {}",
-                    MODULE, name
-                ),
-            ))?
-            .file_type()
-            .is_dir())
-    } else {
-        Ok(false)
-    }
-}
-
-pub fn file_exists(file: &str) -> bool {
-    Path::new(file).exists()
-}
 
 fn whereis(cmd: &str) -> Result<String, MigError> {
     let args: [&str; 2] = ["-b", cmd];
-    let cmd_res = call(WHEREIS_CMD, &args, true).context(MigErrCtx::from_remark(
-        MigErrorKind::Upstream,
-        &format!("{}::whereis: failed for '{}'", MODULE, cmd),
-    ))?;
+    let cmd_res = match call(WHEREIS_CMD, &args, true) {
+        Ok(cmd_res) => cmd_res,
+        Err(_why) => {            
+            // manually try the usual suspects
+            for path in BIN_DIRS {
+                let path = format!("{}/{}", &path, cmd);
+                if file_exists(&path) {
+                    return Ok(path);
+                }
+            }
+            return Err(MigError::from_remark(MigErrorKind::NotFound, &format!("could not find command: '{}'", cmd)));
+        }
+    };
+
     if cmd_res.status.success() {
         if cmd_res.stdout.is_empty() {
             Err(MigError::from_remark(

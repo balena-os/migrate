@@ -5,7 +5,7 @@ mod mswin;
 mod linux;
 
 #[cfg(target_os = "linux")]
-mod stage_two;
+mod stage2;
 
 #[cfg(target_os = "linux")]
 mod linux_common;
@@ -31,5 +31,5 @@ pub fn migrate() -> Result<(), MigError> {
 
 #[cfg(target_os = "linux")]
 pub fn stage2() -> Result<(), MigError> {
-    Ok(stage_two::Stage2::try_init()?)
+    Ok(stage2::Stage2::try_init()?)
 }

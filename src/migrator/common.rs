@@ -3,6 +3,13 @@ use failure::ResultExt;
 use log::trace;
 use std::fmt::{self, Display, Formatter};
 use std::process::{Command, ExitStatus, Stdio};
+use std::fs::read_to_string;
+use std::path::Path;
+use log::{debug};
+use regex::Regex;
+
+pub mod stage_info;
+pub use stage_info::{Stage1Info, Stage2Info};
 
 pub mod mig_error;
 
@@ -14,12 +21,12 @@ pub mod config;
 pub mod config_helper;
 pub mod file_info;
 pub mod logger;
+pub use logger::Logger;
+
 
 pub use self::mig_error::{MigErrCtx, MigError, MigErrorKind};
 pub use self::config::{Config, MigMode};
 pub use self::file_info::{FileInfo, FileType};
-
-
 
 const MODULE: &str = "migrator::common";
 
@@ -50,6 +57,54 @@ pub(crate) struct CmdRes {
     pub stdout: String,
     pub stderr: String,
     pub status: ExitStatus,
+}
+
+pub fn parse_file(fname: &str, regex: &Regex) -> Result<Option<Vec<String>>, MigError> {
+    let os_info = read_to_string(fname).context(MigErrCtx::from_remark(
+        MigErrorKind::Upstream,
+        &format!("File read '{}'", fname),
+    ))?;
+
+    for line in os_info.lines() {
+        debug!("parse_file: line: '{}'", line);
+
+        if let Some(ref captures) = regex.captures(line) {
+            let mut results: Vec<String> = Vec::new();
+            for cap in captures.iter() {
+                if let Some(cap) = cap {
+                    results.push(String::from(cap.as_str()));
+                } else {
+                    results.push(String::from(""));
+                }
+            }
+            return Ok(Some(results));
+        };
+    }
+
+    Ok(None)
+}
+
+pub fn dir_exists(name: &str) -> Result<bool, MigError> {
+    let path = Path::new(name);
+    if path.exists() {
+        Ok(path
+            .metadata()
+            .context(MigErrCtx::from_remark(
+                MigErrorKind::Upstream,
+                &format!(
+                    "{}::dir_exists: failed to retrieve metadata for path: {}",
+                    MODULE, name
+                ),
+            ))?
+            .file_type()
+            .is_dir())
+    } else {
+        Ok(false)
+    }
+}
+
+pub fn file_exists(file: &str) -> bool {
+    Path::new(file).exists()
 }
 
 pub(crate) fn call(cmd: &str, args: &[&str], trim_stdout: bool) -> Result<CmdRes, MigError> {

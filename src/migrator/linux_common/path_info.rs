@@ -8,20 +8,20 @@ use std::path::Path;
 
 use crate::common::{
     format_size_with_unit,
+    dir_exists, 
     MigErrCtx, 
     MigError, 
     MigErrorKind,
     };
 
-use crate::linux_common::{
-    dir_exists, 
+use super::{        
     call_cmd, 
     DF_CMD, 
     LSBLK_CMD, 
     MOUNT_CMD,
     };
 
-const MODULE: &str = "migrator::linux::partition_info";
+const MODULE: &str = "linux_common::path_info";
 
 const SIZE_REGEX: &str = r#"^(\d+)K?$"#;
 const LSBLK_REGEX: &str = r#"^(\S+)\s+(\d+)\s+(\S+)\s+(\S+)(\s+(.*))?$"#;
