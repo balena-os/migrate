@@ -7,6 +7,9 @@ use std::fs::read_to_string;
 use std::path::Path;
 use log::{debug};
 use regex::Regex;
+use std::fs::File;
+use std::io::{Write, BufRead, BufReader};
+
 
 pub mod stage_info;
 pub use stage_info::{Stage1Info, Stage2Info};
@@ -47,6 +50,8 @@ pub enum OSArch {
     */
 }
 
+const BALENA_FILE_TAG_REGEX: &str = "^.* created by balena-migrate$";
+
 impl Display for OSArch {
     fn fmt(&self, f: &mut Formatter) -> fmt::Result {
         write!(f, "{:?}", self)
@@ -60,7 +65,20 @@ pub(crate) struct CmdRes {
     pub status: ExitStatus,
 }
 
-pub fn parse_file(fname: &str, regex: &Regex) -> Result<Option<Vec<String>>, MigError> {
+pub(crate) fn is_balena_file(file_name: &str) -> Result<bool, MigError> {
+    let file = File::open(file_name).context(MigErrCtx::from_remark(MigErrorKind::Upstream, &format!("failed to open file {}", file_name)))?;
+    if let Some(ref line1) = BufReader::new(file).lines().next() {
+        if let Ok(ref line1) = line1 {
+            Ok(Regex::new(BALENA_FILE_TAG_REGEX).unwrap().is_match(&line1))
+        } else {
+            Ok(false)
+        }
+    } else {
+        Ok(false)
+    }
+}
+
+pub(crate) fn parse_file(fname: &str, regex: &Regex) -> Result<Option<Vec<String>>, MigError> {
     let os_info = read_to_string(fname).context(MigErrCtx::from_remark(
         MigErrorKind::Upstream,
         &format!("File read '{}'", fname),

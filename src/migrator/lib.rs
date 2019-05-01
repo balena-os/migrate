@@ -31,5 +31,6 @@ pub fn migrate() -> Result<(), MigError> {
 
 #[cfg(target_os = "linux")]
 pub fn stage2() -> Result<(), MigError> {
-    Ok(stage2::Stage2::try_init()?)
+    let stage2 = stage2::Stage2::try_init()?;
+    stage2.migrate()
 }

@@ -11,6 +11,17 @@ use crate::common::{
     MigErrorKind, 
     Stage1Info,
     Stage2Info,
+    stage_info::{
+        EFI_BOOT_KEY,
+        ROOT_DEVICE_KEY,        
+        BOOT_DEVICE_KEY,        
+        DEVICE_SLUG_KEY,
+        BALENA_IMAGE_KEY,        
+        BALENA_CONFIG_KEY,
+        BACKUP_CONFIG_KEY,
+        BACKUP_ORIG_KEY,
+        BACKUP_BCKUP_KEY,
+    },
     };
 
 use super::{DiskInfo};
@@ -53,16 +64,18 @@ impl<'a> MigrateInfo {
 
     pub fn write_stage2_cfg(&self) -> Result<(),MigError> {        
         let mut cfg_str = String::from( "# Balena Migrate Stage2 Config\n");
-        cfg_str.push_str(&format!(      "efi_boot:      {},\n", self.is_efi_boot()));
-        cfg_str.push_str(&format!(      "device_slug:   '{}'\n", self.get_device_slug()));        
-        cfg_str.push_str(&format!(      "target_device: '{}'\n", self.get_drive_device()));        
-        cfg_str.push_str(&format!(      "balena_image:  '{}'\n", self.get_os_image_path()));        
-        cfg_str.push_str(&format!(      "balena_config: '{}'\n", self.get_os_config_path()));        
+        cfg_str.push_str(&format!(      "{}: {}\n", EFI_BOOT_KEY, self.is_efi_boot()));
+        cfg_str.push_str(&format!(      "{}: '{}'\n", DEVICE_SLUG_KEY, self.get_device_slug()));        
+        //cfg_str.push_str(&format!(      "{}: '{}'\n", DRIVE_DEVICE_KEY, self.get_drive_device()));        
+        cfg_str.push_str(&format!(      "{}: '{}'\n", BALENA_IMAGE_KEY ,self.get_balena_image()));        
+        cfg_str.push_str(&format!(      "{}: '{}'\n", BALENA_CONFIG_KEY, self.get_balena_config()));        
+        cfg_str.push_str(&format!(      "{}: '{}'\n", ROOT_DEVICE_KEY, self.get_root_device()));        
+        cfg_str.push_str(&format!(      "{}: '{}'\n", BOOT_DEVICE_KEY, self.get_boot_device()));        
         cfg_str.push_str(               "# backed up files in boot config\n");
-        cfg_str.push_str(               "boot_cfg_bckup:\n");        
+        cfg_str.push_str(&format!(      "{}:\n", BACKUP_CONFIG_KEY));        
         for bckup in &self.boot_cfg_bckup {            
-            cfg_str.push_str(&format!(  "  - orig:      '{}'\n", &bckup.0 ));        
-            cfg_str.push_str(&format!(  "    bckup:     '{}'\n", &bckup.1 ));        
+            cfg_str.push_str(&format!(  "  - {}:      '{}'\n", BACKUP_ORIG_KEY, &bckup.0 ));        
+            cfg_str.push_str(&format!(  "    {}:     '{}'\n",BACKUP_BCKUP_KEY, &bckup.1 ));        
         }
         let mut cfg_file = File::create(STAGE2_CFG_FILE).context(MigErrCtx::from_remark(MigErrorKind::Upstream, &format!("failed to create new stage 2 config file '{}'", STAGE2_CFG_FILE)))?;
         cfg_file.write_all(cfg_str.as_bytes()).context(MigErrCtx::from_remark(MigErrorKind::Upstream, &format!("failed to write new  stage 2 config file '{}'", STAGE2_CFG_FILE)))?;
@@ -84,42 +97,6 @@ impl<'a> Stage1Info<'a> for MigrateInfo {
             return disk_info.drive_size;
         }
         panic!("{} uninitialized field drive_info in MigrateInfo", MODULE);
-    }
-
-    fn get_boot_path(&'a self) -> &'a str {
-        if let Some(ref disk_info) = self.disk_info {
-            if let Some(ref boot_path) = disk_info.boot_path {
-                return &boot_path.path;
-            }
-        }
-        panic!("{} uninitialized field drive_info in MigrateInfo", MODULE);        
-    }
-
-    fn get_boot_device(&'a self) -> &'a str {
-        if let Some(ref disk_info) = self.disk_info {
-            if let Some(ref boot_path) = disk_info.boot_path {
-                return &boot_path.device;
-            }
-        }
-        panic!("{} uninitialized field drive_info in MigrateInfo", MODULE);        
-    }
-
-    fn get_root_path(&'a self) -> &'a str {
-        if let Some(ref disk_info) = self.disk_info {
-            if let Some(ref root_path) = disk_info.root_path {
-                return &root_path.path;
-            }
-        }
-        panic!("{} uninitialized field drive_info in MigrateInfo", MODULE);        
-    }
-
-    fn get_root_device(&'a self) -> &'a str {
-        if let Some(ref disk_info) = self.disk_info {
-            if let Some(ref root_path) = disk_info.root_path {
-                return &root_path.device;
-            }
-        }
-        panic!("{} uninitialized field drive_info in MigrateInfo", MODULE);        
     }
 
     fn get_efi_device(&'a self) -> Option<&'a str> {
@@ -149,6 +126,12 @@ impl<'a> Stage1Info<'a> for MigrateInfo {
         panic!("{} uninitialized field os_arch in MigrateInfo", MODULE);        
     }
 
+    fn get_drive_device(&'a self) -> &'a str {
+        if let Some(ref disk_info) = self.disk_info {
+            return &disk_info.drive_dev;
+        }
+        panic!("{} uninitialized field drive_info in MigrateInfo", MODULE);
+    }
 }
 
 impl<'a> Stage2Info<'a> for MigrateInfo {    
@@ -162,26 +145,20 @@ impl<'a> Stage2Info<'a> for MigrateInfo {
     }
 
 
-    fn get_os_image_path(&'a self) -> &'a str {
+    fn get_balena_image(&'a self) -> &'a str {
         if let Some(ref image_info) = self.os_image_info {
             return &image_info.path;
         }
-        panic!("{} uninitialized field os image_info in MigrateInfo", MODULE);        
+        panic!("{} uninitialized field balena image in MigrateInfo", MODULE);        
     }
 
-    fn get_os_config_path(&'a self) -> &'a str {
+    fn get_balena_config(&'a self) -> &'a str {
         if let Some(ref config_info) = self. os_config_info {
             return &config_info.path;
         }
-        panic!("{} uninitialized field os config info in MigrateInfo", MODULE);        
+        panic!("{} uninitialized field balena config info in MigrateInfo", MODULE);        
     }
 
-    fn get_drive_device(&'a self) -> &'a str {
-        if let Some(ref disk_info) = self.disk_info {
-            return &disk_info.drive_dev;
-        }
-        panic!("{} uninitialized field drive_info in MigrateInfo", MODULE);
-    }
 
     fn get_device_slug(&'a self) -> &'a str {
         if let Some(ref device_slug) = self.device_slug {
@@ -190,7 +167,27 @@ impl<'a> Stage2Info<'a> for MigrateInfo {
         panic!("{} uninitialized field device_slug in MigrateInfo", MODULE);        
     }
 
+    fn get_backups(&'a self) -> &'a Vec<(String,String)> {
+        &self.boot_cfg_bckup
+    }
 
+    fn get_boot_device(&'a self) -> &'a str {
+        if let Some(ref disk_info) = self.disk_info {
+            if let Some(ref boot_path) = disk_info.boot_path {
+                return &boot_path.device;
+            }
+        }
+        panic!("{} uninitialized field drive_info in MigrateInfo", MODULE);        
+    }
+
+    fn get_root_device(&'a self) -> &'a str {
+        if let Some(ref disk_info) = self.disk_info {
+            if let Some(ref root_path) = disk_info.root_path {
+                return &root_path.device;
+            }
+        }
+        panic!("{} uninitialized field drive_info in MigrateInfo", MODULE);        
+    }
 }
 
 /*

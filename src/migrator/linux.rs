@@ -3,15 +3,17 @@ use log::{debug, error, info, trace, warn};
 use regex::Regex;
 use std::time::{Duration};
 use std::thread;
-use std::fs::File;
-use std::io::Write;
+use std::fs::{File};
+use std::io::{Write};
 use chrono::Local;
 
 mod util;
 
 use crate::common::{
     balena_cfg_json::BalenaCfgJson,
-    file_exists, 
+    STAGE2_CFG_FILE,
+    file_exists,
+    is_balena_file, 
     Stage1Info,        
     Stage2Info,        
     FileInfo, 
@@ -69,6 +71,7 @@ const DEVICE_TREE_MODEL: &str = "/proc/device-tree/model";
 const RPI_MODEL_REGEX: &str = r#"^Raspberry\s+Pi\s+(\S+)\s+Model\s+(.*)$"#;
 const BB_MODEL_REGEX: &str = r#"^((\S+\s+)*\S+)\s+BeagleBone\s+(\S+)$"#;
 const BB_DRIVE_REGEX: &str = r#"^/dev/mmcblk(\d+)p(\d+)$"#;
+
 const MODULE: &str = "migrator::linux";
 
 const BOOT_DIR: &str = "/boot";
@@ -86,9 +89,7 @@ const MIN_DISK_SIZE: u64 = 2 * 1024 * 1024 * 1024; // 2 GiB
 const BBG_MIG_KERNEL_PATH: &str = "/boot/balena-migrate.zImage";
 const BBG_MIG_INITRD_PATH: &str = "/boot/balena-migrate.initrd";
 const BBG_UENV_PATH: &str = "/uEnv.txt";
-const UENV_TXT: &str = r###"
-##Rename as: uEnv.txt to override old bootloader in eMMC
-##These are needed to be compliant with Angstrom's 2013.06.20 u-boot.
+const UENV_TXT: &str = r###"## created by balena-migrate
 
 loadaddr=0x82000000
 fdtaddr=0x88000000
@@ -388,6 +389,7 @@ impl<'a> LinuxMigrator {
         }
 
         self.mig_info.write_stage2_cfg()?;
+        info!("Wrote stage2 config to '{}'", STAGE2_CFG_FILE);
 
         if let Some(delay) = self.config.migrate.reboot {
             println!("Migration stage 1 was successfull, rebooting system in {} seconds", delay); 
@@ -498,7 +500,7 @@ impl<'a> LinuxMigrator {
         );
 
         // **********************************************************************
-        // ** copy new kernel & iniramfs
+        // ** read drive number & partition number from boot device
         let drive_num = {
             let dev_name = self.mig_info.get_boot_device();
         
@@ -530,12 +532,13 @@ impl<'a> LinuxMigrator {
         // ** backup /uEnv.txt if exists
 
         if file_exists(BBG_UENV_PATH) {            
-            // TODO: backup file
-            let backup_uenv = format!("{}-{}", BBG_UENV_PATH, Local::now().format("%s"));
-            std::fs::copy(BBG_UENV_PATH, &backup_uenv).context(MigErrCtx::from_remark(MigErrorKind::Upstream, &format!("failed to file '{}' to '{}'", BBG_UENV_PATH, &backup_uenv)))?;
-            info!("copied backup of '{}' to '{}'", BBG_UENV_PATH, &backup_uenv);
-            self.mig_info.boot_cfg_bckup.push((String::from(BBG_UENV_PATH),backup_uenv));
-            
+            // TODO: make sure we do not backup our own files
+            if ! is_balena_file(BBG_UENV_PATH)? {
+                let backup_uenv = format!("{}-{}", BBG_UENV_PATH, Local::now().format("%s"));
+                std::fs::copy(BBG_UENV_PATH, &backup_uenv).context(MigErrCtx::from_remark(MigErrorKind::Upstream, &format!("failed to file '{}' to '{}'", BBG_UENV_PATH, &backup_uenv)))?;
+                info!("copied backup of '{}' to '{}'", BBG_UENV_PATH, &backup_uenv);
+                self.mig_info.boot_cfg_bckup.push((String::from(BBG_UENV_PATH),backup_uenv));                
+            }            
         }
         
         // **********************************************************************
