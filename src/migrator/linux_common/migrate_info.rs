@@ -24,7 +24,7 @@ use crate::common::{
     },
     };
 
-use super::{DiskInfo};
+use super::{DiskInfo, DeviceStage1};
 
 
 const MODULE: &str = "linux::common::sys_info";

@@ -23,9 +23,9 @@ pub mod balena_cfg_json;
 pub mod config;
 pub mod config_helper;
 pub mod file_info;
+
 pub mod logger;
 pub use logger::Logger;
-
 
 pub use self::mig_error::{MigErrCtx, MigError, MigErrorKind};
 pub use self::config::{Config, MigMode};

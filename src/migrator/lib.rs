@@ -1,23 +1,27 @@
+mod stage2;
+mod common;
+
 #[cfg(target_os = "windows")]
 mod mswin;
 
-#[cfg(target_os = "linux")]
+#[cfg(target_os = "linux")] 
 mod linux;
+#[cfg(target_os = "linux")] 
+mod linux_common;    
 
 #[cfg(target_os = "linux")]
-mod stage2;
-
+mod beaglebone;
 #[cfg(target_os = "linux")]
-mod linux_common;
-
-mod common;
+mod raspberrypi;
+#[cfg(target_os = "linux")]
+mod intel_nuc;
 
 pub use common::config::{Config, YamlConfig};
 pub use common::mig_error::{MigErrCtx, MigError, MigErrorKind};
 pub use common::os_release::OSRelease;
 pub use common::OSArch;
 
-pub(crate) const MODULE: &str = "balena_migrate";
+//pub(crate) const MODULE: &str = "balena_migrate";
 
 #[cfg(target_os = "windows")]
 pub fn migrate() -> Result<(), MigError> {

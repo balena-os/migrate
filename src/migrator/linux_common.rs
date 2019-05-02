@@ -1,6 +1,6 @@
 use failure::{Fail, ResultExt};
 
-use log::{error, trace, warn};
+use log::{error, trace, debug, warn};
 use regex::Regex;
 use std::collections::HashMap;
 use std::cell::{RefCell};
@@ -28,6 +28,10 @@ pub(crate) use migrate_info::MigrateInfo;
 pub(crate) mod path_info;
 pub(crate) use path_info::PathInfo;
 
+pub(crate) mod device;
+pub(crate) use device::DeviceStage1;
+
+
 const MODULE: &str = "balena-migrate::linux_common";
 const WHEREIS_CMD: &str = "whereis";
 
@@ -40,6 +44,15 @@ pub const MOKUTIL_CMD: &str = "mokutil";
 pub const GRUB_INSTALL_CMD: &str = "grub-install";
 pub const REBOOT_CMD: &str = "reboot";
 pub const CHMOD_CMD: &str = "chmod";
+
+pub const BOOT_DIR: &str = "/boot";
+pub const ROOT_DIR: &str = "/";
+pub const EFI_DIR: &str = "/boot/efi";
+
+const GRUB_INST_VERSION_ARGS: [&str; 1] = ["--version"];
+const GRUB_INST_VERSION_RE: &str = r#"^.*\s+\(GRUB\)\s+([0-9]+)\.([0-9]+)[^0-9].*$"#;
+
+const MOKUTIL_ARGS_SB_STATE: [&str; 1] = ["--sb-state"];
 
 
 const UNAME_ARGS_OS_ARCH: [&str; 1] = ["-m"];
@@ -128,42 +141,21 @@ pub(crate) fn is_admin(config: &Config) -> Result<bool, MigError> {
     Ok(admin.unwrap() | config.debug.fake_admin)
 }
 
-
-/*
-    if let Some(found_cmd) = list.get(cmd) {
-        if let Some(valid_cmd) = found_cmd {
-            Ok(call(valid_cmd, args, trim_stdout)?)
-        } else {
-            Err(MigError::from_remark(
-                MigErrorKind::NotFound,
-                &format!("{}::call_cmd: {} is not available", MODULE, cmd),
-            ))
-        }
-    } else {
-        Err(MigError::from_remark(
-            MigErrorKind::InvParam,
-            &format!(
-                "{}::call_cmd: {} is not in the list of checked commands",
-                MODULE, cmd
-            ),
-        ))
-    }
-}
-*/
-
-
 fn whereis(cmd: &str) -> Result<String, MigError> {
+    // try manually first
+    for path in BIN_DIRS {
+        let path = format!("{}/{}", &path, cmd);
+        if file_exists(&path) {
+            return Ok(path);
+        }
+    }
+
+    // else try wheris command
     let args: [&str; 2] = ["-b", cmd];
     let cmd_res = match call(WHEREIS_CMD, &args, true) {
         Ok(cmd_res) => cmd_res,
         Err(_why) => {            
             // manually try the usual suspects
-            for path in BIN_DIRS {
-                let path = format!("{}/{}", &path, cmd);
-                if file_exists(&path) {
-                    return Ok(path);
-                }
-            }
             return Err(MigError::from_remark(MigErrorKind::NotFound, &format!("could not find command: '{}'", cmd)));
         }
     };
@@ -183,7 +175,6 @@ fn whereis(cmd: &str) -> Result<String, MigError> {
                     MigErrorKind::NotFound,
                     &format!("{}::whereis: command not found: '{}'", MODULE, cmd),
                 ))
-                //
             }
         }
     } else {
@@ -290,6 +281,86 @@ pub(crate) fn get_os_name() -> Result<String, MigError> {
         ))
     }
 }
+
+pub(crate) fn is_secure_boot() -> Result<bool, MigError> {
+    trace!("{}::is_secure_boot: entered", MODULE);
+    let cmd_res = match call_cmd(MOKUTIL_CMD, &MOKUTIL_ARGS_SB_STATE, true) {
+        Ok(cr) => {
+            debug!("{}::is_secure_boot: {} -> {:?}", MODULE, MOKUTIL_CMD, cr);
+            cr
+        }
+        Err(why) => {
+            debug!("{}::is_secure_boot: {} -> {:?}", MODULE, MOKUTIL_CMD, why);
+            match why.kind() {
+                MigErrorKind::NotFound => {
+                    return Ok(false);
+                }
+                _ => {
+                    return Err(why);
+                }
+            }
+        }
+    };
+
+    let regex = Regex::new(r"^SecureBoot\s+(disabled|enabled)$").unwrap();
+    let lines = cmd_res.stdout.lines();
+    for line in lines {
+        if let Some(cap) = regex.captures(line) {
+            if cap.get(1).unwrap().as_str() == "enabled" {
+                return Ok(true);
+            } else {
+                return Ok(false);
+            }
+        }
+    }
+    error!(
+        "{}::is_secure_boot: failed to parse command output: '{}'",
+        MODULE, cmd_res.stdout
+    );
+    Err(MigError::from_remark(
+        MigErrorKind::InvParam,
+        &format!("{}::is_secure_boot: failed to parse command output", MODULE),
+    ))
+}
+
+pub(crate) fn get_grub_version() -> Result<(String, String), MigError> {
+    trace!("LinuxMigrator::get_grub_version: entered");
+    let cmd_res = call_cmd(GRUB_INSTALL_CMD, &GRUB_INST_VERSION_ARGS, true).context(
+        MigErrCtx::from_remark(
+            MigErrorKind::Upstream,
+            &format!("{}::get_grub_version: call {}", MODULE, UNAME_CMD),
+        ),
+    )?;
+
+    if cmd_res.status.success() {
+        let re = Regex::new(GRUB_INST_VERSION_RE).unwrap();
+        if let Some(captures) = re.captures(cmd_res.stdout.as_ref()) {
+            Ok((
+                String::from(captures.get(1).unwrap().as_str()),
+                String::from(captures.get(2).unwrap().as_str()),
+            ))
+        } else {
+            Err(MigError::from_remark(
+                MigErrorKind::InvParam,
+                &format!(
+                    "{}::get_grub_version: failed to parse grub version string: {}",
+                    MODULE, cmd_res.stdout
+                ),
+            ))
+        }
+    } else {
+        Err(MigError::from_remark(
+            MigErrorKind::ExecProcess,
+            &format!(
+                "{}::get_os_arch: command failed: {}",
+                MODULE,
+                cmd_res.status.code().unwrap_or(0)
+            ),
+        ))
+    }
+}
+
+
 
 /*
 pub(crate) fn get_os_release() -> Result<OSRelease, MigError> {

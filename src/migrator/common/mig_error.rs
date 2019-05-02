@@ -39,6 +39,9 @@ pub enum MigErrorKind {
     AuthError,
     #[fail(display = "Mutual access failed")]
     MutAccess,
+    #[fail(display = "No Match")]
+    NoMatch,
+
 }
 
 pub struct MigErrCtx {

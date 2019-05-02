@@ -3,17 +3,16 @@ use log::{debug, error, info, trace, warn};
 use regex::Regex;
 use std::time::{Duration};
 use std::thread;
-use std::fs::{File};
-use std::io::{Write};
-use chrono::Local;
 
 mod util;
+
+use crate::beaglebone::{is_bb};
+use crate::raspberrypi::{is_rpi};
+use crate::intel_nuc::{init_amd64};
 
 use crate::common::{
     balena_cfg_json::BalenaCfgJson,
     STAGE2_CFG_FILE,
-    file_exists,
-    is_balena_file, 
     Stage1Info,        
     Stage2Info,        
     FileInfo, 
@@ -33,9 +32,9 @@ use crate::linux_common::{
     is_admin,
     get_os_name,
     get_mem_info,
-    is_efi_boot,
     path_info::PathInfo,
-    get_os_arch,     
+    get_os_arch,   
+    DeviceStage1,  
     MigrateInfo,
     DiskInfo,
     DF_CMD, 
@@ -47,13 +46,11 @@ use crate::linux_common::{
     CHMOD_CMD, 
     MOKUTIL_CMD, 
     GRUB_INSTALL_CMD,
+    BOOT_DIR,
+    ROOT_DIR,
+    EFI_DIR,
     };
 
-
-use self::util::{       
-    is_secure_boot, 
-    get_grub_version,
-    };
 
 const REQUIRED_CMDS: &'static [&'static str] = &[DF_CMD, LSBLK_CMD, MOUNT_CMD, FILE_CMD, UNAME_CMD, REBOOT_CMD, CHMOD_CMD];
 const OPTIONAL_CMDS: &'static [&'static str] = &[MOKUTIL_CMD, GRUB_INSTALL_CMD];
@@ -68,17 +65,8 @@ const SUPPORTED_OSSES: &'static [&'static str] = &[
 ];
 
 const DEVICE_TREE_MODEL: &str = "/proc/device-tree/model";
-const RPI_MODEL_REGEX: &str = r#"^Raspberry\s+Pi\s+(\S+)\s+Model\s+(.*)$"#;
-const BB_MODEL_REGEX: &str = r#"^((\S+\s+)*\S+)\s+BeagleBone\s+(\S+)$"#;
-const BB_DRIVE_REGEX: &str = r#"^/dev/mmcblk(\d+)p(\d+)$"#;
 
 const MODULE: &str = "migrator::linux";
-
-const BOOT_DIR: &str = "/boot";
-const ROOT_DIR: &str = "/";
-const EFI_DIR: &str = "/boot/efi";
-
-const GRUB_MIN_VERSION: &str = "2";
 
 const MEM_THRESHOLD: u64 = 128 * 1024 * 1024; // 128 MiB
 
@@ -86,39 +74,11 @@ const LSBLK_REGEX: &str = r#"^(\d+)(\s+(.*))?$"#;
 
 const MIN_DISK_SIZE: u64 = 2 * 1024 * 1024 * 1024; // 2 GiB
 
-const BBG_MIG_KERNEL_PATH: &str = "/boot/balena-migrate.zImage";
-const BBG_MIG_INITRD_PATH: &str = "/boot/balena-migrate.initrd";
-const BBG_UENV_PATH: &str = "/uEnv.txt";
-const UENV_TXT: &str = r###"## created by balena-migrate
-
-loadaddr=0x82000000
-fdtaddr=0x88000000
-rdaddr=0x88080000
-
-initrd_high=0xffffffff
-fdt_high=0xffffffff
-
-##These are needed to be compliant with Debian 2014-05-14 u-boot.
-
-loadximage=echo debug: [__KERNEL_PATH__] ... ; load mmc __DRIVE__:__PARTITION__ ${loadaddr} __KERNEL_PATH__
-loadxfdt=echo debug: [/boot/dtbs/${uname_r}/${fdtfile}] ... ;load mmc __DRIVE__:__PARTITION__ ${fdtaddr} /boot/dtbs/${uname_r}/${fdtfile}
-loadxrd=echo debug: [__INITRD_PATH__] ... ; load mmc __DRIVE__:__PARTITION__ ${rdaddr} __INITRD_PATH__; setenv rdsize ${filesize}
-loaduEnvtxt=load mmc __DRIVE__:__PARTITION__ ${loadaddr} /boot/uEnv.txt ; env import -t ${loadaddr} ${filesize};
-check_dtb=if test -n ${dtb}; then setenv fdtfile ${dtb};fi;
-check_uboot_overlays=if test -n ${enable_uboot_overlays}; then setenv enable_uboot_overlays ;fi;
-loadall=run loaduEnvtxt; run check_dtb; run check_uboot_overlays; run loadximage; run loadxrd; run loadxfdt;
-
-mmcargs=setenv bootargs console=tty0 console=${console} ${optargs} ${cape_disable} ${cape_enable} root=__ROOT_DEV__ rootfstype=${mmcrootfstype} ${cmdline}
-
-uenvcmd=run loadall; run mmcargs; echo debug: [${bootargs}] ... ; echo debug: [bootz ${loadaddr} ${rdaddr}:${rdsize} ${fdtaddr}] ... ; bootz ${loadaddr} ${rdaddr}:${rdsize} ${fdtaddr};
-"###;
-
-
-
 
 pub struct LinuxMigrator {
     config: Config,
     mig_info: MigrateInfo,
+    device: Option<Box<DeviceStage1>>,
 }
 
 impl<'a> LinuxMigrator {
@@ -146,6 +106,7 @@ impl<'a> LinuxMigrator {
         let mut migrator = LinuxMigrator {
             config,
             mig_info: MigrateInfo::default(),
+            device: None,
         };
 
         // **********************************************************************
@@ -185,13 +146,13 @@ impl<'a> LinuxMigrator {
         match os_arch {
             OSArch::ARMHF => {
                 migrator.init_armhf()?;
-            }
+            },
             OSArch::AMD64 => {
-                migrator.init_amd64()?;
-            }
+                migrator.device = Some(init_amd64(& mut migrator.mig_info)?);
+            },
             OSArch::I386 => {
                 migrator.init_i386()?;
-            }
+            },
             _ => {
                 return Err(MigError::from_remark(
                     MigErrorKind::InvParam,
@@ -203,6 +164,12 @@ impl<'a> LinuxMigrator {
             }
         }
 
+        if let Some(ref device) = migrator.device {
+            migrator.mig_info.device_slug = Some(String::from(device.get_device_slug()));
+        } else {
+            panic!("No device identified!")
+        }
+        
         migrator.mig_info.os_arch = Some(os_arch);
 
         debug!("finished architecture dependant initialization");
@@ -373,19 +340,10 @@ impl<'a> LinuxMigrator {
         // Balena OS Image
         // System Info (arch, boot / efi etc)
 
-        match self.mig_info.get_device_slug() {
-            "beaglebone-green" => {
-                self.setup_bbg()?;
-            }
-            _ => {
-                return Err(MigError::from_remark(
-                    MigErrorKind::InvParam,
-                    &format!(
-                        "{}::try_init: unexpected device type encountered: {}",
-                        MODULE, self.mig_info.get_device_slug()
-                    ),
-                ));
-            }
+        if let Some(ref dev_box) = self.device {
+            dev_box.setup(& mut self.mig_info)?;
+        } else {
+            panic!("No device handler found for {}", self.mig_info.get_device_slug());
         }
 
         self.mig_info.write_stage2_cfg()?;
@@ -419,32 +377,15 @@ impl<'a> LinuxMigrator {
                 ),
             ))?;
 
-        if let Some(captures) = Regex::new(RPI_MODEL_REGEX)
-            .unwrap()
-            .captures(&dev_tree_model)
-        {
-            return Ok(self.init_rpi(
-                captures.get(1).unwrap().as_str(),
-                captures
-                    .get(2)
-                    .unwrap()
-                    .as_str()
-                    .trim_matches(char::from(0)),
-            )?);
+
+        if let Ok(device) = is_rpi(&dev_tree_model) {
+            self.device = Some(device);
+            return Ok(());
         }
 
-        if let Some(captures) = Regex::new(BB_MODEL_REGEX)
-            .unwrap()
-            .captures(&dev_tree_model)
-        {
-            return Ok(self.init_bb(
-                captures.get(1).unwrap().as_str(),
-                captures
-                    .get(3)
-                    .unwrap()
-                    .as_str()
-                    .trim_matches(char::from(0)),
-            )?);
+        if let Ok(device) = is_bb(&dev_tree_model) {
+            self.device = Some(device);
+            return Ok(());
         }
 
         let message = format!(
@@ -470,145 +411,7 @@ impl<'a> LinuxMigrator {
         Err(MigError::from(MigErrorKind::NotImpl))
     }
 
-    fn init_bb(&mut self, cpu: &str, model: &str) -> Result<(), MigError> {
-        trace!(
-            "LinuxMigrator::init_bb: entered with type: '{}', model: '{}'",
-            cpu,
-            model
-        );
 
-        self.mig_info.device_slug = match model {
-            "Green" => Some(String::from("beaglebone-green")),
-            _ => {
-                let message = format!("The beaglebone model reported by your device ('{}') is not supported by balena-migrate", model);
-                error!("{}", message);
-                return Err(MigError::from_remark(MigErrorKind::InvParam, &message));
-            }
-        };
-
-        Ok(())
-    }
-
-    fn setup_bbg(&mut self) -> Result<(), MigError> {
-
-        trace!(
-            "LinuxMigrator::setup_bb: entered with type: '{}'",
-            match &self.mig_info.device_slug {
-                Some(s) => s,
-                _ => panic!("no device type slug found"),
-            }
-        );
-
-        // **********************************************************************
-        // ** read drive number & partition number from boot device
-        let drive_num = {
-            let dev_name = self.mig_info.get_boot_device();
-        
-            if let Some(captures) = Regex::new(BB_DRIVE_REGEX).unwrap().captures(dev_name) {
-                (String::from(captures.get(1).unwrap().as_str()),String::from(captures.get(2).unwrap().as_str()))
-            } else {
-                return Err(MigError::from_remark(MigErrorKind::InvParam, &format!("failed to parse drive & partition numbers from boot device name '{}'",dev_name)));
-            }
-        };
-
-        // **********************************************************************
-        // ** copy new kernel & iniramfs
-        if let Some(ref file_info) = self.mig_info.kernel_info {
-            std::fs::copy(&file_info.path, BBG_MIG_KERNEL_PATH).context(MigErrCtx::from_remark(MigErrorKind::Upstream, &format!("failed to copy kernel file '{}' to '{}'", &file_info.path, BBG_MIG_KERNEL_PATH)))?;            
-            info!("copied kernel: '{}' -> '{}'", file_info.path, BBG_MIG_KERNEL_PATH);
-            call_cmd(CHMOD_CMD, &["+x", BBG_MIG_KERNEL_PATH ], false)?; 
-        } else {
-            panic!("no kernel file info found");
-        }
-        
-        if let Some(ref file_info) = self.mig_info.initrd_info {
-            std::fs::copy(&file_info.path, BBG_MIG_INITRD_PATH).context(MigErrCtx::from_remark(MigErrorKind::Upstream, &format!("failed to copy initrd file '{}' to '{}'", &file_info.path, BBG_MIG_KERNEL_PATH)))?;            
-            info!("copied initrd: '{}' -> '{}'", file_info.path, BBG_MIG_INITRD_PATH);
-        } else {
-            panic!("no initrd file info found");
-        }
-
-        // **********************************************************************
-        // ** backup /uEnv.txt if exists
-
-        if file_exists(BBG_UENV_PATH) {            
-            // TODO: make sure we do not backup our own files
-            if ! is_balena_file(BBG_UENV_PATH)? {
-                let backup_uenv = format!("{}-{}", BBG_UENV_PATH, Local::now().format("%s"));
-                std::fs::copy(BBG_UENV_PATH, &backup_uenv).context(MigErrCtx::from_remark(MigErrorKind::Upstream, &format!("failed to file '{}' to '{}'", BBG_UENV_PATH, &backup_uenv)))?;
-                info!("copied backup of '{}' to '{}'", BBG_UENV_PATH, &backup_uenv);
-                self.mig_info.boot_cfg_bckup.push((String::from(BBG_UENV_PATH),backup_uenv));                
-            }            
-        }
-        
-        // **********************************************************************
-        // ** create new /uEnv.txt
-        let mut uenv_text = UENV_TXT.replace("__KERNEL_PATH__", BBG_MIG_KERNEL_PATH);
-        uenv_text = uenv_text.replace("__INITRD_PATH__", BBG_MIG_INITRD_PATH);
-        uenv_text = uenv_text.replace("__DRIVE__", &drive_num.0);
-        uenv_text = uenv_text.replace("__PARTITION__", &drive_num.1);
-        uenv_text = uenv_text.replace("__ROOT_DEV__", self.mig_info.get_root_device());
-
-        let mut uenv_file = File::create(BBG_UENV_PATH).context(MigErrCtx::from_remark(MigErrorKind::Upstream, &format!("failed to create new '{}'", BBG_UENV_PATH)))?;
-        uenv_file.write_all(uenv_text.as_bytes()).context(MigErrCtx::from_remark(MigErrorKind::Upstream, &format!("failed to write new '{}'", BBG_UENV_PATH)))?;
-        info!("created new file in '{}'", BBG_UENV_PATH);
-        Ok(())
-    }
-
-    // **********************************************************************
-    // ** AMD64 specific initialisation
-    // **********************************************************************
-
-    fn init_amd64(&mut self) -> Result<(), MigError> {
-        trace!("LinuxMigrator::init_amd64: entered");
-
-        self.mig_info.device_slug = Some(String::from("intel-nuc"));
-        self.mig_info.efi_boot = Some(is_efi_boot()?);
-
-        info!(
-            "System is booted in {} mode",
-            match self.mig_info.is_efi_boot() {
-                true => "EFI",
-                false => "Legacy BIOS",
-            }
-        );
-
-        if self.mig_info.is_efi_boot() == true {
-            // check for EFI dir & size
-            self.mig_info.secure_boot = Some(is_secure_boot()?);
-            if let Some(secure_boot) = self.mig_info.secure_boot {
-                info!(
-                    "Secure boot is {}enabled",
-                    match secure_boot {
-                        true => "",
-                        false => "not ",
-                    }
-                );
-                if secure_boot == true {
-                    let message = format!("balena-migrate does not currently support systems with secure boot enabled.");
-                    error!("{}", &message);
-                    return Err(MigError::from_remark(MigErrorKind::InvState, &message));
-                }
-            }
-        } else {
-            self.mig_info.secure_boot = Some(false);
-            info!("Assuming that Secure boot is not enabled for Legacy BIOS system");
-        }
-
-        let grub_version = get_grub_version()?;
-        info!(
-            "grub-install version is {}.{}",
-            grub_version.0, grub_version.1
-        );
-
-        if grub_version.0 < String::from(GRUB_MIN_VERSION) {
-            let message = format!("your version of grub-install ({}.{}) is not supported. balena-migrate requires grub version 2 or higher.", grub_version.0, grub_version.1);
-            error!("{}", &message);
-            return Err(MigError::from_remark(MigErrorKind::InvState, &message));
-        }
-
-        Ok(())
-    }
 
     // **********************************************************************
     // ** I386 specific initialisation
