@@ -1,9 +1,11 @@
 use failure::{Fail, ResultExt};
 
-use log::{error, trace, debug, warn};
+use log::{error, trace, debug, warn, info};
 use regex::Regex;
 use std::collections::HashMap;
 use std::cell::{RefCell};
+use std::fs::{copy};
+use std::path::{Path};
 
 use libc::getuid;
 
@@ -19,6 +21,9 @@ use crate::common::{
     MigErrorKind,
 };
 
+pub(crate) mod wifi_config;
+pub(crate) use wifi_config::WifiConfig;
+
 pub(crate) mod disk_info;
 pub(crate) use disk_info::DiskInfo;
 
@@ -29,7 +34,7 @@ pub(crate) mod path_info;
 pub(crate) use path_info::PathInfo;
 
 pub(crate) mod device;
-pub(crate) use device::DeviceStage1;
+pub(crate) use device::Device;
 
 
 const MODULE: &str = "balena-migrate::linux_common";
@@ -38,12 +43,14 @@ const WHEREIS_CMD: &str = "whereis";
 pub const DF_CMD: &str = "df";
 pub const LSBLK_CMD: &str = "lsblk";
 pub const MOUNT_CMD: &str = "mount";
+pub const UMOUNT_CMD: &str = "umount";
 pub const FILE_CMD: &str = "file";
 pub const UNAME_CMD: &str = "uname";
 pub const MOKUTIL_CMD: &str = "mokutil";
 pub const GRUB_INSTALL_CMD: &str = "grub-install";
 pub const REBOOT_CMD: &str = "reboot";
 pub const CHMOD_CMD: &str = "chmod";
+pub const DD_CMD: &str = "dd";
 
 pub const BOOT_DIR: &str = "/boot";
 pub const ROOT_DIR: &str = "/";
@@ -358,6 +365,18 @@ pub(crate) fn get_grub_version() -> Result<(String, String), MigError> {
             ),
         ))
     }
+}
+
+pub(crate) fn restore_backups(root_path: &Path, backups: &Vec<(String,String)>) -> Result<(),MigError> {
+    // restore boot config backups
+    for backup in backups {
+        let src = root_path.join(&backup.1);
+        let tgt = root_path.join(&backup.0);
+        copy(&src,&tgt).context(MigErrCtx::from_remark(MigErrorKind::Upstream, &format!("Failed to restore '{}' to '{}'", src.display(), tgt.display())))?;
+        info!("Restored '{}' to '{}'", src.display(), tgt.display())
+    }
+
+    Ok(())
 }
 
 

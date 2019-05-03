@@ -1,15 +1,16 @@
 use log::{trace, info, error};
+use std::path::{Path};
+use crate::stage2::{Stage2Config};
 
 use crate::common::{
     MigError, 
     MigErrorKind,
-    Stage1Info,
     Stage2Info,
-
+    Config,
     };
 use crate::linux_common::{
-    DeviceStage1, 
-    MigrateInfo, 
+    Device, 
+    MigrateInfo,     
     is_efi_boot, 
     is_secure_boot,
     get_grub_version,
@@ -21,7 +22,7 @@ const MODULE: &str = "intel_nuc";
 const GRUB_MIN_VERSION: &str = "2";
 
 
-pub(crate) fn init_amd64(mig_info: &mut MigrateInfo) -> Result<Box<DeviceStage1>, MigError> {
+pub(crate) fn init_amd64(mig_info: &mut MigrateInfo) -> Result<Box<Device>, MigError> {
     trace!("{}::init_amd64: entered", MODULE);
         // **********************************************************************
     // ** AMD64 specific initialisation
@@ -77,13 +78,18 @@ pub(crate) fn init_amd64(mig_info: &mut MigrateInfo) -> Result<Box<DeviceStage1>
 
 pub(crate) struct  IntelNuc{}
 
+impl IntelNuc {
+    pub fn new() -> IntelNuc {
+        IntelNuc{}
+    }
+}
 
-impl<'a> DeviceStage1 for IntelNuc {
+impl<'a> Device for IntelNuc {
     fn get_device_slug(&self) -> &'static str {
         "intel-nuc"
     }
 
-    fn setup(&self, mig_info: &mut MigrateInfo) -> Result<(),MigError> {
+    fn setup(&self, _config: &Config, mig_info: &mut MigrateInfo) -> Result<(),MigError> {
         trace!(
             "BeagleboneGreen::setup: entered with type: '{}'",
             match &mig_info.device_slug {
@@ -94,4 +100,9 @@ impl<'a> DeviceStage1 for IntelNuc {
 
         Err(MigError::from(MigErrorKind::NotImpl))
     }
+    
+    fn restore_boot(&self, root_path: &Path, config: &Stage2Config) -> Result<(),MigError> {
+        Err(MigError::from(MigErrorKind::NotImpl))
+    }
+
 }

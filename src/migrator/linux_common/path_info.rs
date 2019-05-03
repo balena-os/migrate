@@ -4,7 +4,7 @@ use log::{debug, trace, warn};
 use regex::Regex;
 use serde_json::Value;
 use std::fmt::{self, Display, Formatter};
-use std::path::Path;
+use std::path::{Path, PathBuf};
 
 use crate::common::{
     format_size_with_unit,
@@ -30,9 +30,9 @@ const MOUNT_REGEX: &str = r#"^(\S+)\s+on\s+(\S+)\s+type\s+(\S+)\s+\(([^\)]+)\).*
 
 #[derive(Debug)]
 pub(crate) struct PathInfo {
-    pub path: String,
-    pub device: String,
-    pub drive: String,
+    pub path: PathBuf,
+    pub device: PathBuf,
+    pub drive: PathBuf,
     pub fs_type: String,
     pub mount_ro: bool,
     pub uuid: String,
@@ -44,11 +44,11 @@ pub(crate) struct PathInfo {
 }
 
 impl PathInfo {
-    fn default(path: &str) -> PathInfo {
+    fn default<P: AsRef<Path>>(path: P) -> PathInfo {        
         PathInfo {
-            path: String::from(path),
-            device: String::from(""),
-            drive: String::from(""),
+            path: PathBuf::from(path.as_ref()),
+            device: PathBuf::from(""),
+            drive: PathBuf::from(""),
             fs_type: String::from(""),
             mount_ro: false,
             uuid: String::from(""),
@@ -81,9 +81,10 @@ impl PathInfo {
             static ref MOUNT_RE: Regex = Regex::new(MOUNT_REGEX).unwrap();
         }
 
-        let mut result = PathInfo::default(abs_path.to_str().unwrap());
+        let mut result = PathInfo::default(&abs_path);
+        let res_path = result.path.to_string_lossy();
 
-        let args: Vec<&str> = vec!["--block-size=K", "--output=source,size,used", &result.path];
+        let args: Vec<&str> = vec!["--block-size=K", "--output=source,size,used", &res_path];
 
         let cmd_res = call_cmd(DF_CMD, &args, true)?;
 
@@ -92,7 +93,7 @@ impl PathInfo {
                 MigErrorKind::InvParam,
                 &format!(
                     "{}::new: failed to find mountpoint for {}",
-                    MODULE, result.path
+                    MODULE, result.path.display()
                 ),
             ));
         }
@@ -103,7 +104,7 @@ impl PathInfo {
                 MigErrorKind::InvParam,
                 &format!(
                     "{}::new: failed to parse mountpoint attributes for {}",
-                    MODULE, result.path
+                    MODULE, result.path.display()
                 ),
             ));
         }
@@ -114,14 +115,14 @@ impl PathInfo {
         if words.len() != 3 {
             debug!(
                 "PathInfo::new: '{}' df result: words {}",
-                result.path,
+                result.path.display(),
                 words.len()
             );
             return Err(MigError::from_remark(
                 MigErrorKind::InvParam,
                 &format!(
                     "{}::new: failed to parse mountpoint attributes for {}",
-                    MODULE, result.path
+                    MODULE, result.path.display()
                 ),
             ));
         }
@@ -136,7 +137,7 @@ impl PathInfo {
                     MigErrorKind::InvParam,
                     &format!(
                         "{}::new: failed to find mountpoint for {}",
-                        MODULE, result.path
+                        MODULE, result.path.display()
                     ),
                 ));
             }
@@ -146,7 +147,7 @@ impl PathInfo {
                 debug!("looking at '{}'", mount);
                 if let Some(captures) = MOUNT_RE.captures(mount) {
                     if captures.get(2).unwrap().as_str() == "/" {
-                        result.device = String::from(captures.get(1).unwrap().as_str());
+                        result.device = PathBuf::from(captures.get(1).unwrap().as_str());
                         found = true;
                         break;
                     }
@@ -164,7 +165,7 @@ impl PathInfo {
                 ));
             }
         } else {
-            result.device = String::from(words[0]);
+            result.device = PathBuf::from(words[0]);
         }
 
         result.fs_size = if let Some(captures) = SIZE_RE.captures(words[1]) {
@@ -213,7 +214,7 @@ impl PathInfo {
                 MigErrorKind::ExecProcess,
                 &format!(
                     "{}::new: failed to determine block device attributes for '{}'",
-                    MODULE, result.path
+                    MODULE, result.path.display()
                 ),
             ));
         }
@@ -238,7 +239,7 @@ impl PathInfo {
                         if dev_name.starts_with(name) {
                             // found our block device
                             debug!("device: {} found {}", dev_name, name);
-                            result.drive = format!("/dev/{}", name);
+                            result.drive = PathBuf::from(&format!("/dev/{}", name));
                             if let Value::Array(children) = device.get("children").unwrap() {
                                 // iterate over children -> partitions
                                 for child_dev in children {
@@ -303,21 +304,21 @@ impl PathInfo {
                 MigErrorKind::InvParam,
                 &format!(
                     "{}::new: failed to parse block device attributes for {} from lsblk output",
-                    MODULE, result.path
+                    MODULE, result.path.display()
                 ),
             ));
         }
 
         debug!(
             "PathInfo::new: '{}' lsblk result: '{:?}'",
-            result.path, result
+            result.path.display(), result
         );
         if result.fs_type.is_empty() || result.part_size == 0 {
             return Err(MigError::from_remark(
                 MigErrorKind::InvParam,
                 &format!(
                     "{}::new: failed to parse block device attributes for {} from lsblk output",
-                    MODULE, result.path
+                    MODULE, result.path.display()
                 ),
             ));
         }
@@ -331,8 +332,8 @@ impl Display for PathInfo {
         write!(
             f,
             "path: {} device: {}, uuid: {}, fstype: {}, size: {}, fs_size: {}, fs_free: {}",
-            self.path,
-            self.device,
+            self.path.display(),
+            self.device.display(),
             self.uuid,
             self.fs_type,
             format_size_with_unit(self.part_size),

@@ -1,46 +1,42 @@
-use log::{trace, warn, error};
+use log::{trace, warn, error, info};
 use regex::{Regex};
+use std::path::{Path};
 
-use crate::common::{MigError, MigErrorKind};
-use crate::linux_common::{DeviceStage1, MigrateInfo};
+use crate::common::{
+    MigError, 
+    MigErrorKind, 
+    Config,
+    };
+
+use crate::linux_common::{
+    Device, 
+    MigrateInfo, 
+    };
+
+use crate::stage2::{Stage2Config};
 
 const RPI_MODEL_REGEX: &str = r#"^Raspberry\s+Pi\s+(\S+)\s+Model\s+(.*)$"#;
 
-pub(crate) fn is_rpi(model_string: &str) -> Result<Box<DeviceStage1>, MigError> {
+pub(crate) fn is_rpi(model_string: &str) -> Result<Box<Device>, MigError> {
     trace!(
         "Beaglebone::is_bb: entered with model string: '{}'",
         model_string
     );
 
-/*        
-            .unwrap()
-            .captures(&dev_tree_model)
-        {
-            return Ok(self.init_rpi(
-                captures.get(1).unwrap().as_str(),
-                captures
-                    .get(2)
-                    .unwrap()
-                    .as_str()
-                    .trim_matches(char::from(0)),
-            )?);
-        }
-*/
-
     if let Some(captures) = Regex::new(RPI_MODEL_REGEX)
             .unwrap()
             .captures(model_string) {            
 
-        let model = captures
-                        .get(2)
-                        .unwrap()
-                        .as_str()
-                        .trim_matches(char::from(0));
+        let pitype = captures.get(1).unwrap().as_str();
+        let model = captures.get(2).unwrap().as_str().trim_matches(char::from(0));
 
-        match model {
-            "3" => Ok(Box::new(RaspberryPi3{})),
+        match pitype {
+            "3" => { 
+                info!("Identified RaspberryPi3: model {}", model);
+                Ok(Box::new(RaspberryPi3{})) 
+            },
             _ => {
-                let message = format!("The beaglebone model reported by your device ('{}') is not supported by balena-migrate", model);
+                let message = format!("The raspberry pi type reported by your device ('{} {}') is not supported by balena-migrate", pitype, model);
                 error!("{}", message);
                 Err(MigError::from_remark(MigErrorKind::InvParam, &message))
             }
@@ -52,14 +48,20 @@ pub(crate) fn is_rpi(model_string: &str) -> Result<Box<DeviceStage1>, MigError> 
 }
 
 
-struct RaspberryPi3 {}
+pub(crate) struct RaspberryPi3 {}
 
-impl<'a> DeviceStage1 for RaspberryPi3 {
+impl RaspberryPi3 {
+    pub(crate) fn new() -> RaspberryPi3 {
+        RaspberryPi3{}
+    }
+}
+
+impl<'a> Device for RaspberryPi3 {
     fn get_device_slug(&self) -> &'static str {
-        "raspberrypi-3"
+        "raspberrypi3"
     }
 
-    fn setup(&self, mig_info: &mut MigrateInfo) -> Result<(),MigError> {
+    fn setup(&self, config: &Config, mig_info: &mut MigrateInfo) -> Result<(),MigError> {
         trace!(
             "RaspberryPi3::setup: entered with type: '{}'",
             match &mig_info.device_slug {
@@ -68,6 +70,10 @@ impl<'a> DeviceStage1 for RaspberryPi3 {
             }
         );
 
+        Err(MigError::from(MigErrorKind::NotImpl))
+    }
+
+    fn restore_boot(&self,root_path: &Path,config: &Stage2Config) -> Result<(),MigError> {
         Err(MigError::from(MigErrorKind::NotImpl))
     }
 }

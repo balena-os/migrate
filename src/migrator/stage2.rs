@@ -1,13 +1,13 @@
-use std::fs::{create_dir, remove_file};
 use log::{info, error, warn};
 use regex::Regex;
 use failure::{ResultExt};
-use std::fs::copy;
+use std::fs::{copy, create_dir};
+use std::path::{Path, PathBuf};
+
 
 use crate::common::{
     dir_exists,
-    file_exists,
-    is_balena_file,
+    file_exists,    
     STAGE2_CFG_FILE,
     Logger,
     MigError, 
@@ -20,15 +20,21 @@ use crate::common::{
 use crate::linux_common::{
     ensure_cmds, 
     call_cmd,    
-    LSBLK_CMD, 
+    Device,
     MOUNT_CMD, 
-    UNAME_CMD, 
+    UMOUNT_CMD,
+    DD_CMD,
     REBOOT_CMD, 
     };
 
-mod util;
-mod stage2_config;
-use stage2_config::{Stage2Config};
+
+
+pub(crate) mod stage2_config;
+pub(crate) use stage2_config::{Stage2Config};
+
+use crate::beaglebone::{BeagleboneGreen};
+use crate::raspberrypi::{RaspberryPi3};
+use crate::intel_nuc::{IntelNuc};
 
 // for starters just restore old boot config, only required command is mount
 
@@ -39,21 +45,20 @@ const KERNEL_CMDLINE: & str = "/proc/cmdline";
 const ROOTFS_REGEX: &str = r#"\sroot=(\S+)\s"#;
 const ROOTFS_DIR: &str = "/tmp_root";
 
+const MIGRATE_TEMP_DIR: &str = "/migrate_tmp";
+
 const INIT_REQUIRED_CMDS: &'static [&'static str] = &[MOUNT_CMD];
 const INIT_OPTIONAL_CMDS: &'static [&'static str] = &[];
 
-const BBG_REQUIRED_CMDS: &'static [&'static str] = &[LSBLK_CMD, UNAME_CMD, REBOOT_CMD];
-const BBG_OPTIONAL_CMDS: &'static [&'static str] = &[];
+const MIG_REQUIRED_CMDS: &'static [&'static str] = &[UMOUNT_CMD, DD_CMD, REBOOT_CMD];
+const MIG_OPTIONAL_CMDS: &'static [&'static str] = &[];
 
-
-const UENV_FILE: &str = "/uEnv.txt";
-
+const BALENA_IMAGE_FILE: &str = "balenaOS.img.gz";
+const BALENA_CONFIG_FILE: &str = "config.json";
 
 pub(crate) struct Stage2 {
     config: Stage2Config,
-    root_path: String,
-    root_device: String,
-    boot_path: String,
+    boot_mounted: bool,
 }
 
 impl Stage2 {
@@ -71,7 +76,7 @@ impl Stage2 {
         // TODO: beaglebone version - make device_slug dependant
         let root_device = 
             if let Some(parse_res) = parse_file(KERNEL_CMDLINE,&Regex::new(&ROOTFS_REGEX).unwrap())? {
-                parse_res.get(1).unwrap().clone()
+                PathBuf::from(parse_res.get(1).unwrap())
             } else {
                 // TODO: manually scan possible devices for config file
                 return Err(MigError::from_remark(MigErrorKind::InvState, &format!("failed to parse {} for root device", KERNEL_CMDLINE)));
@@ -84,47 +89,51 @@ impl Stage2 {
         }
             
         // TODO: add options to make this more reliable
-        match call_cmd(MOUNT_CMD, &[&root_device, ROOTFS_DIR] , true) {
-            Ok(_s) => { info!("mounted {} on {}", &root_device, ROOTFS_DIR); },
+        match call_cmd(MOUNT_CMD, &[&root_device.to_string_lossy(), &ROOTFS_DIR] , true) {
+            Ok(_s) => { info!("mounted {} on {}", root_device.display(), ROOTFS_DIR); },
             Err(_why) => { 
-                error!("failed to mount {} on {}", &root_device, ROOTFS_DIR);
+                error!("failed to mount {} on {}", root_device.display(), ROOTFS_DIR);
                 return Err(MigError::from_remark(MigErrorKind::InvState, "could not mount former root file system"));
             }
         }
 
-        let stage2_cfg_file = format!("{}{}", ROOTFS_DIR, STAGE2_CFG_FILE);
+        let stage2_cfg_file = Path::new(ROOTFS_DIR).join(STAGE2_CFG_FILE);
         if !file_exists(&stage2_cfg_file) {
-            let message = format!("failed to locate stage2 config in {}", &stage2_cfg_file);
+            let message = format!("failed to locate stage2 config in {}", stage2_cfg_file.display());
             error!("{}", &message);
             return Err(MigError::from_remark(MigErrorKind::InvState, &message));
         }
         
         let stage2_cfg = Stage2Config::from_config(&stage2_cfg_file)?;
 
-        info!("Read stage 2 config file from {}", &stage2_cfg_file);
+        info!("Read stage 2 config file from {}", stage2_cfg_file.display());
 
         // TODO: probably paranoid 
         if root_device != stage2_cfg.get_root_device() {
-            let message = format!("The device mounted as root does not match the former root device: {} != {}", root_device, stage2_cfg.get_root_device());
+            let message = format!("The device mounted as root does not match the former root device: {} != {}", root_device.display(), stage2_cfg.get_root_device().display());
             error!("{}", &message);
             return Err(MigError::from_remark(MigErrorKind::InvState, &message));            
         }
 
         // Ensure /boot is mounted in ROOTFS_DIR/boot
 
-        let boot_path = format!("{}/boot", ROOTFS_DIR);
+        let boot_path = Path::new(ROOTFS_DIR).join("boot");
         if ! dir_exists(&boot_path)? {
-            let message = format!("cannot find boot mount point on root device: {}, path {}", root_device, boot_path);
+            let message = format!("cannot find boot mount point on root device: {}, path {}", root_device.display(), boot_path.display());
             error!("{}", &message);
             return Err(MigError::from_remark(MigErrorKind::InvState, &message));                            
         }
 
         let boot_device = stage2_cfg.get_boot_device();
+        let mut boot_mounted = false;
         if boot_device != root_device {                        
-            match call_cmd(MOUNT_CMD, &[boot_device, &boot_path] , true) {
-                Ok(_s) => { info!("mounted {} on {}", boot_device, boot_path); },
+            match call_cmd(MOUNT_CMD, &[&boot_device.to_string_lossy(), &boot_path.to_string_lossy()] , true) {
+                Ok(_s) => { 
+                    info!("mounted {} on {}", boot_device.display(), boot_path.display()); 
+                    boot_mounted = true;    
+                },
                 Err(_why) => { 
-                    let message = format!("failed to mount {} on {}", boot_device, boot_path);
+                    let message = format!("failed to mount {} on {}", boot_device.display(), boot_path.display());
                     error!("{}", &message);
                     return Err(MigError::from_remark(MigErrorKind::InvState, &message));
                 }
@@ -133,10 +142,8 @@ impl Stage2 {
         
         return Ok(
                 Stage2{
-                    root_path: String::from(ROOTFS_DIR),
-                    boot_path: boot_path.clone(),
-                    root_device: root_device.clone(),
                     config: stage2_cfg,
+                    boot_mounted,
                     })
     }
 
@@ -146,57 +153,57 @@ impl Stage2 {
         
         info!("migrating '{}'", &device_slug);
 
-        match device_slug {
-            "beaglebone-green" => { 
-                info!("initializing stage 2 for '{}'", device_slug);
-                self.stage2_bbg()
-            },
-            _ => { 
-                let message = format!("unexpected device type: {}", device_slug);
-                error!("{}", &message);                    
-                Err(MigError::from_remark(MigErrorKind::InvState, &message))
-            },
+        let device =
+            match device_slug {
+                "beaglebone-green" => {             
+                    let device: Box<Device> = Box::new(BeagleboneGreen::new());
+                    device
+                },
+                "raspberrypi-3" => {             
+                    let device: Box<Device> = Box::new(RaspberryPi3::new());
+                    device
+                },
+                "intel-nuc" => {             
+                    let device: Box<Device> = Box::new(IntelNuc::new());
+                    device
+                },
+                _ => { 
+                    let message = format!("unexpected device type: {}", device_slug);
+                    error!("{}", &message);                    
+                    return Err(MigError::from_remark(MigErrorKind::InvState, &message));
+                },
+            };
+
+        device.restore_boot(&PathBuf::from(ROOTFS_DIR), &self.config)?;
+                
+        ensure_cmds(MIG_REQUIRED_CMDS, MIG_OPTIONAL_CMDS)?;                
+
+        if ! dir_exists(MIGRATE_TEMP_DIR)? {
+            create_dir(MIGRATE_TEMP_DIR).context(MigErrCtx::from_remark(MigErrorKind::Upstream, &format!("failed to create migrate temp directory {}",MIGRATE_TEMP_DIR)))?;
         }
-    }
-
-    fn restore_backups(&self) -> Result<(),MigError> {
-        // restore boot config backups
-        for backup in self.config.get_backups() {
-            let src = format!("{}{}",self.root_path, backup.1);
-            let tgt = format!("{}{}",self.root_path, backup.0);
-            copy(&src,&tgt).context(MigErrCtx::from_remark(MigErrorKind::Upstream, &format!("Failed to restore '{}' to '{}'", &src, &tgt)))?;
-            info!("Restored '{}' to '{}'", &src, &tgt)
-        }
-
-        Ok(())
-    }
-
-    fn stage2_bbg(&self) -> Result<(),MigError> {        
         
-        let uenv_file = format!("{}{}", &self.root_path, UENV_FILE);
-
-        if file_exists(&uenv_file) && is_balena_file(&uenv_file)? {
-            remove_file(&uenv_file)
-                .context(MigErrCtx::from_remark(MigErrorKind::Upstream, &format!("failed to remove migrate boot config file {}", &uenv_file )))?;
-            info!("Removed balena boot config file '{}'", &uenv_file);    
-        } else {
-            warn!("balena boot config file not found in '{}'", &uenv_file);
-        }
-
-        self.restore_backups()?;
-
-        info!("The original boot configuration was restored");
-
-        ensure_cmds(BBG_REQUIRED_CMDS, BBG_OPTIONAL_CMDS)?;
-
-        // call_cmd(&LSBLK_CMD, &[""], true)?;
+        
+        let src = Path::new(ROOTFS_DIR).join(self.config.get_balena_image());
+        let tgt = Path::new(MIGRATE_TEMP_DIR).join(BALENA_IMAGE_FILE);
+        copy(&src, &tgt)
+            .context(MigErrCtx::from_remark(MigErrorKind::Upstream, &format!("failed to copy balena image to migrate temp directory, '{}' -> '{}'", src.display(), tgt.display())))?;
 
         
-        // **********************************************************************
-        // try to establish and mount former root file system
+        let src = Path::new(ROOTFS_DIR).join(self.config.get_balena_config());
+        let tgt = Path::new(MIGRATE_TEMP_DIR).join(BALENA_CONFIG_FILE);
+        copy(&src, &tgt)
+            .context(MigErrCtx::from_remark(MigErrorKind::Upstream, &format!("failed to copy balena config to migrate temp directory, '{}' -> '{}'", src.display(), tgt.display())))?;
 
+        info!("Files copied to RAMFS");
 
+        if self.boot_mounted {
+            call_cmd(UMOUNT_CMD, &[&self.config.get_boot_device().to_string_lossy()], true)?;    
+        }
+
+        call_cmd(UMOUNT_CMD, &[&self.config.get_root_device().to_string_lossy()], true)?;
+
+        info!("Unmounted root file system");
+        
         Ok(())
     }
-
 }

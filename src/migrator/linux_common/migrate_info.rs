@@ -1,4 +1,5 @@
-use std::fs::File;
+use std::fs::{File};
+use std::path::{Path};
 use std::io::Write;
 use failure::{ResultExt};
 
@@ -24,7 +25,7 @@ use crate::common::{
     },
     };
 
-use super::{DiskInfo, DeviceStage1};
+use super::{DiskInfo, WifiConfig};
 
 
 const MODULE: &str = "linux::common::sys_info";
@@ -42,6 +43,7 @@ pub(crate) struct MigrateInfo {
     pub initrd_info: Option<FileInfo>,
     pub device_slug: Option<String>,
     pub boot_cfg_bckup: Vec<(String,String)>,
+    pub wifis: Vec<WifiConfig>,
 }
 
 impl<'a> MigrateInfo {
@@ -59,6 +61,7 @@ impl<'a> MigrateInfo {
             initrd_info: None,
             device_slug: None,
             boot_cfg_bckup: Vec::new(),
+            wifis: Vec::new(),
         }        
     }
 
@@ -67,10 +70,10 @@ impl<'a> MigrateInfo {
         cfg_str.push_str(&format!(      "{}: {}\n", EFI_BOOT_KEY, self.is_efi_boot()));
         cfg_str.push_str(&format!(      "{}: '{}'\n", DEVICE_SLUG_KEY, self.get_device_slug()));        
         //cfg_str.push_str(&format!(      "{}: '{}'\n", DRIVE_DEVICE_KEY, self.get_drive_device()));        
-        cfg_str.push_str(&format!(      "{}: '{}'\n", BALENA_IMAGE_KEY ,self.get_balena_image()));        
-        cfg_str.push_str(&format!(      "{}: '{}'\n", BALENA_CONFIG_KEY, self.get_balena_config()));        
-        cfg_str.push_str(&format!(      "{}: '{}'\n", ROOT_DEVICE_KEY, self.get_root_device()));        
-        cfg_str.push_str(&format!(      "{}: '{}'\n", BOOT_DEVICE_KEY, self.get_boot_device()));        
+        cfg_str.push_str(&format!(      "{}: '{}'\n", BALENA_IMAGE_KEY ,self.get_balena_image().to_string_lossy()));        
+        cfg_str.push_str(&format!(      "{}: '{}'\n", BALENA_CONFIG_KEY, self.get_balena_config().to_string_lossy()));        
+        cfg_str.push_str(&format!(      "{}: '{}'\n", ROOT_DEVICE_KEY, self.get_root_device().to_string_lossy()));        
+        cfg_str.push_str(&format!(      "{}: '{}'\n", BOOT_DEVICE_KEY, self.get_boot_device().to_string_lossy()));        
         cfg_str.push_str(               "# backed up files in boot config\n");
         cfg_str.push_str(&format!(      "{}:\n", BACKUP_CONFIG_KEY));        
         for bckup in &self.boot_cfg_bckup {            
@@ -99,10 +102,10 @@ impl<'a> Stage1Info<'a> for MigrateInfo {
         panic!("{} uninitialized field drive_info in MigrateInfo", MODULE);
     }
 
-    fn get_efi_device(&'a self) -> Option<&'a str> {
+    fn get_efi_device(&'a self) -> Option<&'a Path> {
         if let Some(ref disk_info) = self.disk_info {
             if let Some(ref efi_path) = disk_info.efi_path {
-                return Some(&efi_path.device);
+                return Some(efi_path.device.as_path());
             } else {
                 return None;
             }
@@ -110,10 +113,10 @@ impl<'a> Stage1Info<'a> for MigrateInfo {
         panic!("{} uninitialized field drive_info in MigrateInfo", MODULE);        
     }
 
-    fn get_work_path(&'a self) -> &'a str {
+    fn get_work_path(&'a self) -> &'a Path {
         if let Some(ref disk_info) = self.disk_info {
             if let Some(ref work_path) = disk_info.work_path {
-                return &work_path.path;
+                return work_path.path.as_path();
             }
         }
         panic!("{} uninitialized field drive_info in MigrateInfo", MODULE);        
@@ -126,9 +129,9 @@ impl<'a> Stage1Info<'a> for MigrateInfo {
         panic!("{} uninitialized field os_arch in MigrateInfo", MODULE);        
     }
 
-    fn get_drive_device(&'a self) -> &'a str {
+    fn get_drive_device(&'a self) -> &'a Path {
         if let Some(ref disk_info) = self.disk_info {
-            return &disk_info.drive_dev;
+            return disk_info.drive_dev.as_path();
         }
         panic!("{} uninitialized field drive_info in MigrateInfo", MODULE);
     }
@@ -145,16 +148,16 @@ impl<'a> Stage2Info<'a> for MigrateInfo {
     }
 
 
-    fn get_balena_image(&'a self) -> &'a str {
+    fn get_balena_image(&'a self) -> &'a Path {
         if let Some(ref image_info) = self.os_image_info {
-            return &image_info.path;
+            return image_info.path.as_path();
         }
         panic!("{} uninitialized field balena image in MigrateInfo", MODULE);        
     }
 
-    fn get_balena_config(&'a self) -> &'a str {
+    fn get_balena_config(&'a self) -> &'a Path {
         if let Some(ref config_info) = self. os_config_info {
-            return &config_info.path;
+            return config_info.path.as_path();
         }
         panic!("{} uninitialized field balena config info in MigrateInfo", MODULE);        
     }
@@ -171,19 +174,19 @@ impl<'a> Stage2Info<'a> for MigrateInfo {
         &self.boot_cfg_bckup
     }
 
-    fn get_boot_device(&'a self) -> &'a str {
+    fn get_boot_device(&'a self) -> &'a Path {
         if let Some(ref disk_info) = self.disk_info {
             if let Some(ref boot_path) = disk_info.boot_path {
-                return &boot_path.device;
+                return boot_path.device.as_path();
             }
         }
         panic!("{} uninitialized field drive_info in MigrateInfo", MODULE);        
     }
 
-    fn get_root_device(&'a self) -> &'a str {
+    fn get_root_device(&'a self) -> &'a Path {
         if let Some(ref disk_info) = self.disk_info {
             if let Some(ref root_path) = disk_info.root_path {
-                return &root_path.device;
+                return root_path.device.as_path();
             }
         }
         panic!("{} uninitialized field drive_info in MigrateInfo", MODULE);        

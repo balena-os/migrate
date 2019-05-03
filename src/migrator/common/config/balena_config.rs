@@ -1,3 +1,4 @@
+use std::path::{PathBuf, Path};
 use super::{MigMode, YamlConfig};
 use crate::common::{
     config_helper::{
@@ -20,8 +21,8 @@ const DEFAULT_CHECK_TIMEOUT: u64 = 20;
 
 #[derive(Debug)]
 pub struct BalenaConfig {
-    pub image: String,
-    pub config: String,
+    pub image: Option<PathBuf>,
+    pub config: Option<PathBuf>,
     pub api_host: String,
     pub api_port: u16,
     pub api_check: bool,
@@ -31,11 +32,11 @@ pub struct BalenaConfig {
     pub check_timeout: u64,
 }
 
-impl BalenaConfig {
+impl<'a> BalenaConfig {
     pub(crate) fn default() -> BalenaConfig {
         BalenaConfig {
-            image: String::from(""),
-            config: String::from(""),
+            image: None,
+            config: None,
             api_host: String::from(DEFAULT_API_HOST),
             api_port: DEFAULT_API_PORT,
             api_check: true,
@@ -48,7 +49,7 @@ impl BalenaConfig {
 
     pub(crate) fn check(&self, mig_mode: &MigMode) -> Result<(), MigError> {
         if let MigMode::IMMEDIATE = mig_mode {
-            if self.image.is_empty() {
+            if let None = self.image {
                 return Err(MigError::from_remark(
                     MigErrorKind::InvParam,
                     &format!(
@@ -58,7 +59,7 @@ impl BalenaConfig {
                 ));
             }
 
-            if self.config.is_empty() {
+            if let None = self.config {
                 return Err(MigError::from_remark(
                     MigErrorKind::InvParam,
                     &format!(
@@ -71,14 +72,36 @@ impl BalenaConfig {
 
         Ok(())
     }
+
+    pub(crate) fn get_image_path(&'a self) -> &'a Path {
+        if let Some(ref path) = self.image {
+            path
+        } else {
+            panic!("image path is not set");
+        }
+    }
+
+    pub(crate) fn get_config_path(&'a self) -> &'a Path {
+        if let Some(ref path) = self.config {
+            path
+        } else {
+            panic!("config path is not set");
+        }
+    }
 }
 
 impl YamlConfig for BalenaConfig {
     fn to_yaml(&self, prefix: &str) -> String {
-        let mut output = format!(
-            "{}balena:\n{}  image: '{}'\n{}  config: '{}'\n",
-            prefix, prefix, self.image, prefix, self.config
-        );
+        let mut output = format!("{}balena:\n", prefix);
+        
+        if let Some(ref image) = self.image { 
+            output += &format!("{}  image: '{}'\n", prefix, &image.to_string_lossy());
+        }
+
+        if let Some(ref config) = self.config { 
+            output += &format!("{}  config: '{}'\n",prefix, &config.to_string_lossy());
+        }
+        
         output += &format!(
             "{}  api:\n{}    host: '{}'\n{}    port: {}\n{}    check: {}\n",
             prefix, prefix, self.api_host, prefix, self.api_port, prefix, self.api_check
@@ -90,14 +113,15 @@ impl YamlConfig for BalenaConfig {
         output += &format!("{}  check_timeout: {}\n", prefix, self.check_timeout);
         output
     }
+
     fn from_yaml(&mut self, yaml: &Yaml) -> Result<(), MigError> {
         if let Some(balena_image) = get_yaml_str(yaml, &["image"])? {
-            self.image = String::from(balena_image);
+            self.image = Some(PathBuf::from(balena_image));
         }
 
         // Params: balena_config
         if let Some(balena_config) = get_yaml_str(yaml, &["config"])? {
-            self.config = String::from(balena_config);
+            self.config = Some(PathBuf::from(balena_config));
         }
 
         if let Some(api_host) = get_yaml_str(yaml, &["api", "host"])? {

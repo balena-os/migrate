@@ -65,8 +65,9 @@ pub(crate) struct CmdRes {
     pub status: ExitStatus,
 }
 
-pub(crate) fn is_balena_file(file_name: &str) -> Result<bool, MigError> {
-    let file = File::open(file_name).context(MigErrCtx::from_remark(MigErrorKind::Upstream, &format!("failed to open file {}", file_name)))?;
+pub(crate) fn is_balena_file<P: AsRef<Path>>(file_name: P) -> Result<bool, MigError> {    
+    let path = file_name.as_ref();
+    let file = File::open(path).context(MigErrCtx::from_remark(MigErrorKind::Upstream, &format!("failed to open file '{}'", path.display())))?;
     if let Some(ref line1) = BufReader::new(file).lines().next() {
         if let Ok(ref line1) = line1 {
             Ok(Regex::new(BALENA_FILE_TAG_REGEX).unwrap().is_match(&line1))
@@ -78,10 +79,11 @@ pub(crate) fn is_balena_file(file_name: &str) -> Result<bool, MigError> {
     }
 }
 
-pub(crate) fn parse_file(fname: &str, regex: &Regex) -> Result<Option<Vec<String>>, MigError> {
-    let os_info = read_to_string(fname).context(MigErrCtx::from_remark(
+pub(crate) fn parse_file<P: AsRef<Path>>(fname: P, regex: &Regex) -> Result<Option<Vec<String>>, MigError> {
+    let path = fname.as_ref();
+    let os_info = read_to_string(path).context(MigErrCtx::from_remark(
         MigErrorKind::Upstream,
-        &format!("File read '{}'", fname),
+        &format!("File read '{}'", path.display()),
     ))?;
 
     for line in os_info.lines() {
@@ -103,16 +105,16 @@ pub(crate) fn parse_file(fname: &str, regex: &Regex) -> Result<Option<Vec<String
     Ok(None)
 }
 
-pub fn dir_exists(name: &str) -> Result<bool, MigError> {
-    let path = Path::new(name);
+pub fn dir_exists<P: AsRef<Path>>(name: P) -> Result<bool, MigError> {
+    let path = name.as_ref();
     if path.exists() {
-        Ok(path
+        Ok(name.as_ref()
             .metadata()
             .context(MigErrCtx::from_remark(
                 MigErrorKind::Upstream,
                 &format!(
-                    "{}::dir_exists: failed to retrieve metadata for path: {}",
-                    MODULE, name
+                    "{}::dir_exists: failed to retrieve metadata for path: '{}'",
+                    MODULE, path.display()
                 ),
             ))?
             .file_type()
@@ -122,8 +124,8 @@ pub fn dir_exists(name: &str) -> Result<bool, MigError> {
     }
 }
 
-pub fn file_exists(file: &str) -> bool {
-    Path::new(file).exists()
+pub fn file_exists<P: AsRef<Path>>(file: P) -> bool {
+    file.as_ref().exists()
 }
 
 pub(crate) fn call(cmd: &str, args: &[&str], trim_stdout: bool) -> Result<CmdRes, MigError> {

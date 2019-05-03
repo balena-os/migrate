@@ -3,6 +3,7 @@ use log::{error, info, warn};
 use serde_json::Value;
 use std::fs::File;
 use std::io::BufReader;
+use std::path::{Path, PathBuf};
 
 use super::{
     check_tcp_connect, 
@@ -16,23 +17,24 @@ const MODULE: &str = "migrator::common::balena_cfg_json";
 
 pub struct BalenaCfgJson {
     doc: Value,
-    file: String,
+    file: PathBuf,
 }
 
 impl BalenaCfgJson {
-    pub fn new(cfg_file: &str) -> Result<BalenaCfgJson, MigError> {
+    pub fn new<P: AsRef<Path>>(cfg_file: P) -> Result<BalenaCfgJson, MigError> {
+        let cfg_file = cfg_file.as_ref();
         Ok(BalenaCfgJson {
             doc: serde_json::from_reader(BufReader::new(File::open(cfg_file).context(
                 MigErrCtx::from_remark(
                     MigErrorKind::Upstream,
-                    &format!("{}::try_init:cannot open file '{}'", MODULE, cfg_file),
+                    &format!("{}::try_init:cannot open file '{}'", MODULE, cfg_file.display()),
                 ),
             )?))
             .context(MigErrCtx::from_remark(
                 MigErrorKind::Upstream,
-                &format!("{}::new: failed to parse '{}'", MODULE, cfg_file),
+                &format!("{}::new: failed to parse '{}'", MODULE, cfg_file.display()),
             ))?,
-            file: String::from(cfg_file),
+            file: PathBuf::from(cfg_file),
         })
     }
 
@@ -86,7 +88,7 @@ impl BalenaCfgJson {
                     MigErrorKind::NotFound,
                     &format!(
                         "The key '{}' is missing in the config.json supplied in: '{}'.",
-                        name, self.file
+                        name, self.file.display()
                     ),
                 )),
             },
@@ -94,7 +96,7 @@ impl BalenaCfgJson {
                 MigErrorKind::Upstream,
                 &format!(
                     "The key '{}' is invalid in the config.json supplied in: '{}'.",
-                    name, self.file
+                    name, self.file.display()
                 ),
             )))),
         }
@@ -106,12 +108,12 @@ impl BalenaCfgJson {
                 Value::String(sval) => Ok(sval.parse::<u16>()
                                             .context(MigErrCtx::from_remark(
                                                         MigErrorKind::Upstream, 
-                                                        &format!("invalid value for key '{}' found in '{}'", name, &self.file)))?),
+                                                        &format!("invalid value for key '{}' found in '{}'", name, &self.file.display())))?),
                 Value::Number(nval) => Ok(nval.as_u64().unwrap()  as u16),
-                _ => Err(MigError::from_remark(MigErrorKind::InvParam, &format!("invalid type {:?} for key '{}' found in '{}'", value, name, &self.file))),
+                _ => Err(MigError::from_remark(MigErrorKind::InvParam, &format!("invalid type {:?} for key '{}' found in '{}'", value, name, &self.file.display()))),
             }
         } else {
-            Err(MigError::from_remark(MigErrorKind::NotFound, &format!("could not find value for '{}' in '{}'", name, &self.file)))
+            Err(MigError::from_remark(MigErrorKind::NotFound, &format!("could not find value for '{}' in '{}'", name, &self.file.display())))
         }
     }
 }

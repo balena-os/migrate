@@ -2,6 +2,10 @@ migrate:
   mode: IMMEDIATE
   home_dir: './work/'
   all_wifis: true
+  wifis: 
+    - 'Xcover'
+    - 'QIFI'
+    - 'bla'
   reboot: 10
   log_to:
     drive: "/dev/sda1"

@@ -323,8 +323,8 @@ balena:
         }
 
         if let Some(ref balena) = config.balena {
-            assert!(balena.image == "image.gz");
-            assert!(balena.config == "config.json");
+            assert!(balena.get_image_path().to_string_lossy() == "image.gz");
+            assert!(balena.get_config_path().to_string_lossy() == "config.json");
         } else {
             panic!("no balena config found");
         }

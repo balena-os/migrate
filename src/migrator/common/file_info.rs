@@ -45,7 +45,7 @@ pub enum FileType {
 
 #[derive(Debug)]
 pub struct FileInfo {
-    pub path: String,
+    pub path: PathBuf,
     pub size: u64,
     pub in_work_dir: bool,
 }
@@ -53,15 +53,14 @@ pub struct FileInfo {
 // TODO: make this detect file formats used by migrate, eg: kernel, initramfs, json file, disk image
 
 impl FileInfo {
-    pub fn new(file: &str, work_dir: &str) -> Result<Option<FileInfo>, MigError> {
+    pub fn new<P: AsRef<Path>>(file: P, work_dir: P) -> Result<Option<FileInfo>, MigError> {
+        let file_path = file.as_ref();
+        let work_path = work_dir.as_ref();
         trace!(
             "FileInfo::new: entered with file: '{}', work_dir: '{}'",
-            file,
-            work_dir
+            file_path.display(),
+            work_path.display()
         );
-
-        let file_path = PathBuf::from(file);
-        let work_path = Path::new(work_dir);
 
         // figure out if this a path relative to work_dir rather than absolute or relative to current dir
 
@@ -72,7 +71,7 @@ impl FileInfo {
                 && (file_path.starts_with(&format!(".{}", MAIN_SEPARATOR))
                     || file_path.starts_with(&format!("..{}", MAIN_SEPARATOR))))
         {
-            file_path
+            PathBuf::from(file_path)
         } else {
             work_path.join(file_path)
         };
@@ -82,10 +81,9 @@ impl FileInfo {
             let metadata = abs_path.metadata().context(MigErrCtx::from_remark(
                 MigErrorKind::Upstream,
                 &format!("failed to retrieve metadata for path {:?}", abs_path),
-            ))?;
-            let path = String::from(abs_path.to_str().unwrap());
+            ))?;            
             Ok(Some(FileInfo {
-                path: path,
+                path: abs_path,
                 size: metadata.len(),
                 in_work_dir: false,
             }))
@@ -98,7 +96,7 @@ impl FileInfo {
         if !self.is_type(ftype)? {
             let message = format!(
                 "Could not determine expected file type '{}' for file '{}'",
-                ftype.get_descr(), &self.path
+                ftype.get_descr(), self.path.display()
             );
             error!("{}", message);
             Err(MigError::from_remark(MigErrorKind::InvParam, &message))
@@ -109,7 +107,8 @@ impl FileInfo {
 
     #[cfg(target_os = "linux")]
     pub fn is_type(&self, ftype: &FileType) -> Result<bool, MigError> {
-        let args: Vec<&str> = vec!["-bz", &self.path];
+        let path_str = self.path.to_string_lossy();
+        let args: Vec<&str> = vec!["-bz", &path_str];
         
         let cmd_res = call_cmd(FILE_CMD, &args, true)?;
         if !cmd_res.status.success() || cmd_res.stdout.is_empty() {
@@ -117,7 +116,7 @@ impl FileInfo {
                 MigErrorKind::InvParam,
                 &format!(
                     "{}::new: failed determine type for file {}",
-                    MODULE, &self.path
+                    MODULE, self.path.display()
                 ),
             ));
         }

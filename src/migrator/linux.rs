@@ -3,8 +3,8 @@ use log::{debug, error, info, trace, warn};
 use regex::Regex;
 use std::time::{Duration};
 use std::thread;
-
-mod util;
+use std::fs::{create_dir};
+use std::path::{PathBuf};
 
 use crate::beaglebone::{is_bb};
 use crate::raspberrypi::{is_rpi};
@@ -18,6 +18,7 @@ use crate::common::{
     FileInfo, 
     FileType,
     format_size_with_unit,
+    dir_exists,
     Config, 
     MigMode,
     MigErrCtx, 
@@ -34,9 +35,10 @@ use crate::linux_common::{
     get_mem_info,
     path_info::PathInfo,
     get_os_arch,   
-    DeviceStage1,  
+    Device,  
     MigrateInfo,
     DiskInfo,
+    WifiConfig,
     DF_CMD, 
     LSBLK_CMD, 
     MOUNT_CMD, 
@@ -74,11 +76,13 @@ const LSBLK_REGEX: &str = r#"^(\d+)(\s+(.*))?$"#;
 
 const MIN_DISK_SIZE: u64 = 2 * 1024 * 1024 * 1024; // 2 GiB
 
+const SYSTEM_CONNECTIONS_DIR: &str = "system-connections";
+
 
 pub struct LinuxMigrator {
     config: Config,
     mig_info: MigrateInfo,
-    device: Option<Box<DeviceStage1>>,
+    device: Option<Box<Device>>,
 }
 
 impl<'a> LinuxMigrator {
@@ -150,9 +154,10 @@ impl<'a> LinuxMigrator {
             OSArch::AMD64 => {
                 migrator.device = Some(init_amd64(& mut migrator.mig_info)?);
             },
-            OSArch::I386 => {
+/*            OSArch::I386 => {
                 migrator.init_i386()?;
             },
+*/            
             _ => {
                 return Err(MigError::from_remark(
                     MigErrorKind::InvParam,
@@ -196,7 +201,7 @@ impl<'a> LinuxMigrator {
         // Check out relevant paths
         let drive_size = migrator.mig_info.get_drive_size();
         let drive_dev = migrator.mig_info.get_drive_device();
-        info!("Boot device is {}, size: {}", drive_dev, format_size_with_unit(drive_size));
+        info!("Boot device is {}, size: {}", drive_dev.display(), format_size_with_unit(drive_size));
 
         // **********************************************************************
         // Require a minimum disk device size for installation
@@ -204,7 +209,7 @@ impl<'a> LinuxMigrator {
         if drive_size < MIN_DISK_SIZE {
             let message = format!(
                 "The size of your harddrive {} = {} is too small to install balenaOS",
-                drive_dev,
+                drive_dev.display(),
                 format_size_with_unit(drive_size)
             );
             error!("{}", &message);
@@ -214,7 +219,7 @@ impl<'a> LinuxMigrator {
         // **********************************************************************
         // Check if work_dir was found
 
-        let work_dir = String::from(migrator.mig_info.get_work_path());
+        let work_dir = PathBuf::from(migrator.mig_info.get_work_path());
 
         // **********************************************************************
         // Check migrate config section
@@ -222,7 +227,7 @@ impl<'a> LinuxMigrator {
         // TODO: this extra space would be somehow dependent on FS block size & other overheads
         let mut boot_required_space: u64 = 8192;
 
-        if let Some(file_info) = FileInfo::new(&migrator.config.migrate.kernel_file, &work_dir)? {
+        if let Some(file_info) = FileInfo::new(migrator.config.migrate.get_kernel_path(), &work_dir)? {
             file_info.expect_type(
                 match migrator.mig_info.get_os_arch() {
                     OSArch::AMD64 => &FileType::KernelAMD64,
@@ -230,7 +235,7 @@ impl<'a> LinuxMigrator {
                     OSArch::I386 => &FileType::KernelI386,
                 })?;
 
-            info!("The balena migrate kernel looks ok: '{}'", &file_info.path);
+            info!("The balena migrate kernel looks ok: '{}'", file_info.path.display());
             boot_required_space += file_info.size;
             migrator.mig_info.kernel_info = Some(file_info);
         } else {
@@ -239,12 +244,12 @@ impl<'a> LinuxMigrator {
             return Err(MigError::from_remark(MigErrorKind::InvParam, &message));
         }
 
-        if let Some(file_info) = FileInfo::new(&migrator.config.migrate.initramfs_file, &work_dir)?
+        if let Some(file_info) = FileInfo::new(migrator.config.migrate.get_initramfs_path(), &work_dir)?
         {
             file_info.expect_type(&FileType::InitRD)?;
             info!(
                 "The balena migrate initramfs looks ok: '{}'",
-                &file_info.path
+                file_info.path.display()
             );
             boot_required_space += file_info.size;
             migrator.mig_info.initrd_info = Some(file_info);
@@ -277,7 +282,7 @@ impl<'a> LinuxMigrator {
         };
 
         if kernel_path_info.fs_free < boot_required_space {
-            let message = format!("We have not found sufficient space for the migrate boot environment in {}. {} of free space are required.", kernel_path_info.path, format_size_with_unit(boot_required_space));
+            let message = format!("We have not found sufficient space for the migrate boot environment in {}. {} of free space are required.", kernel_path_info.path.display(), format_size_with_unit(boot_required_space));
             error!("{}", message);
             return Err(MigError::from_remark(MigErrorKind::InvParam, &message));
         }
@@ -287,9 +292,9 @@ impl<'a> LinuxMigrator {
         if let Some(ref balena_cfg) = migrator.config.balena {
             // check balena os image
 
-            if let Some(file_info) = FileInfo::new(&balena_cfg.image, &work_dir)? {
+            if let Some(file_info) = FileInfo::new(balena_cfg.get_image_path(), &work_dir)? {
                 file_info.expect_type(&FileType::OSImage)?;
-                info!("The balena OS image looks ok: '{}'", file_info.path);
+                info!("The balena OS image looks ok: '{}'", file_info.path.display());
                 // TODO: make sure there is enough memory for OSImage
                 
                 let required_mem = file_info.size + MEM_THRESHOLD;
@@ -308,7 +313,7 @@ impl<'a> LinuxMigrator {
 
             // check balena os config
 
-            if let Some(file_info) = FileInfo::new(&balena_cfg.config, &work_dir)? {
+            if let Some(file_info) = FileInfo::new(balena_cfg.get_config_path(), &work_dir)? {
                 file_info.expect_type(&FileType::Json)?;
                 let balena_cfg_json = BalenaCfgJson::new(&file_info.path)?;
                 balena_cfg_json.check(migrator.mig_info.get_device_slug())?;
@@ -323,6 +328,24 @@ impl<'a> LinuxMigrator {
             error!("{}", message);
             return Err(MigError::from_remark(MigErrorKind::InvParam, &message));
         }
+
+        if migrator.config.migrate.all_wifis == true || migrator.config.migrate.wifis.len() > 0 {
+            // **********************************************************************
+            // ** migrate wifi config  
+            // TODO: ...
+            debug!("looking for wifi configurations to migrate");
+
+            let wifi_list = WifiConfig::scan(&migrator.config.migrate.wifis)?;
+            if wifi_list.len() > 0 {
+                for wifi in &wifi_list {
+                    info!("Found config for wifi: {}", wifi.get_ssid());
+                }
+                migrator.mig_info.wifis = wifi_list;
+            } else {
+                info!("No wifi configurations found");
+            }
+        }
+
 
         Ok(migrator)
     }
@@ -340,8 +363,20 @@ impl<'a> LinuxMigrator {
         // Balena OS Image
         // System Info (arch, boot / efi etc)
 
+        if self.mig_info.wifis.len() > 0 {
+            let nwmgr_path = self.mig_info.get_work_path().join(SYSTEM_CONNECTIONS_DIR);
+            if ! dir_exists(&nwmgr_path)? {
+                create_dir(&nwmgr_path).context(MigErrCtx::from_remark(MigErrorKind::Upstream, &format!("failed to create directory '{}'", nwmgr_path.display())))?;
+            }
+
+            let mut index = 0;
+            for wifi in &self.mig_info.wifis {
+                index = wifi.create_nwmgr_file(&nwmgr_path, index)?;
+            }
+        }
+
         if let Some(ref dev_box) = self.device {
-            dev_box.setup(& mut self.mig_info)?;
+            dev_box.setup(&self.config, & mut self.mig_info)?;
         } else {
             panic!("No device handler found for {}", self.mig_info.get_device_slug());
         }
@@ -394,31 +429,6 @@ impl<'a> LinuxMigrator {
         );
         error!("{}", message);
         Err(MigError::from_remark(MigErrorKind::InvState, &message))
-    }
-
-    // **********************************************************************
-    // ** RPI specific initialisation
-    // **********************************************************************
-
-    fn init_rpi(&mut self, version: &str, model: &str) -> Result<(), MigError> {
-        trace!(
-            "LinuxMigrator::init_rpi: entered with type: '{}', model: '{}'",
-            version,
-            model
-        );
-        // TODO: set / check device type
-
-        Err(MigError::from(MigErrorKind::NotImpl))
-    }
-
-
-
-    // **********************************************************************
-    // ** I386 specific initialisation
-    // **********************************************************************
-
-    fn init_i386(&mut self) -> Result<(), MigError> {
-        Err(MigError::from(MigErrorKind::NotImpl))
     }
 
     // **********************************************************************
@@ -499,7 +509,8 @@ impl<'a> LinuxMigrator {
             // **********************************************************************
             // get size & UUID of installation drive
 
-            let args: Vec<&str> = vec!["-b", "--output=SIZE,UUID", &root_part.drive];
+            let root_part_str = root_part.drive.to_string_lossy();
+            let args: Vec<&str> = vec!["-b", "--output=SIZE,UUID", &root_part_str];
 
             let cmd_res = call_cmd(LSBLK_CMD, &args, true)?;
             if !cmd_res.status.success() || cmd_res.stdout.is_empty() {
@@ -507,7 +518,7 @@ impl<'a> LinuxMigrator {
                     MigErrorKind::ExecProcess,
                     &format!(
                         "{}::new: failed to retrieve device attributes for {}",
-                        MODULE, &root_part.drive
+                        MODULE, &root_part.drive.display()
                     ),
                 ));
             }
@@ -519,7 +530,7 @@ impl<'a> LinuxMigrator {
                     MigErrorKind::InvParam,
                     &format!(
                         "{}::new: failed to parse block device attributes for {}",
-                        MODULE, &root_part.drive
+                        MODULE, &root_part.drive.display()
                     ),
                 ));
             }
