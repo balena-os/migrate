@@ -101,7 +101,7 @@ impl<'a> Device for IntelNuc {
         Err(MigError::from(MigErrorKind::NotImpl))
     }
     
-    fn restore_boot(&self, root_path: &Path, config: &Stage2Config) -> Result<(),MigError> {
+    fn restore_boot(&self, _root_path: &Path, _config: &Stage2Config) -> Result<(),MigError> {
         Err(MigError::from(MigErrorKind::NotImpl))
     }
 

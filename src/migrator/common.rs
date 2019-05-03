@@ -8,7 +8,7 @@ use std::path::Path;
 use log::{debug};
 use regex::Regex;
 use std::fs::File;
-use std::io::{Write, BufRead, BufReader};
+use std::io::{BufRead, BufReader};
 
 
 pub mod stage_info;

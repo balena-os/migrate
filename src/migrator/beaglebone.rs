@@ -105,7 +105,7 @@ impl<'a> Device for BeagleboneGreen {
         "beaglebone-green"
     }
 
-    fn setup(&self, config: &Config, mig_info: &mut MigrateInfo) -> Result<(),MigError> {
+    fn setup(&self, _config: &Config, mig_info: &mut MigrateInfo) -> Result<(),MigError> {
         trace!(
             "BeagleboneGreen::setup: entered with type: '{}'",
             match &mig_info.device_slug {

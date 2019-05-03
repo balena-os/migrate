@@ -61,7 +61,7 @@ impl<'a> Device for RaspberryPi3 {
         "raspberrypi3"
     }
 
-    fn setup(&self, config: &Config, mig_info: &mut MigrateInfo) -> Result<(),MigError> {
+    fn setup(&self, _config: &Config, mig_info: &mut MigrateInfo) -> Result<(),MigError> {
         trace!(
             "RaspberryPi3::setup: entered with type: '{}'",
             match &mig_info.device_slug {
@@ -73,7 +73,7 @@ impl<'a> Device for RaspberryPi3 {
         Err(MigError::from(MigErrorKind::NotImpl))
     }
 
-    fn restore_boot(&self,root_path: &Path,config: &Stage2Config) -> Result<(),MigError> {
+    fn restore_boot(&self,_root_path: &Path,_config: &Stage2Config) -> Result<(),MigError> {
         Err(MigError::from(MigErrorKind::NotImpl))
     }
 }

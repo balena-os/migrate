@@ -1,7 +1,7 @@
 use std::io::{ BufRead, BufReader, Write};
 use failure::{Fail, ResultExt};
 use regex::Regex;
-use log::{error, warn, debug, trace};
+use log::{warn, debug, trace};
 use std::path::{Path};
 use std::fs::{read_dir,File};
 
@@ -15,7 +15,7 @@ use crate::common::{
 };
 
 const WPA_CONFIG_FILE: &str = "/etc/wpa_supplicant/wpa_supplicant.conf";
-const NWM_CONFIG_DIR: &str = "/etc/NetworkManager/system-connections/";
+//const NWM_CONFIG_DIR: &str = "/etc/NetworkManager/system-connections/";
 const CONNMGR_CONFIG_DIR: &str = "/var/lib/connman/";
 
 const SKIP_REGEX: &str = r##"^(\s*#.*|\s*)$"##;
@@ -54,7 +54,6 @@ psk="__PSK__"
 #[derive(Debug, PartialEq, Clone)]
 enum WpaState {
     Init,
-    NetInit, 
     Network,     
 }
 
@@ -293,11 +292,6 @@ impl<'a> WifiConfig {
                                 } 
 
                                 warn!("in state {:?} ignoring line '{}'", state, line);                                                                    
-                            },
-                            _ => {
-                                let message = format!("unexpected line '{}' in state {:?} while parsing file '{}'", &line, state, WPA_CONFIG_FILE);
-                                error!("{}", message);
-                                return Err(MigError::from_remark(MigErrorKind::InvState, &message));
                             },
                         }
                     },
