@@ -15,6 +15,7 @@ use crate::common::{
         BACKUP_CONFIG_KEY,
         BACKUP_ORIG_KEY,
         BACKUP_BCKUP_KEY,
+        WORK_DIR_KEY,
     },
     MigError,
     MigErrCtx,
@@ -30,6 +31,7 @@ pub(crate) struct Stage2Config {
     device_slug: String,
     balena_config: PathBuf,
     balena_image: PathBuf,
+    work_dir: PathBuf,
     bckup_cfg: Vec<(String,String)>,
 }
 
@@ -75,6 +77,7 @@ impl Stage2Config {
             device_slug: String::from(get_yaml_str(&yaml_cfg, &[DEVICE_SLUG_KEY])?.unwrap()),
             balena_image: PathBuf::from(get_yaml_str(&yaml_cfg, &[BALENA_IMAGE_KEY])?.unwrap()),
             balena_config: PathBuf::from(get_yaml_str(&yaml_cfg, &[BALENA_CONFIG_KEY])?.unwrap()),
+            work_dir: PathBuf::from(get_yaml_str(&yaml_cfg, &[WORK_DIR_KEY])?.unwrap()),
             bckup_cfg,
         })
     }
@@ -107,5 +110,9 @@ impl<'a> Stage2Info<'a> for Stage2Config {
 
     fn get_backups(&'a self) -> &'a Vec<(String,String)> {
         &self.bckup_cfg
+    }
+    
+    fn get_work_path(&'a self) -> &'a Path {
+        &self.work_dir
     }
 }

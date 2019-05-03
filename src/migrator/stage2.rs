@@ -1,7 +1,7 @@
 use log::{info, error, warn};
 use regex::Regex;
 use failure::{ResultExt};
-use std::fs::{copy, create_dir};
+use std::fs::{copy, create_dir, read_dir};
 use std::path::{Path, PathBuf};
 
 
@@ -36,6 +36,8 @@ use crate::beaglebone::{BeagleboneGreen};
 use crate::raspberrypi::{RaspberryPi3};
 use crate::intel_nuc::{IntelNuc};
 
+
+
 // for starters just restore old boot config, only required command is mount
 
 // later ensure all other required commands
@@ -56,6 +58,8 @@ const MIG_OPTIONAL_CMDS: &'static [&'static str] = &[];
 const BALENA_IMAGE_FILE: &str = "balenaOS.img.gz";
 const BALENA_CONFIG_FILE: &str = "config.json";
 
+const SYSTEM_CONNECTIONS_DIR: &str = "system-connections";
+
 pub(crate) struct Stage2 {
     config: Stage2Config,
     boot_mounted: bool,
@@ -70,6 +74,8 @@ impl Stage2 {
                            println!("failed to initalize logger");
             },
         }
+
+        let root_fs_dir = Path::new(ROOTFS_DIR);
 
         ensure_cmds(INIT_REQUIRED_CMDS, INIT_OPTIONAL_CMDS)?;
 
@@ -97,7 +103,7 @@ impl Stage2 {
             }
         }
 
-        let stage2_cfg_file = Path::new(ROOTFS_DIR).join(STAGE2_CFG_FILE);
+        let stage2_cfg_file = root_fs_dir.join(STAGE2_CFG_FILE);
         if !file_exists(&stage2_cfg_file) {
             let message = format!("failed to locate stage2 config in {}", stage2_cfg_file.display());
             error!("{}", &message);
@@ -117,7 +123,7 @@ impl Stage2 {
 
         // Ensure /boot is mounted in ROOTFS_DIR/boot
 
-        let boot_path = Path::new(ROOTFS_DIR).join("boot");
+        let boot_path = root_fs_dir.join("boot");
         if ! dir_exists(&boot_path)? {
             let message = format!("cannot find boot mount point on root device: {}, path {}", root_device.display(), boot_path.display());
             error!("{}", &message);
@@ -150,6 +156,9 @@ impl Stage2 {
 
     pub fn migrate(&self) -> Result<(), MigError> {
         let device_slug = self.config.get_device_slug();
+
+        let root_fs_dir = Path::new(ROOTFS_DIR);
+        let mig_tmp_dir = Path::new(MIGRATE_TEMP_DIR);
         
         info!("migrating '{}'", &device_slug);
 
@@ -178,21 +187,50 @@ impl Stage2 {
                 
         ensure_cmds(MIG_REQUIRED_CMDS, MIG_OPTIONAL_CMDS)?;                
 
-        if ! dir_exists(MIGRATE_TEMP_DIR)? {
-            create_dir(MIGRATE_TEMP_DIR).context(MigErrCtx::from_remark(MigErrorKind::Upstream, &format!("failed to create migrate temp directory {}",MIGRATE_TEMP_DIR)))?;
+        if ! dir_exists(mig_tmp_dir)? {
+            create_dir(mig_tmp_dir).context(MigErrCtx::from_remark(MigErrorKind::Upstream, &format!("failed to create migrate temp directory {}",MIGRATE_TEMP_DIR)))?;
         }
         
         
-        let src = Path::new(ROOTFS_DIR).join(self.config.get_balena_image());
-        let tgt = Path::new(MIGRATE_TEMP_DIR).join(BALENA_IMAGE_FILE);
+        let src = root_fs_dir.join(self.config.get_balena_image());
+        let tgt = mig_tmp_dir.join(BALENA_IMAGE_FILE);
         copy(&src, &tgt)
             .context(MigErrCtx::from_remark(MigErrorKind::Upstream, &format!("failed to copy balena image to migrate temp directory, '{}' -> '{}'", src.display(), tgt.display())))?;
 
+        info!("copied balena OS image to '{}'", tgt.display());
         
-        let src = Path::new(ROOTFS_DIR).join(self.config.get_balena_config());
-        let tgt = Path::new(MIGRATE_TEMP_DIR).join(BALENA_CONFIG_FILE);
+        let src = root_fs_dir.join(self.config.get_balena_config());
+        let tgt = mig_tmp_dir.join(BALENA_CONFIG_FILE);
         copy(&src, &tgt)
             .context(MigErrCtx::from_remark(MigErrorKind::Upstream, &format!("failed to copy balena config to migrate temp directory, '{}' -> '{}'", src.display(), tgt.display())))?;
+
+        info!("copied balena OS config to '{}'", tgt.display());
+
+        let src_nwmgr_dir = root_fs_dir.join(self.config.get_work_path()).join(SYSTEM_CONNECTIONS_DIR);
+        let tgt_nwmgr_dir = root_fs_dir.join(self.config.get_work_path()).join(SYSTEM_CONNECTIONS_DIR);
+        if dir_exists(&src_nwmgr_dir)? {
+            if ! dir_exists(&tgt_nwmgr_dir)? {
+                create_dir(&tgt_nwmgr_dir)
+                    .context(MigErrCtx::from_remark(MigErrorKind::Upstream, &format!("failed to create systm-connections in migrate temp directory: '{}'", tgt_nwmgr_dir.display())))?;
+            }
+
+            let paths = read_dir(&src_nwmgr_dir)
+                .context(MigErrCtx::from_remark(MigErrorKind::Upstream, &format!("Failed to list directory '{}'", src_nwmgr_dir.display())))?;
+
+            for path in paths {
+                if let Ok(path) = path {                    
+                    let src_path = path.path();
+                    if src_path.metadata().unwrap().is_file() {
+                        let tgt_path = tgt_nwmgr_dir.join(&src_path.file_name().unwrap());
+                        copy(&src_path,&tgt_path)
+                            .context(MigErrCtx::from_remark(MigErrorKind::Upstream, &format!("Failed copy network manager file to migrate temp directory '{}' -> '{}'", src_path.display(), tgt_path.display())))?;
+                        info!("copied network manager config  to '{}'", tgt_path.display());                            
+                    }
+                } else {
+                    return Err(MigError::from_remark(MigErrorKind::Upstream, &format!("Error reading entry from directory '{}'", src_nwmgr_dir.display())));
+                }
+            }
+        }
 
         info!("Files copied to RAMFS");
 
@@ -203,6 +241,9 @@ impl Stage2 {
         call_cmd(UMOUNT_CMD, &[&self.config.get_root_device().to_string_lossy()], true)?;
 
         info!("Unmounted root file system");
+
+        // TODO: dd it !
+
         
         Ok(())
     }

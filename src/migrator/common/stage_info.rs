@@ -11,6 +11,7 @@ pub const DEVICE_SLUG_KEY: &str = "device_slug";
 pub const BALENA_IMAGE_KEY: &str = "balena_image";
 pub const BALENA_CONFIG_KEY: &str = "balena_config";
 pub const BACKUP_CONFIG_KEY: &str = "backup_config";
+pub const WORK_DIR_KEY: &str = "work_dir";
 pub const BACKUP_ORIG_KEY: &str = "orig";
 pub const BACKUP_BCKUP_KEY: &str = "bckup";
 
@@ -18,8 +19,7 @@ pub const BACKUP_BCKUP_KEY: &str = "bckup";
 pub trait Stage1Info<'a> {
     fn get_os_name(&'a self) -> &'a str;
     fn get_drive_size(&self) -> u64;
-    fn get_efi_device(&'a self) -> Option<&'a Path>;    
-    fn get_work_path(&'a self) -> &'a Path;
+    fn get_efi_device(&'a self) -> Option<&'a Path>;        
     fn get_os_arch(&'a self) -> &'a OSArch;
     fn get_drive_device(&'a self) -> &'a Path;           
 }
@@ -32,4 +32,5 @@ pub trait Stage2Info<'a> {
     fn get_backups(&'a self) -> &'a Vec<(String,String)>;
     fn get_root_device(&'a self) -> &'a Path;
     fn get_boot_device(&'a self) -> &'a Path;
+    fn get_work_path(&'a self) -> &'a Path; 
 }

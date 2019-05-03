@@ -20,6 +20,7 @@ use crate::common::{
         BALENA_IMAGE_KEY,        
         BALENA_CONFIG_KEY,
         BACKUP_CONFIG_KEY,
+        WORK_DIR_KEY,
         BACKUP_ORIG_KEY,
         BACKUP_BCKUP_KEY,
     },
@@ -74,6 +75,7 @@ impl<'a> MigrateInfo {
         cfg_str.push_str(&format!(      "{}: '{}'\n", BALENA_CONFIG_KEY, self.get_balena_config().to_string_lossy()));        
         cfg_str.push_str(&format!(      "{}: '{}'\n", ROOT_DEVICE_KEY, self.get_root_device().to_string_lossy()));        
         cfg_str.push_str(&format!(      "{}: '{}'\n", BOOT_DEVICE_KEY, self.get_boot_device().to_string_lossy()));        
+        cfg_str.push_str(&format!(      "{}: '{}'\n", WORK_DIR_KEY, self.get_work_path().to_string_lossy()));        
         cfg_str.push_str(               "# backed up files in boot config\n");
         cfg_str.push_str(&format!(      "{}:\n", BACKUP_CONFIG_KEY));        
         for bckup in &self.boot_cfg_bckup {            
@@ -113,14 +115,6 @@ impl<'a> Stage1Info<'a> for MigrateInfo {
         panic!("{} uninitialized field drive_info in MigrateInfo", MODULE);        
     }
 
-    fn get_work_path(&'a self) -> &'a Path {
-        if let Some(ref disk_info) = self.disk_info {
-            if let Some(ref work_path) = disk_info.work_path {
-                return work_path.path.as_path();
-            }
-        }
-        panic!("{} uninitialized field drive_info in MigrateInfo", MODULE);        
-    }
     
     fn get_os_arch(&'a self) -> &'a OSArch {
         if let Some(ref os_arch) = self.os_arch {
@@ -145,6 +139,15 @@ impl<'a> Stage2Info<'a> for MigrateInfo {
         } else {
             false
         }
+    }
+
+    fn get_work_path(&'a self) -> &'a Path {
+        if let Some(ref disk_info) = self.disk_info {
+            if let Some(ref work_path) = disk_info.work_path {
+                return work_path.path.as_path();
+            }
+        }
+        panic!("{} uninitialized field drive_info in MigrateInfo", MODULE);        
     }
 
 
