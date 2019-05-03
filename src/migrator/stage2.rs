@@ -244,7 +244,6 @@ impl Stage2 {
 
         // TODO: dd it !
 
-        
         Ok(())
     }
 }
