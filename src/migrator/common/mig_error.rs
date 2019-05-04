@@ -41,7 +41,6 @@ pub enum MigErrorKind {
     MutAccess,
     #[fail(display = "No Match")]
     NoMatch,
-
 }
 
 pub struct MigErrCtx {

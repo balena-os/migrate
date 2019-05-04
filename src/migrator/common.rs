@@ -1,23 +1,24 @@
 //pub mod mig_error;
 use failure::ResultExt;
+use log::debug;
 use log::trace;
-use std::fmt::{self, Display, Formatter};
-use std::process::{Command, ExitStatus, Stdio};
-use std::fs::read_to_string;
-use std::path::Path;
-use log::{debug};
 use regex::Regex;
+use std::fmt::{self, Display, Formatter};
+use std::fs::read_to_string;
 use std::fs::File;
 use std::io::{BufRead, BufReader};
+use std::path::Path;
+use std::process::{Command, ExitStatus, Stdio};
 
-
+/*
 pub mod stage_info;
 pub use stage_info::{Stage1Info, Stage2Info};
+*/
 
 pub mod mig_error;
 
 pub mod os_release;
-pub use os_release::OSRelease;
+pub(crate) use os_release::OSRelease;
 
 pub mod balena_cfg_json;
 pub mod config;
@@ -25,14 +26,13 @@ pub mod config_helper;
 pub mod file_info;
 
 pub mod logger;
-pub use logger::Logger;
+pub(crate) use logger::Logger;
 
-pub use self::mig_error::{MigErrCtx, MigError, MigErrorKind};
-pub use self::config::{Config, MigMode};
-pub use self::file_info::{FileInfo, FileType};
+pub(crate) use self::config::{Config, MigMode};
+pub(crate) use self::file_info::{FileInfo, FileType};
+pub(crate) use self::mig_error::{MigErrCtx, MigError, MigErrorKind};
 
 const MODULE: &str = "migrator::common";
-pub const STAGE2_CFG_FILE: &str = "/etc/balena-stage2.yml";
 
 #[derive(Debug)]
 pub enum OSArch {
@@ -65,9 +65,12 @@ pub(crate) struct CmdRes {
     pub status: ExitStatus,
 }
 
-pub(crate) fn is_balena_file<P: AsRef<Path>>(file_name: P) -> Result<bool, MigError> {    
+pub(crate) fn is_balena_file<P: AsRef<Path>>(file_name: P) -> Result<bool, MigError> {
     let path = file_name.as_ref();
-    let file = File::open(path).context(MigErrCtx::from_remark(MigErrorKind::Upstream, &format!("failed to open file '{}'", path.display())))?;
+    let file = File::open(path).context(MigErrCtx::from_remark(
+        MigErrorKind::Upstream,
+        &format!("failed to open file '{}'", path.display()),
+    ))?;
     if let Some(ref line1) = BufReader::new(file).lines().next() {
         if let Ok(ref line1) = line1 {
             Ok(Regex::new(BALENA_FILE_TAG_REGEX).unwrap().is_match(&line1))
@@ -79,7 +82,10 @@ pub(crate) fn is_balena_file<P: AsRef<Path>>(file_name: P) -> Result<bool, MigEr
     }
 }
 
-pub(crate) fn parse_file<P: AsRef<Path>>(fname: P, regex: &Regex) -> Result<Option<Vec<String>>, MigError> {
+pub(crate) fn parse_file<P: AsRef<Path>>(
+    fname: P,
+    regex: &Regex,
+) -> Result<Option<Vec<String>>, MigError> {
     let path = fname.as_ref();
     let os_info = read_to_string(path).context(MigErrCtx::from_remark(
         MigErrorKind::Upstream,
@@ -108,13 +114,15 @@ pub(crate) fn parse_file<P: AsRef<Path>>(fname: P, regex: &Regex) -> Result<Opti
 pub fn dir_exists<P: AsRef<Path>>(name: P) -> Result<bool, MigError> {
     let path = name.as_ref();
     if path.exists() {
-        Ok(name.as_ref()
+        Ok(name
+            .as_ref()
             .metadata()
             .context(MigErrCtx::from_remark(
                 MigErrorKind::Upstream,
                 &format!(
                     "{}::dir_exists: failed to retrieve metadata for path: '{}'",
-                    MODULE, path.display()
+                    MODULE,
+                    path.display()
                 ),
             ))?
             .file_type()

@@ -1,10 +1,9 @@
 // expecting work_path to be absolute
 use failure::ResultExt;
 use lazy_static::lazy_static;
-use log::{error, trace, debug};
+use log::{debug, error, trace};
 use regex::Regex;
 use std::path::{Path, PathBuf, MAIN_SEPARATOR};
-
 
 const OS_IMG_FTYPE_REGEX: &str = r#"^DOS/MBR boot sector.*\(gzip compressed data.*\)$"#;
 const INITRD_FTYPE_REGEX: &str = r#"^ASCII cpio archive.*\(gzip compressed data.*\)$"#;
@@ -29,19 +28,19 @@ pub enum FileType {
     InitRD,
     Json,
 }
- 
- impl FileType {
-     pub fn get_descr(&self) -> &str {
-         match self {
-            FileType::OSImage  => "balena OS image",
-            FileType::KernelAMD64  => "balena migrate kernel image for AMD64",
-            FileType::KernelARMHF  => "balena migrate kernel image for ARMHF",
-            FileType::KernelI386  => "balena migrate kernel image for I386",
-            FileType::InitRD   => "balena migrate initramfs",
-            FileType::Json => "balena config.json file"
-         }
-     }
- }
+
+impl FileType {
+    pub fn get_descr(&self) -> &str {
+        match self {
+            FileType::OSImage => "balena OS image",
+            FileType::KernelAMD64 => "balena migrate kernel image for AMD64",
+            FileType::KernelARMHF => "balena migrate kernel image for ARMHF",
+            FileType::KernelI386 => "balena migrate kernel image for I386",
+            FileType::InitRD => "balena migrate initramfs",
+            FileType::Json => "balena config.json file",
+        }
+    }
+}
 
 #[derive(Debug)]
 pub struct FileInfo {
@@ -81,7 +80,7 @@ impl FileInfo {
             let metadata = abs_path.metadata().context(MigErrCtx::from_remark(
                 MigErrorKind::Upstream,
                 &format!("failed to retrieve metadata for path {:?}", abs_path),
-            ))?;            
+            ))?;
             Ok(Some(FileInfo {
                 path: abs_path,
                 size: metadata.len(),
@@ -96,7 +95,8 @@ impl FileInfo {
         if !self.is_type(ftype)? {
             let message = format!(
                 "Could not determine expected file type '{}' for file '{}'",
-                ftype.get_descr(), self.path.display()
+                ftype.get_descr(),
+                self.path.display()
             );
             error!("{}", message);
             Err(MigError::from_remark(MigErrorKind::InvParam, &message))
@@ -109,14 +109,15 @@ impl FileInfo {
     pub fn is_type(&self, ftype: &FileType) -> Result<bool, MigError> {
         let path_str = self.path.to_string_lossy();
         let args: Vec<&str> = vec!["-bz", &path_str];
-        
+
         let cmd_res = call_cmd(FILE_CMD, &args, true)?;
         if !cmd_res.status.success() || cmd_res.stdout.is_empty() {
             return Err(MigError::from_remark(
                 MigErrorKind::InvParam,
                 &format!(
                     "{}::new: failed determine type for file {}",
-                    MODULE, self.path.display()
+                    MODULE,
+                    self.path.display()
                 ),
             ));
         }
@@ -130,7 +131,11 @@ impl FileInfo {
             static ref KERNEL_I386_FTYPE_RE: Regex = Regex::new(KERNEL_I386_FTYPE_REGEX).unwrap();
         }
 
-        debug!("FileInfo::is_type: looking for: {}, found {}", ftype.get_descr(), cmd_res.stdout);
+        debug!(
+            "FileInfo::is_type: looking for: {}, found {}",
+            ftype.get_descr(),
+            cmd_res.stdout
+        );
         match ftype {
             FileType::OSImage => Ok(OS_IMG_FTYPE_RE.is_match(&cmd_res.stdout)),
             FileType::InitRD => Ok(INITRD_FTYPE_RE.is_match(&cmd_res.stdout)),

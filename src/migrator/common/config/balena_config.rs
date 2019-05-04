@@ -1,13 +1,9 @@
-use std::path::{PathBuf, Path};
 use super::{MigMode, YamlConfig};
 use crate::common::{
-    config_helper::{
-        get_yaml_bool, 
-        get_yaml_int, 
-        get_yaml_str},
-        MigError, 
-        MigErrorKind,
-        };
+    config_helper::{get_yaml_bool, get_yaml_int, get_yaml_str},
+    MigError, MigErrorKind,
+};
+use std::path::{Path, PathBuf};
 
 use yaml_rust::Yaml;
 
@@ -93,15 +89,15 @@ impl<'a> BalenaConfig {
 impl YamlConfig for BalenaConfig {
     fn to_yaml(&self, prefix: &str) -> String {
         let mut output = format!("{}balena:\n", prefix);
-        
-        if let Some(ref image) = self.image { 
+
+        if let Some(ref image) = self.image {
             output += &format!("{}  image: '{}'\n", prefix, &image.to_string_lossy());
         }
 
-        if let Some(ref config) = self.config { 
-            output += &format!("{}  config: '{}'\n",prefix, &config.to_string_lossy());
+        if let Some(ref config) = self.config {
+            output += &format!("{}  config: '{}'\n", prefix, &config.to_string_lossy());
         }
-        
+
         output += &format!(
             "{}  api:\n{}    host: '{}'\n{}    port: {}\n{}    check: {}\n",
             prefix, prefix, self.api_host, prefix, self.api_port, prefix, self.api_check

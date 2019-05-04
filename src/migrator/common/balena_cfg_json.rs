@@ -5,13 +5,7 @@ use std::fs::File;
 use std::io::BufReader;
 use std::path::{Path, PathBuf};
 
-use super::{
-    check_tcp_connect, 
-    config_helper::get_json_str, 
-    MigErrCtx, 
-    MigError, 
-    MigErrorKind,
-};
+use super::{check_tcp_connect, config_helper::get_json_str, MigErrCtx, MigError, MigErrorKind};
 
 const MODULE: &str = "migrator::common::balena_cfg_json";
 
@@ -27,7 +21,11 @@ impl BalenaCfgJson {
             doc: serde_json::from_reader(BufReader::new(File::open(cfg_file).context(
                 MigErrCtx::from_remark(
                     MigErrorKind::Upstream,
-                    &format!("{}::try_init:cannot open file '{}'", MODULE, cfg_file.display()),
+                    &format!(
+                        "{}::try_init:cannot open file '{}'",
+                        MODULE,
+                        cfg_file.display()
+                    ),
                 ),
             )?))
             .context(MigErrCtx::from_remark(
@@ -76,7 +74,7 @@ impl BalenaCfgJson {
         self.get_string_cfg("vpnEndpoint")
     }
 
-    pub fn get_vpn_port<'a>(&self) -> Result<u16, MigError> {        
+    pub fn get_vpn_port<'a>(&self) -> Result<u16, MigError> {
         Ok(self.get_u16_cfg("vpnPort")?)
     }
 
@@ -88,7 +86,8 @@ impl BalenaCfgJson {
                     MigErrorKind::NotFound,
                     &format!(
                         "The key '{}' is missing in the config.json supplied in: '{}'.",
-                        name, self.file.display()
+                        name,
+                        self.file.display()
                     ),
                 )),
             },
@@ -96,7 +95,8 @@ impl BalenaCfgJson {
                 MigErrorKind::Upstream,
                 &format!(
                     "The key '{}' is invalid in the config.json supplied in: '{}'.",
-                    name, self.file.display()
+                    name,
+                    self.file.display()
                 ),
             )))),
         }
@@ -105,15 +105,34 @@ impl BalenaCfgJson {
     fn get_u16_cfg(&self, name: &str) -> Result<u16, MigError> {
         if let Some(ref value) = self.doc.get(name) {
             match value {
-                Value::String(sval) => Ok(sval.parse::<u16>()
-                                            .context(MigErrCtx::from_remark(
-                                                        MigErrorKind::Upstream, 
-                                                        &format!("invalid value for key '{}' found in '{}'", name, &self.file.display())))?),
-                Value::Number(nval) => Ok(nval.as_u64().unwrap()  as u16),
-                _ => Err(MigError::from_remark(MigErrorKind::InvParam, &format!("invalid type {:?} for key '{}' found in '{}'", value, name, &self.file.display()))),
+                Value::String(sval) => Ok(sval.parse::<u16>().context(MigErrCtx::from_remark(
+                    MigErrorKind::Upstream,
+                    &format!(
+                        "invalid value for key '{}' found in '{}'",
+                        name,
+                        &self.file.display()
+                    ),
+                ))?),
+                Value::Number(nval) => Ok(nval.as_u64().unwrap() as u16),
+                _ => Err(MigError::from_remark(
+                    MigErrorKind::InvParam,
+                    &format!(
+                        "invalid type {:?} for key '{}' found in '{}'",
+                        value,
+                        name,
+                        &self.file.display()
+                    ),
+                )),
             }
         } else {
-            Err(MigError::from_remark(MigErrorKind::NotFound, &format!("could not find value for '{}' in '{}'", name, &self.file.display())))
+            Err(MigError::from_remark(
+                MigErrorKind::NotFound,
+                &format!(
+                    "could not find value for '{}' in '{}'",
+                    name,
+                    &self.file.display()
+                ),
+            ))
         }
     }
 }

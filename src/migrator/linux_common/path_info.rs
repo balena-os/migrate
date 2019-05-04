@@ -6,20 +6,9 @@ use serde_json::Value;
 use std::fmt::{self, Display, Formatter};
 use std::path::{Path, PathBuf};
 
-use crate::common::{
-    format_size_with_unit,
-    dir_exists, 
-    MigErrCtx, 
-    MigError, 
-    MigErrorKind,
-    };
+use crate::common::{dir_exists, format_size_with_unit, MigErrCtx, MigError, MigErrorKind};
 
-use super::{        
-    call_cmd, 
-    DF_CMD, 
-    LSBLK_CMD, 
-    MOUNT_CMD,
-    };
+use super::{call_cmd, DF_CMD, LSBLK_CMD, MOUNT_CMD};
 
 const MODULE: &str = "linux_common::path_info";
 
@@ -44,7 +33,7 @@ pub(crate) struct PathInfo {
 }
 
 impl PathInfo {
-    fn default<P: AsRef<Path>>(path: P) -> PathInfo {        
+    fn default<P: AsRef<Path>>(path: P) -> PathInfo {
         PathInfo {
             path: PathBuf::from(path.as_ref()),
             device: PathBuf::from(""),
@@ -93,7 +82,8 @@ impl PathInfo {
                 MigErrorKind::InvParam,
                 &format!(
                     "{}::new: failed to find mountpoint for {}",
-                    MODULE, result.path.display()
+                    MODULE,
+                    result.path.display()
                 ),
             ));
         }
@@ -104,7 +94,8 @@ impl PathInfo {
                 MigErrorKind::InvParam,
                 &format!(
                     "{}::new: failed to parse mountpoint attributes for {}",
-                    MODULE, result.path.display()
+                    MODULE,
+                    result.path.display()
                 ),
             ));
         }
@@ -122,7 +113,8 @@ impl PathInfo {
                 MigErrorKind::InvParam,
                 &format!(
                     "{}::new: failed to parse mountpoint attributes for {}",
-                    MODULE, result.path.display()
+                    MODULE,
+                    result.path.display()
                 ),
             ));
         }
@@ -137,7 +129,8 @@ impl PathInfo {
                     MigErrorKind::InvParam,
                     &format!(
                         "{}::new: failed to find mountpoint for {}",
-                        MODULE, result.path.display()
+                        MODULE,
+                        result.path.display()
                     ),
                 ));
             }
@@ -214,7 +207,8 @@ impl PathInfo {
                 MigErrorKind::ExecProcess,
                 &format!(
                     "{}::new: failed to determine block device attributes for '{}'",
-                    MODULE, result.path.display()
+                    MODULE,
+                    result.path.display()
                 ),
             ));
         }
@@ -304,21 +298,24 @@ impl PathInfo {
                 MigErrorKind::InvParam,
                 &format!(
                     "{}::new: failed to parse block device attributes for {} from lsblk output",
-                    MODULE, result.path.display()
+                    MODULE,
+                    result.path.display()
                 ),
             ));
         }
 
         debug!(
             "PathInfo::new: '{}' lsblk result: '{:?}'",
-            result.path.display(), result
+            result.path.display(),
+            result
         );
         if result.fs_type.is_empty() || result.part_size == 0 {
             return Err(MigError::from_remark(
                 MigErrorKind::InvParam,
                 &format!(
                     "{}::new: failed to parse block device attributes for {} from lsblk output",
-                    MODULE, result.path.display()
+                    MODULE,
+                    result.path.display()
                 ),
             ));
         }

@@ -1,13 +1,12 @@
-use std::path::{Path, PathBuf};
 use super::{LogConfig, YamlConfig};
-use crate::common::{
-    config_helper::{
-        get_yaml_bool, 
-        get_yaml_int, 
-        get_yaml_str, 
-        get_yaml_val,},
-    MigError, 
-    MigErrorKind,
+use std::path::{Path, PathBuf};
+
+use crate::{
+    common::{
+        config_helper::{get_yaml_bool, get_yaml_int, get_yaml_str, get_yaml_val},
+        MigError, MigErrorKind,
+    },
+    linux_common::FailMode,
 };
 
 use yaml_rust::Yaml;
@@ -24,7 +23,7 @@ pub enum MigMode {
 const DEFAULT_MODE: MigMode = MigMode::PRETEND;
 
 #[derive(Debug)]
-pub struct MigrateConfig {
+pub(crate) struct MigrateConfig {
     pub work_dir: String,
     pub mode: MigMode,
     pub reboot: Option<u64>,
@@ -34,12 +33,14 @@ pub struct MigrateConfig {
     pub kernel_file: Option<PathBuf>,
     pub initramfs_file: Option<PathBuf>,
     pub force_slug: Option<String>,
+    pub fail_mode: Option<FailMode>,
 }
 
 impl<'a> MigrateConfig {
     pub fn default() -> MigrateConfig {
         MigrateConfig {
             work_dir: String::from("."),
+            fail_mode: None,
             mode: DEFAULT_MODE,
             reboot: None,
             all_wifis: false,
@@ -83,7 +84,7 @@ impl YamlConfig for MigrateConfig {
                 output += &format!("{}  - '{}'\n", next_prefix, wifi);
             }
         } else {
-            output += &format!("{}  all_wifis: {}\n", prefix, self.all_wifis);            
+            output += &format!("{}  all_wifis: {}\n", prefix, self.all_wifis);
         }
 
         if let Some(i) = self.reboot {
@@ -91,11 +92,19 @@ impl YamlConfig for MigrateConfig {
         }
 
         if let Some(ref kernel_file) = self.kernel_file {
-            output += &format!("{}  kernel_file: {}\n", prefix, &kernel_file.to_string_lossy());
+            output += &format!(
+                "{}  kernel_file: {}\n",
+                prefix,
+                &kernel_file.to_string_lossy()
+            );
         }
 
         if let Some(ref initramfs_file) = self.initramfs_file {
-            output += &format!("{}  initramfs_file: {}\n", prefix, &initramfs_file.to_string_lossy());
+            output += &format!(
+                "{}  initramfs_file: {}\n",
+                prefix,
+                &initramfs_file.to_string_lossy()
+            );
         }
 
         if let Some(slug) = &self.force_slug {
@@ -120,6 +129,10 @@ impl YamlConfig for MigrateConfig {
 
         if let Some(initramfs_file) = get_yaml_str(yaml, &["initramfs_file"])? {
             self.initramfs_file = Some(PathBuf::from(initramfs_file));
+        }
+
+        if let Some(fail_mode) = get_yaml_str(yaml, &["fail_mode"])? {
+            self.fail_mode = Some(FailMode::from_str(fail_mode)?.clone());
         }
 
         if let Some(mode) = get_yaml_str(yaml, &["mode"])? {
@@ -169,7 +182,7 @@ impl YamlConfig for MigrateConfig {
                         ));
                     }
                 }
-            }  else {
+            } else {
                 return Err(MigError::from_remark(
                     MigErrorKind::InvParam,
                     &format!(
@@ -177,9 +190,8 @@ impl YamlConfig for MigrateConfig {
                         MODULE, wifis,
                     ),
                 ));
-            }            
+            }
         }
-
 
         // Params: log_to: drive, fs_type
         if let Some(log_section) = get_yaml_val(yaml, &["log_to"])? {

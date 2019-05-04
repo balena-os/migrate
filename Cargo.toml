@@ -28,11 +28,12 @@ yaml-rust = "0.4"
 colored = "1.7"
 serde_json = "*"
 url = "*"
-
 # tempfile = "3"
 
 [target.'cfg(unix)'.dependencies]
 libc = { git = "https://github.com/rust-lang/libc" } 
+nix = "*"
+
 [target.'cfg(windows)'.dependencies]
 winapi = {  git = "https://github.com/retep998/winapi-rs.git", branch = "0.3", features = [
         "winuser", 

@@ -7,25 +7,21 @@ use yaml_rust::{Yaml, YamlLoader};
 
 use clap::{App, Arg};
 
-use super::{
-    MigErrCtx, 
-    MigError, 
-    MigErrorKind,
-    logger::Logger};
+use super::{logger::Logger, MigErrCtx, MigError, MigErrorKind};
 
-pub mod log_config;
-pub use log_config::LogConfig;
+pub(crate) mod log_config;
+pub(crate) use log_config::LogConfig;
 
-pub mod migrate_config;
-pub use migrate_config::{MigMode, MigrateConfig};
+pub(crate) mod migrate_config;
+pub(crate) use migrate_config::{MigMode, MigrateConfig};
 
-pub mod balena_config;
-pub use balena_config::BalenaConfig;
+pub(crate) mod balena_config;
+pub(crate) use balena_config::BalenaConfig;
 
 #[cfg(debug_assertions)]
 pub mod debug_config;
 #[cfg(debug_assertions)]
-pub use debug_config::DebugConfig;
+pub(crate) use debug_config::DebugConfig;
 
 use super::config_helper::get_yaml_val;
 
@@ -39,7 +35,7 @@ pub trait YamlConfig {
 }
 
 #[derive(Debug)]
-pub struct Config {
+pub(crate) struct Config {
     pub migrate: MigrateConfig,
     pub balena: Option<BalenaConfig>,
     #[cfg(debug_assertions)]

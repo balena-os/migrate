@@ -1,7 +1,5 @@
 use super::YamlConfig;
-use crate::common::{
-    config_helper::get_yaml_str,
-    MigError,};
+use crate::common::{config_helper::get_yaml_str, MigError};
 
 use yaml_rust::Yaml;
 

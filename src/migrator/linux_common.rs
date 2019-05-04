@@ -1,25 +1,20 @@
 use failure::{Fail, ResultExt};
 
-use log::{error, trace, debug, warn, info};
+use log::{debug, error, info, trace, warn};
 use regex::Regex;
+use std::cell::RefCell;
 use std::collections::HashMap;
-use std::cell::{RefCell};
-use std::fs::{copy};
-use std::path::{Path};
+use std::fs::copy;
+use std::path::{Path, PathBuf};
 
 use libc::getuid;
 
 use crate::common::{
-    call, 
-    file_exists,
-    parse_file,
-    CmdRes, 
-    Config,
-    OSArch,
-    MigErrCtx, 
-    MigError, 
-    MigErrorKind,
+    call, file_exists, parse_file, CmdRes, Config, MigErrCtx, MigError, MigErrorKind, OSArch,
 };
+
+pub(crate) mod fail_mode;
+pub(crate) use fail_mode::FailMode;
 
 pub(crate) mod wifi_config;
 pub(crate) use wifi_config::WifiConfig;
@@ -36,21 +31,22 @@ pub(crate) use path_info::PathInfo;
 pub(crate) mod device;
 pub(crate) use device::Device;
 
-
 const MODULE: &str = "balena-migrate::linux_common";
 const WHEREIS_CMD: &str = "whereis";
 
 pub const DF_CMD: &str = "df";
 pub const LSBLK_CMD: &str = "lsblk";
-pub const MOUNT_CMD: &str = "mount";
-pub const UMOUNT_CMD: &str = "umount";
+//pub const MOUNT_CMD: &str = "mount";
+//pub const UMOUNT_CMD: &str = "umount";
 pub const FILE_CMD: &str = "file";
 pub const UNAME_CMD: &str = "uname";
+pub const MOUNT_CMD: &str = "mount";
 pub const MOKUTIL_CMD: &str = "mokutil";
 pub const GRUB_INSTALL_CMD: &str = "grub-install";
 pub const REBOOT_CMD: &str = "reboot";
 pub const CHMOD_CMD: &str = "chmod";
 pub const DD_CMD: &str = "dd";
+pub const PARTPROBE_CMD: &str = "partprobe";
 
 pub const BOOT_DIR: &str = "/boot";
 pub const ROOT_DIR: &str = "/";
@@ -61,11 +57,10 @@ const GRUB_INST_VERSION_RE: &str = r#"^.*\s+\(GRUB\)\s+([0-9]+)\.([0-9]+)[^0-9].
 
 const MOKUTIL_ARGS_SB_STATE: [&str; 1] = ["--sb-state"];
 
-
 const UNAME_ARGS_OS_ARCH: [&str; 1] = ["-m"];
 
 // TODO: make this more complete
-const BIN_DIRS: &[&str] = &["/bin", "/usr/bin", "/sbin" ];
+const BIN_DIRS: &[&str] = &["/bin", "/usr/bin", "/sbin", "/usr/sbin"];
 
 // const OS_KERNEL_RELEASE_FILE: &str = "/proc/sys/kernel/osrelease";
 // const OS_MEMINFO_FILE: &str = "/proc/meminfo";
@@ -79,47 +74,64 @@ thread_local! {
     static CMD_TABLE: RefCell<HashMap<String,Option<String>>> = RefCell::new(HashMap::new());
 }
 
-pub(crate) fn ensure_cmds(required: &[&str], optional: &[&str]) -> Result<(),MigError> {
+pub(crate) fn path_append<P1: AsRef<Path>, P2: AsRef<Path>>(base: P1, append: P2) -> PathBuf {
+    let base = base.as_ref();
+    let append = append.as_ref();
+    if append.starts_with("/") {
+        base.join(append.strip_prefix("/").unwrap())
+    } else {
+        base.join(append)
+    }
+}
+
+pub(crate) fn ensure_cmds(required: &[&str], optional: &[&str]) -> Result<(), MigError> {
     CMD_TABLE.with(|cmd_tbl| {
         let mut cmd_table = cmd_tbl.borrow_mut();
         for cmd in required {
             if let Ok(cmd_path) = whereis(cmd) {
-                cmd_table.insert(String::from(*cmd),Some(cmd_path));                    
+                cmd_table.insert(String::from(*cmd), Some(cmd_path));
             } else {
                 let message = format!("cannot find required command {}", cmd);
                 error!("{}", message);
-                return Err(MigError::from_remark(MigErrorKind::NotFound, &format!("{}", message)));
+                return Err(MigError::from_remark(
+                    MigErrorKind::NotFound,
+                    &format!("{}", message),
+                ));
             }
         }
 
         for cmd in optional {
-            match  whereis(cmd) {
+            match whereis(cmd) {
                 Ok(cmd_path) => {
-                    cmd_table.insert(String::from(*cmd),Some(cmd_path));
+                    cmd_table.insert(String::from(*cmd), Some(cmd_path));
                     ()
-                },
+                }
                 Err(_why) => {
                     // TODO: forward upstream error message
                     let message = format!("cannot find optional command {}", cmd);
                     warn!("{}", message);
-                    cmd_table.insert(String::from(*cmd),None);
-                    ()                  
-                }, 
+                    cmd_table.insert(String::from(*cmd), None);
+                    ()
+                }
             }
         }
-        Ok(())                
+        Ok(())
     })
 }
 
-fn get_cmd(cmd: &str) -> Result<String,MigError> {
-    CMD_TABLE.with(|cmd_tbl| {
-        match cmd_tbl.borrow().get(cmd) {
-            Some(cmd_path) => match cmd_path {
-                Some(cmd_path) => Ok(cmd_path.clone()),
-                None => Err(MigError::from_remark(MigErrorKind::NotFound, &format!("The command was not found: {}", cmd))),
-            } ,
-            None => Err(MigError::from_remark(MigErrorKind::InvParam, &format!("The command is not a checked command: {}", cmd))),
-        }
+fn get_cmd(cmd: &str) -> Result<String, MigError> {
+    CMD_TABLE.with(|cmd_tbl| match cmd_tbl.borrow().get(cmd) {
+        Some(cmd_path) => match cmd_path {
+            Some(cmd_path) => Ok(cmd_path.clone()),
+            None => Err(MigError::from_remark(
+                MigErrorKind::NotFound,
+                &format!("The command was not found: {}", cmd),
+            )),
+        },
+        None => Err(MigError::from_remark(
+            MigErrorKind::InvParam,
+            &format!("The command is not a checked command: {}", cmd),
+        )),
     })
 }
 
@@ -161,9 +173,12 @@ fn whereis(cmd: &str) -> Result<String, MigError> {
     let args: [&str; 2] = ["-b", cmd];
     let cmd_res = match call(WHEREIS_CMD, &args, true) {
         Ok(cmd_res) => cmd_res,
-        Err(_why) => {            
+        Err(_why) => {
             // manually try the usual suspects
-            return Err(MigError::from_remark(MigErrorKind::NotFound, &format!("could not find command: '{}'", cmd)));
+            return Err(MigError::from_remark(
+                MigErrorKind::NotFound,
+                &format!("could not find command: '{}'", cmd),
+            ));
         }
     };
 
@@ -233,7 +248,6 @@ pub(crate) fn get_os_arch() -> Result<OSArch, MigError> {
     }
 }
 
-
 pub(crate) fn get_mem_info() -> Result<(u64, u64), MigError> {
     trace!("get_mem_info: entered");
     // TODO: could add loads, uptime if needed
@@ -246,7 +260,6 @@ pub(crate) fn get_mem_info() -> Result<(u64, u64), MigError> {
         Err(MigError::from(MigErrorKind::NotImpl))
     }
 }
-
 
 pub(crate) fn is_efi_boot() -> Result<bool, MigError> {
     trace!("is_efi_boot: entered");
@@ -261,7 +274,6 @@ pub(crate) fn is_efi_boot() -> Result<bool, MigError> {
         },
     }
 }
-
 
 pub(crate) fn get_os_name() -> Result<String, MigError> {
     trace!("get_os_name: entered");
@@ -367,19 +379,27 @@ pub(crate) fn get_grub_version() -> Result<(String, String), MigError> {
     }
 }
 
-pub(crate) fn restore_backups(root_path: &Path, backups: &Vec<(String,String)>) -> Result<(),MigError> {
+pub(crate) fn restore_backups(
+    root_path: &Path,
+    backups: &Vec<(String, String)>,
+) -> Result<(), MigError> {
     // restore boot config backups
     for backup in backups {
-        let src = root_path.join(&backup.1);
-        let tgt = root_path.join(&backup.0);
-        copy(&src,&tgt).context(MigErrCtx::from_remark(MigErrorKind::Upstream, &format!("Failed to restore '{}' to '{}'", src.display(), tgt.display())))?;
+        let src = path_append(root_path, &backup.1);
+        let tgt = path_append(root_path, &backup.0);
+        copy(&src, &tgt).context(MigErrCtx::from_remark(
+            MigErrorKind::Upstream,
+            &format!(
+                "Failed to restore '{}' to '{}'",
+                src.display(),
+                tgt.display()
+            ),
+        ))?;
         info!("Restored '{}' to '{}'", src.display(), tgt.display())
     }
 
     Ok(())
 }
-
-
 
 /*
 pub(crate) fn get_os_release() -> Result<OSRelease, MigError> {

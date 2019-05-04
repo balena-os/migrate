@@ -1,8 +1,6 @@
 use super::YamlConfig;
-use crate::common::{
-    config_helper::get_yaml_bool, 
-    MigError,};
-    
+use crate::common::{config_helper::get_yaml_bool, MigError};
+
 use yaml_rust::Yaml;
 
 #[derive(Debug)]

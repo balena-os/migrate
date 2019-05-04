@@ -1,30 +1,16 @@
-use log::{trace, info, warn, error};
-use std::fs::{File, remove_file};
-use std::io::{Write};
 use chrono::Local;
-use failure::{ResultExt};
-use regex::{Regex};
-use std::path::{Path};
+use failure::ResultExt;
+use log::{error, info, trace, warn};
+use regex::Regex;
+use std::fs::{remove_file, File};
+use std::io::Write;
+use std::path::Path;
 
-use crate::common::{
-    MigError,
-    MigErrCtx,
-    MigErrorKind,
-    file_exists,
-    is_balena_file, 
-    Stage2Info,  
-    Config,          
-};
+use crate::common::{file_exists, is_balena_file, Config, MigErrCtx, MigError, MigErrorKind};
 
-use crate::linux_common::{
-    MigrateInfo,
-    Device,
-    CHMOD_CMD,
-    call_cmd,
-    restore_backups,
-};
+use crate::linux_common::{call_cmd, path_append, restore_backups, Device, MigrateInfo, CHMOD_CMD};
 
-use crate::stage2::{Stage2Config};
+use crate::stage2::Stage2Config;
 
 const BB_DRIVE_REGEX: &str = r#"^/dev/mmcblk(\d+)p(\d+)$"#;
 const BB_MODEL_REGEX: &str = r#"^((\S+\s+)*\S+)\s+BeagleBone\s+(\S+)$"#;
@@ -59,25 +45,21 @@ uenvcmd=run loadall; run mmcargs; echo debug: [${bootargs}] ... ; echo debug: [b
 
 // TODO: create/return trait for device processing
 
-
 pub(crate) fn is_bb(model_string: &str) -> Result<Box<Device>, MigError> {
     trace!(
         "Beaglebone::is_bb: entered with model string: '{}'",
         model_string
     );
 
-    if let Some(captures) = Regex::new(BB_MODEL_REGEX)
-            .unwrap()
-            .captures(model_string) {            
-
+    if let Some(captures) = Regex::new(BB_MODEL_REGEX).unwrap().captures(model_string) {
         let model = captures
-                        .get(3)
-                        .unwrap()
-                        .as_str()
-                        .trim_matches(char::from(0));
+            .get(3)
+            .unwrap()
+            .as_str()
+            .trim_matches(char::from(0));
 
         match model {
-            "Green" => Ok(Box::new(BeagleboneGreen{})),
+            "Green" => Ok(Box::new(BeagleboneGreen {})),
             _ => {
                 let message = format!("The beaglebone model reported by your device ('{}') is not supported by balena-migrate", model);
                 error!("{}", message);
@@ -90,13 +72,11 @@ pub(crate) fn is_bb(model_string: &str) -> Result<Box<Device>, MigError> {
     }
 }
 
-
-
-pub(crate) struct  BeagleboneGreen{}
+pub(crate) struct BeagleboneGreen {}
 
 impl BeagleboneGreen {
     pub(crate) fn new() -> BeagleboneGreen {
-        BeagleboneGreen{}
+        BeagleboneGreen {}
     }
 }
 
@@ -105,7 +85,7 @@ impl<'a> Device for BeagleboneGreen {
         "beaglebone-green"
     }
 
-    fn setup(&self, _config: &Config, mig_info: &mut MigrateInfo) -> Result<(),MigError> {
+    fn setup(&self, _config: &Config, mig_info: &mut MigrateInfo) -> Result<(), MigError> {
         trace!(
             "BeagleboneGreen::setup: entered with type: '{}'",
             match &mig_info.device_slug {
@@ -118,27 +98,61 @@ impl<'a> Device for BeagleboneGreen {
         // ** read drive number & partition number from boot device
         let drive_num = {
             let dev_name = mig_info.get_boot_device();
-        
-            if let Some(captures) = Regex::new(BB_DRIVE_REGEX).unwrap().captures(&dev_name.to_string_lossy()) {
-                (String::from(captures.get(1).unwrap().as_str()),String::from(captures.get(2).unwrap().as_str()))
+
+            if let Some(captures) = Regex::new(BB_DRIVE_REGEX)
+                .unwrap()
+                .captures(&dev_name.to_string_lossy())
+            {
+                (
+                    String::from(captures.get(1).unwrap().as_str()),
+                    String::from(captures.get(2).unwrap().as_str()),
+                )
             } else {
-                return Err(MigError::from_remark(MigErrorKind::InvParam, &format!("failed to parse drive & partition numbers from boot device name '{}'",dev_name.display())));
+                return Err(MigError::from_remark(
+                    MigErrorKind::InvParam,
+                    &format!(
+                        "failed to parse drive & partition numbers from boot device name '{}'",
+                        dev_name.display()
+                    ),
+                ));
             }
         };
 
         // **********************************************************************
         // ** copy new kernel & iniramfs
         if let Some(ref file_info) = mig_info.kernel_info {
-            std::fs::copy(&file_info.path, BBG_MIG_KERNEL_PATH).context(MigErrCtx::from_remark(MigErrorKind::Upstream, &format!("failed to copy kernel file '{}' to '{}'", file_info.path.display(), BBG_MIG_KERNEL_PATH)))?;            
-            info!("copied kernel: '{}' -> '{}'", file_info.path.display(), BBG_MIG_KERNEL_PATH);
-            call_cmd(CHMOD_CMD, &["+x", BBG_MIG_KERNEL_PATH ], false)?; 
+            std::fs::copy(&file_info.path, BBG_MIG_KERNEL_PATH).context(MigErrCtx::from_remark(
+                MigErrorKind::Upstream,
+                &format!(
+                    "failed to copy kernel file '{}' to '{}'",
+                    file_info.path.display(),
+                    BBG_MIG_KERNEL_PATH
+                ),
+            ))?;
+            info!(
+                "copied kernel: '{}' -> '{}'",
+                file_info.path.display(),
+                BBG_MIG_KERNEL_PATH
+            );
+            call_cmd(CHMOD_CMD, &["+x", BBG_MIG_KERNEL_PATH], false)?;
         } else {
             panic!("no kernel file info found");
         }
-        
+
         if let Some(ref file_info) = mig_info.initrd_info {
-            std::fs::copy(&file_info.path, BBG_MIG_INITRD_PATH).context(MigErrCtx::from_remark(MigErrorKind::Upstream, &format!("failed to copy initrd file '{}' to '{}'", file_info.path.display(), BBG_MIG_KERNEL_PATH)))?;            
-            info!("copied initrd: '{}' -> '{}'", file_info.path.display(), BBG_MIG_INITRD_PATH);
+            std::fs::copy(&file_info.path, BBG_MIG_INITRD_PATH).context(MigErrCtx::from_remark(
+                MigErrorKind::Upstream,
+                &format!(
+                    "failed to copy initrd file '{}' to '{}'",
+                    file_info.path.display(),
+                    BBG_MIG_KERNEL_PATH
+                ),
+            ))?;
+            info!(
+                "copied initrd: '{}' -> '{}'",
+                file_info.path.display(),
+                BBG_MIG_INITRD_PATH
+            );
         } else {
             panic!("no initrd file info found");
         }
@@ -146,43 +160,66 @@ impl<'a> Device for BeagleboneGreen {
         // **********************************************************************
         // ** backup /uEnv.txt if exists
 
-        if file_exists(BBG_UENV_PATH) {            
+        if file_exists(BBG_UENV_PATH) {
             // TODO: make sure we do not backup our own files
-            if ! is_balena_file(BBG_UENV_PATH)? {
+            if !is_balena_file(BBG_UENV_PATH)? {
                 let backup_uenv = format!("{}-{}", BBG_UENV_PATH, Local::now().format("%s"));
-                std::fs::copy(BBG_UENV_PATH, &backup_uenv).context(MigErrCtx::from_remark(MigErrorKind::Upstream, &format!("failed to file '{}' to '{}'", BBG_UENV_PATH, &backup_uenv)))?;
+                std::fs::copy(BBG_UENV_PATH, &backup_uenv).context(MigErrCtx::from_remark(
+                    MigErrorKind::Upstream,
+                    &format!("failed to file '{}' to '{}'", BBG_UENV_PATH, &backup_uenv),
+                ))?;
                 info!("copied backup of '{}' to '{}'", BBG_UENV_PATH, &backup_uenv);
-                mig_info.boot_cfg_bckup.push((String::from(BBG_UENV_PATH),backup_uenv));                
-            }            
+                mig_info
+                    .boot_cfg_bckup
+                    .push((String::from(BBG_UENV_PATH), backup_uenv));
+            }
         }
-        
+
         // **********************************************************************
         // ** create new /uEnv.txt
         let mut uenv_text = UENV_TXT.replace("__KERNEL_PATH__", BBG_MIG_KERNEL_PATH);
         uenv_text = uenv_text.replace("__INITRD_PATH__", BBG_MIG_INITRD_PATH);
         uenv_text = uenv_text.replace("__DRIVE__", &drive_num.0);
         uenv_text = uenv_text.replace("__PARTITION__", &drive_num.1);
-        uenv_text = uenv_text.replace("__ROOT_DEV__", &mig_info.get_root_device().to_string_lossy());
+        uenv_text = uenv_text.replace(
+            "__ROOT_DEV__",
+            &mig_info.get_root_device().to_string_lossy(),
+        );
 
-        let mut uenv_file = File::create(BBG_UENV_PATH).context(MigErrCtx::from_remark(MigErrorKind::Upstream, &format!("failed to create new '{}'", BBG_UENV_PATH)))?;
-        uenv_file.write_all(uenv_text.as_bytes()).context(MigErrCtx::from_remark(MigErrorKind::Upstream, &format!("failed to write new '{}'", BBG_UENV_PATH)))?;
+        let mut uenv_file = File::create(BBG_UENV_PATH).context(MigErrCtx::from_remark(
+            MigErrorKind::Upstream,
+            &format!("failed to create new '{}'", BBG_UENV_PATH),
+        ))?;
+        uenv_file
+            .write_all(uenv_text.as_bytes())
+            .context(MigErrCtx::from_remark(
+                MigErrorKind::Upstream,
+                &format!("failed to write new '{}'", BBG_UENV_PATH),
+            ))?;
         info!("created new file in '{}'", BBG_UENV_PATH);
         Ok(())
     }
 
-    fn restore_boot(&self, root_path: &Path, config: &Stage2Config) -> Result<(),MigError> {
+    fn restore_boot(&self, root_path: &Path, config: &Stage2Config) -> Result<(), MigError> {
         info!("restoring boot configuration for Beaglebone Green");
-                
-        let uenv_file = root_path.join(BBG_UENV_PATH);
+
+        let uenv_file = path_append(root_path, BBG_UENV_PATH);
 
         if file_exists(&uenv_file) && is_balena_file(&uenv_file)? {
-            remove_file(&uenv_file)
-                .context(MigErrCtx::from_remark(MigErrorKind::Upstream, &format!("failed to remove migrate boot config file {}", uenv_file.display() )))?;                
-            info!("Removed balena boot config file '{}'", &uenv_file.display());    
+            remove_file(&uenv_file).context(MigErrCtx::from_remark(
+                MigErrorKind::Upstream,
+                &format!(
+                    "failed to remove migrate boot config file {}",
+                    uenv_file.display()
+                ),
+            ))?;
+            info!("Removed balena boot config file '{}'", &uenv_file.display());
             restore_backups(root_path, config.get_backups())?;
-
         } else {
-            warn!("balena boot config file not found in '{}'", &uenv_file.display());
+            warn!(
+                "balena boot config file not found in '{}'",
+                &uenv_file.display()
+            );
         }
 
         info!("The original boot configuration was restored");

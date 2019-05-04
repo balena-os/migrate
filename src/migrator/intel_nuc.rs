@@ -1,30 +1,19 @@
-use log::{trace, info, error};
-use std::path::{Path};
-use crate::stage2::{Stage2Config};
+use log::{error, info, trace};
+use std::path::Path;
 
-use crate::common::{
-    MigError, 
-    MigErrorKind,
-    Stage2Info,
-    Config,
-    };
-use crate::linux_common::{
-    Device, 
-    MigrateInfo,     
-    is_efi_boot, 
-    is_secure_boot,
-    get_grub_version,
+use crate::{
+    common::{Config, MigError, MigErrorKind},
+    linux_common::{get_grub_version, is_efi_boot, is_secure_boot, Device, MigrateInfo},
+    stage2::Stage2Config,
 };
-
 
 const MODULE: &str = "intel_nuc";
 
 const GRUB_MIN_VERSION: &str = "2";
 
-
 pub(crate) fn init_amd64(mig_info: &mut MigrateInfo) -> Result<Box<Device>, MigError> {
     trace!("{}::init_amd64: entered", MODULE);
-        // **********************************************************************
+    // **********************************************************************
     // ** AMD64 specific initialisation
     // **********************************************************************
 
@@ -50,7 +39,9 @@ pub(crate) fn init_amd64(mig_info: &mut MigrateInfo) -> Result<Box<Device>, MigE
                 }
             );
             if secure_boot == true {
-                let message = format!("balena-migrate does not currently support systems with secure boot enabled.");
+                let message = format!(
+                    "balena-migrate does not currently support systems with secure boot enabled."
+                );
                 error!("{}", &message);
                 return Err(MigError::from_remark(MigErrorKind::InvState, &message));
             }
@@ -72,15 +63,14 @@ pub(crate) fn init_amd64(mig_info: &mut MigrateInfo) -> Result<Box<Device>, MigE
         return Err(MigError::from_remark(MigErrorKind::InvState, &message));
     }
 
-    Ok(Box::new(IntelNuc{}))
+    Ok(Box::new(IntelNuc {}))
 }
 
-
-pub(crate) struct  IntelNuc{}
+pub(crate) struct IntelNuc {}
 
 impl IntelNuc {
     pub fn new() -> IntelNuc {
-        IntelNuc{}
+        IntelNuc {}
     }
 }
 
@@ -89,7 +79,7 @@ impl<'a> Device for IntelNuc {
         "intel-nuc"
     }
 
-    fn setup(&self, _config: &Config, mig_info: &mut MigrateInfo) -> Result<(),MigError> {
+    fn setup(&self, _config: &Config, mig_info: &mut MigrateInfo) -> Result<(), MigError> {
         trace!(
             "BeagleboneGreen::setup: entered with type: '{}'",
             match &mig_info.device_slug {
@@ -100,9 +90,8 @@ impl<'a> Device for IntelNuc {
 
         Err(MigError::from(MigErrorKind::NotImpl))
     }
-    
-    fn restore_boot(&self, _root_path: &Path, _config: &Stage2Config) -> Result<(),MigError> {
+
+    fn restore_boot(&self, _root_path: &Path, _config: &Stage2Config) -> Result<(), MigError> {
         Err(MigError::from(MigErrorKind::NotImpl))
     }
-
 }

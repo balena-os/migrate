@@ -1,25 +1,30 @@
+use log::error;
+
 mod stage2;
+use stage2::Stage2;
 mod common;
 
 #[cfg(target_os = "windows")]
 mod mswin;
 
-#[cfg(target_os = "linux")] 
+#[cfg(target_os = "linux")]
 mod linux;
-#[cfg(target_os = "linux")] 
-mod linux_common;    
+#[cfg(target_os = "linux")]
+mod linux_common;
 
 #[cfg(target_os = "linux")]
 mod beaglebone;
 #[cfg(target_os = "linux")]
-mod raspberrypi;
-#[cfg(target_os = "linux")]
 mod intel_nuc;
+#[cfg(target_os = "linux")]
+mod raspberrypi;
 
-pub use common::config::{Config, YamlConfig};
-pub use common::mig_error::{MigErrCtx, MigError, MigErrorKind};
-pub use common::os_release::OSRelease;
-pub use common::OSArch;
+pub(crate) mod defs;
+
+//pub(crate) use common::config::{Config, YamlConfig};
+use common::mig_error::MigError;
+//pub(crate) use common::os_release::OSRelease;
+//pub(crate) use common::OSArch;
 
 //pub(crate) const MODULE: &str = "balena_migrate";
 
@@ -35,6 +40,26 @@ pub fn migrate() -> Result<(), MigError> {
 
 #[cfg(target_os = "linux")]
 pub fn stage2() -> Result<(), MigError> {
-    let stage2 = stage2::Stage2::try_init()?;
-    stage2.migrate()
+    let stage2 = match Stage2::try_init() {
+        Ok(res) => res,
+        Err(why) => {
+            error!("Failed to initialize stage2: Error: {}", why);
+            Stage2::default_exit()?;
+            // should not be getting here
+            return Ok(());
+        }
+    };
+
+    match stage2.migrate() {
+        Ok(_res) => {
+            error!("stage2::migrate() is not expected to return on success");
+        }
+        Err(why) => {
+            error!("Failed to complete stage2::migrate Error: {}", why);
+        }
+    }
+
+    stage2.error_exit()?;
+    // should not be getting here
+    Ok(())
 }
