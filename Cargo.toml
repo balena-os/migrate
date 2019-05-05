@@ -17,17 +17,16 @@ path = "src/balena_stage2.rs"
 
 [dependencies]
 log = { version = "^0.4.5", features = ["std"] }
-chrono = "0.4.6"
-stderrlog = "*"
+chrono = "*"
 csv = "1"
 regex = "1"
 lazy_static = "*"
 clap = "*"
 failure = "*"
 yaml-rust = "0.4"
-colored = "1.7"
 serde_json = "*"
 url = "*"
+mod_logger = { git = "https://github.com/samothx/ModuleLogger.git" } 
 # tempfile = "3"
 
 [target.'cfg(unix)'.dependencies]

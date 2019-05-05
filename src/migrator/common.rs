@@ -25,8 +25,8 @@ pub mod config;
 pub mod config_helper;
 pub mod file_info;
 
-pub mod logger;
-pub(crate) use logger::Logger;
+//pub mod logger;
+//pub(crate) use logger::Logger;
 
 pub(crate) use self::config::{Config, MigMode};
 pub(crate) use self::file_info::{FileInfo, FileType};

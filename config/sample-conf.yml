@@ -7,15 +7,13 @@ migrate:
     - 'QIFI'
     - 'bla'
   reboot: 10
+  
   log_to:
     drive: "/dev/sda1"
     fs_type: ext4
   kernel_file: "balena_x86_64.migrate.kernel"
   initramfs_file: "balena_x86_64.migrate.initramfs"
   backup: 
-  internal:
-  # internal migrate information intended for stage 2
-    stage2_home: ""
 balena:
   image: image.gz
   config: config.json

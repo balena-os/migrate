@@ -34,6 +34,7 @@ pub(crate) struct MigrateConfig {
     pub initramfs_file: Option<PathBuf>,
     pub force_slug: Option<String>,
     pub fail_mode: Option<FailMode>,
+    pub no_flash: bool,
 }
 
 impl<'a> MigrateConfig {
@@ -49,6 +50,7 @@ impl<'a> MigrateConfig {
             kernel_file: None,
             initramfs_file: None,
             force_slug: None,
+            no_flash: false,
         }
     }
 
@@ -133,6 +135,10 @@ impl YamlConfig for MigrateConfig {
 
         if let Some(fail_mode) = get_yaml_str(yaml, &["fail_mode"])? {
             self.fail_mode = Some(FailMode::from_str(fail_mode)?.clone());
+        }
+
+        if let Some(no_flash) = get_yaml_bool(yaml, &["no_flash"])? {
+            self.no_flash = no_flash;
         }
 
         if let Some(mode) = get_yaml_str(yaml, &["mode"])? {

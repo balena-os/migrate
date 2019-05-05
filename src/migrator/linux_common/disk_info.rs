@@ -10,6 +10,7 @@ pub(crate) struct DiskInfo {
     pub boot_path: Option<PathInfo>,
     pub efi_path: Option<PathInfo>,
     pub work_path: Option<PathInfo>,
+    pub log_path: Option<PathInfo>,
 }
 
 impl DiskInfo {
@@ -21,6 +22,7 @@ impl DiskInfo {
             root_path: None,
             boot_path: None,
             efi_path: None,
+            log_path: None,
             work_path: None,
         }
     }

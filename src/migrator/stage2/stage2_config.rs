@@ -9,12 +9,18 @@ pub const EFI_BOOT_KEY: &str = "efi_boot";
 //pub const DRIVE_DEVICE_KEY: &str = "drive_device";
 pub const ROOT_DEVICE_KEY: &str = "root_device";
 pub const BOOT_DEVICE_KEY: &str = "boot_device";
+pub const BOOT_FSTYPE_KEY: &str = "boot_fstype";
+pub const EFI_DEVICE_KEY: &str = "efi_device";
+pub const EFI_FSTYPE_KEY: &str = "efi_fstype";
+pub const FLASH_DEVICE_KEY: &str = "flash_device";
 pub const DEVICE_SLUG_KEY: &str = "device_slug";
 pub const BALENA_IMAGE_KEY: &str = "balena_image";
 pub const BALENA_CONFIG_KEY: &str = "balena_config";
 pub const BACKUP_CONFIG_KEY: &str = "backup_config";
+
 pub const WORK_DIR_KEY: &str = "work_dir";
 pub const FAIL_MODE_KEY: &str = "fail_mode";
+pub const NO_FLASH_KEY: &str = "no_flash";
 
 pub const BACKUP_ORIG_KEY: &str = "orig";
 pub const BACKUP_BCKUP_KEY: &str = "bckup";
@@ -23,18 +29,28 @@ const MODULE: &str = "stage2::stage2:config";
 
 use crate::{
     common::{
+        Config,
         config_helper::{get_yaml_bool, get_yaml_str, get_yaml_val},
-        MigErrCtx, MigError, MigErrorKind,
+        MigErrCtx, 
+        MigError, 
+        MigErrorKind,
     },
     defs::STAGE2_CFG_FILE,
-    linux_common::{FailMode, MigrateInfo},
+    linux_common::{
+        FailMode, 
+        MigrateInfo},
 };
 
 pub(crate) struct Stage2Config {
     efi_boot: bool,
-    fail_mode: FailMode,
+    fail_mode: FailMode,    
+    no_flash: bool,
+    flash_device: PathBuf,
     boot_device: PathBuf,
+    boot_fstype: String,
     root_device: PathBuf,
+    efi_device: Option<PathBuf>,
+    efi_fstype: Option<String>,
     device_slug: String,
     balena_config: PathBuf,
     balena_image: PathBuf,
@@ -43,19 +59,34 @@ pub(crate) struct Stage2Config {
 }
 
 impl<'a> Stage2Config {
-    pub fn write_stage2_cfg(mig_info: &MigrateInfo) -> Result<(), MigError> {
+    pub fn write_stage2_cfg(config: &Config, mig_info: &MigrateInfo) -> Result<(), MigError> {
         let mut cfg_str = String::from("# Balena Migrate Stage2 Config\n");
+
+        let fail_mode = 
+            if let Some(ref fail_mode) = config.migrate.fail_mode {
+                fail_mode
+            } else {
+                FailMode::get_default()
+            };    
+
+        cfg_str.push_str(&format!(
+            "{}: '{}'\n",
+            FAIL_MODE_KEY,
+            fail_mode.to_string()
+        ));
+
+        cfg_str.push_str(&format!(
+            "{}: {}\n",
+            NO_FLASH_KEY,
+            config.migrate.no_flash
+        ));
+
         cfg_str.push_str(&format!("{}: {}\n", EFI_BOOT_KEY, mig_info.is_efi_boot()));
         cfg_str.push_str(&format!(
             "{}: '{}'\n",
             DEVICE_SLUG_KEY,
             mig_info.get_device_slug()
-        ));
-        cfg_str.push_str(&format!(
-            "{}: '{}'\n",
-            FAIL_MODE_KEY,
-            mig_info.get_fail_mode().to_string()
-        ));
+        ));        
         //cfg_str.push_str(&format!(      "{}: '{}'\n", DRIVE_DEVICE_KEY, self.get_drive_device()));
         cfg_str.push_str(&format!(
             "{}: '{}'\n",
@@ -77,6 +108,23 @@ impl<'a> Stage2Config {
             BOOT_DEVICE_KEY,
             mig_info.get_boot_device().to_string_lossy()
         ));
+        cfg_str.push_str(&format!(
+            "{}: '{}'\n",
+            BOOT_FSTYPE_KEY,
+            mig_info.get_boot_fstype()
+        ));
+        if mig_info.is_efi_boot() {
+            cfg_str.push_str(&format!(
+                "{}: '{}'\n",
+                EFI_DEVICE_KEY,
+                mig_info.get_efi_device().unwrap().to_string_lossy()
+            ));
+            cfg_str.push_str(&format!(
+                "{}: '{}'\n",
+                EFI_FSTYPE_KEY,
+                mig_info.get_efi_fstype().unwrap()
+            ));
+        }
         cfg_str.push_str(&format!(
             "{}: '{}'\n",
             WORK_DIR_KEY,
@@ -152,8 +200,23 @@ impl<'a> Stage2Config {
         Ok(Stage2Config {
             efi_boot: get_yaml_bool(&yaml_cfg, &[EFI_BOOT_KEY])?.unwrap(),
             fail_mode: Stage2Config::init_fail_mode(&yaml_cfg).clone(),
+            no_flash: get_yaml_bool(&yaml_cfg, &[NO_FLASH_KEY])?.unwrap(),
+            flash_device: PathBuf::from(get_yaml_str(&yaml_cfg, &[FLASH_DEVICE_KEY])?.unwrap()), 
             root_device: PathBuf::from(get_yaml_str(&yaml_cfg, &[ROOT_DEVICE_KEY])?.unwrap()),
             boot_device: PathBuf::from(get_yaml_str(&yaml_cfg, &[BOOT_DEVICE_KEY])?.unwrap()),
+            boot_fstype: String::from(get_yaml_str(&yaml_cfg, &[BOOT_FSTYPE_KEY])?.unwrap()),
+            efi_device: 
+                if let Some(efi_device) = get_yaml_str(&yaml_cfg, &[BOOT_DEVICE_KEY])? {
+                    Some(PathBuf::from(efi_device))   
+                } else {
+                    None
+                },
+            efi_fstype: 
+                if let Some(efi_fstype) = get_yaml_str(&yaml_cfg, &[BOOT_FSTYPE_KEY])? {
+                    Some(String::from(efi_fstype))
+                } else {
+                    None
+                },
             device_slug: String::from(get_yaml_str(&yaml_cfg, &[DEVICE_SLUG_KEY])?.unwrap()),
             balena_image: PathBuf::from(get_yaml_str(&yaml_cfg, &[BALENA_IMAGE_KEY])?.unwrap()),
             balena_config: PathBuf::from(get_yaml_str(&yaml_cfg, &[BALENA_CONFIG_KEY])?.unwrap()),
@@ -192,8 +255,16 @@ impl<'a> Stage2Config {
         }
     }
 
+    pub fn is_no_flash(&self) -> bool {
+        self.no_flash
+    }
+
     pub fn is_efi_boot(&self) -> bool {
         self.efi_boot
+    }
+
+    pub fn get_flash_device(&'a self) -> &'a Path {
+        self.flash_device.as_path()
     }
 
     pub fn get_root_device(&'a self) -> &'a Path {
@@ -202,6 +273,10 @@ impl<'a> Stage2Config {
 
     pub fn get_boot_device(&'a self) -> &'a Path {
         self.boot_device.as_path()
+    }
+
+    pub fn get_boot_fstype(&'a self) -> &'a str {
+        &self.boot_fstype
     }
 
     pub fn get_device_slug(&'a self) -> &'a str {

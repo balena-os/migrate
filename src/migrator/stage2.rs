@@ -1,5 +1,6 @@
 use failure::ResultExt;
 use log::{debug, error, info, warn};
+use mod_logger::{Logger};
 use nix::{
     mount::{mount, umount, MsFlags},
     sys::reboot::{reboot, RebootMode},
@@ -7,12 +8,13 @@ use nix::{
 use regex::Regex;
 use std::fs::{copy, create_dir, read_dir};
 use std::path::{Path, PathBuf};
+use std::process::{Command, ExitStatus, Stdio};
 
 use crate::{
-    common::{dir_exists, file_exists, parse_file, Logger, MigErrCtx, MigError, MigErrorKind},
+    common::{dir_exists, file_exists, parse_file, MigErrCtx, MigError, MigErrorKind},
     defs::{BOOT_PATH, STAGE2_CFG_FILE, SYSTEM_CONNECTIONS_DIR},
     linux_common::{
-        call_cmd, ensure_cmds, path_append, Device, FailMode, DD_CMD, PARTPROBE_CMD, REBOOT_CMD,
+        call_cmd, ensure_cmds, path_append, Device, FailMode, get_cmd, GZIP_CMD, DD_CMD, PARTPROBE_CMD, REBOOT_CMD,
     },
 };
 
@@ -27,11 +29,15 @@ use crate::raspberrypi::RaspberryPi3;
 
 // later ensure all other required commands
 
+
+const INIT_LOG_LEVEL: &str = "debug";
 const KERNEL_CMDLINE: &str = "/proc/cmdline";
 const ROOT_DEVICE_REGEX: &str = r#"\sroot=(\S+)\s"#;
 const ROOT_FSTYPE_REGEX: &str = r#"\srootfstype=(\S+)\s"#;
 const ROOTFS_DIR: &str = "/tmp_root";
 const MIGRATE_TEMP_DIR: &str = "/migrate_tmp";
+
+const DD_BLOCK_SIZE: u64 = 4194304;
 
 const MIG_REQUIRED_CMDS: &'static [&'static str] = &[DD_CMD, PARTPROBE_CMD, REBOOT_CMD];
 const MIG_OPTIONAL_CMDS: &'static [&'static str] = &[];
@@ -50,7 +56,7 @@ impl Stage2 {
     pub fn try_init() -> Result<Stage2, MigError> {
         // TODO:
 
-        match Logger::initialise(2) {
+        match Logger::initialise(Some(INIT_LOG_LEVEL)) {
             Ok(_s) => info!("Balena Migrate Stage 2 initializing"),
             Err(_why) => {
                 println!("Balena Migrate Stage 2 initializing");
@@ -168,16 +174,17 @@ impl Stage2 {
             mount(
                 Some(boot_device),
                 &boot_path,
-                NIX_NONE,
+                Some(stage2_cfg.get_boot_fstype()),
                 MsFlags::empty(),
                 NIX_NONE,
             )
             .context(MigErrCtx::from_remark(
                 MigErrorKind::Upstream,
                 &format!(
-                    "Failed to mount previous boot device '{}' to '{}'",
+                    "Failed to mount previous boot device '{}' to '{}' with fstype: {}",
                     &boot_device.display(),
-                    &boot_path.display()
+                    &boot_path.display(),
+                    stage2_cfg.get_boot_fstype()
                 ),
             ))?;
             boot_mounted = true;
@@ -321,8 +328,44 @@ impl Stage2 {
 
         info!("Unmounted root file system");
 
-        // TODO: dd it !
+        if self.config.is_no_flash() {
+            info!("Not flashing due to config parameter no_flash");
+            Stage2::exit(&FailMode::Reboot)?;
+        }
 
+        // ************************************************************************************
+        // * write the gzipped image to disk
+        // TODO: try using internal gzip
+        // TODO: test-flash to external device
+        // * from migrate: 
+        // * gzip -d -c "${MIGRATE_TMP}/${IMAGE_FILE}" | dd of=${BOOT_DEV} bs=4194304 || fail  "failed with gzip -d -c ${MIGRATE_TMP}/${IMAGE_FILE} | dd of=${BOOT_DEV} bs=4194304"
+
+        let image_path = path_append(mig_tmp_dir, self.config.get_balena_image());
+        let target_path = self.config.get_flash_device();
+
+        info!("flashing '{}' to '{}'", image_path.display(), target_path.display());
+        if let Ok(ref gzip_cmd) = get_cmd(GZIP_CMD) {
+            if let Ok(ref dd_cmd) = get_cmd(DD_CMD) {
+        
+                let cmd1 = Command::new(gzip_cmd)
+                            .args(&["-d", "-c", &image_path.to_string_lossy()])
+                            .stdout(Stdio::piped())
+                            .spawn()
+                            .context(MigErrCtx::from_remark(MigErrorKind::Upstream, &format!("failed to spawn command {}", gzip_cmd)))?;
+
+                if let Some(cmd1_stdout) = cmd1.stdout {
+                    let cmd_res = Command::new(dd_cmd).args(&[&format!("of={}",&target_path.to_string_lossy()),&format!("bs={}",DD_BLOCK_SIZE) ])
+                        .stdin(cmd1_stdout)
+                        .output()
+                        .context(MigErrCtx::from_remark(MigErrorKind::Upstream, &format!("failed to execute command {}", dd_cmd)))?;
+                    debug!("dd command result: {:?}", cmd_res);
+
+                } else {
+                    return Err(MigError::from_remark(MigErrorKind::InvState, "failed to flash image to target disk, gzip stdout not present"));
+                }
+            }
+        }
+        
         Ok(())
     }
 

@@ -4,10 +4,11 @@ use log::{debug, info};
 use std::fs::read_to_string;
 use std::path::Path;
 use yaml_rust::{Yaml, YamlLoader};
+use mod_logger::Logger;
 
 use clap::{App, Arg};
 
-use super::{logger::Logger, MigErrCtx, MigError, MigErrorKind};
+use super::{ MigErrCtx, MigError, MigErrorKind};
 
 pub(crate) mod log_config;
 pub(crate) use log_config::LogConfig;
@@ -83,20 +84,14 @@ impl<'a> Config {
             )
             .get_matches();
 
-        Logger::initialise(arg_matches.occurrences_of("verbose") as usize)?;
+        let log_level = match arg_matches.occurrences_of("verbose") {
+            0 => None,
+            1 => Some("info"),
+            2 => Some("debug"),
+            _ => Some("trace"),
+        };
 
-        /*
-
-                stderrlog::new()
-                    .module(module_path!())
-                    .verbosity(log_level)
-                    .timestamp(stderrlog::Timestamp::Millisecond)
-                    .init()
-                    .unwrap();
-
-                println!("log mode initialized to {}", log_level);
-                info!("initialized logging");
-        */
+        Logger::initialise(log_level).context(MigErrCtx::from_remark(MigErrorKind::Upstream, "failed to intialize logger"))?;
 
         // defaults to
         let mut config = Config::default();

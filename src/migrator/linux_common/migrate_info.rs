@@ -13,7 +13,7 @@ const MODULE: &str = "linux_common::migrate_info";
 pub(crate) struct MigrateInfo {
     pub os_name: Option<String>,
     // os_release: Option<OSRelease>,
-    pub fail_mode: Option<FailMode>,
+    // pub fail_mode: Option<FailMode>,
     pub os_arch: Option<OSArch>,
     pub efi_boot: Option<bool>,
     pub secure_boot: Option<bool>,
@@ -31,8 +31,6 @@ impl<'a> MigrateInfo {
     pub(crate) fn default() -> MigrateInfo {
         MigrateInfo {
             os_name: None,
-            // os_release: None,
-            fail_mode: None,
             os_arch: None,
             efi_boot: None,
             secure_boot: None,
@@ -96,6 +94,24 @@ impl<'a> MigrateInfo {
         }
     }
 
+    pub(crate) fn get_efi_device(&'a self) -> Option<&'a Path> {
+        if let Some(ref disk_info) = self.disk_info {
+            if let Some(ref efi_path) = disk_info.efi_path {
+                return Some(&efi_path.path);
+            }
+        }
+        return None
+    }
+
+    pub(crate) fn get_efi_fstype(&'a self) -> Option<&'a str> {
+        if let Some(ref disk_info) = self.disk_info {
+            if let Some(ref efi_path) = disk_info.efi_path {
+                return Some(&efi_path.fs_type);
+            }
+        }
+        return None;
+    }
+
     pub(crate) fn get_work_path(&'a self) -> &'a Path {
         if let Some(ref disk_info) = self.disk_info {
             if let Some(ref work_path) = disk_info.work_path {
@@ -143,6 +159,15 @@ impl<'a> MigrateInfo {
         panic!("{} uninitialized field drive_info in MigrateInfo", MODULE);
     }
 
+    pub(crate) fn get_boot_fstype(&'a self) -> &'a str {
+        if let Some(ref disk_info) = self.disk_info {
+            if let Some(ref boot_path) = disk_info.boot_path {
+                return &boot_path.fs_type;
+            }
+        }
+        panic!("{} uninitialized field drive_info in MigrateInfo", MODULE);
+    }
+
     pub(crate) fn get_root_device(&'a self) -> &'a Path {
         if let Some(ref disk_info) = self.disk_info {
             if let Some(ref root_path) = disk_info.root_path {
@@ -152,6 +177,7 @@ impl<'a> MigrateInfo {
         panic!("{} uninitialized field drive_info in MigrateInfo", MODULE);
     }
 
+/*
     pub(crate) fn get_fail_mode(&'a self) -> &'a FailMode {
         if let Some(ref fail_mode) = self.fail_mode {
             &fail_mode
@@ -159,6 +185,7 @@ impl<'a> MigrateInfo {
             FailMode::get_default()
         }
     }
+*/    
 }
 
 /*

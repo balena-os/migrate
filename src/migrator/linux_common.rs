@@ -47,6 +47,7 @@ pub const REBOOT_CMD: &str = "reboot";
 pub const CHMOD_CMD: &str = "chmod";
 pub const DD_CMD: &str = "dd";
 pub const PARTPROBE_CMD: &str = "partprobe";
+pub const GZIP_CMD: &str = "gzip";
 
 pub const BOOT_DIR: &str = "/boot";
 pub const ROOT_DIR: &str = "/";
@@ -119,7 +120,7 @@ pub(crate) fn ensure_cmds(required: &[&str], optional: &[&str]) -> Result<(), Mi
     })
 }
 
-fn get_cmd(cmd: &str) -> Result<String, MigError> {
+pub(crate) fn get_cmd(cmd: &str) -> Result<String, MigError> {
     CMD_TABLE.with(|cmd_tbl| match cmd_tbl.borrow().get(cmd) {
         Some(cmd_path) => match cmd_path {
             Some(cmd_path) => Ok(cmd_path.clone()),

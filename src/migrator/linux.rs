@@ -363,7 +363,7 @@ impl<'a> LinuxMigrator {
             );
         }
 
-        Stage2Config::write_stage2_cfg(&self.mig_info)?;
+        Stage2Config::write_stage2_cfg(&self.config, &self.mig_info)?;
         info!("Wrote stage2 config to '{}'", STAGE2_CFG_FILE);
 
         if let Some(delay) = self.config.migrate.reboot {
@@ -455,6 +455,16 @@ impl<'a> LinuxMigrator {
         if let Some(ref work_part) = disk_info.work_path {
             debug!("{}", work_part);
         }
+
+/*
+        // **********************************************************************
+        // check log path
+
+        disk_info.log_path = PathInfo::new(&self.config.migrate.log_path)?;
+        if let Some(ref work_part) = disk_info.work_path {
+            debug!("{}", work_part);
+        }
+*/
 
         // **********************************************************************
         // check /
