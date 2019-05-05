@@ -12,8 +12,7 @@ use yaml_rust::Yaml;
 // * - log to initramfs
 // * - after flashing
 // *   - move log file to destination configured in this config
-// *   - or to configured log drive 
-
+// *   - or to configured log drive
 
 #[derive(Debug)]
 pub struct LogConfig {

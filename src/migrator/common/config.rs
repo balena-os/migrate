@@ -1,14 +1,14 @@
 //use clap::{ArgMatches};
 use failure::ResultExt;
 use log::{debug, info};
+use mod_logger::Logger;
 use std::fs::read_to_string;
 use std::path::Path;
 use yaml_rust::{Yaml, YamlLoader};
-use mod_logger::Logger;
 
 use clap::{App, Arg};
 
-use super::{ MigErrCtx, MigError, MigErrorKind};
+use super::{MigErrCtx, MigError, MigErrorKind};
 
 pub(crate) mod log_config;
 pub(crate) use log_config::LogConfig;
@@ -91,7 +91,10 @@ impl<'a> Config {
             _ => Some("trace"),
         };
 
-        Logger::initialise(log_level).context(MigErrCtx::from_remark(MigErrorKind::Upstream, "failed to intialize logger"))?;
+        Logger::initialise(log_level).context(MigErrCtx::from_remark(
+            MigErrorKind::Upstream,
+            "failed to intialize logger",
+        ))?;
 
         // defaults to
         let mut config = Config::default();

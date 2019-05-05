@@ -29,5 +29,6 @@ balena:
   check_timeout: 20
 debug:
   fake_admin: true
+  fake_flash_device: '/dev/sdb'
 
         

@@ -100,7 +100,7 @@ impl<'a> MigrateInfo {
                 return Some(&efi_path.path);
             }
         }
-        return None
+        return None;
     }
 
     pub(crate) fn get_efi_fstype(&'a self) -> Option<&'a str> {
@@ -150,6 +150,14 @@ impl<'a> MigrateInfo {
             &self.boot_cfg_bckup
         }
     */
+
+    pub(crate) fn get_flash_device(&'a self) -> &'a Path {
+        if let Some(ref disk_info) = self.disk_info {
+            return &disk_info.drive_dev;
+        }
+        panic!("{} uninitialized field drive_info in MigrateInfo", MODULE);
+    }
+
     pub(crate) fn get_boot_device(&'a self) -> &'a Path {
         if let Some(ref disk_info) = self.disk_info {
             if let Some(ref boot_path) = disk_info.boot_path {
@@ -176,53 +184,4 @@ impl<'a> MigrateInfo {
         }
         panic!("{} uninitialized field drive_info in MigrateInfo", MODULE);
     }
-
-/*
-    pub(crate) fn get_fail_mode(&'a self) -> &'a FailMode {
-        if let Some(ref fail_mode) = self.fail_mode {
-            &fail_mode
-        } else {
-            FailMode::get_default()
-        }
-    }
-*/    
 }
-
-/*
-pub(crate) fn get_work_path(&self) -> Result<&'a str, MigError> {
-    if let Some(ref disk_info) = self.disk_info {
-        if let Some(work_path) = disk_info.work_path {
-            return Ok(&work_path.path);
-        }
-    }
-    Err(MigError::from_remark(MigErrorKind::InvState, "missing root device info"))
-}
-
-
-pub(crate) fn get_root_device(&self) -> Result<&'a str, MigError> {
-    if let Some(ref disk_info) = self.disk_info {
-        if let Some(root_path) = disk_info.root_path {
-            return Ok(&root_path.device);
-        }
-    }
-    Err(MigError::from_remark(MigErrorKind::InvState, "missing root device info"))
-}
-
-pub(crate) fn get_boot_device(&self) -> Result<&'a str, MigError> {
-    if let Some(ref disk_info) = self.disk_info {
-        if let Some(boot_path) = disk_info.boot_path {
-            return Ok(&boot_path.device);
-        }
-    }
-    Err(MigError::from_remark(MigErrorKind::InvState, "missing boot device info"))
-}
-
-pub(crate) fn get_efi_device(&self) -> Result<&'a str, MigError> {
-    if let Some(ref disk_info) = self.disk_info {
-        if let Some(efi_path) = disk_info.efi_path {
-            return Ok(&efi_path.device);
-        }
-    }
-    Err(MigError::from_remark(MigErrorKind::InvState, "missing efi device info"))
-}
-*/

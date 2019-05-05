@@ -1,6 +1,6 @@
 use failure::ResultExt;
 use log::{debug, error, info, warn};
-use mod_logger::{Logger};
+use mod_logger::Logger;
 use nix::{
     mount::{mount, umount, MsFlags},
     sys::reboot::{reboot, RebootMode},
@@ -14,7 +14,8 @@ use crate::{
     common::{dir_exists, file_exists, parse_file, MigErrCtx, MigError, MigErrorKind},
     defs::{BOOT_PATH, STAGE2_CFG_FILE, SYSTEM_CONNECTIONS_DIR},
     linux_common::{
-        call_cmd, ensure_cmds, path_append, Device, FailMode, get_cmd, GZIP_CMD, DD_CMD, PARTPROBE_CMD, REBOOT_CMD,
+        call_cmd, ensure_cmds, get_cmd, path_append, Device, FailMode, DD_CMD, GZIP_CMD,
+        PARTPROBE_CMD, REBOOT_CMD,
     },
 };
 
@@ -28,7 +29,6 @@ use crate::raspberrypi::RaspberryPi3;
 // for starters just restore old boot config, only required command is mount
 
 // later ensure all other required commands
-
 
 const INIT_LOG_LEVEL: &str = "debug";
 const KERNEL_CMDLINE: &str = "/proc/cmdline";
@@ -337,35 +337,50 @@ impl Stage2 {
         // * write the gzipped image to disk
         // TODO: try using internal gzip
         // TODO: test-flash to external device
-        // * from migrate: 
+        // * from migrate:
         // * gzip -d -c "${MIGRATE_TMP}/${IMAGE_FILE}" | dd of=${BOOT_DEV} bs=4194304 || fail  "failed with gzip -d -c ${MIGRATE_TMP}/${IMAGE_FILE} | dd of=${BOOT_DEV} bs=4194304"
 
         let image_path = path_append(mig_tmp_dir, self.config.get_balena_image());
         let target_path = self.config.get_flash_device();
 
-        info!("flashing '{}' to '{}'", image_path.display(), target_path.display());
+        info!(
+            "flashing '{}' to '{}'",
+            image_path.display(),
+            target_path.display()
+        );
         if let Ok(ref gzip_cmd) = get_cmd(GZIP_CMD) {
             if let Ok(ref dd_cmd) = get_cmd(DD_CMD) {
-        
                 let cmd1 = Command::new(gzip_cmd)
-                            .args(&["-d", "-c", &image_path.to_string_lossy()])
-                            .stdout(Stdio::piped())
-                            .spawn()
-                            .context(MigErrCtx::from_remark(MigErrorKind::Upstream, &format!("failed to spawn command {}", gzip_cmd)))?;
+                    .args(&["-d", "-c", &image_path.to_string_lossy()])
+                    .stdout(Stdio::piped())
+                    .spawn()
+                    .context(MigErrCtx::from_remark(
+                        MigErrorKind::Upstream,
+                        &format!("failed to spawn command {}", gzip_cmd),
+                    ))?;
 
                 if let Some(cmd1_stdout) = cmd1.stdout {
-                    let cmd_res = Command::new(dd_cmd).args(&[&format!("of={}",&target_path.to_string_lossy()),&format!("bs={}",DD_BLOCK_SIZE) ])
+                    let cmd_res = Command::new(dd_cmd)
+                        .args(&[
+                            &format!("of={}", &target_path.to_string_lossy()),
+                            &format!("bs={}", DD_BLOCK_SIZE),
+                        ])
                         .stdin(cmd1_stdout)
                         .output()
-                        .context(MigErrCtx::from_remark(MigErrorKind::Upstream, &format!("failed to execute command {}", dd_cmd)))?;
+                        .context(MigErrCtx::from_remark(
+                            MigErrorKind::Upstream,
+                            &format!("failed to execute command {}", dd_cmd),
+                        ))?;
                     debug!("dd command result: {:?}", cmd_res);
-
                 } else {
-                    return Err(MigError::from_remark(MigErrorKind::InvState, "failed to flash image to target disk, gzip stdout not present"));
+                    return Err(MigError::from_remark(
+                        MigErrorKind::InvState,
+                        "failed to flash image to target disk, gzip stdout not present",
+                    ));
                 }
             }
         }
-        
+
         Ok(())
     }
 

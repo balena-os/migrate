@@ -456,15 +456,15 @@ impl<'a> LinuxMigrator {
             debug!("{}", work_part);
         }
 
-/*
-        // **********************************************************************
-        // check log path
+        /*
+                // **********************************************************************
+                // check log path
 
-        disk_info.log_path = PathInfo::new(&self.config.migrate.log_path)?;
-        if let Some(ref work_part) = disk_info.work_path {
-            debug!("{}", work_part);
-        }
-*/
+                disk_info.log_path = PathInfo::new(&self.config.migrate.log_path)?;
+                if let Some(ref work_part) = disk_info.work_path {
+                    debug!("{}", work_part);
+                }
+        */
 
         // **********************************************************************
         // check /
