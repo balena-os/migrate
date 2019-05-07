@@ -6,13 +6,19 @@ use nix::{
     sys::reboot::{reboot, RebootMode},
 };
 use regex::Regex;
-use std::fs::{copy, create_dir, read_dir};
+use std::fs::{copy, create_dir, read_dir, read_link};
 use std::path::{Path, PathBuf};
-use std::process::{Command, ExitStatus, Stdio};
+use std::process::{Command, Stdio};
+use std::thread;
+use std::time::Duration;
 
 use crate::{
     common::{dir_exists, file_exists, parse_file, MigErrCtx, MigError, MigErrorKind},
-    defs::{BOOT_PATH, STAGE2_CFG_FILE, SYSTEM_CONNECTIONS_DIR},
+    defs::{
+        BALENA_BOOT_FSTYPE, BALENA_BOOT_PART, BALENA_DATA_FSTYPE, BALENA_DATA_PART,
+        BALENA_ROOTA_PART, BALENA_ROOTB_PART, BALENA_STATE_PART, BOOT_PATH, DISK_BY_LABEL_PATH,
+        STAGE2_CFG_FILE, SYSTEM_CONNECTIONS_DIR,
+    },
     linux_common::{
         call_cmd, ensure_cmds, get_cmd, path_append, Device, FailMode, DD_CMD, GZIP_CMD,
         PARTPROBE_CMD, REBOOT_CMD,
@@ -36,20 +42,25 @@ const ROOT_DEVICE_REGEX: &str = r#"\sroot=(\S+)\s"#;
 const ROOT_FSTYPE_REGEX: &str = r#"\srootfstype=(\S+)\s"#;
 const ROOTFS_DIR: &str = "/tmp_root";
 const MIGRATE_TEMP_DIR: &str = "/migrate_tmp";
+const BOOT_MNT_DIR: &str = "mnt_boot";
+const DATA_MNT_DIR: &str = "mnt_data";
 
 const DD_BLOCK_SIZE: u64 = 4194304;
 
-const MIG_REQUIRED_CMDS: &'static [&'static str] = &[DD_CMD, PARTPROBE_CMD, REBOOT_CMD];
+const MIG_REQUIRED_CMDS: &'static [&'static str] = &[DD_CMD, PARTPROBE_CMD, GZIP_CMD, REBOOT_CMD];
 const MIG_OPTIONAL_CMDS: &'static [&'static str] = &[];
 
 const BALENA_IMAGE_FILE: &str = "balenaOS.img.gz";
 const BALENA_CONFIG_FILE: &str = "config.json";
 
 const NIX_NONE: Option<&'static [u8]> = None;
+const PARTPROBE_WAIT_SECS: u64 = 5;
+const PARTPROBE_WAIT_NANOS: u32 = 0;
 
 pub(crate) struct Stage2 {
     config: Stage2Config,
     boot_mounted: bool,
+    recoverable_state: bool,
 }
 
 impl Stage2 {
@@ -193,10 +204,11 @@ impl Stage2 {
         return Ok(Stage2 {
             config: stage2_cfg,
             boot_mounted,
+            recoverable_state: false,
         });
     }
 
-    pub fn migrate(&self) -> Result<(), MigError> {
+    pub fn migrate(&mut self) -> Result<(), MigError> {
         let device_slug = self.config.get_device_slug();
 
         let root_fs_dir = Path::new(ROOTFS_DIR);
@@ -225,6 +237,9 @@ impl Stage2 {
         };
 
         device.restore_boot(&PathBuf::from(ROOTFS_DIR), &self.config)?;
+
+        // boot config restored can reboot
+        self.recoverable_state = true;
 
         ensure_cmds(MIG_REQUIRED_CMDS, MIG_OPTIONAL_CMDS)?;
 
@@ -328,57 +343,318 @@ impl Stage2 {
 
         info!("Unmounted root file system");
 
+        // ************************************************************************************
+        // * write the gzipped image to disk
+        // TODO: try using internal gzip
+
+        // TODO: test-flash to external device
+        // * from migrate:
+        // * gzip -d -c "${MIGRATE_TMP}/${IMAGE_FILE}" | dd of=${BOOT_DEV} bs=4194304 || fail  "failed with gzip -d -c ${MIGRATE_TMP}/${IMAGE_FILE} | dd of=${BOOT_DEV} bs=4194304"
+
+        let target_path = self.config.get_flash_device();
+
+        if !file_exists(&target_path) {
+            return Err(MigError::from_remark(
+                MigErrorKind::NotFound,
+                &format!(
+                    "Could not locate target device: '{}'",
+                    target_path.display()
+                ),
+            ));
+        }
+
         if self.config.is_no_flash() {
             info!("Not flashing due to config parameter no_flash");
             Stage2::exit(&FailMode::Reboot)?;
         }
 
-        // ************************************************************************************
-        // * write the gzipped image to disk
-        // TODO: try using internal gzip
-        // TODO: test-flash to external device
-        // * from migrate:
-        // * gzip -d -c "${MIGRATE_TMP}/${IMAGE_FILE}" | dd of=${BOOT_DEV} bs=4194304 || fail  "failed with gzip -d -c ${MIGRATE_TMP}/${IMAGE_FILE} | dd of=${BOOT_DEV} bs=4194304"
+        if !self.config.is_skip_flash() {
+            let image_path = path_append(mig_tmp_dir, BALENA_IMAGE_FILE);
+            info!(
+                "attempting to flash '{}' to '{}'",
+                image_path.display(),
+                target_path.display()
+            );
 
-        let image_path = path_append(mig_tmp_dir, self.config.get_balena_image());
-        let target_path = self.config.get_flash_device();
+            if !file_exists(&image_path) {
+                return Err(MigError::from_remark(
+                    MigErrorKind::NotFound,
+                    &format!("Could not locate OS image: '{}'", image_path.display()),
+                ));
+            }
 
-        info!(
-            "flashing '{}' to '{}'",
-            image_path.display(),
-            target_path.display()
-        );
-        if let Ok(ref gzip_cmd) = get_cmd(GZIP_CMD) {
-            if let Ok(ref dd_cmd) = get_cmd(DD_CMD) {
-                let cmd1 = Command::new(gzip_cmd)
-                    .args(&["-d", "-c", &image_path.to_string_lossy()])
-                    .stdout(Stdio::piped())
-                    .spawn()
-                    .context(MigErrCtx::from_remark(
-                        MigErrorKind::Upstream,
-                        &format!("failed to spawn command {}", gzip_cmd),
-                    ))?;
-
-                if let Some(cmd1_stdout) = cmd1.stdout {
-                    let cmd_res = Command::new(dd_cmd)
-                        .args(&[
-                            &format!("of={}", &target_path.to_string_lossy()),
-                            &format!("bs={}", DD_BLOCK_SIZE),
-                        ])
-                        .stdin(cmd1_stdout)
-                        .output()
+            if let Ok(ref gzip_cmd) = get_cmd(GZIP_CMD) {
+                debug!("gzip found at: {}", gzip_cmd);
+                if let Ok(ref dd_cmd) = get_cmd(DD_CMD) {
+                    debug!("dd found at: {}", dd_cmd);
+                    let gzip_child = Command::new(gzip_cmd)
+                        .args(&["-d", "-c", &image_path.to_string_lossy()])
+                        .stdout(Stdio::piped())
+                        .spawn()
                         .context(MigErrCtx::from_remark(
                             MigErrorKind::Upstream,
-                            &format!("failed to execute command {}", dd_cmd),
+                            &format!("failed to spawn command {}", gzip_cmd),
                         ))?;
-                    debug!("dd command result: {:?}", cmd_res);
+
+                    debug!("invoking dd");
+
+                    // TODO: plug a progress indicator into the pipe
+                    // Idea extract uncompressed size from gzip
+                    // Plug into the pipe
+                    // report progress at set time or data intervals
+                    // TODO: use crate flate2 instead of external gzip
+
+                    if let Some(gzip_stdout) = gzip_child.stdout {
+                        // flashing the device - not recoverable after this
+                        self.recoverable_state = false;
+
+                        let cmd_res_dd = Command::new(dd_cmd)
+                            .args(&[
+                                &format!("of={}", &target_path.to_string_lossy()),
+                                &format!("bs={}", DD_BLOCK_SIZE),
+                            ])
+                            .stdin(gzip_stdout)
+                            .output()
+                            .context(MigErrCtx::from_remark(
+                                MigErrorKind::Upstream,
+                                &format!("failed to execute command {}", dd_cmd),
+                            ))?;
+
+                        debug!("dd command result: {:?}", cmd_res_dd);
+
+                        if cmd_res_dd.status.success() != true {
+                            return Err(MigError::from_remark(
+                                MigErrorKind::ExecProcess,
+                                &format!(
+                                    "dd terminated with exit code: {:?}",
+                                    cmd_res_dd.status.code()
+                                ),
+                            ));
+                        }
+
+                        
+
+                        // TODO: would like to check on gzip process status but ownership issues prevent it
+
+                        // TODO: sync !
+
+                        info!(
+                            "The Balena OS image has been written to the device '{}'",
+                            target_path.display()
+                        );
+
+                        call_cmd(PARTPROBE_CMD, &[&target_path.to_string_lossy()], true)?;
+
+                        thread::sleep(Duration::new(PARTPROBE_WAIT_SECS, PARTPROBE_WAIT_NANOS));
+                    } else {
+                        return Err(MigError::from_remark(
+                            MigErrorKind::InvState,
+                            "failed to flash image to target disk, gzip stdout not present",
+                        ));
+                    }
                 } else {
                     return Err(MigError::from_remark(
-                        MigErrorKind::InvState,
-                        "failed to flash image to target disk, gzip stdout not present",
+                        MigErrorKind::NotFound,
+                        "failed to flash image to target disk, dd command is not present",
                     ));
                 }
+            } else {
+                return Err(MigError::from_remark(
+                    MigErrorKind::NotFound,
+                    "failed to flash image to target disk, gzip command is not present",
+                ));
             }
+        }
+        // check existence of partitions
+
+        let part_label = path_append(DISK_BY_LABEL_PATH, BALENA_BOOT_PART);
+        info!("looking for '{}'", part_label.display());
+
+        if file_exists(&part_label) {
+            /* TODO: skip this step ? can mount work with a link ?
+            let boot_device = read_link(&part_label)
+                                .context(MigErrCtx::from_remark(MigErrorKind::Upstream, &format!("failed to read link: '{}'", part_label.display())))?;
+            */
+
+            let boot_device = path_append(
+                part_label.parent().unwrap(),
+                read_link(&part_label).context(MigErrCtx::from_remark(
+                    MigErrorKind::Upstream,
+                    &format!("failed to read link: '{}'", part_label.display()),
+                ))?,
+            )
+            .canonicalize()
+            .context(MigErrCtx::from_remark(
+                MigErrorKind::Upstream,
+                &format!(
+                    "failed to canonicalize path from: '{}'",
+                    part_label.display()
+                ),
+            ))?;
+
+            let boot_path = path_append(mig_tmp_dir, BOOT_MNT_DIR);
+
+            create_dir(&boot_path).context(MigErrCtx::from_remark(
+                MigErrorKind::Upstream,
+                &format!("failed to create mount dir: '{}'", boot_path.display()),
+            ))?;
+
+            info!(
+                "Mounting balena device '{}' on '{}'",
+                boot_device.display(),
+                boot_path.display()
+            );
+
+            mount(
+                Some(&boot_device),
+                &boot_path,
+                Some(BALENA_BOOT_FSTYPE),
+                MsFlags::empty(),
+                NIX_NONE,
+            )
+            .context(MigErrCtx::from_remark(
+                MigErrorKind::Upstream,
+                &format!(
+                    "Failed to mount balena device '{}' to '{}' with fstype: {}",
+                    &boot_device.display(),
+                    &boot_path.display(),
+                    BALENA_BOOT_FSTYPE
+                ),
+            ))?;
+
+            info!(
+                "Mounted balena device '{}' on '{}'",
+                &boot_device.display(),
+                &boot_path.display()
+            );
+
+            // TODO: copy config.json, system_connections to boot_path
+
+            let src = path_append(mig_tmp_dir, BALENA_CONFIG_FILE);
+            let tgt = path_append(boot_path, BALENA_CONFIG_FILE);
+
+            copy(&src, &tgt).context(MigErrCtx::from_remark(
+                MigErrorKind::Upstream,
+                &format!(
+                    "failed to copy balena config to boot mount dir, '{}' -> '{}'",
+                    src.display(),
+                    tgt.display()
+                ),
+            ))?;
+
+            info!("copied balena OS config to '{}'", tgt.display());
+
+            // we can hope to successfully reboot again after writing config.json and system-connections
+            self.recoverable_state = true;
+        } else {
+            return Err(MigError::from_remark(
+                MigErrorKind::NotFound,
+                &format!(
+                    "unable to find labeled partition: '{}'",
+                    &part_label.display()
+                ),
+            ));
+        }
+
+        let part_label = path_append(DISK_BY_LABEL_PATH, BALENA_ROOTA_PART);
+        info!("looking for '{}'", part_label.display());
+
+        if !file_exists(&part_label) {
+            return Err(MigError::from_remark(
+                MigErrorKind::NotFound,
+                &format!(
+                    "unable to find labeled partition: '{}'",
+                    &part_label.display()
+                ),
+            ));
+        }
+
+        let part_label = path_append(DISK_BY_LABEL_PATH, BALENA_ROOTB_PART);
+        info!("looking for '{}'", part_label.display());
+        if !file_exists(&part_label) {
+            return Err(MigError::from_remark(
+                MigErrorKind::NotFound,
+                &format!(
+                    "unable to find labeled partition: '{}'",
+                    &part_label.display()
+                ),
+            ));
+        }
+
+        let part_label = path_append(DISK_BY_LABEL_PATH, BALENA_STATE_PART);
+        info!("looking for '{}'", part_label.display());
+        if !file_exists(&part_label) {
+            return Err(MigError::from_remark(
+                MigErrorKind::NotFound,
+                &format!(
+                    "unable to find labeled partition: '{}'",
+                    &part_label.display()
+                ),
+            ));
+        }
+
+        let part_label = path_append(DISK_BY_LABEL_PATH, BALENA_DATA_PART);
+        info!("looking for '{}'", part_label.display());
+
+        if file_exists(&part_label) {
+            let link_path = read_link(&part_label).context(MigErrCtx::from_remark(
+                MigErrorKind::Upstream,
+                &format!("failed to read link: '{}'", part_label.display()),
+            ))?;
+
+            debug!(
+                "concatenating: '{}' and '{}'",
+                part_label.parent().unwrap().display(),
+                link_path.display()
+            );
+            let data_device = path_append(part_label.parent().unwrap(), link_path);
+
+            // let data_device = part_label;
+
+            let data_path = path_append(mig_tmp_dir, DATA_MNT_DIR);
+            create_dir(&data_path).context(MigErrCtx::from_remark(
+                MigErrorKind::Upstream,
+                &format!("failed to create mount dir: '{}'", data_path.display()),
+            ))?;
+
+            info!(
+                "Mounting balena device '{}' on '{}'",
+                data_device.display(),
+                data_path.display()
+            );
+
+            mount(
+                Some(&data_device),
+                &data_path,
+                Some(BALENA_DATA_FSTYPE),
+                MsFlags::empty(),
+                NIX_NONE,
+            )
+            .context(MigErrCtx::from_remark(
+                MigErrorKind::Upstream,
+                &format!(
+                    "Failed to mount balena device '{}' on '{}' with fstype: {}",
+                    &data_device.display(),
+                    &data_path.display(),
+                    BALENA_DATA_FSTYPE
+                ),
+            ))?;
+
+            info!(
+                "Mounted balena device '{}' on '{}'",
+                &data_device.display(),
+                &data_path.display()
+            );
+
+        // TODO: copy log, backup to data_path
+        } else {
+            return Err(MigError::from_remark(
+                MigErrorKind::NotFound,
+                &format!(
+                    "unable to find labeled partition: '{}'",
+                    &part_label.display()
+                ),
+            ));
         }
 
         Ok(())
@@ -399,11 +675,19 @@ impl Stage2 {
         Ok(())
     }
 
+    pub(crate) fn is_recoverable(&self) -> bool {
+        self.recoverable_state
+    }
+
     pub(crate) fn default_exit() -> Result<(), MigError> {
         Stage2::exit(FailMode::get_default())
     }
 
     pub(crate) fn error_exit(&self) -> Result<(), MigError> {
-        Stage2::exit(self.config.get_fail_mode())
+        if self.recoverable_state {
+            Stage2::exit(self.config.get_fail_mode())
+        } else {
+            Stage2::exit(&FailMode::RescueShell)
+        }
     }
 }

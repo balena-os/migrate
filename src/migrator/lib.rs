@@ -40,7 +40,7 @@ pub fn migrate() -> Result<(), MigError> {
 
 #[cfg(target_os = "linux")]
 pub fn stage2() -> Result<(), MigError> {
-    let stage2 = match Stage2::try_init() {
+    let mut stage2 = match Stage2::try_init() {
         Ok(res) => res,
         Err(why) => {
             error!("Failed to initialize stage2: Error: {}", why);

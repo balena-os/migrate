@@ -13,6 +13,7 @@ pub const BOOT_FSTYPE_KEY: &str = "boot_fstype";
 pub const EFI_DEVICE_KEY: &str = "efi_device";
 pub const EFI_FSTYPE_KEY: &str = "efi_fstype";
 pub const FLASH_DEVICE_KEY: &str = "flash_device";
+pub const SKIP_FLASH_KEY: &str = "skip_flash";
 pub const DEVICE_SLUG_KEY: &str = "device_slug";
 pub const BALENA_IMAGE_KEY: &str = "balena_image";
 pub const BALENA_CONFIG_KEY: &str = "balena_config";
@@ -38,8 +39,13 @@ use crate::{
 
 pub(crate) struct Stage2Config {
     efi_boot: bool,
+    // what to do on failure
     fail_mode: FailMode,
+    // pretend mode stop after unmounting root
     no_flash: bool,
+    // skip the flashing, only makes sense with fake / forced flash device
+    skip_flash: bool,
+    // which device to flash
     flash_device: PathBuf,
     boot_device: PathBuf,
     boot_fstype: String,
@@ -65,14 +71,24 @@ impl<'a> Stage2Config {
 
         cfg_str.push_str(&format!("{}: '{}'\n", FAIL_MODE_KEY, fail_mode.to_string()));
 
-        cfg_str.push_str(&format!("{}: {}\n", NO_FLASH_KEY, config.migrate.no_flash));
+        cfg_str.push_str(&format!("{}: {}\n", NO_FLASH_KEY, config.debug.no_flash));
 
         // allow to configure fake flash device
-        if let Some(ref fake_flash) = config.debug.fake_flash_device {
+        if let Some(ref force_flash) = config.debug.force_flash_device {
+            warn!("setting up flash device as '{}'", force_flash.display());
             cfg_str.push_str(&format!(
                 "{}: {}\n",
                 FLASH_DEVICE_KEY,
-                &fake_flash.to_string_lossy()
+                &force_flash.to_string_lossy()
+            ));
+
+            if config.debug.skip_flash {
+                warn!("setting {} to {}", SKIP_FLASH_KEY, config.debug.skip_flash);
+            }
+
+            cfg_str.push_str(&format!(
+                "{}: {}\n",
+                SKIP_FLASH_KEY, config.debug.skip_flash,
             ));
         } else {
             cfg_str.push_str(&format!(
@@ -80,6 +96,9 @@ impl<'a> Stage2Config {
                 FLASH_DEVICE_KEY,
                 &mig_info.get_flash_device().to_string_lossy()
             ));
+
+            // no skipping when using the real device
+            cfg_str.push_str(&format!("{}: false\n", SKIP_FLASH_KEY,));
         }
 
         cfg_str.push_str(&format!("{}: {}\n", EFI_BOOT_KEY, mig_info.is_efi_boot()));
@@ -202,6 +221,7 @@ impl<'a> Stage2Config {
             efi_boot: get_yaml_bool(&yaml_cfg, &[EFI_BOOT_KEY])?.unwrap(),
             fail_mode: Stage2Config::init_fail_mode(&yaml_cfg).clone(),
             no_flash: get_yaml_bool(&yaml_cfg, &[NO_FLASH_KEY])?.unwrap(),
+            skip_flash: get_yaml_bool(&yaml_cfg, &[SKIP_FLASH_KEY])?.unwrap(),
             flash_device: PathBuf::from(get_yaml_str(&yaml_cfg, &[FLASH_DEVICE_KEY])?.unwrap()),
             root_device: PathBuf::from(get_yaml_str(&yaml_cfg, &[ROOT_DEVICE_KEY])?.unwrap()),
             boot_device: PathBuf::from(get_yaml_str(&yaml_cfg, &[BOOT_DEVICE_KEY])?.unwrap()),
@@ -258,6 +278,10 @@ impl<'a> Stage2Config {
         self.no_flash
     }
 
+    pub fn is_skip_flash(&self) -> bool {
+        self.skip_flash
+    }
+
     pub fn is_efi_boot(&self) -> bool {
         self.efi_boot
     }
@@ -296,6 +320,10 @@ impl<'a> Stage2Config {
 
     pub fn get_work_path(&'a self) -> &'a Path {
         &self.work_dir
+    }
+
+    pub fn set_fail_mode(&mut self, mode: &FailMode) {
+        self.fail_mode = mode.clone();
     }
 
     pub fn get_fail_mode(&'a self) -> &'a FailMode {

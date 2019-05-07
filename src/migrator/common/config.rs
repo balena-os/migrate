@@ -19,9 +19,7 @@ pub(crate) use migrate_config::{MigMode, MigrateConfig};
 pub(crate) mod balena_config;
 pub(crate) use balena_config::BalenaConfig;
 
-#[cfg(debug_assertions)]
 pub mod debug_config;
-#[cfg(debug_assertions)]
 pub(crate) use debug_config::DebugConfig;
 
 use super::config_helper::get_yaml_val;
@@ -39,7 +37,6 @@ pub trait YamlConfig {
 pub(crate) struct Config {
     pub migrate: MigrateConfig,
     pub balena: Option<BalenaConfig>,
-    #[cfg(debug_assertions)]
     pub debug: DebugConfig,
 }
 
@@ -169,12 +166,10 @@ impl<'a> Config {
         Config {
             migrate: MigrateConfig::default(),
             balena: None,
-            #[cfg(debug_assertions)]
             debug: DebugConfig::default(),
         }
     }
 
-    #[cfg(debug_assertions)]
     fn get_debug_config(&mut self, yaml: &Yaml) -> Result<(), MigError> {
         if let Some(section) = get_yaml_val(yaml, &["debug"])? {
             self.debug.from_yaml(section)?
@@ -182,7 +177,6 @@ impl<'a> Config {
         Ok(())
     }
 
-    #[cfg(debug_assertions)]
     fn print_debug_config(&self, prefix: &str, buffer: &mut String) -> () {
         *buffer += &self.debug.to_yaml(prefix)
     }
@@ -245,7 +239,7 @@ impl YamlConfig for Config {
         if let Some(ref balena) = self.balena {
             output += &balena.to_yaml(prefix);
         }
-        #[cfg(debug_assertions)]
+
         self.print_debug_config(prefix, &mut output);
 
         output
@@ -267,7 +261,6 @@ impl YamlConfig for Config {
             }
         }
 
-        #[cfg(debug_assertions)]
         self.get_debug_config(yaml)?;
 
         Ok(())
