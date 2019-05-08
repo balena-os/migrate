@@ -186,16 +186,16 @@ impl<'a> Config {
 
         if let Some(work_dir) = work_dir {
             // if work_dir was set in command line it overrides
-            config.migrate.work_dir = Some(work_dir);
+            config.migrate.set_work_dir(work_dir);
         }
 
         if arg_matches.is_present("mode") {
             if let Some(mode) = arg_matches.value_of("mode") {
-                config.migrate.mode = Some(MigMode::from_str(mode)?)
+                config.migrate.set_mig_mode(&MigMode::from_str(mode)?);
             }
         }
 
-        debug!("{}::new: migrate mode: {:?}", MODULE, config.migrate.mode);
+        debug!("{}::new: migrate mode: {:?}", MODULE, config.migrate.get_mig_mode());
 
         debug!("{}::new: got: {:?}", MODULE, config);
 

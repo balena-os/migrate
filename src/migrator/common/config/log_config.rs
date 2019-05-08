@@ -15,15 +15,15 @@ use yaml_rust::Yaml;
 
 #[derive(Debug, Deserialize)]
 pub struct LogConfig {
-    pub drive: String,
-    pub fs_type: String,
+    pub drive: Option<String>,
+    pub fs_type: Option<String>,
 }
 
 impl LogConfig {
     pub fn default() -> LogConfig {
         LogConfig {
-            drive: String::from(""),
-            fs_type: String::from(""),
+            drive: None,
+            fs_type: None,
         }
     }
 }

@@ -53,20 +53,22 @@ const DEFAULT_MIG_MODE: MigMode = MigMode::PRETEND;
 
 #[derive(Debug, Deserialize)]
 pub(crate) struct MigrateConfig {
-    pub work_dir: Option<PathBuf>,
-    pub mode: Option<MigMode>,
-    pub reboot: Option<u64>,
-    pub all_wifis: Option<bool>,
-    pub wifis: Option<Vec<String>>,
-    pub log_to: Option<LogConfig>,
-    pub kernel_file: Option<PathBuf>,
-    pub initramfs_file: Option<PathBuf>,
-    pub force_slug: Option<String>,
-    pub fail_mode: Option<FailMode>,
-    pub backup_config: Option<BackupConfig>
+    work_dir: Option<PathBuf>,
+    mode: Option<MigMode>,
+    reboot: Option<u64>,
+    all_wifis: Option<bool>,
+    wifis: Option<Vec<String>>,
+    log_to: Option<LogConfig>,
+    kernel_file: Option<PathBuf>,
+    initramfs_file: Option<PathBuf>,
+    force_slug: Option<String>,
+    fail_mode: Option<FailMode>,
+    backup_config: Option<BackupConfig>
 }
 
 impl<'a> MigrateConfig {
+    // TODO: implement log & backup config getters
+
     pub fn default() -> MigrateConfig {
         MigrateConfig{
             work_dir: None,
@@ -78,46 +80,59 @@ impl<'a> MigrateConfig {
             kernel_file: None,
             initramfs_file: None,
             force_slug: None,
-            fail_mode: Some(FailMode::get_default().clone()),
+            fail_mode: None,
             backup_config: None,
         }
     }
 
-    pub fn check(&mut self) -> Result<(), MigError> {
-        // TODO: implement
-        if let None = self.mode {
-            self.mode = Some(DEFAULT_MIG_MODE.clone());
-        }
-
-        if let Some(ref mode) = self.mode {
-            match mode {
-                MigMode::AGENT => Err(MigError::from(MigErrorKind::NotImpl)),
-                _ => {
-                    if let None = self.work_dir {
-                        return Err(MigError::from_remark(MigErrorKind::InvParam, "A required parameter was not found: 'work_dir'"));
-                    }
-
-                    if let None = self.fail_mode {
-                        self.fail_mode = Some(FailMode::get_default().clone());
-                    }
-
-                    if let None = self.kernel_file {
-                        return Err(MigError::from_remark(MigErrorKind::InvParam, "A required parameter was not found: 'kernel_file'"));
-                    }
-
-                    if let None = self.initramfs_file {
-                        return Err(MigError::from_remark(MigErrorKind::InvParam, "A required parameter was not found: 'initramfs_file'"));
-                    }
-
-                    Ok(())
+    pub fn check(&self) -> Result<(), MigError> {
+        match self.get_mig_mode() {
+            MigMode::AGENT => Err(MigError::from(MigErrorKind::NotImpl)),
+            _ => {
+                if let None = self.work_dir {
+                    return Err(MigError::from_remark(MigErrorKind::InvParam, "A required parameter was not found: 'work_dir'"));
                 }
+
+                if let None = self.kernel_file {
+                    return Err(MigError::from_remark(MigErrorKind::InvParam, "A required parameter was not found: 'kernel_file'"));
+                }
+
+                if let None = self.initramfs_file {
+                    return Err(MigError::from_remark(MigErrorKind::InvParam, "A required parameter was not found: 'initramfs_file'"));
+                }
+
+                Ok(())
             }
-        } else {
-            panic!("migrate mode is not set");
         }
     }
 
+    pub fn set_mig_mode(&mut self, mode: &MigMode ) {
+        self.mode = Some(mode.clone());
+    }
 
+    pub fn get_mig_mode(&'a self) -> &'a MigMode {
+        if let Some(ref mode) = self.mode {
+            mode
+        } else {
+            &DEFAULT_MIG_MODE
+        }
+    }
+
+    pub fn get_reboot(&'a self) -> &'a Option<u64> {
+        &self.reboot
+    }
+
+    pub fn get_force_slug(&'a self) -> &'a Option<String> {
+        &self.force_slug
+    }
+
+    pub fn get_fail_mode(&'a self) -> &'a FailMode {
+        if let Some(ref val) = self.fail_mode {
+            val
+        } else {
+            FailMode::get_default()
+        }
+    }
 
     pub fn get_wifis(&self) -> MigrateWifis {
         if let Some(ref wifis) = self.wifis {
@@ -138,20 +153,15 @@ impl<'a> MigrateConfig {
 
     // The following functions can only be safely called after check has succeeded
 
+    pub fn set_work_dir(&mut self, work_dir: PathBuf ) {
+        self.work_dir = Some(work_dir);
+    }
+
     pub fn get_work_dir(&'a self) -> &'a Path {
         if let Some(ref dir) = self.work_dir {
             dir
         } else {
             panic!("work_dir is not set");
-        }
-    }
-
-
-    pub fn get_mig_mode(&'a self) -> &'a MigMode {
-        if let Some(ref mode) = self.mode {
-            mode
-        } else {
-            panic!("migrate mode is not set");
         }
     }
 

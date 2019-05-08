@@ -74,7 +74,7 @@ impl<'a> LinuxMigrator {
 
         ensure_cmds(REQUIRED_CMDS, OPTIONAL_CMDS)?;
 
-        info!("migrate mode: {:?}", config.migrate.mode);
+        info!("migrate mode: {:?}", config.migrate.get_mig_mode());
 
         // create default
         let mut migrator = LinuxMigrator {
@@ -154,7 +154,7 @@ impl<'a> LinuxMigrator {
         // **********************************************************************
         // Set the custom device slug here if configured
 
-        if let Some(ref force_slug) = migrator.config.migrate.force_slug {
+        if let Some(ref force_slug) = migrator.config.migrate.get_force_slug() {
             let device_slug = migrator.mig_info.get_device_slug();
             warn!(
                 "setting device type to '{}' using 'force_slug, detected type was '{}'",
@@ -298,7 +298,7 @@ impl<'a> LinuxMigrator {
         if let Some(file_info) = FileInfo::new(&migrator.config.balena.get_config_path(), &work_dir)? {
             file_info.expect_type(&FileType::Json)?;
             let balena_cfg_json = BalenaCfgJson::new(&file_info.path)?;
-            balena_cfg_json.check(migrator.mig_info.get_device_slug())?;
+            balena_cfg_json.check(&migrator.config, migrator.mig_info.get_device_slug())?;
             migrator.mig_info.os_config_info = Some(file_info);
         } else {
             let message = String::from("The balena config has not been specified or cannot be accessed. Automatic download is not yet implemented, so you need to specify and supply all required files");
@@ -370,12 +370,12 @@ impl<'a> LinuxMigrator {
         Stage2Config::write_stage2_cfg(&self.config, &self.mig_info)?;
         info!("Wrote stage2 config to '{}'", STAGE2_CFG_FILE);
 
-        if let Some(delay) = self.config.migrate.reboot {
+        if let Some(delay) = self.config.migrate.get_reboot() {
             println!(
                 "Migration stage 1 was successfull, rebooting system in {} seconds",
-                delay
+                *delay
             );
-            let delay = Duration::new(delay, 0);
+            let delay = Duration::new(*delay, 0);
             thread::sleep(delay);
             println!("Rebooting now..");
             call_cmd(REBOOT_CMD, &["-f"], false)?;

@@ -146,7 +146,7 @@ pub(crate) fn is_admin(_config: &Config) -> Result<bool, MigError> {
 pub(crate) fn is_admin(config: &Config) -> Result<bool, MigError> {
     trace!("LinuxMigrator::is_admin: entered");
     let admin = Some(unsafe { getuid() } == 0);
-    Ok(admin.unwrap() | config.debug.fake_admin)
+    Ok(admin.unwrap() | config.debug.is_fake_admin())
 }
 
 fn whereis(cmd: &str) -> Result<String, MigError> {

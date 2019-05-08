@@ -64,18 +64,14 @@ impl<'a> Stage2Config {
     pub fn write_stage2_cfg(config: &Config, mig_info: &MigrateInfo) -> Result<(), MigError> {
         let mut cfg_str = String::from("# Balena Migrate Stage2 Config\n");
 
-        let fail_mode = if let Some(ref fail_mode) = config.migrate.fail_mode {
-            fail_mode
-        } else {
-            FailMode::get_default()
-        };
+        let fail_mode = config.migrate.get_fail_mode();
 
         cfg_str.push_str(&format!("{}: '{}'\n", FAIL_MODE_KEY, fail_mode.to_string()));
 
-        cfg_str.push_str(&format!("{}: {}\n", NO_FLASH_KEY, config.debug.no_flash));
+        cfg_str.push_str(&format!("{}: {}\n", NO_FLASH_KEY, config.debug.is_no_flash()));
 
         // allow to configure fake flash device
-        if let Some(ref force_flash) = config.debug.force_flash_device {
+        if let Some(ref force_flash) = config.debug.get_force_flash_device() {
             warn!("setting up flash device as '{}'", force_flash.display());
             cfg_str.push_str(&format!(
                 "{}: {}\n",
@@ -83,13 +79,13 @@ impl<'a> Stage2Config {
                 &force_flash.to_string_lossy()
             ));
 
-            if config.debug.skip_flash {
-                warn!("setting {} to {}", SKIP_FLASH_KEY, config.debug.skip_flash);
+            if config.debug.is_skip_flash() {
+                warn!("setting {} to true", SKIP_FLASH_KEY);
             }
 
             cfg_str.push_str(&format!(
                 "{}: {}\n",
-                SKIP_FLASH_KEY, config.debug.skip_flash,
+                SKIP_FLASH_KEY, config.debug.is_skip_flash(),
             ));
         } else {
             cfg_str.push_str(&format!(
