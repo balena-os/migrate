@@ -1,17 +1,9 @@
-
-use super::{LogConfig,BackupConfig};
+use super::{BackupConfig, LogConfig};
 use std::path::{Path, PathBuf};
 
-use crate::{
-    common::{
-        config_helper::{get_yaml_bool, get_yaml_int, get_yaml_str, get_yaml_val},
-        MigError, MigErrorKind,
-        FailMode,
-    },
-};
+use crate::common::{FailMode, MigError, MigErrorKind};
 
-use serde::{Deserialize};
-use yaml_rust::Yaml;
+use serde::Deserialize;
 
 const MODULE: &str = "common::config::migrate_config";
 
@@ -48,7 +40,6 @@ pub(crate) enum MigrateWifis {
     SOME(Vec<String>),
 }
 
-
 const DEFAULT_MIG_MODE: MigMode = MigMode::PRETEND;
 
 #[derive(Debug, Deserialize)]
@@ -63,14 +54,14 @@ pub(crate) struct MigrateConfig {
     initramfs_file: Option<PathBuf>,
     force_slug: Option<String>,
     fail_mode: Option<FailMode>,
-    backup_config: Option<BackupConfig>
+    backup_config: Option<BackupConfig>,
 }
 
 impl<'a> MigrateConfig {
     // TODO: implement log & backup config getters
 
     pub fn default() -> MigrateConfig {
-        MigrateConfig{
+        MigrateConfig {
             work_dir: None,
             mode: Some(DEFAULT_MIG_MODE.clone()),
             reboot: None,
@@ -90,15 +81,24 @@ impl<'a> MigrateConfig {
             MigMode::AGENT => Err(MigError::from(MigErrorKind::NotImpl)),
             _ => {
                 if let None = self.work_dir {
-                    return Err(MigError::from_remark(MigErrorKind::InvParam, "A required parameter was not found: 'work_dir'"));
+                    return Err(MigError::from_remark(
+                        MigErrorKind::InvParam,
+                        "A required parameter was not found: 'work_dir'",
+                    ));
                 }
 
                 if let None = self.kernel_file {
-                    return Err(MigError::from_remark(MigErrorKind::InvParam, "A required parameter was not found: 'kernel_file'"));
+                    return Err(MigError::from_remark(
+                        MigErrorKind::InvParam,
+                        "A required parameter was not found: 'kernel_file'",
+                    ));
                 }
 
                 if let None = self.initramfs_file {
-                    return Err(MigError::from_remark(MigErrorKind::InvParam, "A required parameter was not found: 'initramfs_file'"));
+                    return Err(MigError::from_remark(
+                        MigErrorKind::InvParam,
+                        "A required parameter was not found: 'initramfs_file'",
+                    ));
                 }
 
                 Ok(())
@@ -106,7 +106,7 @@ impl<'a> MigrateConfig {
         }
     }
 
-    pub fn set_mig_mode(&mut self, mode: &MigMode ) {
+    pub fn set_mig_mode(&mut self, mode: &MigMode) {
         self.mode = Some(mode.clone());
     }
 
@@ -150,10 +150,9 @@ impl<'a> MigrateConfig {
         }
     }
 
-
     // The following functions can only be safely called after check has succeeded
 
-    pub fn set_work_dir(&mut self, work_dir: PathBuf ) {
+    pub fn set_work_dir(&mut self, work_dir: PathBuf) {
         self.work_dir = Some(work_dir);
     }
 
@@ -181,4 +180,3 @@ impl<'a> MigrateConfig {
         }
     }
 }
-

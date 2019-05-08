@@ -5,12 +5,13 @@ use regex::Regex;
 use std::cell::RefCell;
 use std::collections::HashMap;
 use std::fs::copy;
-use std::path::{Path, PathBuf};
+use std::path::Path;
 
 use libc::getuid;
 
 use crate::common::{
-    call, file_exists, parse_file, CmdRes, Config, MigErrCtx, MigError, MigErrorKind, OSArch,path_append,
+    call, file_exists, parse_file, path_append, CmdRes, Config, MigErrCtx, MigError, MigErrorKind,
+    OSArch,
 };
 
 pub(crate) mod wifi_config;
@@ -71,7 +72,6 @@ const SYS_UEFI_DIR: &str = "/sys/firmware/efi";
 thread_local! {
     static CMD_TABLE: RefCell<HashMap<String,Option<String>>> = RefCell::new(HashMap::new());
 }
-
 
 pub(crate) fn ensure_cmds(required: &[&str], optional: &[&str]) -> Result<(), MigError> {
     CMD_TABLE.with(|cmd_tbl| {

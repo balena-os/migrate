@@ -1,16 +1,11 @@
-use log::debug;
-use std::path::{Path,PathBuf};
+use std::path::{Path, PathBuf};
 
-use super::{MigMode};
-use crate::common::{
-    config_helper::{get_yaml_bool, get_yaml_str},
-    MigError,
-};
+use super::MigMode;
+use crate::common::MigError;
 
-use yaml_rust::Yaml;
-use serde::{Deserialize};
+use serde::Deserialize;
 
-#[derive(Debug,Deserialize)]
+#[derive(Debug, Deserialize)]
 pub(crate) struct DebugConfig {
     // ignore non admin user
     fake_admin: Option<bool>,
@@ -70,7 +65,7 @@ impl<'a> DebugConfig {
         }
     }
 
-    pub fn check(&self, mig_mode: &MigMode) -> Result<(), MigError> {
+    pub fn check(&self, _mig_mode: &MigMode) -> Result<(), MigError> {
         // TODO: implement
         Ok(())
     }

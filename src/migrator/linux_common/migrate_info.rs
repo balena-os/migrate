@@ -1,9 +1,6 @@
-use std::fs::File;
 use std::path::Path;
 
-use crate::{
-    common::{FileInfo, OSArch, FailMode},
-};
+use crate::common::{FileInfo, OSArch};
 
 use super::{DiskInfo, WifiConfig};
 

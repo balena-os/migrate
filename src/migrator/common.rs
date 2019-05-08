@@ -17,15 +17,15 @@ pub use stage_info::{Stage1Info, Stage2Info};
 
 pub(crate) mod mig_error;
 
-pub(crate) mod os_release;
-pub(crate) use os_release::OSRelease;
+//pub(crate) mod os_release;
+//pub(crate) use os_release::OSRelease;
 
 pub(crate) mod balena_cfg_json;
 pub(crate) mod config;
 pub(crate) mod config_helper;
-pub(crate) mod file_info;
 pub(crate) mod fail_mode;
-pub(crate) use fail_mode::{FailMode};
+pub(crate) mod file_info;
+pub(crate) use fail_mode::FailMode;
 
 //pub mod logger;
 //pub(crate) use logger::Logger;
@@ -83,7 +83,6 @@ pub(crate) fn path_append<P1: AsRef<Path>, P2: AsRef<Path>>(base: P1, append: P2
         base.join(append)
     }
 }
-
 
 pub(crate) fn is_balena_file<P: AsRef<Path>>(file_name: P) -> Result<bool, MigError> {
     let path = file_name.as_ref();

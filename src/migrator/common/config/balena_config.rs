@@ -1,12 +1,7 @@
-use super::{MigMode};
-use crate::common::{
-    config_helper::{get_yaml_bool, get_yaml_int, get_yaml_str},
-    MigError, MigErrorKind,
-};
+use super::MigMode;
+use crate::common::{MigError, MigErrorKind};
+use serde::Deserialize;
 use std::path::{Path, PathBuf};
-use serde::{Deserialize};
-
-use yaml_rust::Yaml;
 
 const MODULE: &str = "common::config::balena_config";
 
@@ -16,7 +11,7 @@ const DEFAULT_VPN_HOST: &str = "vpn.balena-cloud.com";
 const DEFAULT_VPN_PORT: u16 = 443;
 const DEFAULT_CHECK_TIMEOUT: u64 = 20;
 
-#[derive(Debug,Deserialize)]
+#[derive(Debug, Deserialize)]
 pub struct BalenaConfig {
     image: Option<PathBuf>,
     config: Option<PathBuf>,
@@ -117,7 +112,6 @@ impl<'a> BalenaConfig {
             true
         }
     }
-
 
     pub fn get_check_timeout(&self) -> u64 {
         if let Some(timeout) = self.check_timeout {

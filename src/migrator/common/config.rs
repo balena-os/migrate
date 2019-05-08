@@ -1,12 +1,10 @@
-//use clap::{ArgMatches};
 use failure::ResultExt;
-use log::{debug, info};
+use log::debug;
 use mod_logger::Logger;
+use serde::Deserialize;
+use serde_yaml;
 use std::fs::read_to_string;
 use std::path::{Path, PathBuf};
-use yaml_rust::{Yaml, YamlLoader};
-use serde::{Deserialize};
-use serde_yaml;
 
 use clap::{App, Arg};
 
@@ -28,13 +26,8 @@ pub mod debug_config;
 pub(crate) use debug_config::DebugConfig;
 
 use crate::{
-    defs::{DEFAULT_MIGRATE_CONFIG},
-    common::{
-        file_exists,
-        path_append,
-        config_helper::{get_yaml_val},
-    },
-    linux_common
+    common::{file_exists, path_append},
+    defs::DEFAULT_MIGRATE_CONFIG,
 };
 
 const MODULE: &str = "migrator::common::config";
@@ -109,7 +102,6 @@ impl<'a> Config {
             "failed to intialize logger",
         ))?;
 
-
         // try to establish work_dir and config file
         // work_dir can be specified on command line, it defaults to ./ if not
         // work_dir can also be specified in config, path specified on command line
@@ -120,43 +112,49 @@ impl<'a> Config {
         // or work_dir/{DEFAULT_MIGRATE_CONFIG}
         // If none is fouund a default is created
 
-        let work_dir =
-            if arg_matches.is_present("work_dir") {
-                if let Some(dir) = arg_matches.value_of("work_dir") {
-                    Some(PathBuf::from(dir)
-                            .canonicalize()
-                             .context(MigErrCtx::from_remark(MigErrorKind::Upstream, &format!("failed to create absolute path from work_dir: '{}'", dir)))?
-                    )
-                } else {
-                    return Err(MigError::from_remark(MigErrorKind::InvParam, "invalid command line parameter 'work_dir': no value given"));
-                }
+        let work_dir = if arg_matches.is_present("work_dir") {
+            if let Some(dir) = arg_matches.value_of("work_dir") {
+                Some(
+                    PathBuf::from(dir)
+                        .canonicalize()
+                        .context(MigErrCtx::from_remark(
+                            MigErrorKind::Upstream,
+                            &format!("failed to create absolute path from work_dir: '{}'", dir),
+                        ))?,
+                )
             } else {
-                None
-            };
-
+                return Err(MigError::from_remark(
+                    MigErrorKind::InvParam,
+                    "invalid command line parameter 'work_dir': no value given",
+                ));
+            }
+        } else {
+            None
+        };
 
         // establish a temporary working dir
         // defaults to ./ if not set above
 
-        let tmp_work_dir =
-            if let Some(ref work_dir) = work_dir {
-                work_dir.clone()
-            } else {
-                PathBuf::from("./")
-            };
+        let tmp_work_dir = if let Some(ref work_dir) = work_dir {
+            work_dir.clone()
+        } else {
+            PathBuf::from("./")
+        };
 
         // establish a valid config path
         let config_path = {
-            let config_path =
-                if arg_matches.is_present("config") {
-                    if let Some(cfg) = arg_matches.value_of("config") {
-                        PathBuf::from(cfg)
-                    } else {
-                        return Err(MigError::from_remark(MigErrorKind::InvParam, "invalid command line parameter 'config': no value given"));
-                    }
+            let config_path = if arg_matches.is_present("config") {
+                if let Some(cfg) = arg_matches.value_of("config") {
+                    PathBuf::from(cfg)
                 } else {
-                    PathBuf::from(DEFAULT_MIGRATE_CONFIG)
-                };
+                    return Err(MigError::from_remark(
+                        MigErrorKind::InvParam,
+                        "invalid command line parameter 'config': no value given",
+                    ));
+                }
+            } else {
+                PathBuf::from(DEFAULT_MIGRATE_CONFIG)
+            };
 
             if config_path.is_absolute() {
                 Some(config_path)
@@ -173,16 +171,15 @@ impl<'a> Config {
             }
         };
 
-        let mut config =
-            if let Some(config_path) = config_path {
-                if file_exists(&config_path) {
-                    Config::from_file(&config_path)?
-                } else {
-                    Config::default()
-                }
+        let mut config = if let Some(config_path) = config_path {
+            if file_exists(&config_path) {
+                Config::from_file(&config_path)?
             } else {
                 Config::default()
-            };
+            }
+        } else {
+            Config::default()
+        };
 
         if let Some(work_dir) = work_dir {
             // if work_dir was set in command line it overrides
@@ -195,7 +192,11 @@ impl<'a> Config {
             }
         }
 
-        debug!("{}::new: migrate mode: {:?}", MODULE, config.migrate.get_mig_mode());
+        debug!(
+            "{}::new: migrate mode: {:?}",
+            MODULE,
+            config.migrate.get_mig_mode()
+        );
 
         debug!("{}::new: got: {:?}", MODULE, config);
 
@@ -203,7 +204,6 @@ impl<'a> Config {
 
         Ok(config)
     }
-
 
     fn default() -> Config {
         Config {
@@ -231,8 +231,12 @@ impl<'a> Config {
 
     fn from_string(config_str: &str) -> Result<Config, MigError> {
         debug!("{}::from_string: entered", MODULE);
-        Ok(serde_yaml::from_str(config_str)
-            .context(MigErrCtx::from_remark(MigErrorKind::Upstream, "failed to deserialze config from yaml"))?)
+        Ok(
+            serde_yaml::from_str(config_str).context(MigErrCtx::from_remark(
+                MigErrorKind::Upstream,
+                "failed to deserialze config from yaml",
+            ))?,
+        )
     }
 
     fn from_file<P: AsRef<Path>>(file_name: &P) -> Result<Config, MigError> {
@@ -240,11 +244,15 @@ impl<'a> Config {
         debug!("{}::from_file: {} entered", MODULE, file_name.display());
         Config::from_string(&read_to_string(file_name).context(MigErrCtx::from_remark(
             MigErrorKind::Upstream,
-            &format!("{}::from_file: failed to read {}", MODULE, file_name.display()),
+            &format!(
+                "{}::from_file: failed to read {}",
+                MODULE,
+                file_name.display()
+            ),
         ))?)
     }
 
-    fn check(&mut self) -> Result<(), MigError> {
+    fn check(&self) -> Result<(), MigError> {
         self.migrate.check()?;
         let mode = self.migrate.get_mig_mode();
         self.balena.check(mode)?;
@@ -252,7 +260,6 @@ impl<'a> Config {
         Ok(())
     }
 }
-
 
 #[cfg(test)]
 mod tests {

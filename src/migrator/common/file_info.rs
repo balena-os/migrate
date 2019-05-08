@@ -52,7 +52,10 @@ pub struct FileInfo {
 // TODO: make this detect file formats used by migrate, eg: kernel, initramfs, json file, disk image
 
 impl FileInfo {
-    pub fn new<P1: AsRef<Path>,P2: AsRef<Path>>(file: P1, work_dir: P2) -> Result<Option<FileInfo>, MigError> {
+    pub fn new<P1: AsRef<Path>, P2: AsRef<Path>>(
+        file: P1,
+        work_dir: P2,
+    ) -> Result<Option<FileInfo>, MigError> {
         let file_path = file.as_ref();
         let work_path = work_dir.as_ref();
         trace!(

@@ -1,6 +1,4 @@
-use crate::common::{config_helper::get_yaml_str, MigError, MigErrorKind};
-use serde::{Deserialize};
-use yaml_rust::Yaml;
+use serde::Deserialize;
 
 // *************************************************************************
 // * Log configuration

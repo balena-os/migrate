@@ -269,9 +269,10 @@ impl<'a> LinuxMigrator {
 
         // **********************************************************************
         // Check balena config section
-            // check balena os image
+        // check balena os image
 
-        if let Some(file_info) = FileInfo::new(&migrator.config.balena.get_image_path(), &work_dir)? {
+        if let Some(file_info) = FileInfo::new(&migrator.config.balena.get_image_path(), &work_dir)?
+        {
             file_info.expect_type(&FileType::OSImage)?;
             info!(
                 "The balena OS image looks ok: '{}'",
@@ -295,7 +296,9 @@ impl<'a> LinuxMigrator {
 
         // check balena os config
 
-        if let Some(file_info) = FileInfo::new(&migrator.config.balena.get_config_path(), &work_dir)? {
+        if let Some(file_info) =
+            FileInfo::new(&migrator.config.balena.get_config_path(), &work_dir)?
+        {
             file_info.expect_type(&FileType::Json)?;
             let balena_cfg_json = BalenaCfgJson::new(&file_info.path)?;
             balena_cfg_json.check(&migrator.config, migrator.mig_info.get_device_slug())?;
@@ -314,12 +317,11 @@ impl<'a> LinuxMigrator {
             debug!("looking for wifi configurations to migrate");
 
             let empty_list: Vec<String> = Vec::new();
-            let list : &Vec<String> =
-                if let MigrateWifis::SOME(ref list) = wifis {
-                    list
-                } else {
-                    &empty_list
-                };
+            let list: &Vec<String> = if let MigrateWifis::SOME(ref list) = wifis {
+                list
+            } else {
+                &empty_list
+            };
 
             let wifi_list = WifiConfig::scan(list)?;
 

@@ -5,7 +5,9 @@ use std::fs::File;
 use std::io::BufReader;
 use std::path::{Path, PathBuf};
 
-use super::{check_tcp_connect, config_helper::get_json_str, MigErrCtx, MigError, MigErrorKind, Config};
+use super::{
+    check_tcp_connect, config_helper::get_json_str, Config, MigErrCtx, MigError, MigErrorKind,
+};
 
 const MODULE: &str = "migrator::common::balena_cfg_json";
 

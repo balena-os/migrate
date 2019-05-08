@@ -1,5 +1,5 @@
-use serde::{Deserialize};
 use crate::common::{MigError, MigErrorKind};
+use serde::Deserialize;
 
 #[derive(Debug, Clone, Deserialize)]
 pub(crate) enum FailMode {

@@ -14,14 +14,8 @@ use std::time::Duration;
 
 use crate::{
     common::{
-        dir_exists,
-        file_exists,
-        parse_file,
-        path_append,
-        MigErrCtx,
-        MigError,
+        dir_exists, file_exists, parse_file, path_append, FailMode, MigErrCtx, MigError,
         MigErrorKind,
-        FailMode,
     },
     defs::{
         BALENA_BOOT_FSTYPE, BALENA_BOOT_PART, BALENA_DATA_FSTYPE, BALENA_DATA_PART,
@@ -29,8 +23,7 @@ use crate::{
         STAGE2_CFG_FILE, SYSTEM_CONNECTIONS_DIR,
     },
     linux_common::{
-        call_cmd, ensure_cmds, get_cmd, Device,  DD_CMD, GZIP_CMD,
-        PARTPROBE_CMD, REBOOT_CMD,
+        call_cmd, ensure_cmds, get_cmd, Device, DD_CMD, GZIP_CMD, PARTPROBE_CMD, REBOOT_CMD,
     },
 };
 
@@ -440,8 +433,6 @@ impl Stage2 {
                                 ),
                             ));
                         }
-
-                        
 
                         // TODO: would like to check on gzip process status but ownership issues prevent it
 
