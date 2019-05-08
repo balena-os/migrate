@@ -10,11 +10,8 @@ use std::path::{Path, PathBuf};
 use libc::getuid;
 
 use crate::common::{
-    call, file_exists, parse_file, CmdRes, Config, MigErrCtx, MigError, MigErrorKind, OSArch,
+    call, file_exists, parse_file, CmdRes, Config, MigErrCtx, MigError, MigErrorKind, OSArch,path_append,
 };
-
-pub(crate) mod fail_mode;
-pub(crate) use fail_mode::FailMode;
 
 pub(crate) mod wifi_config;
 pub(crate) use wifi_config::WifiConfig;
@@ -75,15 +72,6 @@ thread_local! {
     static CMD_TABLE: RefCell<HashMap<String,Option<String>>> = RefCell::new(HashMap::new());
 }
 
-pub(crate) fn path_append<P1: AsRef<Path>, P2: AsRef<Path>>(base: P1, append: P2) -> PathBuf {
-    let base = base.as_ref();
-    let append = append.as_ref();
-    if append.starts_with("/") {
-        base.join(append.strip_prefix("/").unwrap())
-    } else {
-        base.join(append)
-    }
-}
 
 pub(crate) fn ensure_cmds(required: &[&str], optional: &[&str]) -> Result<(), MigError> {
     CMD_TABLE.with(|cmd_tbl| {

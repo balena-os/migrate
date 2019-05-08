@@ -1,6 +1,6 @@
 use log::debug;
 
-use super::YamlConfig;
+use super::{MigMode, YamlConfig};
 use crate::common::{
     config_helper::{get_yaml_bool, get_yaml_str},
     MigError,
@@ -31,9 +31,39 @@ impl DebugConfig {
             no_flash: true,
         }
     }
+
+    pub fn check(&self, mig_mode: &MigMode) -> Result<(), MigError> {
+        // TODO: implement
+        Ok(())
+    }
 }
 
 impl YamlConfig for DebugConfig {
+    fn from_yaml(yaml: &Yaml) -> Result<Box<DebugConfig>, MigError> {
+        let mut config = DebugConfig::default();
+        if let Some(value) = get_yaml_bool(yaml, &["fake_admin"])? {
+            debug!("fake_admin: {}", value);
+            config.fake_admin = value;
+        }
+
+        if let Some(value) = get_yaml_str(yaml, &["force_flash_device"])? {
+            debug!("force_flash_device: {}", value);
+            config.force_flash_device = Some(PathBuf::from(value));
+
+            if let Some(value) = get_yaml_bool(yaml, &["skip_flash"])? {
+                debug!("skip_flash: {}", value);
+                config.skip_flash = value;
+            }
+        }
+
+        if let Some(no_flash) = get_yaml_bool(yaml, &["no_flash"])? {
+            debug!("no_flash: {}", no_flash);
+            config.no_flash = no_flash;
+        }
+
+        Ok(Box::new(config))
+    }
+/*
     fn to_yaml(&self, prefix: &str) -> String {
         let mut output = format!(
             "{}debug:\n{}  fake_admin: {}\n{}  no_flash: {}\n",
@@ -49,28 +79,6 @@ impl YamlConfig for DebugConfig {
         }
         output
     }
+*/
 
-    fn from_yaml(&mut self, yaml: &Yaml) -> Result<(), MigError> {
-        if let Some(value) = get_yaml_bool(yaml, &["fake_admin"])? {
-            debug!("fake_admin: {}", value);
-            self.fake_admin = value;
-        }
-
-        if let Some(value) = get_yaml_str(yaml, &["force_flash_device"])? {
-            debug!("force_flash_device: {}", value);
-            self.force_flash_device = Some(PathBuf::from(value));
-
-            if let Some(value) = get_yaml_bool(yaml, &["skip_flash"])? {
-                debug!("skip_flash: {}", value);
-                self.skip_flash = value;
-            }
-        }
-
-        if let Some(no_flash) = get_yaml_bool(yaml, &["no_flash"])? {
-            debug!("no_flash: {}", no_flash);
-            self.no_flash = no_flash;
-        }
-
-        Ok(())
-    }
 }

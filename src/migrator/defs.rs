@@ -13,3 +13,5 @@ pub const BALENA_ROOTB_PART: &str = "resin-rootB";
 pub const BALENA_STATE_PART: &str = "resin-state";
 pub const BALENA_DATA_PART: &str = "resin-data";
 pub const BALENA_DATA_FSTYPE: &str = "ext4";
+
+pub const DEFAULT_MIGRATE_CONFIG: &str = "balena-migrate.yml";

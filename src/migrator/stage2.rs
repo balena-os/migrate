@@ -13,14 +13,23 @@ use std::thread;
 use std::time::Duration;
 
 use crate::{
-    common::{dir_exists, file_exists, parse_file, MigErrCtx, MigError, MigErrorKind},
+    common::{
+        dir_exists,
+        file_exists,
+        parse_file,
+        path_append,
+        MigErrCtx,
+        MigError,
+        MigErrorKind,
+        FailMode,
+    },
     defs::{
         BALENA_BOOT_FSTYPE, BALENA_BOOT_PART, BALENA_DATA_FSTYPE, BALENA_DATA_PART,
         BALENA_ROOTA_PART, BALENA_ROOTB_PART, BALENA_STATE_PART, BOOT_PATH, DISK_BY_LABEL_PATH,
         STAGE2_CFG_FILE, SYSTEM_CONNECTIONS_DIR,
     },
     linux_common::{
-        call_cmd, ensure_cmds, get_cmd, path_append, Device, FailMode, DD_CMD, GZIP_CMD,
+        call_cmd, ensure_cmds, get_cmd, Device,  DD_CMD, GZIP_CMD,
         PARTPROBE_CMD, REBOOT_CMD,
     },
 };

@@ -3,7 +3,7 @@ use failure::ResultExt;
 use log::{debug, info};
 use mod_logger::Logger;
 use std::fs::read_to_string;
-use std::path::Path;
+use std::path::{Path, PathBuf};
 use yaml_rust::{Yaml, YamlLoader};
 
 use clap::{App, Arg};
@@ -12,6 +12,9 @@ use super::{MigErrCtx, MigError, MigErrorKind};
 
 pub(crate) mod log_config;
 pub(crate) use log_config::LogConfig;
+
+pub(crate) mod backup_config;
+pub(crate) use backup_config::BackupConfig;
 
 pub(crate) mod migrate_config;
 pub(crate) use migrate_config::{MigMode, MigrateConfig};
@@ -22,21 +25,30 @@ pub(crate) use balena_config::BalenaConfig;
 pub mod debug_config;
 pub(crate) use debug_config::DebugConfig;
 
-use super::config_helper::get_yaml_val;
+use crate::{
+    defs::{DEFAULT_MIGRATE_CONFIG},
+    common::{
+        file_exists,
+        path_append,
+        config_helper::{get_yaml_val},
+    },
+    linux_common
+};
 
 const MODULE: &str = "migrator::common::config";
 
 // TODO: add trait ToYaml and implement for all sections
 
 pub trait YamlConfig {
-    fn to_yaml(&self, prefix: &str) -> String;
-    fn from_yaml(&mut self, yaml: &Yaml) -> Result<(), MigError>;
+    // fn to_yaml(&self, prefix: &str) -> String;
+    // fn from_yaml(&mut self, yaml: &Yaml) -> Result<(), MigError>;
+    fn from_yaml(yaml: &Yaml) -> Result<Box<Self>, MigError>;
 }
 
 #[derive(Debug)]
 pub(crate) struct Config {
     pub migrate: MigrateConfig,
-    pub balena: Option<BalenaConfig>,
+    pub balena: BalenaConfig,
     pub debug: DebugConfig,
 }
 
@@ -93,45 +105,84 @@ impl<'a> Config {
             "failed to intialize logger",
         ))?;
 
-        // defaults to
-        let mut config = Config::default();
 
-        if arg_matches.is_present("config") {
-            if let Some(cfg) = arg_matches.value_of("config") {
-                info!("reading config from default location: '{}'", cfg);
-                config.from_file(cfg)?;
-            }
-        } else {
-            let work_dir = if arg_matches.is_present("work_dir") {
+        // try to establish work_dir and config file
+        // work_dir can be specified on command line, it defaults to ./ if not
+        // work_dir can also be specified in config, path specified on command line
+        // will override specification in config
+
+        // config file can be specified on command line
+        // if not specified it will be looked for in ./{DEFAULT_MIGRATE_CONFIG}
+        // or work_dir/{DEFAULT_MIGRATE_CONFIG}
+        // If none is fouund a default is created
+
+        let work_dir =
+            if arg_matches.is_present("work_dir") {
                 if let Some(dir) = arg_matches.value_of("work_dir") {
-                    dir
+                    Some(PathBuf::from(dir)
+                            .canonicalize()
+                             .context(MigErrCtx::from_remark(MigErrorKind::Upstream, &format!("failed to create absolute path from work_dir: '{}'", dir)))?
+                    )
                 } else {
-                    "./"
+                    return Err(MigError::from_remark(MigErrorKind::InvParam, "invalid command line parameter 'work_dir': no value given"));
                 }
             } else {
-                "./"
+                None
             };
 
-            let config_path = if work_dir.ends_with("/") {
-                format!("{}balena-migrate.yml", work_dir)
+
+        // establish a temporary working dir
+        // defaults to ./ if not set above
+
+        let tmp_work_dir =
+            if let Some(ref work_dir) = work_dir {
+                work_dir.clone()
             } else {
-                format!("{}/balena-migrate.yml", work_dir)
+                PathBuf::from("./")
             };
 
-            debug!(
-                "{}::new: no config option given, looking for default in '{}'",
-                MODULE, config_path
-            );
-            if Path::new(&config_path).exists() {
-                info!("reading config from default location: '{}'", config_path);
-                config.from_file(&config_path)?;
-            }
-        }
+        // establish a valid config path
+        let config_path = {
+            let config_path =
+                if arg_matches.is_present("config") {
+                    if let Some(cfg) = arg_matches.value_of("config") {
+                        PathBuf::from(cfg)
+                    } else {
+                        return Err(MigError::from_remark(MigErrorKind::InvParam, "invalid command line parameter 'config': no value given"));
+                    }
+                } else {
+                    PathBuf::from(DEFAULT_MIGRATE_CONFIG)
+                };
 
-        if arg_matches.is_present("work_dir") {
-            if let Some(work_dir) = arg_matches.value_of("work_dir") {
-                config.migrate.work_dir = String::from(work_dir);
+            if config_path.is_absolute() {
+                Some(config_path)
+            } else {
+                if let Ok(abs_path) = config_path.canonicalize() {
+                    Some(abs_path)
+                } else {
+                    if let Ok(abs_path) = path_append(tmp_work_dir, config_path).canonicalize() {
+                        Some(abs_path)
+                    } else {
+                        None
+                    }
+                }
             }
+        };
+
+        let mut config =
+            if let Some(config_path) = config_path {
+                if file_exists(&config_path) {
+                    Config::from_file(&config_path)?
+                } else {
+                    Config::default()
+                }
+            } else {
+                Config::default()
+            };
+
+        if let Some(work_dir) = work_dir {
+            // if work_dir was set in command line it overrides
+            config.migrate.work_dir = work_dir;
         }
 
         if arg_matches.is_present("mode") {
@@ -165,23 +216,25 @@ impl<'a> Config {
     fn default() -> Config {
         Config {
             migrate: MigrateConfig::default(),
-            balena: None,
+            balena: BalenaConfig::default(),
             debug: DebugConfig::default(),
         }
     }
 
     fn get_debug_config(&mut self, yaml: &Yaml) -> Result<(), MigError> {
         if let Some(section) = get_yaml_val(yaml, &["debug"])? {
-            self.debug.from_yaml(section)?
+            self.debug = *DebugConfig::from_yaml(section)?;
         }
         Ok(())
     }
 
+    /*
     fn print_debug_config(&self, prefix: &str, buffer: &mut String) -> () {
         *buffer += &self.debug.to_yaml(prefix)
     }
+    */
 
-    fn from_string(&mut self, config_str: &str) -> Result<(), MigError> {
+    fn from_string(config_str: &str) -> Result<Config, MigError> {
         debug!("{}::from_string: entered", MODULE);
         let yaml_cfg = YamlLoader::load_from_str(&config_str).context(MigErrCtx::from_remark(
             MigErrorKind::Upstream,
@@ -198,15 +251,15 @@ impl<'a> Config {
             ));
         }
 
-        self.from_yaml(&yaml_cfg[0])
+        Ok(*Config::from_yaml(&yaml_cfg[0])?)
     }
 
-    fn from_file(&mut self, file_name: &str) -> Result<(), MigError> {
-        debug!("{}::from_file: {} entered", MODULE, file_name);
-
-        self.from_string(&read_to_string(file_name).context(MigErrCtx::from_remark(
+    fn from_file<P: AsRef<Path>>(file_name: &P) -> Result<Config, MigError> {
+        let file_name = file_name.as_ref();
+        debug!("{}::from_file: {} entered", MODULE, file_name.display());
+        Config::from_string(&read_to_string(file_name).context(MigErrCtx::from_remark(
             MigErrorKind::Upstream,
-            &format!("{}::from_file: failed to read {}", MODULE, file_name),
+            &format!("{}::from_file: failed to read {}", MODULE, file_name.display()),
         ))?)
     }
 
@@ -215,17 +268,9 @@ impl<'a> Config {
             MigMode::AGENT => {}
             MigMode::PRETEND => {}
             MigMode::IMMEDIATE => {
-                if let Some(balena) = &self.balena {
-                    balena.check(&self.migrate.mode)?;
-                } else {
-                    return Err(MigError::from_remark(
-                        MigErrorKind::InvParam,
-                        &format!(
-                            "{}::check: no balena section was specified in mode: IMMEDIATE",
-                            MODULE
-                        ),
-                    ));
-                }
+                self.migrate.check(&self.migrate.mode)?;
+                self.balena.check(&self.migrate.mode)?;
+                self.debug.check(&self.migrate.mode)?;
             }
         }
 
@@ -234,6 +279,30 @@ impl<'a> Config {
 }
 
 impl YamlConfig for Config {
+    fn from_yaml(yaml: &Yaml) -> Result<Box<Config>, MigError> {
+        Ok(Box::new(Config{
+            migrate:
+                if let Some(ref section) = get_yaml_val(yaml, &["migrate"])? {
+                    *MigrateConfig::from_yaml(section)?
+                } else {
+                    MigrateConfig::default()
+                },
+            balena:
+                if let Some(section) = get_yaml_val(yaml, &["balena"])? {
+                    // Params: balena_image
+                    *BalenaConfig::from_yaml(section)?
+                } else {
+                    BalenaConfig::default()
+                },
+            debug:
+                if let Some(section) = get_yaml_val(yaml, &["debug"])? {
+                    *DebugConfig::from_yaml(section)?
+                } else {
+                    DebugConfig::default()
+                },
+        }))
+    }
+/*
     fn to_yaml(&self, prefix: &str) -> String {
         let mut output = self.migrate.to_yaml(prefix);
         if let Some(ref balena) = self.balena {
@@ -244,27 +313,7 @@ impl YamlConfig for Config {
 
         output
     }
-
-    fn from_yaml(&mut self, yaml: &Yaml) -> Result<(), MigError> {
-        if let Some(ref section) = get_yaml_val(yaml, &["migrate"])? {
-            self.migrate.from_yaml(section)?;
-        }
-
-        if let Some(section) = get_yaml_val(yaml, &["balena"])? {
-            // Params: balena_image
-            if let Some(ref mut balena) = self.balena {
-                balena.from_yaml(section)?;
-            } else {
-                let mut balena = BalenaConfig::default();
-                balena.from_yaml(section)?;
-                self.balena = Some(balena);
-            }
-        }
-
-        self.get_debug_config(yaml)?;
-
-        Ok(())
-    }
+*/
 }
 
 #[cfg(test)]
@@ -327,6 +376,7 @@ balena:
         ()
     }
 
+    /*
     #[test]
     fn read_write() -> () {
         let mut config = Config::default();
@@ -340,5 +390,6 @@ balena:
 
         ()
     }
+    */
 
 }

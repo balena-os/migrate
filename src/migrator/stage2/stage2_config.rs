@@ -32,9 +32,10 @@ use crate::{
     common::{
         config_helper::{get_yaml_bool, get_yaml_str, get_yaml_val},
         Config, MigErrCtx, MigError, MigErrorKind,
+        FailMode,
     },
     defs::STAGE2_CFG_FILE,
-    linux_common::{FailMode, MigrateInfo},
+    linux_common::{MigrateInfo},
 };
 
 pub(crate) struct Stage2Config {

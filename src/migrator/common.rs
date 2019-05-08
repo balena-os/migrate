@@ -7,7 +7,7 @@ use std::fmt::{self, Display, Formatter};
 use std::fs::read_to_string;
 use std::fs::File;
 use std::io::{BufRead, BufReader};
-use std::path::Path;
+use std::path::{Path, PathBuf};
 use std::process::{Command, ExitStatus, Stdio};
 
 /*
@@ -15,15 +15,17 @@ pub mod stage_info;
 pub use stage_info::{Stage1Info, Stage2Info};
 */
 
-pub mod mig_error;
+pub(crate) mod mig_error;
 
-pub mod os_release;
+pub(crate) mod os_release;
 pub(crate) use os_release::OSRelease;
 
-pub mod balena_cfg_json;
-pub mod config;
-pub mod config_helper;
-pub mod file_info;
+pub(crate) mod balena_cfg_json;
+pub(crate) mod config;
+pub(crate) mod config_helper;
+pub(crate) mod file_info;
+pub(crate) mod fail_mode;
+pub(crate) use fail_mode::{FailMode};
 
 //pub mod logger;
 //pub(crate) use logger::Logger;
@@ -64,6 +66,24 @@ pub(crate) struct CmdRes {
     pub stderr: String,
     pub status: ExitStatus,
 }
+
+pub(crate) fn path_append<P1: AsRef<Path>, P2: AsRef<Path>>(base: P1, append: P2) -> PathBuf {
+    let base = base.as_ref();
+    let append = append.as_ref();
+
+    if append.is_absolute() {
+        let mut components = append.components();
+        let mut curr = PathBuf::from(base);
+        components.next();
+        for comp in components {
+            curr = curr.join(comp);
+        }
+        curr
+    } else {
+        base.join(append)
+    }
+}
+
 
 pub(crate) fn is_balena_file<P: AsRef<Path>>(file_name: P) -> Result<bool, MigError> {
     let path = file_name.as_ref();

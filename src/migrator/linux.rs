@@ -269,45 +269,39 @@ impl<'a> LinuxMigrator {
 
         // **********************************************************************
         // Check balena config section
-        if let Some(ref balena_cfg) = migrator.config.balena {
             // check balena os image
 
-            if let Some(file_info) = FileInfo::new(balena_cfg.get_image_path(), &work_dir)? {
-                file_info.expect_type(&FileType::OSImage)?;
-                info!(
-                    "The balena OS image looks ok: '{}'",
-                    file_info.path.display()
-                );
-                // TODO: make sure there is enough memory for OSImage
+        if let Some(file_info) = FileInfo::new(&migrator.config.balena.get_image_path(), &work_dir)? {
+            file_info.expect_type(&FileType::OSImage)?;
+            info!(
+                "The balena OS image looks ok: '{}'",
+                file_info.path.display()
+            );
+            // TODO: make sure there is enough memory for OSImage
 
-                let required_mem = file_info.size + MEM_THRESHOLD;
-                if get_mem_info()?.0 < required_mem {
-                    let message = format!("We have not found sufficient memory to store the balena OS image in ram. at least {} of memory is required.", format_size_with_unit(required_mem));
-                    error!("{}", message);
-                    return Err(MigError::from_remark(MigErrorKind::InvParam, &message));
-                }
-
-                migrator.mig_info.os_image_info = Some(file_info);
-            } else {
-                let message = String::from("The balena image has not been specified or cannot be accessed. Automatic download is not yet implemented, so you need to specify and supply all required files");
+            let required_mem = file_info.size + MEM_THRESHOLD;
+            if get_mem_info()?.0 < required_mem {
+                let message = format!("We have not found sufficient memory to store the balena OS image in ram. at least {} of memory is required.", format_size_with_unit(required_mem));
                 error!("{}", message);
                 return Err(MigError::from_remark(MigErrorKind::InvParam, &message));
             }
 
-            // check balena os config
-
-            if let Some(file_info) = FileInfo::new(balena_cfg.get_config_path(), &work_dir)? {
-                file_info.expect_type(&FileType::Json)?;
-                let balena_cfg_json = BalenaCfgJson::new(&file_info.path)?;
-                balena_cfg_json.check(migrator.mig_info.get_device_slug())?;
-                migrator.mig_info.os_config_info = Some(file_info);
-            } else {
-                let message = String::from("The balena config has not been specified or cannot be accessed. Automatic download is not yet implemented, so you need to specify and supply all required files");
-                error!("{}", message);
-                return Err(MigError::from_remark(MigErrorKind::InvParam, &message));
-            }
+            migrator.mig_info.os_image_info = Some(file_info);
         } else {
-            let message = String::from("The balena section of the configuration is empty. Automatic download is not yet implemented, so you need to specify and supply all required files and options.");
+            let message = String::from("The balena image has not been specified or cannot be accessed. Automatic download is not yet implemented, so you need to specify and supply all required files");
+            error!("{}", message);
+            return Err(MigError::from_remark(MigErrorKind::InvParam, &message));
+        }
+
+        // check balena os config
+
+        if let Some(file_info) = FileInfo::new(&migrator.config.balena.get_config_path(), &work_dir)? {
+            file_info.expect_type(&FileType::Json)?;
+            let balena_cfg_json = BalenaCfgJson::new(&file_info.path)?;
+            balena_cfg_json.check(migrator.mig_info.get_device_slug())?;
+            migrator.mig_info.os_config_info = Some(file_info);
+        } else {
+            let message = String::from("The balena config has not been specified or cannot be accessed. Automatic download is not yet implemented, so you need to specify and supply all required files");
             error!("{}", message);
             return Err(MigError::from_remark(MigErrorKind::InvParam, &message));
         }

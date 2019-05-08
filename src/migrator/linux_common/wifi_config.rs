@@ -6,8 +6,7 @@ use std::io::{BufRead, BufReader, Write};
 use std::path::Path;
 
 use crate::{
-    common::{dir_exists, file_exists, is_balena_file, MigErrCtx, MigError, MigErrorKind},
-    linux_common::path_append,
+    common::{dir_exists, file_exists, is_balena_file, MigErrCtx, MigError, MigErrorKind, path_append},
 };
 
 const WPA_CONFIG_FILE: &str = "/etc/wpa_supplicant/wpa_supplicant.conf";

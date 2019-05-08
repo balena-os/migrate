@@ -2,8 +2,7 @@ use std::fs::File;
 use std::path::Path;
 
 use crate::{
-    common::{FileInfo, OSArch},
-    linux_common::FailMode,
+    common::{FileInfo, OSArch, FailMode},
 };
 
 use super::{DiskInfo, WifiConfig};

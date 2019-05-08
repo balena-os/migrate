@@ -6,9 +6,9 @@ use std::fs::{remove_file, File};
 use std::io::Write;
 use std::path::Path;
 
-use crate::common::{file_exists, is_balena_file, Config, MigErrCtx, MigError, MigErrorKind};
+use crate::common::{file_exists, is_balena_file, Config, MigErrCtx, MigError, MigErrorKind, path_append};
 
-use crate::linux_common::{call_cmd, path_append, restore_backups, Device, MigrateInfo, CHMOD_CMD};
+use crate::linux_common::{call_cmd, restore_backups, Device, MigrateInfo, CHMOD_CMD};
 
 use crate::stage2::Stage2Config;
 
