@@ -10,7 +10,7 @@ use crate::{
     beaglebone::is_bb,
     common::{
         balena_cfg_json::BalenaCfgJson, dir_exists, format_size_with_unit, Config, FileInfo,
-        FileType, MigErrCtx, MigError, MigErrorKind, MigMode, OSArch,
+        FileType, MigErrCtx, MigError, MigErrorKind, MigMode, MigrateWifis, OSArch,
     },
     defs::STAGE2_CFG_FILE,
     intel_nuc::init_amd64,
@@ -58,7 +58,7 @@ pub(crate) struct LinuxMigrator {
 impl<'a> LinuxMigrator {
     pub fn migrate() -> Result<(), MigError> {
         let mut migrator = LinuxMigrator::try_init(Config::new()?)?;
-        match migrator.config.migrate.mode {
+        match migrator.config.migrate.get_mig_mode() {
             MigMode::IMMEDIATE => migrator.do_migrate(),
             MigMode::PRETEND => Ok(()),
             MigMode::AGENT => Err(MigError::from(MigErrorKind::NotImpl)),
@@ -306,13 +306,23 @@ impl<'a> LinuxMigrator {
             return Err(MigError::from_remark(MigErrorKind::InvParam, &message));
         }
 
-        if migrator.config.migrate.all_wifis == true || migrator.config.migrate.wifis.len() > 0 {
+        let wifis = migrator.config.migrate.get_wifis();
+        if MigrateWifis::NONE != wifis {
             // **********************************************************************
             // ** migrate wifi config
             // TODO: ...
             debug!("looking for wifi configurations to migrate");
 
-            let wifi_list = WifiConfig::scan(&migrator.config.migrate.wifis)?;
+            let empty_list: Vec<String> = Vec::new();
+            let list : &Vec<String> =
+                if let MigrateWifis::SOME(ref list) = wifis {
+                    list
+                } else {
+                    &empty_list
+                };
+
+            let wifi_list = WifiConfig::scan(list)?;
+
             if wifi_list.len() > 0 {
                 for wifi in &wifi_list {
                     info!("Found config for wifi: {}", wifi.get_ssid());
@@ -445,7 +455,7 @@ impl<'a> LinuxMigrator {
         // **********************************************************************
         // check work_dir
 
-        disk_info.work_path = PathInfo::new(&self.config.migrate.work_dir)?;
+        disk_info.work_path = PathInfo::new(self.config.migrate.get_work_dir())?;
         if let Some(ref work_part) = disk_info.work_path {
             debug!("{}", work_part);
         }

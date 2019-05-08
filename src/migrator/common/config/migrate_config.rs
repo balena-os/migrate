@@ -1,5 +1,5 @@
 
-use super::{log_config::LogConfig, YamlConfig};
+use super::{LogConfig,BackupConfig};
 use std::path::{Path, PathBuf};
 
 use crate::{
@@ -10,46 +10,148 @@ use crate::{
     },
 };
 
+use serde::{Deserialize};
 use yaml_rust::Yaml;
 
 const MODULE: &str = "common::config::migrate_config";
 
-#[derive(Debug, PartialEq)]
-pub enum MigMode {
+#[derive(Debug, PartialEq, Deserialize, Clone)]
+pub(crate) enum MigMode {
     AGENT,
     IMMEDIATE,
     PRETEND,
 }
 
-const DEFAULT_MODE: MigMode = MigMode::PRETEND;
+impl MigMode {
+    pub fn from_str(mode: &str) -> Result<Self, MigError> {
+        match mode.to_lowercase().as_str() {
+            "immediate" => Ok(MigMode::IMMEDIATE),
+            "agent" => Ok(MigMode::AGENT),
+            "pretend" => Ok(MigMode::PRETEND),
+            _ => {
+                return Err(MigError::from_remark(
+                    MigErrorKind::InvParam,
+                    &format!(
+                        "{}::new: invalid value for parameter mode: '{}'",
+                        MODULE, mode
+                    ),
+                ));
+            }
+        }
+    }
+}
 
-#[derive(Debug)]
+#[derive(Debug, PartialEq, Clone)]
+pub(crate) enum MigrateWifis {
+    NONE,
+    ALL,
+    SOME(Vec<String>),
+}
+
+
+const DEFAULT_MIG_MODE: MigMode = MigMode::PRETEND;
+
+#[derive(Debug, Deserialize)]
 pub(crate) struct MigrateConfig {
-    pub work_dir: PathBuf,
-    pub mode: MigMode,
+    pub work_dir: Option<PathBuf>,
+    pub mode: Option<MigMode>,
     pub reboot: Option<u64>,
-    pub all_wifis: bool,
-    pub wifis: Vec<String>,
+    pub all_wifis: Option<bool>,
+    pub wifis: Option<Vec<String>>,
     pub log_to: Option<LogConfig>,
     pub kernel_file: Option<PathBuf>,
     pub initramfs_file: Option<PathBuf>,
     pub force_slug: Option<String>,
     pub fail_mode: Option<FailMode>,
+    pub backup_config: Option<BackupConfig>
 }
 
 impl<'a> MigrateConfig {
     pub fn default() -> MigrateConfig {
-        MigrateConfig {
-            work_dir: PathBuf::from("./"),
-            fail_mode: None,
-            mode: DEFAULT_MODE,
+        MigrateConfig{
+            work_dir: None,
+            mode: Some(DEFAULT_MIG_MODE.clone()),
             reboot: None,
-            all_wifis: false,
-            wifis: Vec::new(),
+            all_wifis: None,
+            wifis: None,
             log_to: None,
             kernel_file: None,
             initramfs_file: None,
             force_slug: None,
+            fail_mode: Some(FailMode::get_default().clone()),
+            backup_config: None,
+        }
+    }
+
+    pub fn check(&mut self) -> Result<(), MigError> {
+        // TODO: implement
+        if let None = self.mode {
+            self.mode = Some(DEFAULT_MIG_MODE.clone());
+        }
+
+        if let Some(ref mode) = self.mode {
+            match mode {
+                MigMode::AGENT => Err(MigError::from(MigErrorKind::NotImpl)),
+                _ => {
+                    if let None = self.work_dir {
+                        return Err(MigError::from_remark(MigErrorKind::InvParam, "A required parameter was not found: 'work_dir'"));
+                    }
+
+                    if let None = self.fail_mode {
+                        self.fail_mode = Some(FailMode::get_default().clone());
+                    }
+
+                    if let None = self.kernel_file {
+                        return Err(MigError::from_remark(MigErrorKind::InvParam, "A required parameter was not found: 'kernel_file'"));
+                    }
+
+                    if let None = self.initramfs_file {
+                        return Err(MigError::from_remark(MigErrorKind::InvParam, "A required parameter was not found: 'initramfs_file'"));
+                    }
+
+                    Ok(())
+                }
+            }
+        } else {
+            panic!("migrate mode is not set");
+        }
+    }
+
+
+
+    pub fn get_wifis(&self) -> MigrateWifis {
+        if let Some(ref wifis) = self.wifis {
+            MigrateWifis::SOME(wifis.clone())
+        } else {
+            if let Some(ref all_wifis) = self.all_wifis {
+                if *all_wifis {
+                    MigrateWifis::ALL
+                } else {
+                    MigrateWifis::NONE
+                }
+            } else {
+                MigrateWifis::NONE
+            }
+        }
+    }
+
+
+    // The following functions can only be safely called after check has succeeded
+
+    pub fn get_work_dir(&'a self) -> &'a Path {
+        if let Some(ref dir) = self.work_dir {
+            dir
+        } else {
+            panic!("work_dir is not set");
+        }
+    }
+
+
+    pub fn get_mig_mode(&'a self) -> &'a MigMode {
+        if let Some(ref mode) = self.mode {
+            mode
+        } else {
+            panic!("migrate mode is not set");
         }
     }
 
@@ -68,101 +170,5 @@ impl<'a> MigrateConfig {
             panic!("initramfs path is not set");
         }
     }
-
-    pub fn check(&self, mig_mode: &MigMode) -> Result<(), MigError> {
-        // TODO: implement
-        Ok(())
-    }
 }
 
-impl YamlConfig for MigrateConfig {
-    fn from_yaml(yaml: &Yaml) -> Result<Box<MigrateConfig>, MigError> {
-        let mut config = MigrateConfig::default();
-
-        if let Some(work_dir) = get_yaml_str(yaml, &["work_dir"])? {
-            config.work_dir = PathBuf::from(work_dir);
-        }
-
-        if let Some(kernel_file) = get_yaml_str(yaml, &["kernel_file"])? {
-            config.kernel_file = Some(PathBuf::from(kernel_file));
-        }
-
-        if let Some(initramfs_file) = get_yaml_str(yaml, &["initramfs_file"])? {
-            config.initramfs_file = Some(PathBuf::from(initramfs_file));
-        }
-
-        if let Some(fail_mode) = get_yaml_str(yaml, &["fail_mode"])? {
-            config.fail_mode = Some(FailMode::from_str(fail_mode)?.clone());
-        }
-
-        if let Some(mode) = get_yaml_str(yaml, &["mode"])? {
-            if mode.to_lowercase() == "immediate" {
-                config.mode = MigMode::IMMEDIATE;
-            } else if mode.to_lowercase() == "agent" {
-                config.mode = MigMode::AGENT;
-            } else if mode.to_lowercase() == "pretend" {
-                config.mode = MigMode::PRETEND;
-            } else {
-                return Err(MigError::from_remark(
-                    MigErrorKind::InvParam,
-                    &format!(
-                        "{}::from_string: invalid value for migrate mode '{}'",
-                        MODULE, mode
-                    ),
-                ));
-            }
-        }
-
-        // Param: reboot - must be > 0
-        if let Some(reboot_timeout) = get_yaml_int(yaml, &["reboot"])? {
-            if reboot_timeout > 0 {
-                config.reboot = Some(reboot_timeout as u64);
-            } else {
-                config.reboot = None;
-            }
-        }
-
-        // Param: all_wifis - must be > 0
-        if let Some(all_wifis) = get_yaml_bool(yaml, &["all_wifis"])? {
-            config.all_wifis = all_wifis;
-        }
-
-        if let Some(wifis) = get_yaml_val(yaml, &["wifis"])? {
-            if let Yaml::Array(wifis) = wifis {
-                for ssid in wifis {
-                    if let Yaml::String(ssid) = ssid {
-                        config.wifis.push(ssid.clone());
-                    } else {
-                        return Err(MigError::from_remark(
-                            MigErrorKind::InvParam,
-                            &format!(
-                                "{}::from_string: invalid value for wifis - ssid , expected string, got  '{:?}'",
-                                MODULE, ssid
-                            ),
-                        ));
-                    }
-                }
-            } else {
-                return Err(MigError::from_remark(
-                    MigErrorKind::InvParam,
-                    &format!(
-                        "{}::from_string: invalid value for wifis, expected array, got  '{:?}'",
-                        MODULE, wifis,
-                    ),
-                ));
-            }
-        }
-
-        // Params: log_to: drive, fs_type
-        if let Some(log_section) = get_yaml_val(yaml, &["log_to"])? {
-            config.log_to = Some(*LogConfig::from_yaml(log_section)?);
-        }
-
-        // Param: all_wifis - must be > 0
-        if let Some(force_slug) = get_yaml_str(yaml, &["force_slug"])? {
-            config.force_slug = Some(String::from(force_slug));
-        }
-
-        Ok(Box::new(config))
-    }
-}

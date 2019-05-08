@@ -5,6 +5,8 @@ use mod_logger::Logger;
 use std::fs::read_to_string;
 use std::path::{Path, PathBuf};
 use yaml_rust::{Yaml, YamlLoader};
+use serde::{Deserialize};
+use serde_yaml;
 
 use clap::{App, Arg};
 
@@ -17,7 +19,7 @@ pub(crate) mod backup_config;
 pub(crate) use backup_config::BackupConfig;
 
 pub(crate) mod migrate_config;
-pub(crate) use migrate_config::{MigMode, MigrateConfig};
+pub(crate) use migrate_config::{MigMode, MigrateConfig, MigrateWifis};
 
 pub(crate) mod balena_config;
 pub(crate) use balena_config::BalenaConfig;
@@ -39,13 +41,15 @@ const MODULE: &str = "migrator::common::config";
 
 // TODO: add trait ToYaml and implement for all sections
 
+/*
 pub trait YamlConfig {
     // fn to_yaml(&self, prefix: &str) -> String;
     // fn from_yaml(&mut self, yaml: &Yaml) -> Result<(), MigError>;
     fn from_yaml(yaml: &Yaml) -> Result<Box<Self>, MigError>;
 }
+*/
 
-#[derive(Debug)]
+#[derive(Debug, Deserialize)]
 pub(crate) struct Config {
     pub migrate: MigrateConfig,
     pub balena: BalenaConfig,
@@ -182,25 +186,12 @@ impl<'a> Config {
 
         if let Some(work_dir) = work_dir {
             // if work_dir was set in command line it overrides
-            config.migrate.work_dir = work_dir;
+            config.migrate.work_dir = Some(work_dir);
         }
 
         if arg_matches.is_present("mode") {
             if let Some(mode) = arg_matches.value_of("mode") {
-                config.migrate.mode = match mode.to_lowercase().as_str() {
-                    "immediate" => MigMode::IMMEDIATE,
-                    "agent" => MigMode::AGENT,
-                    "pretend" => MigMode::PRETEND,
-                    _ => {
-                        return Err(MigError::from_remark(
-                            MigErrorKind::InvParam,
-                            &format!(
-                                "{}::new: invalid value for parameter mode: '{}'",
-                                MODULE, mode
-                            ),
-                        ));
-                    }
-                }
+                config.migrate.mode = Some(MigMode::from_str(mode)?)
             }
         }
 
@@ -213,6 +204,7 @@ impl<'a> Config {
         Ok(config)
     }
 
+
     fn default() -> Config {
         Config {
             migrate: MigrateConfig::default(),
@@ -221,6 +213,9 @@ impl<'a> Config {
         }
     }
 
+    // TODO: reimplement in Debug mode with serde (de)serialize
+
+    /*
     fn get_debug_config(&mut self, yaml: &Yaml) -> Result<(), MigError> {
         if let Some(section) = get_yaml_val(yaml, &["debug"])? {
             self.debug = *DebugConfig::from_yaml(section)?;
@@ -228,7 +223,7 @@ impl<'a> Config {
         Ok(())
     }
 
-    /*
+
     fn print_debug_config(&self, prefix: &str, buffer: &mut String) -> () {
         *buffer += &self.debug.to_yaml(prefix)
     }
@@ -236,22 +231,8 @@ impl<'a> Config {
 
     fn from_string(config_str: &str) -> Result<Config, MigError> {
         debug!("{}::from_string: entered", MODULE);
-        let yaml_cfg = YamlLoader::load_from_str(&config_str).context(MigErrCtx::from_remark(
-            MigErrorKind::Upstream,
-            &format!("{}::from_string: failed to parse", MODULE),
-        ))?;
-        if yaml_cfg.len() != 1 {
-            return Err(MigError::from_remark(
-                MigErrorKind::InvParam,
-                &format!(
-                    "{}::from_string: invalid number of configs in file: {}",
-                    MODULE,
-                    yaml_cfg.len()
-                ),
-            ));
-        }
-
-        Ok(*Config::from_yaml(&yaml_cfg[0])?)
+        Ok(serde_yaml::from_str(config_str)
+            .context(MigErrCtx::from_remark(MigErrorKind::Upstream, "failed to deserialze config from yaml"))?)
     }
 
     fn from_file<P: AsRef<Path>>(file_name: &P) -> Result<Config, MigError> {
@@ -263,58 +244,15 @@ impl<'a> Config {
         ))?)
     }
 
-    fn check(&self) -> Result<(), MigError> {
-        match self.migrate.mode {
-            MigMode::AGENT => {}
-            MigMode::PRETEND => {}
-            MigMode::IMMEDIATE => {
-                self.migrate.check(&self.migrate.mode)?;
-                self.balena.check(&self.migrate.mode)?;
-                self.debug.check(&self.migrate.mode)?;
-            }
-        }
-
+    fn check(&mut self) -> Result<(), MigError> {
+        self.migrate.check()?;
+        let mode = self.migrate.get_mig_mode();
+        self.balena.check(mode)?;
+        self.debug.check(mode)?;
         Ok(())
     }
 }
 
-impl YamlConfig for Config {
-    fn from_yaml(yaml: &Yaml) -> Result<Box<Config>, MigError> {
-        Ok(Box::new(Config{
-            migrate:
-                if let Some(ref section) = get_yaml_val(yaml, &["migrate"])? {
-                    *MigrateConfig::from_yaml(section)?
-                } else {
-                    MigrateConfig::default()
-                },
-            balena:
-                if let Some(section) = get_yaml_val(yaml, &["balena"])? {
-                    // Params: balena_image
-                    *BalenaConfig::from_yaml(section)?
-                } else {
-                    BalenaConfig::default()
-                },
-            debug:
-                if let Some(section) = get_yaml_val(yaml, &["debug"])? {
-                    *DebugConfig::from_yaml(section)?
-                } else {
-                    DebugConfig::default()
-                },
-        }))
-    }
-/*
-    fn to_yaml(&self, prefix: &str) -> String {
-        let mut output = self.migrate.to_yaml(prefix);
-        if let Some(ref balena) = self.balena {
-            output += &balena.to_yaml(prefix);
-        }
-
-        self.print_debug_config(prefix, &mut output);
-
-        output
-    }
-*/
-}
 
 #[cfg(test)]
 mod tests {
