@@ -19,20 +19,21 @@ pub const SKIP_FLASH_KEY: &str = "skip_flash";
 pub const DEVICE_SLUG_KEY: &str = "device_slug";
 pub const BALENA_IMAGE_KEY: &str = "balena_image";
 pub const BALENA_CONFIG_KEY: &str = "balena_config";
-pub const BACKUP_CONFIG_KEY: &str = "backup_config";
+pub const BOOT_BACKUP_KEY: &str = "boot_bckup";
 
 pub const WORK_DIR_KEY: &str = "work_dir";
 pub const FAIL_MODE_KEY: &str = "fail_mode";
 pub const NO_FLASH_KEY: &str = "no_flash";
 
-pub const BACKUP_ORIG_KEY: &str = "orig";
-pub const BACKUP_BCKUP_KEY: &str = "bckup";
+pub const BBCKUP_SOURCE_KEY: &str = "source";
+pub const BBCKUP_BCKUP_KEY: &str = "backup";
+
+pub const EMPTY_BACKUPS: &[(String,String)] = &[];
 
 const MODULE: &str = "stage2::stage2:config";
 
 use crate::{
     common::{
-        config_helper::{get_yaml_bool, get_yaml_str, get_yaml_val},
         Config, FailMode, MigErrCtx, MigError, MigErrorKind,
     },
     defs::STAGE2_CFG_FILE,
@@ -59,7 +60,7 @@ pub(crate) struct Stage2Config {
     balena_config: PathBuf,
     balena_image: PathBuf,
     work_dir: PathBuf,
-    bckup_cfg: Vec<(String, String)>,
+    boot_bckup: Option<Vec<(String, String)>>,
 }
 
 impl<'a> Stage2Config {
@@ -154,12 +155,16 @@ impl<'a> Stage2Config {
             WORK_DIR_KEY,
             mig_info.get_work_path().to_string_lossy()
         ));
+
         cfg_str.push_str("# backed up files in boot config\n");
-        cfg_str.push_str(&format!("{}:\n", BACKUP_CONFIG_KEY));
-        for bckup in &mig_info.boot_cfg_bckup {
-            cfg_str.push_str(&format!("  - {}:      '{}'\n", BACKUP_ORIG_KEY, &bckup.0));
-            cfg_str.push_str(&format!("    {}:     '{}'\n", BACKUP_BCKUP_KEY, &bckup.1));
+        if mig_info.boot_cfg_bckup.len() > 0 {
+            cfg_str.push_str(&format!("{}:\n", BOOT_BACKUP_KEY));
+            for bckup in &mig_info.boot_cfg_bckup {
+                cfg_str.push_str(&format!("  - {}:      '{}'\n", BBCKUP_SOURCE_KEY, bckup.0));
+                cfg_str.push_str(&format!("    {}:     '{}'\n", BBCKUP_BCKUP_KEY, bckup.1));
+            }
         }
+
         let mut cfg_file = File::create(STAGE2_CFG_FILE).context(MigErrCtx::from_remark(
             MigErrorKind::Upstream,
             &format!(
@@ -239,8 +244,12 @@ impl<'a> Stage2Config {
         self.balena_config.as_path()
     }
 
-    pub fn get_backups(&'a self) -> &'a Vec<(String, String)> {
-        &self.bckup_cfg
+    pub fn get_boot_backups(&'a self) -> &'a [(String, String)] {
+        if let Some(ref boot_bckup) = self.boot_bckup {
+            boot_bckup.as_slice()
+        } else {
+            EMPTY_BACKUPS
+        }
     }
 
     pub fn get_work_path(&'a self) -> &'a Path {

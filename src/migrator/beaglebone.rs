@@ -216,7 +216,7 @@ impl<'a> Device for BeagleboneGreen {
                 ),
             ))?;
             info!("Removed balena boot config file '{}'", &uenv_file.display());
-            restore_backups(root_path, config.get_backups())?;
+            restore_backups(root_path, config.get_boot_backups())?;
         } else {
             warn!(
                 "balena boot config file not found in '{}'",

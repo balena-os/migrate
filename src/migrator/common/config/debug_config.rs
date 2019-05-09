@@ -54,7 +54,7 @@ impl<'a> DebugConfig {
     }
 
     pub fn is_skip_flash(&self) -> bool {
-        if let Some(val) = self.no_flash {
+        if let Some(val) = self.skip_flash {
             if let Some(ref _ffd) = self.force_flash_device {
                 val
             } else {

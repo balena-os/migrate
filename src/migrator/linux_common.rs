@@ -370,7 +370,7 @@ pub(crate) fn get_grub_version() -> Result<(String, String), MigError> {
 
 pub(crate) fn restore_backups(
     root_path: &Path,
-    backups: &Vec<(String, String)>,
+    backups: &[(String, String)],
 ) -> Result<(), MigError> {
     // restore boot config backups
     for backup in backups {
