@@ -10,6 +10,8 @@ use std::io::{BufRead, BufReader};
 use std::path::{Path, PathBuf};
 use std::process::{Command, ExitStatus, Stdio};
 
+use crate::defs::BALENA_FILE_TAG_REGEX;
+
 /*
 pub mod stage_info;
 pub use stage_info::{Stage1Info, Stage2Info};
@@ -22,7 +24,7 @@ pub(crate) mod mig_error;
 
 pub(crate) mod balena_cfg_json;
 pub(crate) mod config;
-pub(crate) mod config_helper;
+// pub(crate) mod config_helper;
 pub(crate) mod fail_mode;
 pub(crate) mod file_info;
 pub(crate) use fail_mode::FailMode;
@@ -51,8 +53,6 @@ pub enum OSArch {
         S390EX,
     */
 }
-
-const BALENA_FILE_TAG_REGEX: &str = "^.* created by balena-migrate$";
 
 impl Display for OSArch {
     fn fmt(&self, f: &mut Formatter) -> fmt::Result {

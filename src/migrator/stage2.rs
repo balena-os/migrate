@@ -468,13 +468,13 @@ impl Stage2 {
         // check existence of partitions
 
         let part_label = path_append(DISK_BY_LABEL_PATH, BALENA_BOOT_PART);
-        info!("looking for '{}'", part_label.display());
 
         if file_exists(&part_label) {
             /* TODO: skip this step ? can mount work with a link ?
             let boot_device = read_link(&part_label)
                                 .context(MigErrCtx::from_remark(MigErrorKind::Upstream, &format!("failed to read link: '{}'", part_label.display())))?;
             */
+            info!("Found labeled partition for '{}'", part_label.display());
 
             let boot_device = path_append(
                 part_label.parent().unwrap(),
@@ -547,56 +547,58 @@ impl Stage2 {
             // we can hope to successfully reboot again after writing config.json and system-connections
             self.recoverable_state = true;
         } else {
-            return Err(MigError::from_remark(
-                MigErrorKind::NotFound,
-                &format!(
-                    "unable to find labeled partition: '{}'",
-                    &part_label.display()
-                ),
-            ));
+            let message = format!(
+                "unable to find labeled partition: '{}'",
+                part_label.display()
+            );
+            error!("{}", &message);
+            return Err(MigError::from_remark(MigErrorKind::NotFound, &message));
         }
 
         let part_label = path_append(DISK_BY_LABEL_PATH, BALENA_ROOTA_PART);
-        info!("looking for '{}'", part_label.display());
-
         if !file_exists(&part_label) {
-            return Err(MigError::from_remark(
-                MigErrorKind::NotFound,
-                &format!(
-                    "unable to find labeled partition: '{}'",
-                    &part_label.display()
-                ),
-            ));
+            let message = format!(
+                "unable to find labeled partition: '{}'",
+                part_label.display()
+            );
+            error!("{}", &message);
+            return Err(MigError::from_remark(MigErrorKind::NotFound, &message));
         }
+
+        info!("Found labeled partition for '{}'", part_label.display());
 
         let part_label = path_append(DISK_BY_LABEL_PATH, BALENA_ROOTB_PART);
         info!("looking for '{}'", part_label.display());
         if !file_exists(&part_label) {
-            return Err(MigError::from_remark(
-                MigErrorKind::NotFound,
-                &format!(
-                    "unable to find labeled partition: '{}'",
-                    &part_label.display()
-                ),
-            ));
+            let message = format!(
+                "unable to find labeled partition: '{}'",
+                part_label.display()
+            );
+            error!("{}", &message);
+            return Err(MigError::from_remark(MigErrorKind::NotFound, &message));
         }
+
+        info!("Found labeled partition for '{}'", part_label.display());
 
         let part_label = path_append(DISK_BY_LABEL_PATH, BALENA_STATE_PART);
         info!("looking for '{}'", part_label.display());
         if !file_exists(&part_label) {
-            return Err(MigError::from_remark(
-                MigErrorKind::NotFound,
-                &format!(
-                    "unable to find labeled partition: '{}'",
-                    &part_label.display()
-                ),
-            ));
+            let message = format!(
+                "unable to find labeled partition: '{}'",
+                part_label.display()
+            );
+            error!("{}", &message);
+            return Err(MigError::from_remark(MigErrorKind::NotFound, &message));
         }
+
+        info!("Found labeled partition for '{}'", part_label.display());
 
         let part_label = path_append(DISK_BY_LABEL_PATH, BALENA_DATA_PART);
         info!("looking for '{}'", part_label.display());
 
         if file_exists(&part_label) {
+            info!("Found labeled partition for '{}'", part_label.display());
+
             let link_path = read_link(&part_label).context(MigErrCtx::from_remark(
                 MigErrorKind::Upstream,
                 &format!("failed to read link: '{}'", part_label.display()),
@@ -648,13 +650,12 @@ impl Stage2 {
 
         // TODO: copy log, backup to data_path
         } else {
-            return Err(MigError::from_remark(
-                MigErrorKind::NotFound,
-                &format!(
-                    "unable to find labeled partition: '{}'",
-                    &part_label.display()
-                ),
-            ));
+            let message = format!(
+                "unable to find labeled partition: '{}'",
+                part_label.display()
+            );
+            error!("{}", &message);
+            return Err(MigError::from_remark(MigErrorKind::NotFound, &message));
         }
 
         Ok(())

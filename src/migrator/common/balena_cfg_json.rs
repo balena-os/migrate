@@ -1,13 +1,11 @@
 use failure::{Fail, ResultExt};
 use log::{error, info, warn};
-use serde_json::Value;
+use serde_json::{value::Index, Value};
 use std::fs::File;
 use std::io::BufReader;
 use std::path::{Path, PathBuf};
 
-use super::{
-    check_tcp_connect, config_helper::get_json_str, Config, MigErrCtx, MigError, MigErrorKind,
-};
+use super::{check_tcp_connect, Config, MigErrCtx, MigError, MigErrorKind};
 
 const MODULE: &str = "migrator::common::balena_cfg_json";
 
@@ -51,7 +49,7 @@ impl BalenaCfgJson {
 
         // TODO: check API too
 
-        if config.balena.is_check_vpn() {
+        if config.balena.is_vpn_check() {
             let vpn_addr = self.get_vpn_endpoint()?;
             let vpn_port = self.get_vpn_port()?;
 
@@ -86,7 +84,7 @@ impl BalenaCfgJson {
     }
 
     fn get_string_cfg(&self, name: &str) -> Result<&str, MigError> {
-        match get_json_str(&self.doc, name) {
+        match BalenaCfgJson::get_json_str(&self.doc, name) {
             Ok(res) => match res {
                 Some(res) => Ok(&res),
                 None => Err(MigError::from_remark(
@@ -140,6 +138,20 @@ impl BalenaCfgJson {
                     &self.file.display()
                 ),
             ))
+        }
+    }
+
+    fn get_json_str<'a, I: Index>(doc: &'a Value, index: I) -> Result<Option<&'a str>, MigError> {
+        if let Some(value) = doc.get(index) {
+            match value {
+                Value::String(s) => Ok(Some(&s)),
+                _ => Err(MigError::from_remark(
+                    MigErrorKind::InvParam,
+                    &format!("{}::get_json_str: invalid value, not string", MODULE),
+                )),
+            }
+        } else {
+            Ok(None)
         }
     }
 }

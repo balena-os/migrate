@@ -28,14 +28,12 @@ pub const NO_FLASH_KEY: &str = "no_flash";
 pub const BBCKUP_SOURCE_KEY: &str = "source";
 pub const BBCKUP_BCKUP_KEY: &str = "backup";
 
-pub const EMPTY_BACKUPS: &[(String,String)] = &[];
+pub const EMPTY_BACKUPS: &[(String, String)] = &[];
 
 const MODULE: &str = "stage2::stage2:config";
 
 use crate::{
-    common::{
-        Config, FailMode, MigErrCtx, MigError, MigErrorKind,
-    },
+    common::{Config, FailMode, MigErrCtx, MigError, MigErrorKind},
     defs::STAGE2_CFG_FILE,
     linux_common::MigrateInfo,
 };
@@ -185,6 +183,15 @@ impl<'a> Stage2Config {
         Ok(())
     }
 
+    fn from_str(config_str: &str) -> Result<Stage2Config, MigError> {
+        Ok(
+            serde_yaml::from_str(&config_str).context(MigErrCtx::from_remark(
+                MigErrorKind::Upstream,
+                "Failed to parse stage2 config",
+            ))?,
+        )
+    }
+
     pub fn from_config<P: AsRef<Path>>(path: &P) -> Result<Stage2Config, MigError> {
         // TODO: Dummy, parse from yaml
         let config_str = read_to_string(path).context(MigErrCtx::from_remark(
@@ -196,12 +203,7 @@ impl<'a> Stage2Config {
             ),
         ))?;
 
-        Ok(
-            serde_yaml::from_str(&config_str).context(MigErrCtx::from_remark(
-                MigErrorKind::Upstream,
-                "Failed to parse stage2 config",
-            ))?,
-        )
+        Stage2Config::from_str(&config_str)
     }
 
     pub fn is_no_flash(&self) -> bool {
@@ -262,5 +264,27 @@ impl<'a> Stage2Config {
 
     pub fn get_fail_mode(&'a self) -> &'a FailMode {
         &self.fail_mode
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    const TEST_CONFIG: &str = r##"
+migrate:
+  mode: IMMEDIATE
+  all_wifis: true
+  reboot: 10
+  log_to:
+    drive: '/dev/sda1'
+    fs_type: ext4
+balena:
+  image: image.gz
+  config: config.json
+"##;
+
+    fn assert_test_config1(config: &Config) -> () {
+        let config = Stage2Config::from_str(TEST_CONFIG);
     }
 }

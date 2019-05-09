@@ -7,11 +7,11 @@ migrate:
   #  PRETEND: only validates conditions for IMMEDIATE, changes nothing
   mode: IMMEDIATE
   # where all files are expected to be found
-  home_dir: './work/'
+  work_dir: './work/'
   # migrate all wifi configurations found on device
   all_wifis: true
   # migrate only the following wifi ssid's (overrides all_wifis)
-  wifis: 
+  wifis:
     - 'Xcover'
     - 'QIFI'
     - 'bla'
@@ -28,9 +28,9 @@ migrate:
   # backup configuration
   backup:
   # what to do on a recoverable fail in phase 2, either reboot or rescueshell
-  fail_mode: Reboot,
+  fail_mode: Reboot
   # forced use of a device slug other than the one detected
-  force_slug:
+  force_slug: 'dummy_device'
 balena:
   # the balena image version to download (not yet implemented)
   version:
@@ -41,19 +41,23 @@ balena:
   # The balena app name - needed for download (not yet implemented) checked against present config.json
   app_name: 'test'
   # Api to use for connectivity check, agent mode, downloads etc
-  api: 
-    host: "api.balena-cloud.com"
-    port: 443
-    check: true
-  # VPN to use for connectivity check
+  api:
+    ## defaults as follows
+    # host: "api.balena-cloud.com"
+    # port: 443
+    # check: true
+    ## Api key  to use for agent mode, downloads etc
+    key: "secret"
+  ## VPN to use for connectivity check
   vpn:
-    host: "api.balena-cloud.com"  
-    port: 443
-    check: true
-  # connectivity check timeout
-  check_timeout: 20
-  # Api key  to use for agent mode, downloads etc
-  api_key:
+    ## defaults as follows
+    # host: "vpn.balena-cloud.com"
+    # port: 443
+    # check: true
+
+  ## connectivity check timeout
+  # check_timeout: 20
+
 debug:
   # ignore non admin mode
   fake_admin: true

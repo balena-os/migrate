@@ -5,22 +5,33 @@ use std::path::{Path, PathBuf};
 
 const MODULE: &str = "common::config::balena_config";
 
-const DEFAULT_API_HOST: &str = "api.balena-cloud.com";
-const DEFAULT_API_PORT: u16 = 443;
-const DEFAULT_VPN_HOST: &str = "vpn.balena-cloud.com";
-const DEFAULT_VPN_PORT: u16 = 443;
-const DEFAULT_CHECK_TIMEOUT: u64 = 20;
+use crate::defs::{
+    DEFAULT_API_CHECK_TIMEOUT, DEFAULT_API_HOST, DEFAULT_API_PORT, DEFAULT_VPN_HOST,
+    DEFAULT_VPN_PORT,
+};
+
+#[derive(Debug, Deserialize)]
+pub struct Host {
+    host: Option<String>,
+    port: Option<u16>,
+    check: Option<bool>,
+}
+
+#[derive(Debug, Deserialize)]
+pub struct ApiInfo {
+    host: Option<String>,
+    port: Option<u16>,
+    check: Option<bool>,
+    key: Option<String>,
+}
 
 #[derive(Debug, Deserialize)]
 pub struct BalenaConfig {
     image: Option<PathBuf>,
     config: Option<PathBuf>,
-    api_host: Option<String>,
-    api_port: Option<u16>,
-    api_check: Option<bool>,
-    vpn_host: Option<String>,
-    vpn_port: Option<u16>,
-    vpn_check: Option<bool>,
+    app_name: Option<String>,
+    api: Option<ApiInfo>,
+    vpn: Option<Host>,
     check_timeout: Option<u64>,
 }
 
@@ -29,12 +40,9 @@ impl<'a> BalenaConfig {
         BalenaConfig {
             image: None,
             config: None,
-            api_host: None,
-            api_port: None,
-            api_check: None,
-            vpn_host: None,
-            vpn_port: None,
-            vpn_check: None,
+            app_name: None,
+            api: None,
+            vpn: None,
             check_timeout: None,
         }
     }
@@ -65,59 +73,89 @@ impl<'a> BalenaConfig {
         Ok(())
     }
 
-    pub fn get_api_host(&'a self) -> &'a str {
-        if let Some(ref api_host) = self.api_host {
-            api_host
+    pub fn get_app_name(&'a self) -> Option<&'a str> {
+        if let Some(ref val) = self.app_name {
+            Some(val)
         } else {
-            DEFAULT_API_HOST
+            None
         }
+    }
+
+    pub fn get_api_host(&'a self) -> &'a str {
+        if let Some(ref api) = self.api {
+            if let Some(ref val) = api.host {
+                return val;
+            }
+        }
+
+        return DEFAULT_API_HOST;
     }
 
     pub fn get_api_port(&self) -> u16 {
-        if let Some(api_port) = self.api_port {
-            api_port
-        } else {
-            DEFAULT_API_PORT
+        if let Some(ref api) = self.api {
+            if let Some(ref val) = api.port {
+                return *val;
+            }
         }
+
+        return DEFAULT_API_PORT;
     }
 
     pub fn is_api_check(&self) -> bool {
-        if let Some(api_check) = self.api_check {
-            api_check
-        } else {
-            true
+        if let Some(ref api) = self.api {
+            if let Some(ref val) = api.check {
+                return *val;
+            }
         }
+
+        return true;
+    }
+
+    pub fn get_api_key(&self) -> Option<String> {
+        if let Some(ref api) = self.api {
+            if let Some(ref val) = api.key {
+                return Some(val.clone());
+            }
+        }
+
+        return None;
     }
 
     pub fn get_vpn_host(&'a self) -> &'a str {
-        if let Some(ref vpn_host) = self.vpn_host {
-            vpn_host
-        } else {
-            DEFAULT_VPN_HOST
+        if let Some(ref vpn) = self.vpn {
+            if let Some(ref val) = vpn.host {
+                return val;
+            }
         }
+
+        return DEFAULT_VPN_HOST;
     }
 
     pub fn get_vpn_port(&self) -> u16 {
-        if let Some(vpn_port) = self.vpn_port {
-            vpn_port
-        } else {
-            DEFAULT_VPN_PORT
+        if let Some(ref vpn) = self.vpn {
+            if let Some(ref val) = vpn.port {
+                return *val;
+            }
         }
+
+        return DEFAULT_VPN_PORT;
     }
 
-    pub fn is_check_vpn(&self) -> bool {
-        if let Some(vpn_check) = self.vpn_check {
-            vpn_check
-        } else {
-            true
+    pub fn is_vpn_check(&self) -> bool {
+        if let Some(ref vpn) = self.vpn {
+            if let Some(ref val) = vpn.check {
+                return *val;
+            }
         }
+
+        return true;
     }
 
     pub fn get_check_timeout(&self) -> u64 {
         if let Some(timeout) = self.check_timeout {
             timeout
         } else {
-            DEFAULT_CHECK_TIMEOUT
+            DEFAULT_API_CHECK_TIMEOUT
         }
     }
 

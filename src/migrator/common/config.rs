@@ -10,9 +10,6 @@ use clap::{App, Arg};
 
 use super::{MigErrCtx, MigError, MigErrorKind};
 
-pub(crate) mod log_config;
-pub(crate) use log_config::LogConfig;
-
 pub(crate) mod backup_config;
 pub(crate) use backup_config::BackupConfig;
 
@@ -264,77 +261,182 @@ impl<'a> Config {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::common::{config::migrate_config::MigrateWifis, FailMode};
 
     // TODO: update this to current config
 
-    const TEST_CONFIG: &str = "
-migrate:
-  mode: IMMEDIATE
-  all_wifis: true
-  reboot: 10
-  log_to:
-    drive: '/dev/sda1'
-    fs_type: ext4
-balena:
-  image: image.gz
-  config: config.json
-";
-
-    fn assert_test_config1(config: &Config) -> () {
-        match config.migrate.mode {
-            MigMode::IMMEDIATE => (),
-            _ => {
-                panic!("unexpected migrate mode");
-            }
-        };
-
-        assert!(config.migrate.all_wifis == true);
-
-        if let Some(i) = config.migrate.reboot {
-            assert!(i == 10);
-        } else {
-            panic!("missing parameter migarte.reboot");
-        }
-
-        if let Some(ref log_to) = config.migrate.log_to {
-            assert!(log_to.drive == "/dev/sda1");
-            assert!(log_to.fs_type == "ext4");
-        } else {
-            panic!("no log config found");
-        }
-
-        if let Some(ref balena) = config.balena {
-            assert!(balena.get_image_path().to_string_lossy() == "image.gz");
-            assert!(balena.get_config_path().to_string_lossy() == "config.json");
-        } else {
-            panic!("no balena config found");
-        }
-
-        config.check().unwrap();
-    }
-
     #[test]
-    fn read_sample_conf() -> () {
-        let mut config = Config::default();
-        config.from_string(TEST_CONFIG).unwrap();
-        assert_test_config1(&config);
+    fn read_conf_ok() -> () {
+        let config = Config::from_string(TEST_CONFIG_OK).unwrap();
+
+        assert_eq!(config.migrate.get_mig_mode(), &MigMode::IMMEDIATE);
+        assert_eq!(config.migrate.get_work_dir(), Path::new("./work/"));
+        match config.migrate.get_wifis() {
+            MigrateWifis::SOME(list) => assert_eq!(list.len(), 3),
+            _ => panic!("unexpected result from get_wifis"),
+        };
+        assert_eq!(config.migrate.get_reboot(), &Some(10));
+        assert_eq!(
+            config.migrate.get_kernel_path(),
+            Path::new("balena_x86_64.migrate.kernel")
+        );
+        assert_eq!(
+            config.migrate.get_initramfs_path(),
+            Path::new("balena_x86_64.migrate.initramfs")
+        );
+        assert_eq!(config.migrate.get_fail_mode(), &FailMode::Reboot);
+        assert_eq!(
+            config.migrate.get_force_slug(),
+            Some(String::from("dummy_device"))
+        );
+
+        assert_eq!(config.balena.get_image_path(), Path::new("image.gz"));
+        assert_eq!(config.balena.get_config_path(), Path::new("config.json"));
+        assert_eq!(config.balena.get_app_name(), Some("test"));
+        assert_eq!(config.balena.get_api_host(), "api1.balena-cloud.com");
+        assert_eq!(config.balena.get_api_port(), 444);
+        assert_eq!(config.balena.is_api_check(), false);
+        assert_eq!(config.balena.get_api_key(), Some(String::from("secret")));
+        assert_eq!(config.balena.get_vpn_host(), "vpn1.balena-cloud.com");
+        assert_eq!(config.balena.get_vpn_port(), 444);
+        assert_eq!(config.balena.is_vpn_check(), false);
+        assert_eq!(config.balena.get_check_timeout(), 42);
+
         ()
     }
 
     /*
-    #[test]
-    fn read_write() -> () {
-        let mut config = Config::default();
-        config.from_string(TEST_CONFIG).unwrap();
 
-        let out = config.to_yaml("");
+        fn assert_test_config_ok(config: &Config) -> () {
+            match config.migrate.mode {
+                MigMode::IMMEDIATE => (),
+                _ => {
+                    panic!("unexpected migrate mode");
+                }
+            };
 
-        let mut new_config = Config::default();
-        new_config.from_string(&out).unwrap();
-        assert_test_config1(&new_config);
+            assert!(config.migrate.all_wifis == true);
 
-        ()
-    }
+            if let Some(i) = config.migrate.reboot {
+                assert!(i == 10);
+            } else {
+                panic!("missing parameter migarte.reboot");
+            }
+
+            if let Some(ref log_to) = config.migrate.log_to {
+                assert!(log_to.drive == "/dev/sda1");
+                assert!(log_to.fs_type == "ext4");
+            } else {
+                panic!("no log config found");
+            }
+
+            if let Some(ref balena) = config.balena {
+                assert!(balena.get_image_path().to_string_lossy() == "image.gz");
+                assert!(balena.get_config_path().to_string_lossy() == "config.json");
+            } else {
+                panic!("no balena config found");
+            }
+
+            config.check().unwrap();
+        }
+
+
+
+        #[test]
+        fn read_write() -> () {
+            let mut config = Config::default();
+            config.from_string(TEST_CONFIG).unwrap();
+
+            let out = config.to_yaml("");
+
+            let mut new_config = Config::default();
+            new_config.from_string(&out).unwrap();
+            assert_test_config1(&new_config);
+
+            ()
+        }
     */
+
+    const TEST_CONFIG_OK: &str = r###"
+migrate:
+  # mode AGENT, IMMEDIATE, PRETEND
+  #  AGENT - not yet implemented, connects to balena-cloud, controlled by dashboard
+  #  IMMEDIATE: migrates the device
+  #   not yet implemented:
+  #     if app, api, api_key, are given in balena section, config & image can be downloaded
+  #  PRETEND: only validates conditions for IMMEDIATE, changes nothing
+  mode: IMMEDIATE
+  # where all files are expected to be found
+  work_dir: './work/'
+  # migrate all wifi configurations found on device
+  all_wifis: true
+  # migrate only the following wifi ssid's (overrides all_wifis)
+  wifis:
+    - 'Xcover'
+    - 'QIFI'
+    - 'bla'
+  # reboot automatically after n seconds
+  reboot: 10
+  # not yet implemented, subject to change
+  log_to:
+    drive: "/dev/sda1"
+    fs_type: ext4
+  # the migrate kernel, might be downloaded automatically in future versions
+  kernel_file: "balena_x86_64.migrate.kernel"
+  # the migrate initramfs, might be downloaded automatically in future versions
+  initramfs_file: "balena_x86_64.migrate.initramfs"
+  # backup configuration
+  backup:
+  #  - volume: "test volume 1"
+  #    - source: /home/thomas/develop/balena.io/support
+  #      target: "target dir 1.1"
+  #    - source: "/home/thomas/develop/balena.io/customer/sonder/unitdata/UnitData files"
+  #      target: "target dir 1.2"
+  #  - volume: "test volume 2"
+  #    - source: "/home/thomas/develop/balena.io/migrate/migratecfg/balena-migrate"
+  #      target: "target file 2.1"
+  #    - source: "/home/thomas/develop/balena.io/migrate/migratecfg/init-scripts"
+  #      target: "target dir 2.2"
+  #      filter: 'balena-.*'
+  #  - volume: "test_volume_3"
+  #     - source: "/home/thomas/develop/balena.io/migrate/migratecfg/init-scripts"
+  #       filter: 'balena-.*'
+  ## what to do on a recoverable fail in phase 2, either reboot or rescueshell
+  fail_mode: Reboot
+  ## forced use of a device slug other than the one detected
+  force_slug: 'dummy_device'
+balena:
+  ## the balena image version to download (not yet implemented)
+  version:
+  ## the balena image to flash
+  image: image.gz
+  ## the balena config file to use (can be auto generated in future versions)
+  config: config.json
+  ## The balena app name - needed for download (not yet implemented) checked against present config.json
+  app_name: 'test'
+  ## Api to use for connectivity check, agent mode, downloads etc
+  api:
+    host: "api1.balena-cloud.com"
+    port: 444
+    check: false
+    key: "secret"
+  ## VPN to use for connectivity check
+  vpn:
+    host: "vpn1.balena-cloud.com"
+    port: 444
+    check: false
+  ## connectivity check timeout
+  check_timeout: 42
+  ## Api key  to use for agent mode, downloads etc
+debug:
+  ## ignore non admin mode
+  fake_admin: true
+  ## flash to a device other than the boot device
+  force_flash_device: '/dev/sdb'
+  ## skip flashing - only used with force_flash_device
+  skip_flash: false
+  ## run migration up to phase2 but stop & reboot before flashing
+  no_flash: true
+"###;
 
 }

@@ -154,13 +154,13 @@ impl<'a> LinuxMigrator {
         // **********************************************************************
         // Set the custom device slug here if configured
 
-        if let Some(ref force_slug) = migrator.config.migrate.get_force_slug() {
+        if let Some(force_slug) = migrator.config.migrate.get_force_slug() {
             let device_slug = migrator.mig_info.get_device_slug();
             warn!(
                 "setting device type to '{}' using 'force_slug, detected type was '{}'",
-                force_slug, device_slug
+                &force_slug, device_slug
             );
-            migrator.mig_info.device_slug = Some(force_slug.clone());
+            migrator.mig_info.device_slug = Some(force_slug);
         }
         info!("using device slug '{}", migrator.mig_info.get_device_slug());
 

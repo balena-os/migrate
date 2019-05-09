@@ -1,4 +1,4 @@
-use super::{BackupConfig, LogConfig};
+use super::BackupConfig;
 use std::path::{Path, PathBuf};
 
 use crate::common::{FailMode, MigError, MigErrorKind};
@@ -33,6 +33,8 @@ impl MigMode {
     }
 }
 
+const DEFAULT_MIG_MODE: MigMode = MigMode::PRETEND;
+
 #[derive(Debug, PartialEq, Clone)]
 pub(crate) enum MigrateWifis {
     NONE,
@@ -40,7 +42,22 @@ pub(crate) enum MigrateWifis {
     SOME(Vec<String>),
 }
 
-const DEFAULT_MIG_MODE: MigMode = MigMode::PRETEND;
+#[derive(Debug, Deserialize)]
+pub struct LogConfig {
+    pub level: Option<String>,
+    pub drive: Option<PathBuf>,
+    pub fs_type: Option<String>,
+}
+
+impl LogConfig {
+    pub fn default() -> LogConfig {
+        LogConfig {
+            level: None,
+            drive: None,
+            fs_type: None,
+        }
+    }
+}
 
 #[derive(Debug, Deserialize)]
 pub(crate) struct MigrateConfig {
@@ -49,7 +66,7 @@ pub(crate) struct MigrateConfig {
     reboot: Option<u64>,
     all_wifis: Option<bool>,
     wifis: Option<Vec<String>>,
-    log_to: Option<LogConfig>,
+    log: Option<LogConfig>,
     kernel_file: Option<PathBuf>,
     initramfs_file: Option<PathBuf>,
     force_slug: Option<String>,
@@ -67,7 +84,7 @@ impl<'a> MigrateConfig {
             reboot: None,
             all_wifis: None,
             wifis: None,
-            log_to: None,
+            log: None,
             kernel_file: None,
             initramfs_file: None,
             force_slug: None,
@@ -122,8 +139,12 @@ impl<'a> MigrateConfig {
         &self.reboot
     }
 
-    pub fn get_force_slug(&'a self) -> &'a Option<String> {
-        &self.force_slug
+    pub fn get_force_slug(&self) -> Option<String> {
+        if let Some(ref val) = self.force_slug {
+            Some(val.clone())
+        } else {
+            None
+        }
     }
 
     pub fn get_fail_mode(&'a self) -> &'a FailMode {
@@ -178,5 +199,32 @@ impl<'a> MigrateConfig {
         } else {
             panic!("initramfs path is not set");
         }
+    }
+
+    pub fn get_log_device(&'a self) -> Option<&'a Path> {
+        if let Some(ref log_info) = self.log {
+            if let Some(ref val) = log_info.drive {
+                return Some(val);
+            }
+        }
+        return None;
+    }
+
+    pub fn get_log_fstype(&'a self) -> Option<&'a str> {
+        if let Some(ref log_info) = self.log {
+            if let Some(ref val) = log_info.fs_type {
+                return Some(val);
+            }
+        }
+        return None;
+    }
+
+    pub fn get_log_level(&'a self) -> Option<&'a str> {
+        if let Some(ref log_info) = self.log {
+            if let Some(ref val) = log_info.level {
+                return Some(val);
+            }
+        }
+        return Some("warn");
     }
 }
