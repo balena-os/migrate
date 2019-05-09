@@ -1,6 +1,7 @@
 use crate::common::{MigError, MigErrorKind};
+use serde::Deserialize;
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Deserialize, PartialEq)]
 pub(crate) enum FailMode {
     Reboot,
     RescueShell,

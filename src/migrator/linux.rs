@@ -10,7 +10,7 @@ use crate::{
     beaglebone::is_bb,
     common::{
         balena_cfg_json::BalenaCfgJson, dir_exists, format_size_with_unit, Config, FileInfo,
-        FileType, MigErrCtx, MigError, MigErrorKind, MigMode, OSArch,
+        FileType, MigErrCtx, MigError, MigErrorKind, MigMode, MigrateWifis, OSArch,
     },
     defs::STAGE2_CFG_FILE,
     intel_nuc::init_amd64,
@@ -58,7 +58,7 @@ pub(crate) struct LinuxMigrator {
 impl<'a> LinuxMigrator {
     pub fn migrate() -> Result<(), MigError> {
         let mut migrator = LinuxMigrator::try_init(Config::new()?)?;
-        match migrator.config.migrate.mode {
+        match migrator.config.migrate.get_mig_mode() {
             MigMode::IMMEDIATE => migrator.do_migrate(),
             MigMode::PRETEND => Ok(()),
             MigMode::AGENT => Err(MigError::from(MigErrorKind::NotImpl)),
@@ -74,7 +74,7 @@ impl<'a> LinuxMigrator {
 
         ensure_cmds(REQUIRED_CMDS, OPTIONAL_CMDS)?;
 
-        info!("migrate mode: {:?}", config.migrate.mode);
+        info!("migrate mode: {:?}", config.migrate.get_mig_mode());
 
         // create default
         let mut migrator = LinuxMigrator {
@@ -154,13 +154,13 @@ impl<'a> LinuxMigrator {
         // **********************************************************************
         // Set the custom device slug here if configured
 
-        if let Some(ref force_slug) = migrator.config.migrate.force_slug {
+        if let Some(force_slug) = migrator.config.migrate.get_force_slug() {
             let device_slug = migrator.mig_info.get_device_slug();
             warn!(
                 "setting device type to '{}' using 'force_slug, detected type was '{}'",
-                force_slug, device_slug
+                &force_slug, device_slug
             );
-            migrator.mig_info.device_slug = Some(force_slug.clone());
+            migrator.mig_info.device_slug = Some(force_slug);
         }
         info!("using device slug '{}", migrator.mig_info.get_device_slug());
 
@@ -269,56 +269,62 @@ impl<'a> LinuxMigrator {
 
         // **********************************************************************
         // Check balena config section
-        if let Some(ref balena_cfg) = migrator.config.balena {
-            // check balena os image
+        // check balena os image
 
-            if let Some(file_info) = FileInfo::new(balena_cfg.get_image_path(), &work_dir)? {
-                file_info.expect_type(&FileType::OSImage)?;
-                info!(
-                    "The balena OS image looks ok: '{}'",
-                    file_info.path.display()
-                );
-                // TODO: make sure there is enough memory for OSImage
+        if let Some(file_info) = FileInfo::new(&migrator.config.balena.get_image_path(), &work_dir)?
+        {
+            file_info.expect_type(&FileType::OSImage)?;
+            info!(
+                "The balena OS image looks ok: '{}'",
+                file_info.path.display()
+            );
+            // TODO: make sure there is enough memory for OSImage
 
-                let required_mem = file_info.size + MEM_THRESHOLD;
-                if get_mem_info()?.0 < required_mem {
-                    let message = format!("We have not found sufficient memory to store the balena OS image in ram. at least {} of memory is required.", format_size_with_unit(required_mem));
-                    error!("{}", message);
-                    return Err(MigError::from_remark(MigErrorKind::InvParam, &message));
-                }
-
-                migrator.mig_info.os_image_info = Some(file_info);
-            } else {
-                let message = String::from("The balena image has not been specified or cannot be accessed. Automatic download is not yet implemented, so you need to specify and supply all required files");
+            let required_mem = file_info.size + MEM_THRESHOLD;
+            if get_mem_info()?.0 < required_mem {
+                let message = format!("We have not found sufficient memory to store the balena OS image in ram. at least {} of memory is required.", format_size_with_unit(required_mem));
                 error!("{}", message);
                 return Err(MigError::from_remark(MigErrorKind::InvParam, &message));
             }
 
-            // check balena os config
-
-            if let Some(file_info) = FileInfo::new(balena_cfg.get_config_path(), &work_dir)? {
-                file_info.expect_type(&FileType::Json)?;
-                let balena_cfg_json = BalenaCfgJson::new(&file_info.path)?;
-                balena_cfg_json.check(migrator.mig_info.get_device_slug())?;
-                migrator.mig_info.os_config_info = Some(file_info);
-            } else {
-                let message = String::from("The balena config has not been specified or cannot be accessed. Automatic download is not yet implemented, so you need to specify and supply all required files");
-                error!("{}", message);
-                return Err(MigError::from_remark(MigErrorKind::InvParam, &message));
-            }
+            migrator.mig_info.os_image_info = Some(file_info);
         } else {
-            let message = String::from("The balena section of the configuration is empty. Automatic download is not yet implemented, so you need to specify and supply all required files and options.");
+            let message = String::from("The balena image has not been specified or cannot be accessed. Automatic download is not yet implemented, so you need to specify and supply all required files");
             error!("{}", message);
             return Err(MigError::from_remark(MigErrorKind::InvParam, &message));
         }
 
-        if migrator.config.migrate.all_wifis == true || migrator.config.migrate.wifis.len() > 0 {
+        // check balena os config
+
+        if let Some(file_info) =
+            FileInfo::new(&migrator.config.balena.get_config_path(), &work_dir)?
+        {
+            file_info.expect_type(&FileType::Json)?;
+            let balena_cfg_json = BalenaCfgJson::new(&file_info.path)?;
+            balena_cfg_json.check(&migrator.config, migrator.mig_info.get_device_slug())?;
+            migrator.mig_info.os_config_info = Some(file_info);
+        } else {
+            let message = String::from("The balena config has not been specified or cannot be accessed. Automatic download is not yet implemented, so you need to specify and supply all required files");
+            error!("{}", message);
+            return Err(MigError::from_remark(MigErrorKind::InvParam, &message));
+        }
+
+        let wifis = migrator.config.migrate.get_wifis();
+        if MigrateWifis::NONE != wifis {
             // **********************************************************************
             // ** migrate wifi config
             // TODO: ...
             debug!("looking for wifi configurations to migrate");
 
-            let wifi_list = WifiConfig::scan(&migrator.config.migrate.wifis)?;
+            let empty_list: Vec<String> = Vec::new();
+            let list: &Vec<String> = if let MigrateWifis::SOME(ref list) = wifis {
+                list
+            } else {
+                &empty_list
+            };
+
+            let wifi_list = WifiConfig::scan(list)?;
+
             if wifi_list.len() > 0 {
                 for wifi in &wifi_list {
                     info!("Found config for wifi: {}", wifi.get_ssid());
@@ -366,12 +372,12 @@ impl<'a> LinuxMigrator {
         Stage2Config::write_stage2_cfg(&self.config, &self.mig_info)?;
         info!("Wrote stage2 config to '{}'", STAGE2_CFG_FILE);
 
-        if let Some(delay) = self.config.migrate.reboot {
+        if let Some(delay) = self.config.migrate.get_reboot() {
             println!(
                 "Migration stage 1 was successfull, rebooting system in {} seconds",
-                delay
+                *delay
             );
-            let delay = Duration::new(delay, 0);
+            let delay = Duration::new(*delay, 0);
             thread::sleep(delay);
             println!("Rebooting now..");
             call_cmd(REBOOT_CMD, &["-f"], false)?;
@@ -451,7 +457,7 @@ impl<'a> LinuxMigrator {
         // **********************************************************************
         // check work_dir
 
-        disk_info.work_path = PathInfo::new(&self.config.migrate.work_dir)?;
+        disk_info.work_path = PathInfo::new(self.config.migrate.get_work_dir())?;
         if let Some(ref work_part) = disk_info.work_path {
             debug!("{}", work_part);
         }

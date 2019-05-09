@@ -1,58 +1,191 @@
-use super::{LogConfig, YamlConfig};
+use super::BackupConfig;
 use std::path::{Path, PathBuf};
 
-use crate::{
-    common::{
-        config_helper::{get_yaml_bool, get_yaml_int, get_yaml_str, get_yaml_val},
-        MigError, MigErrorKind,
-    },
-    linux_common::FailMode,
-};
+use crate::common::{FailMode, MigError, MigErrorKind};
 
-use yaml_rust::Yaml;
+use serde::Deserialize;
 
 const MODULE: &str = "common::config::migrate_config";
 
-#[derive(Debug, PartialEq)]
-pub enum MigMode {
+#[derive(Debug, PartialEq, Deserialize, Clone)]
+pub(crate) enum MigMode {
     AGENT,
     IMMEDIATE,
     PRETEND,
 }
 
-const DEFAULT_MODE: MigMode = MigMode::PRETEND;
+impl MigMode {
+    pub fn from_str(mode: &str) -> Result<Self, MigError> {
+        match mode.to_lowercase().as_str() {
+            "immediate" => Ok(MigMode::IMMEDIATE),
+            "agent" => Ok(MigMode::AGENT),
+            "pretend" => Ok(MigMode::PRETEND),
+            _ => {
+                return Err(MigError::from_remark(
+                    MigErrorKind::InvParam,
+                    &format!(
+                        "{}::new: invalid value for parameter mode: '{}'",
+                        MODULE, mode
+                    ),
+                ));
+            }
+        }
+    }
+}
 
-#[derive(Debug)]
+const DEFAULT_MIG_MODE: MigMode = MigMode::PRETEND;
+
+#[derive(Debug, PartialEq, Clone)]
+pub(crate) enum MigrateWifis {
+    NONE,
+    ALL,
+    SOME(Vec<String>),
+}
+
+#[derive(Debug, Deserialize)]
+pub struct LogConfig {
+    pub level: Option<String>,
+    pub drive: Option<PathBuf>,
+    pub fs_type: Option<String>,
+}
+
+impl LogConfig {
+    pub fn default() -> LogConfig {
+        LogConfig {
+            level: None,
+            drive: None,
+            fs_type: None,
+        }
+    }
+}
+
+#[derive(Debug, Deserialize)]
 pub(crate) struct MigrateConfig {
-    pub work_dir: String,
-    pub mode: MigMode,
-    pub reboot: Option<u64>,
-    pub all_wifis: bool,
-    pub wifis: Vec<String>,
-    pub log_to: Option<LogConfig>,
-    pub kernel_file: Option<PathBuf>,
-    pub initramfs_file: Option<PathBuf>,
-    pub force_slug: Option<String>,
-    pub fail_mode: Option<FailMode>,
+    work_dir: Option<PathBuf>,
+    mode: Option<MigMode>,
+    reboot: Option<u64>,
+    all_wifis: Option<bool>,
+    wifis: Option<Vec<String>>,
+    log: Option<LogConfig>,
+    kernel_file: Option<PathBuf>,
+    initramfs_file: Option<PathBuf>,
+    force_slug: Option<String>,
+    fail_mode: Option<FailMode>,
+    backup_config: Option<BackupConfig>,
 }
 
 impl<'a> MigrateConfig {
+    // TODO: implement log & backup config getters
+
     pub fn default() -> MigrateConfig {
         MigrateConfig {
-            work_dir: String::from("."),
-            fail_mode: None,
-            mode: DEFAULT_MODE,
+            work_dir: None,
+            mode: Some(DEFAULT_MIG_MODE.clone()),
             reboot: None,
-            all_wifis: false,
-            wifis: Vec::new(),
-            log_to: None,
+            all_wifis: None,
+            wifis: None,
+            log: None,
             kernel_file: None,
             initramfs_file: None,
             force_slug: None,
+            fail_mode: None,
+            backup_config: None,
         }
     }
 
-    pub(crate) fn get_kernel_path(&'a self) -> &'a Path {
+    pub fn check(&self) -> Result<(), MigError> {
+        match self.get_mig_mode() {
+            MigMode::AGENT => Err(MigError::from(MigErrorKind::NotImpl)),
+            _ => {
+                if let None = self.work_dir {
+                    return Err(MigError::from_remark(
+                        MigErrorKind::InvParam,
+                        "A required parameter was not found: 'work_dir'",
+                    ));
+                }
+
+                if let None = self.kernel_file {
+                    return Err(MigError::from_remark(
+                        MigErrorKind::InvParam,
+                        "A required parameter was not found: 'kernel_file'",
+                    ));
+                }
+
+                if let None = self.initramfs_file {
+                    return Err(MigError::from_remark(
+                        MigErrorKind::InvParam,
+                        "A required parameter was not found: 'initramfs_file'",
+                    ));
+                }
+
+                Ok(())
+            }
+        }
+    }
+
+    pub fn set_mig_mode(&mut self, mode: &MigMode) {
+        self.mode = Some(mode.clone());
+    }
+
+    pub fn get_mig_mode(&'a self) -> &'a MigMode {
+        if let Some(ref mode) = self.mode {
+            mode
+        } else {
+            &DEFAULT_MIG_MODE
+        }
+    }
+
+    pub fn get_reboot(&'a self) -> &'a Option<u64> {
+        &self.reboot
+    }
+
+    pub fn get_force_slug(&self) -> Option<String> {
+        if let Some(ref val) = self.force_slug {
+            Some(val.clone())
+        } else {
+            None
+        }
+    }
+
+    pub fn get_fail_mode(&'a self) -> &'a FailMode {
+        if let Some(ref val) = self.fail_mode {
+            val
+        } else {
+            FailMode::get_default()
+        }
+    }
+
+    pub fn get_wifis(&self) -> MigrateWifis {
+        if let Some(ref wifis) = self.wifis {
+            MigrateWifis::SOME(wifis.clone())
+        } else {
+            if let Some(ref all_wifis) = self.all_wifis {
+                if *all_wifis {
+                    MigrateWifis::ALL
+                } else {
+                    MigrateWifis::NONE
+                }
+            } else {
+                MigrateWifis::NONE
+            }
+        }
+    }
+
+    // The following functions can only be safely called after check has succeeded
+
+    pub fn set_work_dir(&mut self, work_dir: PathBuf) {
+        self.work_dir = Some(work_dir);
+    }
+
+    pub fn get_work_dir(&'a self) -> &'a Path {
+        if let Some(ref dir) = self.work_dir {
+            dir
+        } else {
+            panic!("work_dir is not set");
+        }
+    }
+
+    pub fn get_kernel_path(&'a self) -> &'a Path {
         if let Some(ref path) = self.kernel_file {
             path
         } else {
@@ -60,155 +193,38 @@ impl<'a> MigrateConfig {
         }
     }
 
-    pub(crate) fn get_initramfs_path(&'a self) -> &'a Path {
+    pub fn get_initramfs_path(&'a self) -> &'a Path {
         if let Some(ref path) = self.initramfs_file {
             path
         } else {
             panic!("initramfs path is not set");
         }
     }
-}
 
-impl YamlConfig for MigrateConfig {
-    fn to_yaml(&self, prefix: &str) -> String {
-        let mut output = format!(
-            "{}migrate:\n{}  work_dir: '{}'\n{}  mode: '{:?}'\n",
-            prefix, prefix, self.work_dir, prefix, self.mode
-        );
-
-        let next_prefix = String::from(prefix) + "  ";
-
-        if self.wifis.len() > 0 {
-            output += &format!("{}  wifis:\n", prefix);
-            for wifi in &self.wifis {
-                output += &format!("{}  - '{}'\n", next_prefix, wifi);
+    pub fn get_log_device(&'a self) -> Option<&'a Path> {
+        if let Some(ref log_info) = self.log {
+            if let Some(ref val) = log_info.drive {
+                return Some(val);
             }
-        } else {
-            output += &format!("{}  all_wifis: {}\n", prefix, self.all_wifis);
         }
-
-        if let Some(i) = self.reboot {
-            output += &format!("{}  reboot: {}\n", prefix, i);
-        }
-
-        if let Some(ref kernel_file) = self.kernel_file {
-            output += &format!(
-                "{}  kernel_file: {}\n",
-                prefix,
-                &kernel_file.to_string_lossy()
-            );
-        }
-
-        if let Some(ref initramfs_file) = self.initramfs_file {
-            output += &format!(
-                "{}  initramfs_file: {}\n",
-                prefix,
-                &initramfs_file.to_string_lossy()
-            );
-        }
-
-        if let Some(slug) = &self.force_slug {
-            output += &format!("{}  force_slug: '{}'\n", prefix, slug);
-        }
-
-        if let Some(ref log_to) = self.log_to {
-            output += &log_to.to_yaml(&next_prefix);
-        }
-
-        output
+        return None;
     }
 
-    fn from_yaml(&mut self, yaml: &Yaml) -> Result<(), MigError> {
-        if let Some(work_dir) = get_yaml_str(yaml, &["work_dir"])? {
-            self.work_dir = String::from(work_dir);
-        }
-
-        if let Some(kernel_file) = get_yaml_str(yaml, &["kernel_file"])? {
-            self.kernel_file = Some(PathBuf::from(kernel_file));
-        }
-
-        if let Some(initramfs_file) = get_yaml_str(yaml, &["initramfs_file"])? {
-            self.initramfs_file = Some(PathBuf::from(initramfs_file));
-        }
-
-        if let Some(fail_mode) = get_yaml_str(yaml, &["fail_mode"])? {
-            self.fail_mode = Some(FailMode::from_str(fail_mode)?.clone());
-        }
-
-        if let Some(mode) = get_yaml_str(yaml, &["mode"])? {
-            if mode.to_lowercase() == "immediate" {
-                self.mode = MigMode::IMMEDIATE;
-            } else if mode.to_lowercase() == "agent" {
-                self.mode = MigMode::AGENT;
-            } else if mode.to_lowercase() == "pretend" {
-                self.mode = MigMode::PRETEND;
-            } else {
-                return Err(MigError::from_remark(
-                    MigErrorKind::InvParam,
-                    &format!(
-                        "{}::from_string: invalid value for migrate mode '{}'",
-                        MODULE, mode
-                    ),
-                ));
+    pub fn get_log_fstype(&'a self) -> Option<&'a str> {
+        if let Some(ref log_info) = self.log {
+            if let Some(ref val) = log_info.fs_type {
+                return Some(val);
             }
         }
+        return None;
+    }
 
-        // Param: reboot - must be > 0
-        if let Some(reboot_timeout) = get_yaml_int(yaml, &["reboot"])? {
-            if reboot_timeout > 0 {
-                self.reboot = Some(reboot_timeout as u64);
-            } else {
-                self.reboot = None;
+    pub fn get_log_level(&'a self) -> Option<&'a str> {
+        if let Some(ref log_info) = self.log {
+            if let Some(ref val) = log_info.level {
+                return Some(val);
             }
         }
-
-        // Param: all_wifis - must be > 0
-        if let Some(all_wifis) = get_yaml_bool(yaml, &["all_wifis"])? {
-            self.all_wifis = all_wifis;
-        }
-
-        if let Some(wifis) = get_yaml_val(yaml, &["wifis"])? {
-            if let Yaml::Array(wifis) = wifis {
-                for ssid in wifis {
-                    if let Yaml::String(ssid) = ssid {
-                        self.wifis.push(ssid.clone());
-                    } else {
-                        return Err(MigError::from_remark(
-                            MigErrorKind::InvParam,
-                            &format!(
-                                "{}::from_string: invalid value for wifis - ssid , expected string, got  '{:?}'",
-                                MODULE, ssid
-                            ),
-                        ));
-                    }
-                }
-            } else {
-                return Err(MigError::from_remark(
-                    MigErrorKind::InvParam,
-                    &format!(
-                        "{}::from_string: invalid value for wifis, expected array, got  '{:?}'",
-                        MODULE, wifis,
-                    ),
-                ));
-            }
-        }
-
-        // Params: log_to: drive, fs_type
-        if let Some(log_section) = get_yaml_val(yaml, &["log_to"])? {
-            if let Some(ref mut log_to) = self.log_to {
-                log_to.from_yaml(yaml)?;
-            } else {
-                let mut log_to = LogConfig::default();
-                log_to.from_yaml(log_section)?;
-                self.log_to = Some(log_to);
-            }
-        }
-
-        // Param: all_wifis - must be > 0
-        if let Some(force_slug) = get_yaml_str(yaml, &["force_slug"])? {
-            self.force_slug = Some(String::from(force_slug));
-        }
-
-        Ok(())
+        return Some("warn");
     }
 }

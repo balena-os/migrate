@@ -5,16 +5,14 @@ use regex::Regex;
 use std::cell::RefCell;
 use std::collections::HashMap;
 use std::fs::copy;
-use std::path::{Path, PathBuf};
+use std::path::Path;
 
 use libc::getuid;
 
 use crate::common::{
-    call, file_exists, parse_file, CmdRes, Config, MigErrCtx, MigError, MigErrorKind, OSArch,
+    call, file_exists, parse_file, path_append, CmdRes, Config, MigErrCtx, MigError, MigErrorKind,
+    OSArch,
 };
-
-pub(crate) mod fail_mode;
-pub(crate) use fail_mode::FailMode;
 
 pub(crate) mod wifi_config;
 pub(crate) use wifi_config::WifiConfig;
@@ -73,16 +71,6 @@ const SYS_UEFI_DIR: &str = "/sys/firmware/efi";
 
 thread_local! {
     static CMD_TABLE: RefCell<HashMap<String,Option<String>>> = RefCell::new(HashMap::new());
-}
-
-pub(crate) fn path_append<P1: AsRef<Path>, P2: AsRef<Path>>(base: P1, append: P2) -> PathBuf {
-    let base = base.as_ref();
-    let append = append.as_ref();
-    if append.starts_with("/") {
-        base.join(append.strip_prefix("/").unwrap())
-    } else {
-        base.join(append)
-    }
 }
 
 pub(crate) fn ensure_cmds(required: &[&str], optional: &[&str]) -> Result<(), MigError> {
@@ -158,7 +146,7 @@ pub(crate) fn is_admin(_config: &Config) -> Result<bool, MigError> {
 pub(crate) fn is_admin(config: &Config) -> Result<bool, MigError> {
     trace!("LinuxMigrator::is_admin: entered");
     let admin = Some(unsafe { getuid() } == 0);
-    Ok(admin.unwrap() | config.debug.fake_admin)
+    Ok(admin.unwrap() | config.debug.is_fake_admin())
 }
 
 fn whereis(cmd: &str) -> Result<String, MigError> {
@@ -382,7 +370,7 @@ pub(crate) fn get_grub_version() -> Result<(String, String), MigError> {
 
 pub(crate) fn restore_backups(
     root_path: &Path,
-    backups: &Vec<(String, String)>,
+    backups: &[(String, String)],
 ) -> Result<(), MigError> {
     // restore boot config backups
     for backup in backups {

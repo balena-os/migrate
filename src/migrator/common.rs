@@ -7,28 +7,32 @@ use std::fmt::{self, Display, Formatter};
 use std::fs::read_to_string;
 use std::fs::File;
 use std::io::{BufRead, BufReader};
-use std::path::Path;
+use std::path::{Path, PathBuf};
 use std::process::{Command, ExitStatus, Stdio};
+
+use crate::defs::BALENA_FILE_TAG_REGEX;
 
 /*
 pub mod stage_info;
 pub use stage_info::{Stage1Info, Stage2Info};
 */
 
-pub mod mig_error;
+pub(crate) mod mig_error;
 
-pub mod os_release;
-pub(crate) use os_release::OSRelease;
+//pub(crate) mod os_release;
+//pub(crate) use os_release::OSRelease;
 
-pub mod balena_cfg_json;
-pub mod config;
-pub mod config_helper;
-pub mod file_info;
+pub(crate) mod balena_cfg_json;
+pub(crate) mod config;
+// pub(crate) mod config_helper;
+pub(crate) mod fail_mode;
+pub(crate) mod file_info;
+pub(crate) use fail_mode::FailMode;
 
 //pub mod logger;
 //pub(crate) use logger::Logger;
 
-pub(crate) use self::config::{Config, MigMode};
+pub(crate) use self::config::{Config, MigMode, MigrateWifis};
 pub(crate) use self::file_info::{FileInfo, FileType};
 pub(crate) use self::mig_error::{MigErrCtx, MigError, MigErrorKind};
 
@@ -50,8 +54,6 @@ pub enum OSArch {
     */
 }
 
-const BALENA_FILE_TAG_REGEX: &str = "^.* created by balena-migrate$";
-
 impl Display for OSArch {
     fn fmt(&self, f: &mut Formatter) -> fmt::Result {
         write!(f, "{:?}", self)
@@ -63,6 +65,23 @@ pub(crate) struct CmdRes {
     pub stdout: String,
     pub stderr: String,
     pub status: ExitStatus,
+}
+
+pub(crate) fn path_append<P1: AsRef<Path>, P2: AsRef<Path>>(base: P1, append: P2) -> PathBuf {
+    let base = base.as_ref();
+    let append = append.as_ref();
+
+    if append.is_absolute() {
+        let mut components = append.components();
+        let mut curr = PathBuf::from(base);
+        components.next();
+        for comp in components {
+            curr = curr.join(comp);
+        }
+        curr
+    } else {
+        base.join(append)
+    }
 }
 
 pub(crate) fn is_balena_file<P: AsRef<Path>>(file_name: P) -> Result<bool, MigError> {

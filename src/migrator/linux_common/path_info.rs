@@ -49,8 +49,9 @@ impl PathInfo {
         }
     }
 
-    pub fn new(path: &str) -> Result<Option<PathInfo>, MigError> {
-        trace!("PathInfo::new: entered with: '{}'", path);
+    pub fn new<P: AsRef<Path>>(path: P) -> Result<Option<PathInfo>, MigError> {
+        let path = path.as_ref();
+        trace!("PathInfo::new: entered with: '{}'", path.display());
 
         if !dir_exists(path)? {
             return Ok(None);
@@ -60,7 +61,8 @@ impl PathInfo {
             MigErrorKind::Upstream,
             &format!(
                 "{}::new: failed to create absolute path from {}",
-                MODULE, path
+                MODULE,
+                path.display()
             ),
         ))?;
 
@@ -119,7 +121,11 @@ impl PathInfo {
             ));
         }
 
-        debug!("PathInfo::new: '{}' df result: {:?}", path, &words);
+        debug!(
+            "PathInfo::new: '{}' df result: {:?}",
+            path.display(),
+            &words
+        );
 
         if words[0] == "/dev/root" {
             let args: Vec<&str> = vec![];

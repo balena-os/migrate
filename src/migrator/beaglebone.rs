@@ -6,9 +6,12 @@ use std::fs::{remove_file, File};
 use std::io::Write;
 use std::path::Path;
 
-use crate::common::{file_exists, is_balena_file, Config, MigErrCtx, MigError, MigErrorKind};
+use crate::{
+    common::{file_exists, is_balena_file, path_append, Config, MigErrCtx, MigError, MigErrorKind},
+    defs::BALENA_FILE_TAG,
+};
 
-use crate::linux_common::{call_cmd, path_append, restore_backups, Device, MigrateInfo, CHMOD_CMD};
+use crate::linux_common::{call_cmd, restore_backups, Device, MigrateInfo, CHMOD_CMD};
 
 use crate::stage2::Stage2Config;
 
@@ -19,8 +22,7 @@ const BBG_MIG_KERNEL_PATH: &str = "/boot/balena-migrate.zImage";
 const BBG_MIG_INITRD_PATH: &str = "/boot/balena-migrate.initrd";
 const BBG_UENV_PATH: &str = "/uEnv.txt";
 
-const UENV_TXT: &str = r###"## created by balena-migrate
-
+const UENV_TXT: &str = r###"
 loadaddr=0x82000000
 fdtaddr=0x88000000
 rdaddr=0x88080000
@@ -177,7 +179,9 @@ impl<'a> Device for BeagleboneGreen {
 
         // **********************************************************************
         // ** create new /uEnv.txt
-        let mut uenv_text = UENV_TXT.replace("__KERNEL_PATH__", BBG_MIG_KERNEL_PATH);
+        let mut uenv_text = String::from(BALENA_FILE_TAG);
+        uenv_text.push_str(UENV_TXT);
+        uenv_text = uenv_text.replace("__KERNEL_PATH__", BBG_MIG_KERNEL_PATH);
         uenv_text = uenv_text.replace("__INITRD_PATH__", BBG_MIG_INITRD_PATH);
         uenv_text = uenv_text.replace("__DRIVE__", &drive_num.0);
         uenv_text = uenv_text.replace("__PARTITION__", &drive_num.1);
@@ -214,7 +218,7 @@ impl<'a> Device for BeagleboneGreen {
                 ),
             ))?;
             info!("Removed balena boot config file '{}'", &uenv_file.display());
-            restore_backups(root_path, config.get_backups())?;
+            restore_backups(root_path, config.get_boot_backups())?;
         } else {
             warn!(
                 "balena boot config file not found in '{}'",

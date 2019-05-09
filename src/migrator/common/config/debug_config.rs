@@ -1,76 +1,72 @@
-use log::debug;
+use std::path::{Path, PathBuf};
 
-use super::YamlConfig;
-use crate::common::{
-    config_helper::{get_yaml_bool, get_yaml_str},
-    MigError,
-};
-use std::path::PathBuf;
+use super::MigMode;
+use crate::common::MigError;
 
-use yaml_rust::Yaml;
+use serde::Deserialize;
 
-#[derive(Debug)]
-pub struct DebugConfig {
+#[derive(Debug, Deserialize)]
+pub(crate) struct DebugConfig {
     // ignore non admin user
-    pub fake_admin: bool,
+    fake_admin: Option<bool>,
     // flash on this device instead of / device
-    pub force_flash_device: Option<PathBuf>,
+    force_flash_device: Option<PathBuf>,
     // skip the flashing (only makes sense with force_flash_device)
-    pub skip_flash: bool,
+    skip_flash: Option<bool>,
     // pretend mode, stop after unmounting former root
-    pub no_flash: bool,
+    no_flash: Option<bool>,
 }
 
-impl DebugConfig {
+impl<'a> DebugConfig {
     pub fn default() -> DebugConfig {
         DebugConfig {
-            fake_admin: false,
+            fake_admin: None,
             force_flash_device: None,
-            skip_flash: false,
+            skip_flash: None,
             // TODO: default to false when project is mature
-            no_flash: true,
+            no_flash: None,
         }
     }
-}
 
-impl YamlConfig for DebugConfig {
-    fn to_yaml(&self, prefix: &str) -> String {
-        let mut output = format!(
-            "{}debug:\n{}  fake_admin: {}\n{}  no_flash: {}\n",
-            prefix, prefix, self.fake_admin, prefix, self.no_flash
-        );
-
-        if let Some(ref force_flash) = self.force_flash_device {
-            output += &format!(
-                "{}  force_flash_device: {}\n",
-                prefix,
-                &force_flash.to_string_lossy()
-            );
+    pub fn is_fake_admin(&self) -> bool {
+        if let Some(val) = self.fake_admin {
+            val
+        } else {
+            false
         }
-        output
     }
 
-    fn from_yaml(&mut self, yaml: &Yaml) -> Result<(), MigError> {
-        if let Some(value) = get_yaml_bool(yaml, &["fake_admin"])? {
-            debug!("fake_admin: {}", value);
-            self.fake_admin = value;
+    pub fn is_no_flash(&self) -> bool {
+        if let Some(val) = self.no_flash {
+            val
+        } else {
+            // TODO: change to false when mature
+            true
         }
+    }
 
-        if let Some(value) = get_yaml_str(yaml, &["force_flash_device"])? {
-            debug!("force_flash_device: {}", value);
-            self.force_flash_device = Some(PathBuf::from(value));
+    pub fn get_force_flash_device(&'a self) -> Option<&'a Path> {
+        if let Some(ref val) = self.force_flash_device {
+            Some(val)
+        } else {
+            None
+        }
+    }
 
-            if let Some(value) = get_yaml_bool(yaml, &["skip_flash"])? {
-                debug!("skip_flash: {}", value);
-                self.skip_flash = value;
+    pub fn is_skip_flash(&self) -> bool {
+        if let Some(val) = self.skip_flash {
+            if let Some(ref _ffd) = self.force_flash_device {
+                val
+            } else {
+                false
             }
+        } else {
+            false
         }
+    }
 
-        if let Some(no_flash) = get_yaml_bool(yaml, &["no_flash"])? {
-            debug!("no_flash: {}", no_flash);
-            self.no_flash = no_flash;
-        }
-
+    pub fn check(&self, _mig_mode: &MigMode) -> Result<(), MigError> {
+        // TODO: implement
         Ok(())
     }
 }

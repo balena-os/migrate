@@ -1,20 +1,20 @@
-//use clap::{ArgMatches};
 use failure::ResultExt;
-use log::{debug, info};
+use log::debug;
 use mod_logger::Logger;
+use serde::Deserialize;
+use serde_yaml;
 use std::fs::read_to_string;
-use std::path::Path;
-use yaml_rust::{Yaml, YamlLoader};
+use std::path::{Path, PathBuf};
 
 use clap::{App, Arg};
 
 use super::{MigErrCtx, MigError, MigErrorKind};
 
-pub(crate) mod log_config;
-pub(crate) use log_config::LogConfig;
+pub(crate) mod backup_config;
+pub(crate) use backup_config::BackupConfig;
 
 pub(crate) mod migrate_config;
-pub(crate) use migrate_config::{MigMode, MigrateConfig};
+pub(crate) use migrate_config::{MigMode, MigrateConfig, MigrateWifis};
 
 pub(crate) mod balena_config;
 pub(crate) use balena_config::BalenaConfig;
@@ -22,21 +22,27 @@ pub(crate) use balena_config::BalenaConfig;
 pub mod debug_config;
 pub(crate) use debug_config::DebugConfig;
 
-use super::config_helper::get_yaml_val;
+use crate::{
+    common::{file_exists, path_append},
+    defs::DEFAULT_MIGRATE_CONFIG,
+};
 
 const MODULE: &str = "migrator::common::config";
 
 // TODO: add trait ToYaml and implement for all sections
 
+/*
 pub trait YamlConfig {
-    fn to_yaml(&self, prefix: &str) -> String;
-    fn from_yaml(&mut self, yaml: &Yaml) -> Result<(), MigError>;
+    // fn to_yaml(&self, prefix: &str) -> String;
+    // fn from_yaml(&mut self, yaml: &Yaml) -> Result<(), MigError>;
+    fn from_yaml(yaml: &Yaml) -> Result<Box<Self>, MigError>;
 }
+*/
 
-#[derive(Debug)]
+#[derive(Debug, Deserialize)]
 pub(crate) struct Config {
     pub migrate: MigrateConfig,
-    pub balena: Option<BalenaConfig>,
+    pub balena: BalenaConfig,
     pub debug: DebugConfig,
 }
 
@@ -93,67 +99,101 @@ impl<'a> Config {
             "failed to intialize logger",
         ))?;
 
-        // defaults to
-        let mut config = Config::default();
+        // try to establish work_dir and config file
+        // work_dir can be specified on command line, it defaults to ./ if not
+        // work_dir can also be specified in config, path specified on command line
+        // will override specification in config
 
-        if arg_matches.is_present("config") {
-            if let Some(cfg) = arg_matches.value_of("config") {
-                info!("reading config from default location: '{}'", cfg);
-                config.from_file(cfg)?;
+        // config file can be specified on command line
+        // if not specified it will be looked for in ./{DEFAULT_MIGRATE_CONFIG}
+        // or work_dir/{DEFAULT_MIGRATE_CONFIG}
+        // If none is fouund a default is created
+
+        let work_dir = if arg_matches.is_present("work_dir") {
+            if let Some(dir) = arg_matches.value_of("work_dir") {
+                Some(
+                    PathBuf::from(dir)
+                        .canonicalize()
+                        .context(MigErrCtx::from_remark(
+                            MigErrorKind::Upstream,
+                            &format!("failed to create absolute path from work_dir: '{}'", dir),
+                        ))?,
+                )
+            } else {
+                return Err(MigError::from_remark(
+                    MigErrorKind::InvParam,
+                    "invalid command line parameter 'work_dir': no value given",
+                ));
             }
         } else {
-            let work_dir = if arg_matches.is_present("work_dir") {
-                if let Some(dir) = arg_matches.value_of("work_dir") {
-                    dir
+            None
+        };
+
+        // establish a temporary working dir
+        // defaults to ./ if not set above
+
+        let tmp_work_dir = if let Some(ref work_dir) = work_dir {
+            work_dir.clone()
+        } else {
+            PathBuf::from("./")
+        };
+
+        // establish a valid config path
+        let config_path = {
+            let config_path = if arg_matches.is_present("config") {
+                if let Some(cfg) = arg_matches.value_of("config") {
+                    PathBuf::from(cfg)
                 } else {
-                    "./"
+                    return Err(MigError::from_remark(
+                        MigErrorKind::InvParam,
+                        "invalid command line parameter 'config': no value given",
+                    ));
                 }
             } else {
-                "./"
+                PathBuf::from(DEFAULT_MIGRATE_CONFIG)
             };
 
-            let config_path = if work_dir.ends_with("/") {
-                format!("{}balena-migrate.yml", work_dir)
+            if config_path.is_absolute() {
+                Some(config_path)
             } else {
-                format!("{}/balena-migrate.yml", work_dir)
-            };
-
-            debug!(
-                "{}::new: no config option given, looking for default in '{}'",
-                MODULE, config_path
-            );
-            if Path::new(&config_path).exists() {
-                info!("reading config from default location: '{}'", config_path);
-                config.from_file(&config_path)?;
+                if let Ok(abs_path) = config_path.canonicalize() {
+                    Some(abs_path)
+                } else {
+                    if let Ok(abs_path) = path_append(tmp_work_dir, config_path).canonicalize() {
+                        Some(abs_path)
+                    } else {
+                        None
+                    }
+                }
             }
-        }
+        };
 
-        if arg_matches.is_present("work_dir") {
-            if let Some(work_dir) = arg_matches.value_of("work_dir") {
-                config.migrate.work_dir = String::from(work_dir);
+        let mut config = if let Some(config_path) = config_path {
+            if file_exists(&config_path) {
+                Config::from_file(&config_path)?
+            } else {
+                Config::default()
             }
+        } else {
+            Config::default()
+        };
+
+        if let Some(work_dir) = work_dir {
+            // if work_dir was set in command line it overrides
+            config.migrate.set_work_dir(work_dir);
         }
 
         if arg_matches.is_present("mode") {
             if let Some(mode) = arg_matches.value_of("mode") {
-                config.migrate.mode = match mode.to_lowercase().as_str() {
-                    "immediate" => MigMode::IMMEDIATE,
-                    "agent" => MigMode::AGENT,
-                    "pretend" => MigMode::PRETEND,
-                    _ => {
-                        return Err(MigError::from_remark(
-                            MigErrorKind::InvParam,
-                            &format!(
-                                "{}::new: invalid value for parameter mode: '{}'",
-                                MODULE, mode
-                            ),
-                        ));
-                    }
-                }
+                config.migrate.set_mig_mode(&MigMode::from_str(mode)?);
             }
         }
 
-        debug!("{}::new: migrate mode: {:?}", MODULE, config.migrate.mode);
+        debug!(
+            "{}::new: migrate mode: {:?}",
+            MODULE,
+            config.migrate.get_mig_mode()
+        );
 
         debug!("{}::new: got: {:?}", MODULE, config);
 
@@ -165,104 +205,55 @@ impl<'a> Config {
     fn default() -> Config {
         Config {
             migrate: MigrateConfig::default(),
-            balena: None,
+            balena: BalenaConfig::default(),
             debug: DebugConfig::default(),
         }
     }
 
+    // TODO: reimplement in Debug mode with serde (de)serialize
+
+    /*
     fn get_debug_config(&mut self, yaml: &Yaml) -> Result<(), MigError> {
         if let Some(section) = get_yaml_val(yaml, &["debug"])? {
-            self.debug.from_yaml(section)?
+            self.debug = *DebugConfig::from_yaml(section)?;
         }
         Ok(())
     }
+
 
     fn print_debug_config(&self, prefix: &str, buffer: &mut String) -> () {
         *buffer += &self.debug.to_yaml(prefix)
     }
+    */
 
-    fn from_string(&mut self, config_str: &str) -> Result<(), MigError> {
+    fn from_string(config_str: &str) -> Result<Config, MigError> {
         debug!("{}::from_string: entered", MODULE);
-        let yaml_cfg = YamlLoader::load_from_str(&config_str).context(MigErrCtx::from_remark(
-            MigErrorKind::Upstream,
-            &format!("{}::from_string: failed to parse", MODULE),
-        ))?;
-        if yaml_cfg.len() != 1 {
-            return Err(MigError::from_remark(
-                MigErrorKind::InvParam,
-                &format!(
-                    "{}::from_string: invalid number of configs in file: {}",
-                    MODULE,
-                    yaml_cfg.len()
-                ),
-            ));
-        }
-
-        self.from_yaml(&yaml_cfg[0])
+        Ok(
+            serde_yaml::from_str(config_str).context(MigErrCtx::from_remark(
+                MigErrorKind::Upstream,
+                "failed to deserialze config from yaml",
+            ))?,
+        )
     }
 
-    fn from_file(&mut self, file_name: &str) -> Result<(), MigError> {
-        debug!("{}::from_file: {} entered", MODULE, file_name);
-
-        self.from_string(&read_to_string(file_name).context(MigErrCtx::from_remark(
+    fn from_file<P: AsRef<Path>>(file_name: &P) -> Result<Config, MigError> {
+        let file_name = file_name.as_ref();
+        debug!("{}::from_file: {} entered", MODULE, file_name.display());
+        Config::from_string(&read_to_string(file_name).context(MigErrCtx::from_remark(
             MigErrorKind::Upstream,
-            &format!("{}::from_file: failed to read {}", MODULE, file_name),
+            &format!(
+                "{}::from_file: failed to read {}",
+                MODULE,
+                file_name.display()
+            ),
         ))?)
     }
 
     fn check(&self) -> Result<(), MigError> {
-        match self.migrate.mode {
-            MigMode::AGENT => {}
-            MigMode::PRETEND => {}
-            MigMode::IMMEDIATE => {
-                if let Some(balena) = &self.balena {
-                    balena.check(&self.migrate.mode)?;
-                } else {
-                    return Err(MigError::from_remark(
-                        MigErrorKind::InvParam,
-                        &format!(
-                            "{}::check: no balena section was specified in mode: IMMEDIATE",
-                            MODULE
-                        ),
-                    ));
-                }
-            }
-        }
-
-        Ok(())
-    }
-}
-
-impl YamlConfig for Config {
-    fn to_yaml(&self, prefix: &str) -> String {
-        let mut output = self.migrate.to_yaml(prefix);
-        if let Some(ref balena) = self.balena {
-            output += &balena.to_yaml(prefix);
-        }
-
-        self.print_debug_config(prefix, &mut output);
-
-        output
-    }
-
-    fn from_yaml(&mut self, yaml: &Yaml) -> Result<(), MigError> {
-        if let Some(ref section) = get_yaml_val(yaml, &["migrate"])? {
-            self.migrate.from_yaml(section)?;
-        }
-
-        if let Some(section) = get_yaml_val(yaml, &["balena"])? {
-            // Params: balena_image
-            if let Some(ref mut balena) = self.balena {
-                balena.from_yaml(section)?;
-            } else {
-                let mut balena = BalenaConfig::default();
-                balena.from_yaml(section)?;
-                self.balena = Some(balena);
-            }
-        }
-
-        self.get_debug_config(yaml)?;
-
+        self.migrate.check()?;
+        let mode = self.migrate.get_mig_mode();
+        self.balena.check(mode)?;
+        self.debug.check(mode)?;
         Ok(())
     }
 }
@@ -270,75 +261,182 @@ impl YamlConfig for Config {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::common::{config::migrate_config::MigrateWifis, FailMode};
 
     // TODO: update this to current config
 
-    const TEST_CONFIG: &str = "
-migrate:
-  mode: IMMEDIATE
-  all_wifis: true
-  reboot: 10
-  log_to:
-    drive: '/dev/sda1'
-    fs_type: ext4
-balena:
-  image: image.gz
-  config: config.json
-";
+    #[test]
+    fn read_conf_ok() -> () {
+        let config = Config::from_string(TEST_CONFIG_OK).unwrap();
 
-    fn assert_test_config1(config: &Config) -> () {
-        match config.migrate.mode {
-            MigMode::IMMEDIATE => (),
-            _ => {
-                panic!("unexpected migrate mode");
-            }
+        assert_eq!(config.migrate.get_mig_mode(), &MigMode::IMMEDIATE);
+        assert_eq!(config.migrate.get_work_dir(), Path::new("./work/"));
+        match config.migrate.get_wifis() {
+            MigrateWifis::SOME(list) => assert_eq!(list.len(), 3),
+            _ => panic!("unexpected result from get_wifis"),
         };
+        assert_eq!(config.migrate.get_reboot(), &Some(10));
+        assert_eq!(
+            config.migrate.get_kernel_path(),
+            Path::new("balena_x86_64.migrate.kernel")
+        );
+        assert_eq!(
+            config.migrate.get_initramfs_path(),
+            Path::new("balena_x86_64.migrate.initramfs")
+        );
+        assert_eq!(config.migrate.get_fail_mode(), &FailMode::Reboot);
+        assert_eq!(
+            config.migrate.get_force_slug(),
+            Some(String::from("dummy_device"))
+        );
 
-        assert!(config.migrate.all_wifis == true);
-
-        if let Some(i) = config.migrate.reboot {
-            assert!(i == 10);
-        } else {
-            panic!("missing parameter migarte.reboot");
-        }
-
-        if let Some(ref log_to) = config.migrate.log_to {
-            assert!(log_to.drive == "/dev/sda1");
-            assert!(log_to.fs_type == "ext4");
-        } else {
-            panic!("no log config found");
-        }
-
-        if let Some(ref balena) = config.balena {
-            assert!(balena.get_image_path().to_string_lossy() == "image.gz");
-            assert!(balena.get_config_path().to_string_lossy() == "config.json");
-        } else {
-            panic!("no balena config found");
-        }
-
-        config.check().unwrap();
-    }
-
-    #[test]
-    fn read_sample_conf() -> () {
-        let mut config = Config::default();
-        config.from_string(TEST_CONFIG).unwrap();
-        assert_test_config1(&config);
-        ()
-    }
-
-    #[test]
-    fn read_write() -> () {
-        let mut config = Config::default();
-        config.from_string(TEST_CONFIG).unwrap();
-
-        let out = config.to_yaml("");
-
-        let mut new_config = Config::default();
-        new_config.from_string(&out).unwrap();
-        assert_test_config1(&new_config);
+        assert_eq!(config.balena.get_image_path(), Path::new("image.gz"));
+        assert_eq!(config.balena.get_config_path(), Path::new("config.json"));
+        assert_eq!(config.balena.get_app_name(), Some("test"));
+        assert_eq!(config.balena.get_api_host(), "api1.balena-cloud.com");
+        assert_eq!(config.balena.get_api_port(), 444);
+        assert_eq!(config.balena.is_api_check(), false);
+        assert_eq!(config.balena.get_api_key(), Some(String::from("secret")));
+        assert_eq!(config.balena.get_vpn_host(), "vpn1.balena-cloud.com");
+        assert_eq!(config.balena.get_vpn_port(), 444);
+        assert_eq!(config.balena.is_vpn_check(), false);
+        assert_eq!(config.balena.get_check_timeout(), 42);
 
         ()
     }
+
+    /*
+
+        fn assert_test_config_ok(config: &Config) -> () {
+            match config.migrate.mode {
+                MigMode::IMMEDIATE => (),
+                _ => {
+                    panic!("unexpected migrate mode");
+                }
+            };
+
+            assert!(config.migrate.all_wifis == true);
+
+            if let Some(i) = config.migrate.reboot {
+                assert!(i == 10);
+            } else {
+                panic!("missing parameter migarte.reboot");
+            }
+
+            if let Some(ref log_to) = config.migrate.log_to {
+                assert!(log_to.drive == "/dev/sda1");
+                assert!(log_to.fs_type == "ext4");
+            } else {
+                panic!("no log config found");
+            }
+
+            if let Some(ref balena) = config.balena {
+                assert!(balena.get_image_path().to_string_lossy() == "image.gz");
+                assert!(balena.get_config_path().to_string_lossy() == "config.json");
+            } else {
+                panic!("no balena config found");
+            }
+
+            config.check().unwrap();
+        }
+
+
+
+        #[test]
+        fn read_write() -> () {
+            let mut config = Config::default();
+            config.from_string(TEST_CONFIG).unwrap();
+
+            let out = config.to_yaml("");
+
+            let mut new_config = Config::default();
+            new_config.from_string(&out).unwrap();
+            assert_test_config1(&new_config);
+
+            ()
+        }
+    */
+
+    const TEST_CONFIG_OK: &str = r###"
+migrate:
+  # mode AGENT, IMMEDIATE, PRETEND
+  #  AGENT - not yet implemented, connects to balena-cloud, controlled by dashboard
+  #  IMMEDIATE: migrates the device
+  #   not yet implemented:
+  #     if app, api, api_key, are given in balena section, config & image can be downloaded
+  #  PRETEND: only validates conditions for IMMEDIATE, changes nothing
+  mode: IMMEDIATE
+  # where all files are expected to be found
+  work_dir: './work/'
+  # migrate all wifi configurations found on device
+  all_wifis: true
+  # migrate only the following wifi ssid's (overrides all_wifis)
+  wifis:
+    - 'Xcover'
+    - 'QIFI'
+    - 'bla'
+  # reboot automatically after n seconds
+  reboot: 10
+  # not yet implemented, subject to change
+  log_to:
+    drive: "/dev/sda1"
+    fs_type: ext4
+  # the migrate kernel, might be downloaded automatically in future versions
+  kernel_file: "balena_x86_64.migrate.kernel"
+  # the migrate initramfs, might be downloaded automatically in future versions
+  initramfs_file: "balena_x86_64.migrate.initramfs"
+  # backup configuration
+  backup:
+  #  - volume: "test volume 1"
+  #    - source: /home/thomas/develop/balena.io/support
+  #      target: "target dir 1.1"
+  #    - source: "/home/thomas/develop/balena.io/customer/sonder/unitdata/UnitData files"
+  #      target: "target dir 1.2"
+  #  - volume: "test volume 2"
+  #    - source: "/home/thomas/develop/balena.io/migrate/migratecfg/balena-migrate"
+  #      target: "target file 2.1"
+  #    - source: "/home/thomas/develop/balena.io/migrate/migratecfg/init-scripts"
+  #      target: "target dir 2.2"
+  #      filter: 'balena-.*'
+  #  - volume: "test_volume_3"
+  #     - source: "/home/thomas/develop/balena.io/migrate/migratecfg/init-scripts"
+  #       filter: 'balena-.*'
+  ## what to do on a recoverable fail in phase 2, either reboot or rescueshell
+  fail_mode: Reboot
+  ## forced use of a device slug other than the one detected
+  force_slug: 'dummy_device'
+balena:
+  ## the balena image version to download (not yet implemented)
+  version:
+  ## the balena image to flash
+  image: image.gz
+  ## the balena config file to use (can be auto generated in future versions)
+  config: config.json
+  ## The balena app name - needed for download (not yet implemented) checked against present config.json
+  app_name: 'test'
+  ## Api to use for connectivity check, agent mode, downloads etc
+  api:
+    host: "api1.balena-cloud.com"
+    port: 444
+    check: false
+    key: "secret"
+  ## VPN to use for connectivity check
+  vpn:
+    host: "vpn1.balena-cloud.com"
+    port: 444
+    check: false
+  ## connectivity check timeout
+  check_timeout: 42
+  ## Api key  to use for agent mode, downloads etc
+debug:
+  ## ignore non admin mode
+  fake_admin: true
+  ## flash to a device other than the boot device
+  force_flash_device: '/dev/sdb'
+  ## skip flashing - only used with force_flash_device
+  skip_flash: false
+  ## run migration up to phase2 but stop & reboot before flashing
+  no_flash: true
+"###;
 
 }

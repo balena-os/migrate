@@ -28,8 +28,10 @@ regex = "1"
 lazy_static = "*"
 clap = "*"
 failure = "*"
-yaml-rust = "0.4"
 serde_json = "*"
+serde = { version = "1.0", features = ["derive"] }
+serde_yaml = "0.8"
+yaml-rust = "0.4"
 url = "*"
 mod_logger = { git = "https://github.com/samothx/ModuleLogger.git" } 
 # tempfile = "3"
