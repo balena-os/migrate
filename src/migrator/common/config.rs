@@ -1,5 +1,5 @@
 use failure::ResultExt;
-use log::debug;
+use log::{debug, info};
 use mod_logger::Logger;
 use serde::Deserialize;
 use serde_yaml;
@@ -183,6 +183,8 @@ impl<'a> Config {
             config.migrate.set_work_dir(work_dir);
         }
 
+        info!("Using work_dir '{}'", config.migrate.get_work_dir().display());
+
         if arg_matches.is_present("mode") {
             if let Some(mode) = arg_matches.value_of("mode") {
                 config.migrate.set_mig_mode(&MigMode::from_str(mode)?);
@@ -239,6 +241,7 @@ impl<'a> Config {
     fn from_file<P: AsRef<Path>>(file_name: &P) -> Result<Config, MigError> {
         let file_name = file_name.as_ref();
         debug!("{}::from_file: {} entered", MODULE, file_name.display());
+        info!("Using config file '{}'", file_name.display());
         Config::from_string(&read_to_string(file_name).context(MigErrCtx::from_remark(
             MigErrorKind::Upstream,
             &format!(

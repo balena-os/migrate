@@ -51,6 +51,15 @@ impl<'a> MigrateInfo {
             panic!("{} uninitialized field os_name in MigrateInfo", MODULE);
         }
     */
+
+    pub fn get_initrd_path(&'a self) -> &'a Path {
+        if let Some(ref initrd_info) = self.initrd_info {
+            &initrd_info.path
+        } else {
+            panic!("initrd path is not initialized");
+        }
+    }
+
     pub(crate) fn get_drive_size(&self) -> u64 {
         if let Some(ref disk_info) = self.disk_info {
             return disk_info.drive_size;
@@ -152,6 +161,15 @@ impl<'a> MigrateInfo {
     pub(crate) fn get_flash_device(&'a self) -> &'a Path {
         if let Some(ref disk_info) = self.disk_info {
             return &disk_info.drive_dev;
+        }
+        panic!("{} uninitialized field drive_info in MigrateInfo", MODULE);
+    }
+
+    pub(crate) fn get_boot_path(&'a self) -> &'a Path {
+        if let Some(ref disk_info) = self.disk_info {
+            if let Some(ref boot_path) = disk_info.boot_path {
+                return &boot_path.path;
+            }
         }
         panic!("{} uninitialized field drive_info in MigrateInfo", MODULE);
     }
