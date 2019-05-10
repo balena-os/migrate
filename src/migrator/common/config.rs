@@ -183,7 +183,10 @@ impl<'a> Config {
             config.migrate.set_work_dir(work_dir);
         }
 
-        info!("Using work_dir '{}'", config.migrate.get_work_dir().display());
+        info!(
+            "Using work_dir '{}'",
+            config.migrate.get_work_dir().display()
+        );
 
         if arg_matches.is_present("mode") {
             if let Some(mode) = arg_matches.value_of("mode") {

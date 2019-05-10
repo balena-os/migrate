@@ -662,9 +662,8 @@ impl Stage2 {
                 &data_path.display()
             );
 
-            // TODO: copy log, backup to data_path
-            // TODO: write logs to data_path
-
+        // TODO: copy log, backup to data_path
+        // TODO: write logs to data_path
         } else {
             let message = format!(
                 "unable to find labeled partition: '{}'",
@@ -676,9 +675,12 @@ impl Stage2 {
 
         sync();
 
-        info!("Migration stage 2 was successful, rebooting in {} seconds!", REBOOT_DELAY);
+        info!(
+            "Migration stage 2 was successful, rebooting in {} seconds!",
+            REBOOT_DELAY
+        );
 
-        thread::sleep(Duration::new(REBOOT_DELAY,0));
+        thread::sleep(Duration::new(REBOOT_DELAY, 0));
 
         Stage2::exit(&FailMode::Reboot)?;
 

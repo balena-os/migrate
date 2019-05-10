@@ -1,21 +1,26 @@
+use failure::{Fail, ResultExt};
 use log::{error, info, trace, warn};
-use failure::{ResultExt, Fail};
+use regex::{Captures, Regex};
 use std::fs::{copy, File};
-use std::io::{BufReader, BufRead, Write};
+use std::io::{BufRead, BufReader, Write};
 use std::path::Path;
-use std::time::{SystemTime};
-use regex::{Regex, Captures};
-
+use std::time::SystemTime;
 
 use crate::{
-    common::{Config, MigError, MigErrorKind, MigErrCtx, path_append, file_exists, is_balena_file},
-    linux_common::{Device, migrate_info::MigrateInfo},
+    common::{file_exists, is_balena_file, path_append, Config, MigErrCtx, MigError, MigErrorKind},
+    defs::BALENA_FILE_TAG,
+    linux_common::{call_cmd, migrate_info::MigrateInfo, Device, CHMOD_CMD},
     stage2::Stage2Config,
-    defs::{BALENA_FILE_TAG },
 };
 
 const RPI_MODEL_REGEX: &str = r#"^Raspberry\s+Pi\s+(\S+)\s+Model\s+(.*)$"#;
 const RPI_CONFIG_TXT: &str = "config.txt";
+
+const RPI_MIG_KERNEL_PATH: &str = "/boot/balena.zImage";
+const RPI_MIG_KERNEL_NAME: &str = "balena.zImage";
+
+const RPI_MIG_INITRD_PATH: &str = "/boot/balena.initramfs.cpio.gz";
+const RPI_MIG_INITRD_NAME: &str = "balena.initramfs.cpio.gz";
 
 pub(crate) fn is_rpi(model_string: &str) -> Result<Box<Device>, MigError> {
     trace!(
@@ -70,137 +75,170 @@ impl<'a> Device for RaspberryPi3 {
             }
         );
 
+        // **********************************************************************
+        // ** copy new kernel
+        let kernel_path = mig_info.get_kernel_path();
+        std::fs::copy(kernel_path, RPI_MIG_KERNEL_PATH).context(MigErrCtx::from_remark(
+            MigErrorKind::Upstream,
+            &format!(
+                "failed to copy kernel file '{}' to '{}'",
+                kernel_path.display(),
+                RPI_MIG_KERNEL_PATH
+            ),
+        ))?;
+        info!(
+            "copied kernel: '{}' -> '{}'",
+            kernel_path.display(),
+            RPI_MIG_KERNEL_PATH
+        );
+        call_cmd(CHMOD_CMD, &["+x", RPI_MIG_KERNEL_PATH], false)?;
+
+        // **********************************************************************
+        // ** copy new iniramfs
+        let initrd_path = mig_info.get_initrd_path();
+        std::fs::copy(initrd_path, RPI_MIG_INITRD_PATH).context(MigErrCtx::from_remark(
+            MigErrorKind::Upstream,
+            &format!(
+                "failed to copy initrd file '{}' to '{}'",
+                initrd_path.display(),
+                RPI_MIG_INITRD_PATH
+            ),
+        ))?;
+        info!(
+            "copied initramfs: '{}' -> '{}'",
+            initrd_path.display(),
+            RPI_MIG_INITRD_PATH
+        );
+
         let boot_path = mig_info.get_boot_path();
         let config_path = path_append(boot_path, RPI_CONFIG_TXT);
 
         if !file_exists(&config_path) {
-            return Err(MigError::from_remark(MigErrorKind::NotFound, &format!("Could not find '{}'", config_path.display())));
+            return Err(MigError::from_remark(
+                MigErrorKind::NotFound,
+                &format!("Could not find '{}'", config_path.display()),
+            ));
         }
 
         // create backup of config.txt
 
-        if ! is_balena_file(&config_path)? {
-            let system_time = SystemTime::now().duration_since(SystemTime::UNIX_EPOCH).context(MigErrCtx::from_remark(MigErrorKind::Upstream, "Failed to create timestamp"))?;
-            let backup_path = path_append(boot_path, &format!("{}.{}", RPI_CONFIG_TXT, system_time.as_secs()));
+        let balena_config = is_balena_file(&config_path)?;
+        if !balena_config {
+            let system_time = SystemTime::now()
+                .duration_since(SystemTime::UNIX_EPOCH)
+                .context(MigErrCtx::from_remark(
+                    MigErrorKind::Upstream,
+                    "Failed to create timestamp",
+                ))?;
+            let backup_path = path_append(
+                boot_path,
+                &format!("{}.{}", RPI_CONFIG_TXT, system_time.as_secs()),
+            );
 
-            copy(&config_path, &backup_path).context(MigErrCtx::from_remark(MigErrorKind::Upstream, &format!("Failed to copy '{}' to '{}'", config_path.display(), backup_path.display())))?;
-            mig_info.boot_cfg_bckup.push((String::from(&*config_path.to_string_lossy()), String::from(&*backup_path.to_string_lossy())));
-            info!("Created backup of '{}' in '{}'", config_path.display(), backup_path.display());
+            copy(&config_path, &backup_path).context(MigErrCtx::from_remark(
+                MigErrorKind::Upstream,
+                &format!(
+                    "Failed to copy '{}' to '{}'",
+                    config_path.display(),
+                    backup_path.display()
+                ),
+            ))?;
+            mig_info.boot_cfg_bckup.push((
+                String::from(&*config_path.to_string_lossy()),
+                String::from(&*backup_path.to_string_lossy()),
+            ));
+            info!(
+                "Created backup of '{}' in '{}'",
+                config_path.display(),
+                backup_path.display()
+            );
         } else {
             // TODO: what to do if it is a balena-migrate created config.txt ?
+            warn!("We appear to be modifying a '{}' that has been created by balena-migrate. No original config backup will be available as fallback.", &config_path.display());
         }
 
-        let initramfs_re = Regex::new(r#"^\s*initramfs"#).unwrap();
+        let initrd_re = Regex::new(r#"^\s*initramfs"#).unwrap();
+        let mut initrd_found = false;
 
-        let mut out_str = format!("{}\n", BALENA_FILE_TAG);
-        let mut found = false;
+        let kernel_re = Regex::new(r#"^\s*kernel"#).unwrap();
+        let mut kernel_found = false;
+
+        let mut out_str = String::new();
+
+        if ! balena_config {
+            out_str += &format!("{}\n", BALENA_FILE_TAG);
+        }
 
         {
-            let config_file = File::open(&config_path).context(MigErrCtx::from_remark(MigErrorKind::Upstream, &format!("Failed to open file '{}'", config_path.display())))?;
+            let config_file = File::open(&config_path).context(MigErrCtx::from_remark(
+                MigErrorKind::Upstream,
+                &format!("Failed to open file '{}'", config_path.display()),
+            ))?;
             for line in BufReader::new(config_file).lines() {
                 match line {
                     Ok(line) => {
-                        if initramfs_re.is_match(&line) {
-                            if found {
-                                // one initrd comand is enough
-                                out_str.push_str(&format!("# {}\n", line));
-                            } else {
-                                out_str.push_str(&format!("initramfs {} followkernel\n", &mig_info.get_initrd_path().to_string_lossy()));
-                                found = true;
+                        // TODO: more modifications to /boot/config.txt
+                        if initrd_re.is_match(&line) {
+                            // save commented version anyway
+                            out_str.push_str(&format!("# {}\n", line));
+                            if !initrd_found {
+                                out_str.push_str(&format!(
+                                    "initramfs {} followkernel\n",
+                                    RPI_MIG_INITRD_NAME
+                                ));
+                                initrd_found = true;
+                            }
+                        } else if kernel_re.is_match(&line) {
+                            // save commented version anyway
+                            out_str.push_str(&format!("# {}\n", line));
+                            if !kernel_found {
+                                out_str.push_str(&format!("kernel {}\n", RPI_MIG_KERNEL_NAME));
+                                kernel_found = true;
                             }
                         } else {
                             out_str.push_str(&format!("{}\n", &line));
                         }
-                    },
+                    }
                     Err(why) => {
-                        return Err(MigError::from(why.context(MigErrCtx::from_remark(MigErrorKind::Upstream, &format!("Failed to read line from file '{}'", config_path.display())))));
+                        return Err(MigError::from(why.context(MigErrCtx::from_remark(
+                            MigErrorKind::Upstream,
+                            &format!("Failed to read line from file '{}'", config_path.display()),
+                        ))));
                     }
                 }
             }
         }
-        if !found {
+
+        if !initrd_found {
             // add it if it did not exist
-            out_str.push_str(&format!("initramfs {} followkernel\n", &mig_info.get_initrd_path().to_string_lossy()));
+            out_str.push_str(&format!("initramfs {} followkernel\n", RPI_MIG_INITRD_NAME));
         }
 
-        let mut config_file = File::create(&config_path).context(MigErrCtx::from_remark(MigErrorKind::Upstream, &format!("Failed to open file '{}' for writing", config_path.display())))?;
-        config_file.write(out_str.as_bytes()).context(MigErrCtx::from_remark(MigErrorKind::Upstream, &format!("Failed write to file '{}'", config_path.display())))?;
+        if !kernel_found {
+            // add it if it did not exist
+            out_str.push_str(&format!("kernel {}\n", RPI_MIG_KERNEL_NAME));
+        }
 
+        let mut config_file = File::create(&config_path).context(MigErrCtx::from_remark(
+            MigErrorKind::Upstream,
+            &format!(
+                "Failed to open file '{}' for writing",
+                config_path.display()
+            ),
+        ))?;
 
+        config_file
+            .write(out_str.as_bytes())
+            .context(MigErrCtx::from_remark(
+                MigErrorKind::Upstream,
+                &format!("Failed write to file '{}'", config_path.display()),
+            ))?;
 
+        info!("Modified '{}' to boot migrate environment", config_path.display());
 
+        // TODO: Optional backup & modify cmd_line.txt - eg. add debug
 
-
-        /*
-                ####################################################
-                ## setup raspbery pi to boot using initramfs
-                ####################################################
-
-                function setupBootCfg_rpi {
-                    if [ "$NO_SETUP" != "TRUE" ] ; then
-                # RESTORE_BOOT="TRUE"
-
-                CONFIG_TXT_BACKUP="config.txt.$(date +%Y%m%d-%H-%M-%S)"
-
-                cp "${S1_BOOT_PATH}/config.txt" "${S1_BOOT_PATH}/${CONFIG_TXT_BACKUP}"
-                inform "created backup of ${S1_BOOT_PATH}/${CONFIG_TXT} in ${S1_BOOT_PATH}/${CONFIG_TXT_BACKUP}"
-                RESTORE_BOOT_CFG_STAGE1="mv ${S1_BOOT_PATH}/${CONFIG_TXT_BACKUP} ${S1_BOOT_PATH}/config.txt"
-                RESTORE_BOOT_CFG_STAGE2="cp ${S2_BOOT_PATH}/${CONFIG_TXT_BACKUP} ${S2_BOOT_PATH}/config.txt"
-
-                TMP_FILE=$(mktemp)
-                INITRAM_CMD="initramfs ${INITRAMFS_NAME} followkernel"
-
-                while read -r line
-                do
-                if [[ $line =~ ^\ *\# ]] ; then
-                echo "$line" >> "$TMP_FILE"
-                continue
-                fi
-
-                if [[ $line =~ ^\ *initramfs ]] ; then
-                if [ "$line" != "$INITRAM_CMD" ] ; then
-                echo "# $line" >> "$TMP_FILE"
-                fi
-                else
-                echo "$line" >> "$TMP_FILE"
-                fi
-                done < "${CONFIG_TXT}"
-                echo "$INITRAM_CMD" >> "$TMP_FILE"
-                cp "$TMP_FILE" "$CONFIG_TXT"
-                rm "$TMP_FILE"
-
-                ###########################
-                ## Modify /boot/cmdline.txt
-                ###########################
-
-                if [ "$DEBUG" == "TRUE" ] ; then
-                CMD_LINE=$(cat "${S1_BOOT_PATH}/cmdline.txt")
-                if [[ ! $CMD_LINE =~ debug ]] ; then
-                CMDLINE_TXT_BACKUP="cmdline.txt.$(date +%Y%m%d-%H-%M-%S)"
-                inform "creating backup of ${CMDLINE_TXT} in ${CMDLINE_TXT_BACKUP}"
-                cp "${S1_BOOT_PATH}/cmdline.txt"  "${S1_BOOT_PATH}/${CMDLINE_TXT_BACKUP}"
-                CMD_LINE="${CMD_LINE} debug"
-                echo "$CMD_LINE" > "${S1_BOOT_PATH}/cmdline.txt"
-
-                RESTORE_BOOT_CFG_STAGE1="${RESTORE_BOOT_CFG_STAGE1} && mv ${S1_BOOT_PATH}/${CMDLINE_TXT_BACKUP} ${S1_BOOT_PATH}/cmdline.txt"
-                RESTORE_BOOT_CFG_STAGE2="${RESTORE_BOOT_CFG_STAGE2} && cp ${S2_BOOT_PATH}/${CMDLINE_TXT_BACKUP} ${S2_BOOT_PATH}/cmdline.txt"
-                fi
-                fi
-
-                if [ -n "${RESTORE_BOOT_CFG_STAGE2}" ] ; then
-                RESTORE_BOOT_CFG_STAGE2="\"${RESTORE_BOOT_CFG_STAGE2}\""
-                fi
-
-                debug setupBootCfg_rpi "RESTORE_BOOT_CFG_STAGE1=${RESTORE_BOOT_CFG_STAGE1}"
-                debug setupBootCfg_rpi "RESTORE_BOOT_CFG_STAGE2=${RESTORE_BOOT_CFG_STAGE2}"
-
-                else
-                inform "boot setup is disabled, NO_SETUP=$NO_SETUP"
-                fi
-            }
-         */
-
-        Err(MigError::from(MigErrorKind::NotImpl))
+        Ok(())
     }
 
     fn restore_boot(&self, _root_path: &Path, _config: &Stage2Config) -> Result<(), MigError> {

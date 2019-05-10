@@ -60,6 +60,14 @@ impl<'a> MigrateInfo {
         }
     }
 
+    pub fn get_kernel_path(&'a self) -> &'a Path {
+        if let Some(ref kernel_info) = self.kernel_info {
+            &kernel_info.path
+        } else {
+            panic!("kernel path is not initialized");
+        }
+    }
+
     pub(crate) fn get_drive_size(&self) -> u64 {
         if let Some(ref disk_info) = self.disk_info {
             return disk_info.drive_size;

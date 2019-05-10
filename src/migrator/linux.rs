@@ -1,7 +1,7 @@
 use failure::ResultExt;
 use log::{debug, error, info, trace, warn};
 use regex::Regex;
-use std::fs::{create_dir, copy};
+use std::fs::{copy, create_dir};
 use std::path::PathBuf;
 use std::thread;
 use std::time::Duration;
@@ -9,8 +9,8 @@ use std::time::Duration;
 use crate::{
     beaglebone::is_bb,
     common::{
-        balena_cfg_json::BalenaCfgJson, dir_exists, format_size_with_unit, Config, FileInfo, path_append,
-        FileType, MigErrCtx, MigError, MigErrorKind, MigMode, MigrateWifis, OSArch,
+        balena_cfg_json::BalenaCfgJson, dir_exists, format_size_with_unit, path_append, Config,
+        FileInfo, FileType, MigErrCtx, MigError, MigErrorKind, MigMode, MigrateWifis, OSArch,
     },
     defs::STAGE2_CFG_FILE,
     intel_nuc::init_amd64,
@@ -309,19 +309,23 @@ impl<'a> LinuxMigrator {
             return Err(MigError::from_remark(MigErrorKind::InvParam, &message));
         }
 
-
         for file in migrator.config.migrate.get_nwmgr_files() {
             if let Some(file_info) = FileInfo::new(&file, &work_dir)? {
                 file_info.expect_type(&FileType::Text)?;
-                info!("Adding network manager config: '{}'", file_info.path.display());
+                info!(
+                    "Adding network manager config: '{}'",
+                    file_info.path.display()
+                );
                 migrator.mig_info.nwmgr_files.push(file_info);
             } else {
-                let message = format!("The network manager config file '{}' could not be found", file.display());
+                let message = format!(
+                    "The network manager config file '{}' could not be found",
+                    file.display()
+                );
                 error!("{}", message);
                 return Err(MigError::from_remark(MigErrorKind::InvParam, &message));
             }
         }
-
 
         let wifis = migrator.config.migrate.get_wifis();
         if MigrateWifis::NONE != wifis {
@@ -349,7 +353,10 @@ impl<'a> LinuxMigrator {
             }
         }
 
-        if migrator.mig_info.nwmgr_files.len() == 0 && migrator.mig_info.wifis.len() == 0 && ! migrator.config.migrate.require_nwmgr_configs() {
+        if migrator.mig_info.nwmgr_files.len() == 0
+            && migrator.mig_info.wifis.len() == 0
+            && !migrator.config.migrate.require_nwmgr_configs()
+        {
             let message = String::from("No network manager configurations were found, set require_nmgr_configs to false to proceed anyway.",);
             error!("{}", message);
             return Err(MigError::from_remark(MigErrorKind::InvParam, &message));
@@ -367,7 +374,9 @@ impl<'a> LinuxMigrator {
 
         let nwmgr_path = self.mig_info.get_work_path().join(SYSTEM_CONNECTIONS_DIR);
 
-        if self.mig_info.nwmgr_files.len() > 0 || self.mig_info.wifis.len() > 0  && !dir_exists(&nwmgr_path)? {
+        if self.mig_info.nwmgr_files.len() > 0
+            || self.mig_info.wifis.len() > 0 && !dir_exists(&nwmgr_path)?
+        {
             create_dir(&nwmgr_path).context(MigErrCtx::from_remark(
                 MigErrorKind::Upstream,
                 &format!("failed to create directory '{}'", nwmgr_path.display()),
@@ -377,9 +386,19 @@ impl<'a> LinuxMigrator {
         for file in &self.mig_info.nwmgr_files {
             if let Some(file_name) = file.path.file_name() {
                 let tgt = path_append(&nwmgr_path, file_name);
-                copy(&file.path , &tgt).context(MigErrCtx::from_remark(MigErrorKind::Upstream, &format!("Failed to copy '{}' to '{}'", file.path.display(), tgt.display())))?;
+                copy(&file.path, &tgt).context(MigErrCtx::from_remark(
+                    MigErrorKind::Upstream,
+                    &format!(
+                        "Failed to copy '{}' to '{}'",
+                        file.path.display(),
+                        tgt.display()
+                    ),
+                ))?;
             } else {
-                return Err(MigError::from_remark(MigErrorKind::Upstream, &format!("unable to processs path: '{}'", file.path.display())));
+                return Err(MigError::from_remark(
+                    MigErrorKind::Upstream,
+                    &format!("unable to processs path: '{}'", file.path.display()),
+                ));
             }
         }
 

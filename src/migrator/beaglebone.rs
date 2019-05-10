@@ -122,42 +122,38 @@ impl<'a> Device for BeagleboneGreen {
 
         // **********************************************************************
         // ** copy new kernel & iniramfs
-        if let Some(ref file_info) = mig_info.kernel_info {
-            std::fs::copy(&file_info.path, BBG_MIG_KERNEL_PATH).context(MigErrCtx::from_remark(
-                MigErrorKind::Upstream,
-                &format!(
-                    "failed to copy kernel file '{}' to '{}'",
-                    file_info.path.display(),
-                    BBG_MIG_KERNEL_PATH
-                ),
-            ))?;
-            info!(
-                "copied kernel: '{}' -> '{}'",
-                file_info.path.display(),
-                BBG_MIG_KERNEL_PATH
-            );
-            call_cmd(CHMOD_CMD, &["+x", BBG_MIG_KERNEL_PATH], false)?;
-        } else {
-            panic!("no kernel file info found");
-        }
 
-        if let Some(ref file_info) = mig_info.initrd_info {
-            std::fs::copy(&file_info.path, BBG_MIG_INITRD_PATH).context(MigErrCtx::from_remark(
-                MigErrorKind::Upstream,
-                &format!(
-                    "failed to copy initrd file '{}' to '{}'",
-                    file_info.path.display(),
-                    BBG_MIG_KERNEL_PATH
-                ),
-            ))?;
-            info!(
-                "copied initrd: '{}' -> '{}'",
-                file_info.path.display(),
+        let kernel_path = mig_info.get_kernel_path();
+        std::fs::copy(kernel_path, BBG_MIG_KERNEL_PATH).context(MigErrCtx::from_remark(
+            MigErrorKind::Upstream,
+            &format!(
+                "failed to copy kernel file '{}' to '{}'",
+                kernel_path.display(),
+                BBG_MIG_KERNEL_PATH
+            ),
+        ))?;
+        info!(
+            "copied kernel: '{}' -> '{}'",
+            kernel_path.display(),
+            BBG_MIG_KERNEL_PATH
+        );
+
+        call_cmd(CHMOD_CMD, &["+x", BBG_MIG_KERNEL_PATH], false)?;
+        let initrd_path = mig_info.get_initrd_path();
+
+        std::fs::copy(initrd_path, BBG_MIG_INITRD_PATH).context(MigErrCtx::from_remark(
+            MigErrorKind::Upstream,
+            &format!(
+                "failed to copy initrd file '{}' to '{}'",
+                initrd_path.display(),
                 BBG_MIG_INITRD_PATH
-            );
-        } else {
-            panic!("no initrd file info found");
-        }
+            ),
+        ))?;
+        info!(
+            "copied initrd: '{}' -> '{}'",
+            initrd_path.display(),
+            BBG_MIG_INITRD_PATH
+        );
 
         // **********************************************************************
         // ** backup /uEnv.txt if exists

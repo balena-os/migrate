@@ -73,7 +73,7 @@ pub(crate) struct MigrateConfig {
     force_slug: Option<String>,
     fail_mode: Option<FailMode>,
     backup_config: Option<BackupConfig>,
-    nwmgr_files:Option<Vec<PathBuf>>,
+    nwmgr_files: Option<Vec<PathBuf>>,
     require_nwmgr_config: Option<bool>,
     // COPY_NMGR_FILES="eth0_static enp2s0_static enp3s0_static"
 }
@@ -142,7 +142,6 @@ impl<'a> MigrateConfig {
         }
         return NO_NMGR_FILES;
     }
-
 
     pub fn set_mig_mode(&mut self, mode: &MigMode) {
         self.mode = Some(mode.clone());
