@@ -23,13 +23,13 @@ const CONNMGR_PARAM_REGEX: &str = r#"^\s*(\S+)\s*=\s*(\S+)\s*$"#;
 
 const NWMGR_CONTENT: &str = r##"## created by balena-migrate
 [connection]
-id="__FILE_NAME__"
+id=__FILE_NAME__
 type=wifi
 
 [wifi]
 hidden=true
 mode=infrastructure
-ssid="__SSID__"
+ssid=__SSID__
 
 [ipv4]
 method=auto
@@ -42,7 +42,7 @@ method=auto
 const NWMGR_CONTENT_PSK: &str = r##"[wifi-security]
 auth-alg=open
 key-mgmt=wpa-psk
-psk="__PSK__"
+psk=__PSK__
 "##;
 
 #[derive(Debug, PartialEq, Clone)]

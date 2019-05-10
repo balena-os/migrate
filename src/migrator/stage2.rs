@@ -4,6 +4,7 @@ use mod_logger::Logger;
 use nix::{
     mount::{mount, umount, MsFlags},
     sys::reboot::{reboot, RebootMode},
+    unistd::sync,
 };
 use regex::Regex;
 use std::fs::{copy, create_dir, read_dir, read_link};
@@ -28,6 +29,7 @@ use crate::{
 };
 
 pub(crate) mod stage2_config;
+
 pub(crate) use stage2_config::Stage2Config;
 
 use crate::beaglebone::BeagleboneGreen;
@@ -37,6 +39,8 @@ use crate::raspberrypi::RaspberryPi3;
 // for starters just restore old boot config, only required command is mount
 
 // later ensure all other required commands
+
+const REBOOT_DELAY: u64 = 3;
 
 const INIT_LOG_LEVEL: &str = "debug";
 const KERNEL_CMDLINE: &str = "/proc/cmdline";
@@ -307,7 +311,7 @@ impl Stage2 {
                     let src_path = path.path();
                     if src_path.metadata().unwrap().is_file() {
                         let tgt_path = path_append(&tgt_nwmgr_dir, &src_path.file_name().unwrap());
-                        copy(&src_path,&tgt_path)
+                        copy(&src_path, &tgt_path)
                             .context(MigErrCtx::from_remark(MigErrorKind::Upstream, &format!("Failed copy network manager file to migrate temp directory '{}' -> '{}'", src_path.display(), tgt_path.display())))?;
                         info!("copied network manager config  to '{}'", tgt_path.display());
                     }
@@ -437,6 +441,7 @@ impl Stage2 {
                         // TODO: would like to check on gzip process status but ownership issues prevent it
 
                         // TODO: sync !
+                        sync();
 
                         info!(
                             "The Balena OS image has been written to the device '{}'",
@@ -470,10 +475,6 @@ impl Stage2 {
         let part_label = path_append(DISK_BY_LABEL_PATH, BALENA_BOOT_PART);
 
         if file_exists(&part_label) {
-            /* TODO: skip this step ? can mount work with a link ?
-            let boot_device = read_link(&part_label)
-                                .context(MigErrCtx::from_remark(MigErrorKind::Upstream, &format!("failed to read link: '{}'", part_label.display())))?;
-            */
             info!("Found labeled partition for '{}'", part_label.display());
 
             let boot_device = path_append(
@@ -499,12 +500,6 @@ impl Stage2 {
                 &format!("failed to create mount dir: '{}'", boot_path.display()),
             ))?;
 
-            info!(
-                "Mounting balena device '{}' on '{}'",
-                boot_device.display(),
-                boot_path.display()
-            );
-
             mount(
                 Some(&boot_device),
                 &boot_path,
@@ -528,10 +523,10 @@ impl Stage2 {
                 &boot_path.display()
             );
 
-            // TODO: copy config.json, system_connections to boot_path
+            // TODO: check fingerprints ?
 
             let src = path_append(mig_tmp_dir, BALENA_CONFIG_FILE);
-            let tgt = path_append(boot_path, BALENA_CONFIG_FILE);
+            let tgt = path_append(&boot_path, BALENA_CONFIG_FILE);
 
             copy(&src, &tgt).context(MigErrCtx::from_remark(
                 MigErrorKind::Upstream,
@@ -543,6 +538,33 @@ impl Stage2 {
             ))?;
 
             info!("copied balena OS config to '{}'", tgt.display());
+
+            // copy system connections
+            let nwmgr_dir = path_append(mig_tmp_dir, SYSTEM_CONNECTIONS_DIR);
+            if dir_exists(&nwmgr_dir)? {
+                let tgt_path = path_append(&boot_path, SYSTEM_CONNECTIONS_DIR);
+                for path in read_dir(&nwmgr_dir).context(MigErrCtx::from_remark(
+                    MigErrorKind::Upstream,
+                    &format!("Failed to read directory: '{}'", nwmgr_dir.display()),
+                ))? {
+                    if let Ok(ref path) = path {
+                        let tgt = path_append(&tgt_path, path.file_name());
+                        copy(path.path(), &tgt).context(MigErrCtx::from_remark(
+                            MigErrorKind::Upstream,
+                            &format!(
+                                "Failed to copy '{}' to '{}'",
+                                path.path().display(),
+                                tgt.display()
+                            ),
+                        ))?;
+                        info!("copied '{}' to '{}'", path.path().display(), tgt.display());
+                    } else {
+                        error!("failed to read path element: {:?}", path);
+                    }
+                }
+            } else {
+                warn!("No network manager configurations were copied");
+            }
 
             // we can hope to successfully reboot again after writing config.json and system-connections
             self.recoverable_state = true;
@@ -568,7 +590,6 @@ impl Stage2 {
         info!("Found labeled partition for '{}'", part_label.display());
 
         let part_label = path_append(DISK_BY_LABEL_PATH, BALENA_ROOTB_PART);
-        info!("looking for '{}'", part_label.display());
         if !file_exists(&part_label) {
             let message = format!(
                 "unable to find labeled partition: '{}'",
@@ -581,7 +602,6 @@ impl Stage2 {
         info!("Found labeled partition for '{}'", part_label.display());
 
         let part_label = path_append(DISK_BY_LABEL_PATH, BALENA_STATE_PART);
-        info!("looking for '{}'", part_label.display());
         if !file_exists(&part_label) {
             let message = format!(
                 "unable to find labeled partition: '{}'",
@@ -594,36 +614,30 @@ impl Stage2 {
         info!("Found labeled partition for '{}'", part_label.display());
 
         let part_label = path_append(DISK_BY_LABEL_PATH, BALENA_DATA_PART);
-        info!("looking for '{}'", part_label.display());
-
         if file_exists(&part_label) {
             info!("Found labeled partition for '{}'", part_label.display());
 
-            let link_path = read_link(&part_label).context(MigErrCtx::from_remark(
+            let data_device = path_append(
+                part_label.parent().unwrap(),
+                read_link(&part_label).context(MigErrCtx::from_remark(
+                    MigErrorKind::Upstream,
+                    &format!("failed to read link: '{}'", part_label.display()),
+                ))?,
+            )
+            .canonicalize()
+            .context(MigErrCtx::from_remark(
                 MigErrorKind::Upstream,
-                &format!("failed to read link: '{}'", part_label.display()),
+                &format!(
+                    "failed to canonicalize path from: '{}'",
+                    part_label.display()
+                ),
             ))?;
-
-            debug!(
-                "concatenating: '{}' and '{}'",
-                part_label.parent().unwrap().display(),
-                link_path.display()
-            );
-            let data_device = path_append(part_label.parent().unwrap(), link_path);
-
-            // let data_device = part_label;
 
             let data_path = path_append(mig_tmp_dir, DATA_MNT_DIR);
             create_dir(&data_path).context(MigErrCtx::from_remark(
                 MigErrorKind::Upstream,
                 &format!("failed to create mount dir: '{}'", data_path.display()),
             ))?;
-
-            info!(
-                "Mounting balena device '{}' on '{}'",
-                data_device.display(),
-                data_path.display()
-            );
 
             mount(
                 Some(&data_device),
@@ -648,7 +662,9 @@ impl Stage2 {
                 &data_path.display()
             );
 
-        // TODO: copy log, backup to data_path
+            // TODO: copy log, backup to data_path
+            // TODO: write logs to data_path
+
         } else {
             let message = format!(
                 "unable to find labeled partition: '{}'",
@@ -657,6 +673,14 @@ impl Stage2 {
             error!("{}", &message);
             return Err(MigError::from_remark(MigErrorKind::NotFound, &message));
         }
+
+        sync();
+
+        info!("Migration stage 2 was successful, rebooting in {} seconds!", REBOOT_DELAY);
+
+        thread::sleep(Duration::new(REBOOT_DELAY,0));
+
+        Stage2::exit(&FailMode::Reboot)?;
 
         Ok(())
     }

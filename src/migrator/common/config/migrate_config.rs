@@ -6,6 +6,7 @@ use crate::common::{FailMode, MigError, MigErrorKind};
 use serde::Deserialize;
 
 const MODULE: &str = "common::config::migrate_config";
+const NO_NMGR_FILES: &[PathBuf] = &[];
 
 #[derive(Debug, PartialEq, Deserialize, Clone)]
 pub(crate) enum MigMode {
@@ -72,6 +73,9 @@ pub(crate) struct MigrateConfig {
     force_slug: Option<String>,
     fail_mode: Option<FailMode>,
     backup_config: Option<BackupConfig>,
+    nwmgr_files:Option<Vec<PathBuf>>,
+    require_nwmgr_config: Option<bool>,
+    // COPY_NMGR_FILES="eth0_static enp2s0_static enp3s0_static"
 }
 
 impl<'a> MigrateConfig {
@@ -90,6 +94,8 @@ impl<'a> MigrateConfig {
             force_slug: None,
             fail_mode: None,
             backup_config: None,
+            nwmgr_files: None,
+            require_nwmgr_config: None,
         }
     }
 
@@ -122,6 +128,21 @@ impl<'a> MigrateConfig {
             }
         }
     }
+
+    pub fn require_nwmgr_configs(&self) -> bool {
+        if let Some(val) = self.require_nwmgr_config {
+            return val;
+        }
+        return true;
+    }
+
+    pub fn get_nwmgr_files(&'a self) -> &'a [PathBuf] {
+        if let Some(ref val) = self.nwmgr_files {
+            return val.as_ref();
+        }
+        return NO_NMGR_FILES;
+    }
+
 
     pub fn set_mig_mode(&mut self, mode: &MigMode) {
         self.mode = Some(mode.clone());
