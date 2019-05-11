@@ -24,17 +24,14 @@ use crate::{
         STAGE2_CFG_FILE, SYSTEM_CONNECTIONS_DIR,
     },
     linux_common::{
-        call_cmd, ensure_cmds, get_cmd, Device, DD_CMD, GZIP_CMD, PARTPROBE_CMD, REBOOT_CMD,
+        call_cmd, ensure_cmds, get_cmd, DD_CMD, GZIP_CMD, PARTPROBE_CMD, REBOOT_CMD,
     },
+
+    device::{self},
 };
 
 pub(crate) mod stage2_config;
-
 pub(crate) use stage2_config::Stage2Config;
-
-use crate::beaglebone::BeagleboneGreen;
-use crate::intel_nuc::IntelNuc;
-use crate::raspberrypi::RaspberryPi3;
 
 // for starters just restore old boot config, only required command is mount
 
@@ -222,25 +219,7 @@ impl Stage2 {
 
         info!("migrating '{}'", &device_slug);
 
-        let device = match device_slug {
-            "beaglebone-green" => {
-                let device: Box<Device> = Box::new(BeagleboneGreen::new());
-                device
-            }
-            "raspberrypi-3" => {
-                let device: Box<Device> = Box::new(RaspberryPi3::new());
-                device
-            }
-            "intel-nuc" => {
-                let device: Box<Device> = Box::new(IntelNuc::new());
-                device
-            }
-            _ => {
-                let message = format!("unexpected device type: {}", device_slug);
-                error!("{}", &message);
-                return Err(MigError::from_remark(MigErrorKind::InvState, &message));
-            }
-        };
+        let device= device::from_device_slug(&device_slug)?;
 
         device.restore_boot(&PathBuf::from(ROOTFS_DIR), &self.config)?;
 

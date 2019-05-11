@@ -26,9 +26,6 @@ pub(crate) use migrate_info::MigrateInfo;
 pub(crate) mod path_info;
 pub(crate) use path_info::PathInfo;
 
-pub(crate) mod device;
-pub(crate) use device::Device;
-
 const MODULE: &str = "balena-migrate::linux_common";
 const WHEREIS_CMD: &str = "whereis";
 

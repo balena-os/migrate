@@ -11,13 +11,9 @@ mod mswin;
 mod linux;
 #[cfg(target_os = "linux")]
 mod linux_common;
+#[cfg(target_os = "linux")]
+mod device;
 
-#[cfg(target_os = "linux")]
-mod beaglebone;
-#[cfg(target_os = "linux")]
-mod intel_nuc;
-#[cfg(target_os = "linux")]
-mod raspberrypi;
 
 pub(crate) mod defs;
 

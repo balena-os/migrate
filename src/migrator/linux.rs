@@ -7,21 +7,19 @@ use std::thread;
 use std::time::Duration;
 
 use crate::{
-    beaglebone::is_bb,
     common::{
         balena_cfg_json::BalenaCfgJson, dir_exists, format_size_with_unit, path_append, Config,
         FileInfo, FileType, MigErrCtx, MigError, MigErrorKind, MigMode, MigrateWifis, OSArch,
     },
     defs::STAGE2_CFG_FILE,
-    intel_nuc::init_amd64,
     linux_common::{
         call_cmd, ensure_cmds, get_mem_info, get_os_arch, get_os_name, is_admin,
-        path_info::PathInfo, Device, DiskInfo, MigrateInfo, WifiConfig, BOOT_DIR, CHMOD_CMD,
+        path_info::PathInfo, DiskInfo, MigrateInfo, WifiConfig, BOOT_DIR, CHMOD_CMD,
         DF_CMD, EFI_DIR, FILE_CMD, GRUB_INSTALL_CMD, LSBLK_CMD, MOKUTIL_CMD, MOUNT_CMD, REBOOT_CMD,
         ROOT_DIR, UNAME_CMD,
     },
-    raspberrypi::is_rpi,
     stage2::Stage2Config,
+    device::{self,Device},
 };
 
 const REQUIRED_CMDS: &'static [&'static str] = &[
@@ -36,8 +34,6 @@ const SUPPORTED_OSSES: &'static [&'static str] = &[
     "Raspbian GNU/Linux 9 (stretch)",
     "Debian GNU/Linux 9 (stretch)",
 ];
-
-const DEVICE_TREE_MODEL: &str = "/proc/device-tree/model";
 
 const MODULE: &str = "migrator::linux";
 
@@ -116,38 +112,24 @@ impl<'a> LinuxMigrator {
         // Run the architecture dependent part of initialization
         // Add further architectures / functons here
 
-        let os_arch = get_os_arch()?;
-        info!("OS Architecture is {}", os_arch);
+        migrator.mig_info.os_arch = Some(get_os_arch()?);
+        info!("OS Architecture is {}", migrator.mig_info.os_arch.as_ref().unwrap());
 
-        match os_arch {
-            OSArch::ARMHF => {
-                migrator.init_armhf()?;
-            }
-            OSArch::AMD64 => {
-                migrator.device = Some(init_amd64(&mut migrator.mig_info)?);
-            }
-            /*            OSArch::I386 => {
-                            migrator.init_i386()?;
-                        },
-            */
-            _ => {
-                return Err(MigError::from_remark(
-                    MigErrorKind::InvParam,
-                    &format!(
-                        "{}::try_init: unexpected OsArch encountered: {}",
-                        MODULE, os_arch
-                    ),
-                ));
-            }
-        }
+
+        migrator.device = Some(device::get_device(&migrator.mig_info)?);
 
         if let Some(ref device) = migrator.device {
+            if ! device.can_migrate(&migrator.config, &mut migrator.mig_info)? {
+                let message = format!("Your device: '{}' can not be migrated", device.get_device_slug());
+                error!("{}", &message);
+                return Err(MigError::from_remark(MigErrorKind::InvParam, &message));
+            }
             migrator.mig_info.device_slug = Some(String::from(device.get_device_slug()));
+
         } else {
             panic!("No device identified!")
         }
 
-        migrator.mig_info.os_arch = Some(os_arch);
 
         debug!("finished architecture dependant initialization");
 
@@ -435,39 +417,6 @@ impl<'a> LinuxMigrator {
         Ok(())
     }
 
-    // **********************************************************************
-    // ** ARMHF specific initialisation
-    // **********************************************************************
-
-    fn init_armhf(&mut self) -> Result<(), MigError> {
-        trace!("LinuxMigrator::init_armhf: entered");
-
-        let dev_tree_model =
-            std::fs::read_to_string(DEVICE_TREE_MODEL).context(MigErrCtx::from_remark(
-                MigErrorKind::Upstream,
-                &format!(
-                    "{}::init_armhf: unable to determine model due to inaccessible file '{}'",
-                    MODULE, DEVICE_TREE_MODEL
-                ),
-            ))?;
-
-        if let Ok(device) = is_rpi(&dev_tree_model) {
-            self.device = Some(device);
-            return Ok(());
-        }
-
-        if let Ok(device) = is_bb(&dev_tree_model) {
-            self.device = Some(device);
-            return Ok(());
-        }
-
-        let message = format!(
-            "Your device type: '{}' is not supported by balena-migrate.",
-            dev_tree_model
-        );
-        error!("{}", message);
-        Err(MigError::from_remark(MigErrorKind::InvState, &message))
-    }
 
     // **********************************************************************
     // ** Check required paths on disk

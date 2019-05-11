@@ -8,12 +8,11 @@ use std::path::Path;
 
 use crate::{
     common::{file_exists, is_balena_file, path_append, Config, MigErrCtx, MigError, MigErrorKind},
+    linux_common::{call_cmd, restore_backups,  MigrateInfo, CHMOD_CMD},
     defs::BALENA_FILE_TAG,
+    stage2::Stage2Config,
+    device::{Device},
 };
-
-use crate::linux_common::{call_cmd, restore_backups, Device, MigrateInfo, CHMOD_CMD};
-
-use crate::stage2::Stage2Config;
 
 const BB_DRIVE_REGEX: &str = r#"^/dev/mmcblk(\d+)p(\d+)$"#;
 const BB_MODEL_REGEX: &str = r#"^((\S+\s+)*\S+)\s+BeagleBone\s+(\S+)$"#;
@@ -198,6 +197,11 @@ impl<'a> Device for BeagleboneGreen {
             ))?;
         info!("created new file in '{}'", BBG_UENV_PATH);
         Ok(())
+    }
+
+    fn can_migrate(&self, _config: &Config, _mig_info: &mut MigrateInfo) -> Result<bool, MigError> {
+        // TODO: check
+        Ok(true)
     }
 
     fn restore_boot(&self, root_path: &Path, config: &Stage2Config) -> Result<(), MigError> {

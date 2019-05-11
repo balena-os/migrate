@@ -1,4 +1,9 @@
-[target.x86_64-pc-windows-msvc]
+#[target.x86_64-pc-windows-msvc]
+# rustflags = ["-C", "target-feature=+crt-static"]
+#[target.i686-pc-windows-msvc]
+#rustflags = ["-C", "target-feature=+crt-static"]
+#[target.armv7-unknown-linux]
+# rustflags = ["-C", "target-feature=+crt-static"]
+[target.x86_64_unknown_linux_gnu]
 rustflags = ["-C", "target-feature=+crt-static"]
-[target.i686-pc-windows-msvc]
-rustflags = ["-C", "target-feature=+crt-static"]
+
