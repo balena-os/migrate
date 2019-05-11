@@ -164,13 +164,21 @@ getCmdArgs "$@"
 if [ -n "$DO_TRANSFER" ]; then
     if [ "$DEV_TYPE" == "raspberrypi" ]; then
         if  [ "$DEV_MODEL" == "3" ]; then
-            DEV_SLUG="raspberrypi3"
+            DEV_SLUG="${DEV_TYPE}${DEV_MODEL}"
         else
             fail "unknown device model ${DEV_MODEL} for device type ${DEV_TYPE}"
         fi
     elif [ "$DEV_TYPE" == "beaglebone" ]; then
         if  [ "$DEV_MODEL" == "green" ]; then
             DEV_SLUG="${DEV_TYPE}-${DEV_MODEL}"
+        else
+            fail "unknown device model ${DEV_MODEL} for device type ${DEV_TYPE}"
+        fi
+    elif [ "$DEV_TYPE" == "intel" ]; then
+        if  [ "$DEV_MODEL" == "nuc" ]; then
+            DEV_SLUG="${DEV_TYPE}-${DEV_MODEL}"
+            DEV_NAME="genericx86-64"
+            KERNEL_NAME="bzImage-initramfs-${DEV_NAME}.bin"
         else
             fail "unknown device model ${DEV_MODEL} for device type ${DEV_TYPE}"
         fi
@@ -181,13 +189,22 @@ if [ -n "$DO_TRANSFER" ]; then
     if [ -n "$MAKE_HOST_PASSWD" ]; then
         SCP_CMD=
     else
-        SCP_CMD="scp ${MAKE_HOST_USER}@${MAKE_HOST_NAME}:${MAKE_HOST_PATH}/balena-${DEV_TYPE}/build/tmp/deploy/images/${DEV_SLUG}"
+        SCP_CMD="scp ${MAKE_HOST_USER}@${MAKE_HOST_NAME}:${MAKE_HOST_PATH}/balena-${DEV_TYPE}/build/tmp/deploy/images/${DEV_NAME}"
     fi
 
-    CURR_CMD="${SCP_CMD}/zImage-initramfs-${DEV_SLUG}.bin ${TARGET_DIR}/balena.zImage"
-    inform "attempting ${CURR_CMD}"
+    if [ -z "$DEV_NAME" ]; then
+        DEV_NAME=$DEV_SLUG
+    fi
+
+    if [ -z "$KERNEL_NAME" ]; then
+        KERNEL_NAME="zImage-initramfs-${DEV_NAME}.bin"
+    fi
+
+
+    CURR_CMD="${SCP_CMD}/${KERNEL_NAME} ${TARGET_DIR}/balena.zImage"
+    debug "attempting ${CURR_CMD}"
     $CURR_CMD || error "failed at command ${CURR_CMD}"
-    CURR_CMD="${SCP_CMD}/resin-image-initramfs-${DEV_SLUG}.cpio.gz ${TARGET_DIR}/balena.initramfs.cpio.orig.gz"
+    CURR_CMD="${SCP_CMD}/resin-image-initramfs-${DEV_NAME}.cpio.gz ${TARGET_DIR}/balena.initramfs.cpio.orig.gz"
     $CURR_CMD || error "failed at command ${CURR_CMD}"
 
     inform "success!"
@@ -197,7 +214,7 @@ if [ -n "$DO_EXTRACT" ]; then
     mkdir -p "${TARGET_DIR}/extract"
     LAST_PWD=$(pwd)
     cd "${TARGET_DIR}/extract"
-    gzip -c -d "${TARGET_DIR}/balena.initramfs.cpio.orig.gz" | sudo cpio -i || fail "failed to unpack initramfs to ${TARGET_DIR}/extract"
+    gzip -c -d "../balena.initramfs.cpio.orig.gz" | sudo cpio -i || fail "failed to unpack initramfs to ${TARGET_DIR}/extract"
     cd $LAST_PWD
 fi
 
