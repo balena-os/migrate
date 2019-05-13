@@ -25,8 +25,10 @@ pub const WORK_DIR_KEY: &str = "work_dir";
 pub const FAIL_MODE_KEY: &str = "fail_mode";
 pub const NO_FLASH_KEY: &str = "no_flash";
 
+/*
 pub const BBCKUP_SOURCE_KEY: &str = "source";
 pub const BBCKUP_BCKUP_KEY: &str = "backup";
+*/
 
 pub const EMPTY_BACKUPS: &[(String, String)] = &[];
 
@@ -158,8 +160,7 @@ impl<'a> Stage2Config {
         if mig_info.boot_cfg_bckup.len() > 0 {
             cfg_str.push_str(&format!("{}:\n", BOOT_BACKUP_KEY));
             for bckup in &mig_info.boot_cfg_bckup {
-                cfg_str.push_str(&format!("  - {}:      '{}'\n", BBCKUP_SOURCE_KEY, bckup.0));
-                cfg_str.push_str(&format!("    {}:     '{}'\n", BBCKUP_BCKUP_KEY, bckup.1));
+                cfg_str.push_str(&format!("  - ['{}','{}']\n", bckup.0 , bckup.1));
             }
         }
 
