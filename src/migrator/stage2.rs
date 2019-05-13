@@ -1,4 +1,4 @@
-use failure::ResultExt;
+use failure::{ResultExt};
 use log::{debug, error, info, warn};
 use mod_logger::Logger;
 use nix::{
@@ -7,7 +7,7 @@ use nix::{
     unistd::sync,
 };
 use regex::Regex;
-use std::fs::{copy, create_dir, read_dir, read_link};
+use std::fs::{read_to_string, copy, create_dir, read_dir, read_link};
 use std::path::{Path, PathBuf};
 use std::process::{Command, Stdio};
 use std::thread;
@@ -21,7 +21,7 @@ use crate::{
     defs::{
         BALENA_BOOT_FSTYPE, BALENA_BOOT_PART, BALENA_DATA_FSTYPE, BALENA_DATA_PART,
         BALENA_ROOTA_PART, BALENA_ROOTB_PART, BALENA_STATE_PART, BOOT_PATH, DISK_BY_LABEL_PATH,
-        STAGE2_CFG_FILE, SYSTEM_CONNECTIONS_DIR,
+        DISK_BY_PARTUUID_PATH, STAGE2_CFG_FILE, SYSTEM_CONNECTIONS_DIR,
     },
     linux_common::{
         call_cmd, ensure_cmds, get_cmd, DD_CMD, GZIP_CMD, PARTPROBE_CMD, REBOOT_CMD,
@@ -42,6 +42,8 @@ const REBOOT_DELAY: u64 = 3;
 const INIT_LOG_LEVEL: &str = "debug";
 const KERNEL_CMDLINE: &str = "/proc/cmdline";
 const ROOT_DEVICE_REGEX: &str = r#"\sroot=(\S+)\s"#;
+const ROOT_PARTUUID_REGEX: &str = r#"^PARTUUID=(\S+)$"#;
+
 const ROOT_FSTYPE_REGEX: &str = r#"\srootfstype=(\S+)\s"#;
 const ROOTFS_DIR: &str = "/tmp_root";
 const MIGRATE_TEMP_DIR: &str = "/migrate_tmp";
@@ -81,35 +83,52 @@ impl Stage2 {
         let root_fs_dir = Path::new(ROOTFS_DIR);
 
         // TODO: beaglebone version - make device_slug dependant
-        let root_device = if let Some(parse_res) =
-            parse_file(KERNEL_CMDLINE, &Regex::new(&ROOT_DEVICE_REGEX).unwrap())?
-        {
-            PathBuf::from(parse_res.get(1).unwrap().trim_matches(char::from(0)))
-        } else {
-            // TODO: manually scan possible devices for config file
-            return Err(MigError::from_remark(
-                MigErrorKind::InvState,
-                &format!("failed to parse {} for root device", KERNEL_CMDLINE),
-            ));
-        };
 
-        let root_fs_type = if let Some(parse_res) =
-            parse_file(KERNEL_CMDLINE, &Regex::new(&ROOT_FSTYPE_REGEX).unwrap())?
-        {
-            String::from(
-                parse_res
-                    .get(1)
-                    .unwrap()
-                    .as_str()
-                    .trim_matches(char::from(0)),
-            )
-        } else {
-            // TODO: manually scan possible devices for config file
-            return Err(MigError::from_remark(
-                MigErrorKind::InvState,
-                &format!("failed to parse {} for root fs type", KERNEL_CMDLINE),
-            ));
-        };
+        let cmd_line = read_to_string(KERNEL_CMDLINE).context(MigErrCtx::from_remark(MigErrorKind::Upstream, &format!("Failed to read file: '{}'", KERNEL_CMDLINE)))?;
+
+        let root_device =
+            if let Some(captures) = Regex::new(ROOT_DEVICE_REGEX).unwrap().captures(&cmd_line) {
+                let root_dev = captures.get(1).unwrap().as_str();
+                if let Some(captures) = Regex::new(ROOT_PARTUUID_REGEX).unwrap().captures(root_dev) {
+                    let uuid_part = path_append(DISK_BY_PARTUUID_PATH, captures.get(1).unwrap().as_str());
+                    if file_exists(&uuid_part) {
+                        path_append(
+                            uuid_part.parent().unwrap(),
+                            read_link(&uuid_part).context(MigErrCtx::from_remark(
+                                MigErrorKind::Upstream,
+                                &format!("failed to read link: '{}'", uuid_part.display()),
+                            ))?,
+                        )
+                            .canonicalize()
+                            .context(MigErrCtx::from_remark(
+                                MigErrorKind::Upstream,
+                                &format!(
+                                    "failed to canonicalize path from: '{}'",
+                                    uuid_part.display()
+                                ),
+                            ))?
+                    } else {
+                        return Err(MigError::from_remark(MigErrorKind::InvParam, &format!("Failed to get root device from part-uuid: '{}'", root_dev)));
+                    }
+                } else {
+                    PathBuf::from(root_dev)
+                }
+            } else {
+                return Err(MigError::from_remark(MigErrorKind::InvParam, &format!("Failed to parse root device from kernel command line: '{}'", cmd_line)));
+            };
+
+        let root_fs_type =
+            if let Some(captures) = Regex::new(&ROOT_FSTYPE_REGEX).unwrap().captures(&cmd_line) {
+                captures.get(1).unwrap().as_str()
+            }  else {
+                // TODO: manually scan possible devices for config file
+                return Err(MigError::from_remark(
+                    MigErrorKind::InvState,
+                    &format!("failed to parse {} for root fs type", KERNEL_CMDLINE),
+                ));
+            };
+
+        info!("Using root device '{}' with fs-type: '{}'", root_device.display(), root_fs_type);
 
         if !dir_exists(ROOTFS_DIR)? {
             create_dir(ROOTFS_DIR).context(MigErrCtx::from_remark(
@@ -125,7 +144,7 @@ impl Stage2 {
         mount(
             Some(&root_device),
             root_fs_dir,
-            Some(root_fs_type.as_str()),
+            Some(root_fs_type),
             MsFlags::empty(),
             NIX_NONE,
         )

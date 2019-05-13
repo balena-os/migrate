@@ -8,6 +8,7 @@ pub const SYSTEM_CONNECTIONS_DIR: &str = "system-connections";
 
 // where do disk labels live ?
 pub const DISK_BY_LABEL_PATH: &str = "/dev/disk/by-label";
+pub const DISK_BY_PARTUUID_PATH: &str = "/dev/disk/by-partuuid";
 
 // Default balena partition labels and FS types
 pub const BALENA_BOOT_PART: &str = "resin-boot";
