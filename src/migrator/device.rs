@@ -28,7 +28,7 @@ pub(crate) trait Device {
 pub(crate) fn from_device_slug(slug: &str) -> Result<Box<Device>, MigError> {
     match slug {
         "beaglebone-green" => Ok(Box::new(beaglebone::BeagleboneGreen::new())),
-        "raspberrypi-3" => Ok(Box::new(raspberrypi::RaspberryPi3::new())),
+        "raspberrypi3" => Ok(Box::new(raspberrypi::RaspberryPi3::new())),
         "intel-nuc" => Ok(Box::new(intel_nuc::IntelNuc::new())),
         _ => {
             let message = format!("unexpected device type: {}", &slug);
