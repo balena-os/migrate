@@ -49,7 +49,7 @@ impl BalenaCfgJson {
 
         // TODO: check API too
 
-        if config.balena.is_vpn_check() {
+        if config.balena.is_check_vpn() {
             let vpn_addr = self.get_vpn_endpoint()?;
             let vpn_port = self.get_vpn_port()?;
 

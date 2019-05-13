@@ -10,12 +10,14 @@ use crate::defs::{
     DEFAULT_VPN_PORT,
 };
 
+/*
 #[derive(Debug, Deserialize)]
 pub struct Host {
     host: Option<String>,
     port: Option<u16>,
     check: Option<bool>,
 }
+*/
 
 #[derive(Debug, Deserialize)]
 pub struct ApiInfo {
@@ -31,7 +33,7 @@ pub struct BalenaConfig {
     config: Option<PathBuf>,
     app_name: Option<String>,
     api: Option<ApiInfo>,
-    vpn: Option<Host>,
+    check_vpn: Option<bool>,
     check_timeout: Option<u64>,
 }
 
@@ -42,7 +44,7 @@ impl<'a> BalenaConfig {
             config: None,
             app_name: None,
             api: None,
-            vpn: None,
+            check_vpn: None,
             check_timeout: None,
         }
     }
@@ -121,34 +123,12 @@ impl<'a> BalenaConfig {
         return None;
     }
 
-    pub fn get_vpn_host(&'a self) -> &'a str {
-        if let Some(ref vpn) = self.vpn {
-            if let Some(ref val) = vpn.host {
-                return val;
-            }
+    pub fn is_check_vpn(&self) -> bool {
+        if let Some(ref check_vpn) = self.check_vpn {
+            *check_vpn
+        } else {
+            true
         }
-
-        return DEFAULT_VPN_HOST;
-    }
-
-    pub fn get_vpn_port(&self) -> u16 {
-        if let Some(ref vpn) = self.vpn {
-            if let Some(ref val) = vpn.port {
-                return *val;
-            }
-        }
-
-        return DEFAULT_VPN_PORT;
-    }
-
-    pub fn is_vpn_check(&self) -> bool {
-        if let Some(ref vpn) = self.vpn {
-            if let Some(ref val) = vpn.check {
-                return *val;
-            }
-        }
-
-        return true;
     }
 
     pub fn get_check_timeout(&self) -> u64 {

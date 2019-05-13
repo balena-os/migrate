@@ -9,7 +9,7 @@ use std::time::SystemTime;
 use crate::{
     common::{file_exists, is_balena_file, path_append, Config, MigErrCtx, MigError, MigErrorKind},
     defs::BALENA_FILE_TAG,
-    linux_common::{call_cmd, migrate_info::MigrateInfo, CHMOD_CMD},
+    linux_common::{call_cmd, migrate_info::MigrateInfo, CHMOD_CMD,restore_backups},
     stage2::Stage2Config,
     device::Device,
 };
@@ -247,7 +247,13 @@ impl<'a> Device for RaspberryPi3 {
         Ok(true)
     }
 
-    fn restore_boot(&self, _root_path: &Path, _config: &Stage2Config) -> Result<(), MigError> {
-        Err(MigError::from(MigErrorKind::NotImpl))
+    fn restore_boot(&self, root_path: &Path, config: &Stage2Config) -> Result<(), MigError> {
+        info!("restoring boot configuration for Raspberry Pi 3");
+
+        restore_backups(root_path, config.get_boot_backups())?;
+
+        info!("The original boot configuration was restored");
+
+        Ok(())
     }
 }
