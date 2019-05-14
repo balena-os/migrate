@@ -28,14 +28,6 @@ const REQUIRED_CMDS: &'static [&'static str] = &[
 ];
 const OPTIONAL_CMDS: &'static [&'static str] = &[MOKUTIL_CMD, GRUB_INSTALL_CMD];
 
-const SUPPORTED_OSSES: &'static [&'static str] = &[
-    "Ubuntu 18.04.2 LTS",
-    "Ubuntu 16.04.2 LTS",
-    "Ubuntu 14.04.2 LTS",
-    "Raspbian GNU/Linux 9 (stretch)",
-    "Debian GNU/Linux 9 (stretch)",
-];
-
 const MODULE: &str = "migrator::linux";
 
 const MEM_THRESHOLD: u64 = 128 * 1024 * 1024; // 128 MiB
@@ -93,35 +85,36 @@ impl<'a> LinuxMigrator {
         }
 
         // **********************************************************************
-        // Check if we are on a supported OS.
-        // Add OS string to SUPPORTED_OSSES list above  once tested
+        // Get os architecture & name
+        // and check if we are on a supported OS.
+        // Add OS string to SUPPORTED_OSSES_<ARCH> list above  once tested
 
-        let os_name = get_os_name()?;
-        if let None = SUPPORTED_OSSES.iter().position(|&r| r == os_name) {
-            let message = format!(
-                "your OS '{}' is not in the list of operating systems supported by balena-migrate",
-                os_name
-            );
-            error!("{}", &message);
-            return Err(MigError::from_remark(MigErrorKind::InvState, &message));
-        }
+        migrator.mig_info.os_arch = Some(get_os_arch()?);
+        migrator.mig_info.os_name = Some(get_os_name()?);
 
-        info!("OS Name is {}", os_name);
-        migrator.mig_info.os_name = Some(os_name);
+        info!(
+            "OS Architecture is {}, OS Name is '{}'",
+            migrator.mig_info.get_os_arch(),
+            migrator.mig_info.get_os_name()
+        );
 
         // **********************************************************************
         // Run the architecture dependent part of initialization
         // Add further architectures / functons here
 
-        migrator.mig_info.os_arch = Some(get_os_arch()?);
-        info!(
-            "OS Architecture is {}",
-            migrator.mig_info.os_arch.as_ref().unwrap()
-        );
-
         migrator.device = Some(device::get_device(&migrator.mig_info)?);
 
         if let Some(ref device) = migrator.device {
+            if !device.is_supported_os(&migrator.mig_info)? {
+                let message = format!(
+                    "Your devices OS '{}' is not supported on this platform: {}",
+                    migrator.mig_info.get_os_name(),
+                    device.get_device_slug()
+                );
+                error!("{}", &message);
+                return Err(MigError::from_remark(MigErrorKind::InvParam, &message));
+            }
+
             if !device.can_migrate(&migrator.config, &mut migrator.mig_info)? {
                 let message = format!(
                     "Your device: '{}' can not be migrated",

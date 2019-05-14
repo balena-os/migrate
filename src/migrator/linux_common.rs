@@ -26,7 +26,7 @@ pub(crate) use migrate_info::MigrateInfo;
 pub(crate) mod path_info;
 pub(crate) use path_info::PathInfo;
 
-const MODULE: &str = "balena-migrate::linux_common";
+const MODULE: &str = "linux_common";
 const WHEREIS_CMD: &str = "whereis";
 
 pub const DF_CMD: &str = "df";
@@ -199,7 +199,7 @@ fn whereis(cmd: &str) -> Result<String, MigError> {
 }
 
 pub(crate) fn get_os_arch() -> Result<OSArch, MigError> {
-    trace!("LinuxMigrator::get_os_arch: entered");
+    trace!("get_os_arch: entered");
     let cmd_res =
         call_cmd(UNAME_CMD, &UNAME_ARGS_OS_ARCH, true).context(MigErrCtx::from_remark(
             MigErrorKind::Upstream,
@@ -226,9 +226,8 @@ pub(crate) fn get_os_arch() -> Result<OSArch, MigError> {
         Err(MigError::from_remark(
             MigErrorKind::ExecProcess,
             &format!(
-                "{}::get_os_arch: command failed: {}",
-                MODULE,
-                cmd_res.status.code().unwrap_or(0)
+                "{}::get_os_arch: command failed: {} {:?}",
+                MODULE, UNAME_CMD, cmd_res
             ),
         ))
     }

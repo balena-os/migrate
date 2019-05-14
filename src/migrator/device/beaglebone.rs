@@ -15,7 +15,10 @@ use crate::{
 };
 
 const BB_DRIVE_REGEX: &str = r#"^/dev/mmcblk(\d+)p(\d+)$"#;
-const BB_MODEL_REGEX: &str = r#"^((\S+\s+)*\S+)\s+BeagleBone\s+(\S+)$"#;
+
+// Supported models
+// TI OMAP3 BeagleBoard xM
+const BB_MODEL_REGEX: &str = r#"^((\S+\s+)*\S+)\s+Beagle(Bone|Board)\s+(\S+)$"#;
 
 const BBG_MIG_KERNEL_PATH: &str = "/boot/balena-migrate.zImage";
 const BBG_MIG_INITRD_PATH: &str = "/boot/balena-migrate.initrd";
@@ -54,12 +57,13 @@ pub(crate) fn is_bb(model_string: &str) -> Result<Box<Device>, MigError> {
 
     if let Some(captures) = Regex::new(BB_MODEL_REGEX).unwrap().captures(model_string) {
         let model = captures
-            .get(3)
+            .get(4)
             .unwrap()
             .as_str()
             .trim_matches(char::from(0));
 
         match model {
+            "xM" => Ok(Box::new(BeagleboardXM {})),
             "Green" => Ok(Box::new(BeagleboneGreen {})),
             _ => {
                 let message = format!("The beaglebone model reported by your device ('{}') is not supported by balena-migrate", model);
@@ -229,5 +233,48 @@ impl<'a> Device for BeagleboneGreen {
         info!("The original boot configuration was restored");
 
         Ok(())
+    }
+
+    fn is_supported_os(&self, mig_info: &MigrateInfo) -> Result<bool, MigError> {
+        const SUPPORTED_OSSES: &'static [&'static str] = &["Debian GNU/Linux 9 (stretch)"];
+
+        let os_name = mig_info.get_os_name();
+
+        if let None = SUPPORTED_OSSES.iter().position(|&r| r == os_name) {
+            Ok(false)
+        } else {
+            Ok(true)
+        }
+    }
+}
+
+pub(crate) struct BeagleboardXM {}
+
+impl BeagleboardXM {
+    pub(crate) fn new() -> BeagleboardXM {
+        BeagleboardXM {}
+    }
+}
+
+impl<'a> Device for BeagleboardXM {
+    fn get_device_slug(&self) -> &'static str {
+        // TODO: check if that is true
+        "beagleboard-xm"
+    }
+
+    fn is_supported_os(&self, mig_info: &MigrateInfo) -> Result<bool, MigError> {
+        Err(MigError::from(MigErrorKind::NotImpl))
+    }
+
+    fn restore_boot(&self, root_path: &Path, config: &Stage2Config) -> Result<(), MigError> {
+        Err(MigError::from(MigErrorKind::NotImpl))
+    }
+
+    fn can_migrate(&self, _config: &Config, _mig_info: &mut MigrateInfo) -> Result<bool, MigError> {
+        Err(MigError::from(MigErrorKind::NotImpl))
+    }
+
+    fn setup(&self, _config: &Config, mig_info: &mut MigrateInfo) -> Result<(), MigError> {
+        Err(MigError::from(MigErrorKind::NotImpl))
     }
 }

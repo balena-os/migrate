@@ -20,6 +20,7 @@ const DEVICE_TREE_MODEL: &str = "/proc/device-tree/model";
 pub(crate) trait Device {
     fn get_device_slug(&self) -> &'static str;
     fn can_migrate(&self, config: &Config, mig_info: &mut MigrateInfo) -> Result<bool, MigError>;
+    fn is_supported_os(&self, mig_info: &MigrateInfo) -> Result<bool, MigError>;
     fn setup(&self, config: &Config, mig_info: &mut MigrateInfo) -> Result<(), MigError>;
     fn restore_boot(&self, root_path: &Path, config: &Stage2Config) -> Result<(), MigError>;
 }
@@ -38,11 +39,11 @@ pub(crate) fn from_device_slug(slug: &str) -> Result<Box<Device>, MigError> {
 }
 
 pub(crate) fn get_device(mig_info: &MigrateInfo) -> Result<Box<Device>, MigError> {
-    if let Some(ref os_arch) = mig_info.os_arch {
-        match os_arch {
-            OSArch::ARMHF => {
-                let dev_tree_model = fs::read_to_string(DEVICE_TREE_MODEL)
-                    .context(MigErrCtx::from_remark(
+    let os_arch = mig_info.get_os_arch();
+    match os_arch {
+        OSArch::ARMHF => {
+            let dev_tree_model =
+                fs::read_to_string(DEVICE_TREE_MODEL).context(MigErrCtx::from_remark(
                     MigErrorKind::Upstream,
                     &format!(
                         "{}::init_armhf: unable to determine model due to inaccessible file '{}'",
@@ -50,37 +51,34 @@ pub(crate) fn get_device(mig_info: &MigrateInfo) -> Result<Box<Device>, MigError
                     ),
                 ))?;
 
-                if let Ok(device) = raspberrypi::is_rpi(&dev_tree_model) {
-                    return Ok(device);
-                }
-
-                if let Ok(device) = beaglebone::is_bb(&dev_tree_model) {
-                    return Ok(device);
-                }
-
-                let message = format!(
-                    "Your device type: '{}' is not supported by balena-migrate.",
-                    dev_tree_model
-                );
-                error!("{}", message);
-                Err(MigError::from_remark(MigErrorKind::InvState, &message))
+            if let Ok(device) = raspberrypi::is_rpi(&dev_tree_model) {
+                return Ok(device);
             }
-            OSArch::AMD64 => Ok(Box::new(intel_nuc::IntelNuc::new())),
-            /*            OSArch::I386 => {
-                        migrator.init_i386()?;
-                    },
-            */
-            _ => {
-                return Err(MigError::from_remark(
-                    MigErrorKind::InvParam,
-                    &format!(
-                        "{}::get_device: unexpected OsArch encountered: {}",
-                        MODULE, os_arch
-                    ),
-                ));
+
+            if let Ok(device) = beaglebone::is_bb(&dev_tree_model) {
+                return Ok(device);
             }
+
+            let message = format!(
+                "Your device type: '{}' is not supported by balena-migrate.",
+                dev_tree_model
+            );
+            error!("{}", message);
+            Err(MigError::from_remark(MigErrorKind::InvState, &message))
         }
-    } else {
-        panic!("os arch is not initialized");
+        OSArch::AMD64 => Ok(Box::new(intel_nuc::IntelNuc::new())),
+        /*            OSArch::I386 => {
+                    migrator.init_i386()?;
+                },
+        */
+        _ => {
+            return Err(MigError::from_remark(
+                MigErrorKind::InvParam,
+                &format!(
+                    "{}::get_device: unexpected OsArch encountered: {}",
+                    MODULE, os_arch
+                ),
+            ));
+        }
     }
 }

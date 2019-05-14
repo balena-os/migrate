@@ -64,7 +64,7 @@ pub(crate) struct Stage2 {
 
 impl Stage2 {
     pub fn try_init() -> Result<Stage2, MigError> {
-        // TODO:
+        // TODO: wait a couple of seconds for more devices to show up ?
 
         match Logger::initialise(Some(INIT_LOG_LEVEL)) {
             Ok(_s) => info!("Balena Migrate Stage 2 initializing"),

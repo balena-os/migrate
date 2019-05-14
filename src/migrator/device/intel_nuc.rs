@@ -93,4 +93,19 @@ impl<'a> Device for IntelNuc {
     fn restore_boot(&self, _root_path: &Path, _config: &Stage2Config) -> Result<(), MigError> {
         Err(MigError::from(MigErrorKind::NotImpl))
     }
+
+    fn is_supported_os(&self, mig_info: &MigrateInfo) -> Result<bool, MigError> {
+        const SUPPORTED_OSSES: &'static [&'static str] = &[
+            "Ubuntu 18.04.2 LTS",
+            //    "Ubuntu 16.04.2 LTS",
+            "Ubuntu 14.04.2 LTS",
+        ];
+
+        let os_name = mig_info.get_os_name();
+        if let None = SUPPORTED_OSSES.iter().position(|&r| r == os_name) {
+            Ok(false)
+        } else {
+            Ok(true)
+        }
+    }
 }

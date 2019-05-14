@@ -45,14 +45,19 @@ impl<'a> MigrateInfo {
         }
     }
 
-    /*
-        pub(crate) fn get_os_name(&'a self) -> &'a str {
-            if let Some(ref os_name) = self.os_name {
-                return os_name;
-            }
-            panic!("{} uninitialized field os_name in MigrateInfo", MODULE);
+    pub(crate) fn get_os_name(&'a self) -> &'a str {
+        if let Some(ref os_name) = self.os_name {
+            return os_name;
         }
-    */
+        panic!("{} uninitialized field os_name in MigrateInfo", MODULE);
+    }
+
+    pub(crate) fn get_os_arch(&'a self) -> &'a OSArch {
+        if let Some(ref os_arch) = self.os_arch {
+            return os_arch;
+        }
+        panic!("{} uninitialized field os_arch in MigrateInfo", MODULE);
+    }
 
     pub fn get_initrd_path(&'a self) -> &'a Path {
         if let Some(ref initrd_info) = self.initrd_info {
@@ -88,13 +93,6 @@ impl<'a> MigrateInfo {
             panic!("{} uninitialized field drive_info in MigrateInfo", MODULE);
         }
     */
-
-    pub(crate) fn get_os_arch(&'a self) -> &'a OSArch {
-        if let Some(ref os_arch) = self.os_arch {
-            return os_arch;
-        }
-        panic!("{} uninitialized field os_arch in MigrateInfo", MODULE);
-    }
 
     pub(crate) fn get_drive_device(&'a self) -> &'a Path {
         if let Some(ref disk_info) = self.disk_info {

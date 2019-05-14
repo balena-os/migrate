@@ -259,4 +259,16 @@ impl<'a> Device for RaspberryPi3 {
 
         Ok(())
     }
+
+    fn is_supported_os(&self, mig_info: &MigrateInfo) -> Result<bool, MigError> {
+        const SUPPORTED_OSSES: &'static [&'static str] = &["Raspbian GNU/Linux 9 (stretch)"];
+
+        let os_name = mig_info.get_os_name();
+
+        if let None = SUPPORTED_OSSES.iter().position(|&r| r == os_name) {
+            Ok(false)
+        } else {
+            Ok(true)
+        }
+    }
 }
