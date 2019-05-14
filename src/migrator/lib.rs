@@ -8,12 +8,11 @@ mod common;
 mod mswin;
 
 #[cfg(target_os = "linux")]
+mod device;
+#[cfg(target_os = "linux")]
 mod linux;
 #[cfg(target_os = "linux")]
 mod linux_common;
-#[cfg(target_os = "linux")]
-mod device;
-
 
 pub(crate) mod defs;
 

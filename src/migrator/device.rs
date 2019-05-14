@@ -1,13 +1,13 @@
+use failure::ResultExt;
+use log::error;
 use std::fs;
-use log::{error};
 use std::path::Path;
-use failure::{ResultExt};
 
 use crate::{
     //linux::LinuxMigrator,
-    common::{Config, MigError, MigErrCtx, MigErrorKind, OSArch},
-    linux_common::{MigrateInfo},
-    stage2::{Stage2Config},
+    common::{Config, MigErrCtx, MigError, MigErrorKind, OSArch},
+    linux_common::MigrateInfo,
+    stage2::Stage2Config,
 };
 
 mod beaglebone;
@@ -16,7 +16,6 @@ mod raspberrypi;
 
 const MODULE: &str = "device";
 const DEVICE_TREE_MODEL: &str = "/proc/device-tree/model";
-
 
 pub(crate) trait Device {
     fn get_device_slug(&self) -> &'static str;
@@ -42,14 +41,14 @@ pub(crate) fn get_device(mig_info: &MigrateInfo) -> Result<Box<Device>, MigError
     if let Some(ref os_arch) = mig_info.os_arch {
         match os_arch {
             OSArch::ARMHF => {
-                let dev_tree_model =
-                    fs::read_to_string(DEVICE_TREE_MODEL).context(MigErrCtx::from_remark(
-                        MigErrorKind::Upstream,
-                        &format!(
-                            "{}::init_armhf: unable to determine model due to inaccessible file '{}'",
-                            MODULE, DEVICE_TREE_MODEL
-                        ),
-                    ))?;
+                let dev_tree_model = fs::read_to_string(DEVICE_TREE_MODEL)
+                    .context(MigErrCtx::from_remark(
+                    MigErrorKind::Upstream,
+                    &format!(
+                        "{}::init_armhf: unable to determine model due to inaccessible file '{}'",
+                        MODULE, DEVICE_TREE_MODEL
+                    ),
+                ))?;
 
                 if let Ok(device) = raspberrypi::is_rpi(&dev_tree_model) {
                     return Ok(device);
@@ -66,9 +65,7 @@ pub(crate) fn get_device(mig_info: &MigrateInfo) -> Result<Box<Device>, MigError
                 error!("{}", message);
                 Err(MigError::from_remark(MigErrorKind::InvState, &message))
             }
-            OSArch::AMD64 => {
-                Ok(Box::new(intel_nuc::IntelNuc::new()))
-            }
+            OSArch::AMD64 => Ok(Box::new(intel_nuc::IntelNuc::new())),
             /*            OSArch::I386 => {
                         migrator.init_i386()?;
                     },
@@ -87,5 +84,3 @@ pub(crate) fn get_device(mig_info: &MigrateInfo) -> Result<Box<Device>, MigError
         panic!("os arch is not initialized");
     }
 }
-
-

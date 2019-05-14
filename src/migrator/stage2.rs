@@ -1,4 +1,4 @@
-use failure::{ResultExt};
+use failure::ResultExt;
 use log::{debug, error, info, warn};
 use mod_logger::Logger;
 use nix::{
@@ -7,27 +7,21 @@ use nix::{
     unistd::sync,
 };
 use regex::Regex;
-use std::fs::{read_to_string, copy, create_dir, read_dir, read_link};
+use std::fs::{copy, create_dir, read_dir, read_link, read_to_string};
 use std::path::{Path, PathBuf};
 use std::process::{Command, Stdio};
 use std::thread;
 use std::time::Duration;
 
 use crate::{
-    common::{
-        dir_exists, file_exists, path_append, FailMode, MigErrCtx, MigError,
-        MigErrorKind,
-    },
+    common::{dir_exists, file_exists, path_append, FailMode, MigErrCtx, MigError, MigErrorKind},
     defs::{
-        BALENA_BOOT_FSTYPE, BALENA_BOOT_PART, BALENA_DATA_FSTYPE, BALENA_DATA_PART,
+        BACKUP_FILE, BALENA_BOOT_FSTYPE, BALENA_BOOT_PART, BALENA_DATA_FSTYPE, BALENA_DATA_PART,
         BALENA_ROOTA_PART, BALENA_ROOTB_PART, BALENA_STATE_PART, BOOT_PATH, DISK_BY_LABEL_PATH,
         DISK_BY_PARTUUID_PATH, STAGE2_CFG_FILE, SYSTEM_CONNECTIONS_DIR,
     },
-    linux_common::{
-        call_cmd, ensure_cmds, get_cmd, DD_CMD, GZIP_CMD, PARTPROBE_CMD, REBOOT_CMD,
-    },
-
-    device::{self},
+    device,
+    linux_common::{call_cmd, ensure_cmds, get_cmd, DD_CMD, GZIP_CMD, PARTPROBE_CMD, REBOOT_CMD},
 };
 
 pub(crate) mod stage2_config;
@@ -84,43 +78,57 @@ impl Stage2 {
 
         // TODO: beaglebone version - make device_slug dependant
 
-        let cmd_line = read_to_string(KERNEL_CMDLINE).context(MigErrCtx::from_remark(MigErrorKind::Upstream, &format!("Failed to read file: '{}'", KERNEL_CMDLINE)))?;
+        let cmd_line = read_to_string(KERNEL_CMDLINE).context(MigErrCtx::from_remark(
+            MigErrorKind::Upstream,
+            &format!("Failed to read file: '{}'", KERNEL_CMDLINE),
+        ))?;
 
-        let root_device =
-            if let Some(captures) = Regex::new(ROOT_DEVICE_REGEX).unwrap().captures(&cmd_line) {
-                let root_dev = captures.get(1).unwrap().as_str();
-                if let Some(captures) = Regex::new(ROOT_PARTUUID_REGEX).unwrap().captures(root_dev) {
-                    let uuid_part = path_append(DISK_BY_PARTUUID_PATH, captures.get(1).unwrap().as_str());
-                    if file_exists(&uuid_part) {
-                        path_append(
-                            uuid_part.parent().unwrap(),
-                            read_link(&uuid_part).context(MigErrCtx::from_remark(
-                                MigErrorKind::Upstream,
-                                &format!("failed to read link: '{}'", uuid_part.display()),
-                            ))?,
-                        )
-                            .canonicalize()
-                            .context(MigErrCtx::from_remark(
-                                MigErrorKind::Upstream,
-                                &format!(
-                                    "failed to canonicalize path from: '{}'",
-                                    uuid_part.display()
-                                ),
-                            ))?
-                    } else {
-                        return Err(MigError::from_remark(MigErrorKind::InvParam, &format!("Failed to get root device from part-uuid: '{}'", root_dev)));
-                    }
+        let root_device = if let Some(captures) =
+            Regex::new(ROOT_DEVICE_REGEX).unwrap().captures(&cmd_line)
+        {
+            let root_dev = captures.get(1).unwrap().as_str();
+            if let Some(captures) = Regex::new(ROOT_PARTUUID_REGEX).unwrap().captures(root_dev) {
+                let uuid_part =
+                    path_append(DISK_BY_PARTUUID_PATH, captures.get(1).unwrap().as_str());
+                if file_exists(&uuid_part) {
+                    path_append(
+                        uuid_part.parent().unwrap(),
+                        read_link(&uuid_part).context(MigErrCtx::from_remark(
+                            MigErrorKind::Upstream,
+                            &format!("failed to read link: '{}'", uuid_part.display()),
+                        ))?,
+                    )
+                    .canonicalize()
+                    .context(MigErrCtx::from_remark(
+                        MigErrorKind::Upstream,
+                        &format!(
+                            "failed to canonicalize path from: '{}'",
+                            uuid_part.display()
+                        ),
+                    ))?
                 } else {
-                    PathBuf::from(root_dev)
+                    return Err(MigError::from_remark(
+                        MigErrorKind::InvParam,
+                        &format!("Failed to get root device from part-uuid: '{}'", root_dev),
+                    ));
                 }
             } else {
-                return Err(MigError::from_remark(MigErrorKind::InvParam, &format!("Failed to parse root device from kernel command line: '{}'", cmd_line)));
-            };
+                PathBuf::from(root_dev)
+            }
+        } else {
+            return Err(MigError::from_remark(
+                MigErrorKind::InvParam,
+                &format!(
+                    "Failed to parse root device from kernel command line: '{}'",
+                    cmd_line
+                ),
+            ));
+        };
 
         let root_fs_type =
             if let Some(captures) = Regex::new(&ROOT_FSTYPE_REGEX).unwrap().captures(&cmd_line) {
                 captures.get(1).unwrap().as_str()
-            }  else {
+            } else {
                 // TODO: manually scan possible devices for config file
                 return Err(MigError::from_remark(
                     MigErrorKind::InvState,
@@ -128,7 +136,11 @@ impl Stage2 {
                 ));
             };
 
-        info!("Using root device '{}' with fs-type: '{}'", root_device.display(), root_fs_type);
+        info!(
+            "Using root device '{}' with fs-type: '{}'",
+            root_device.display(),
+            root_fs_type
+        );
 
         if !dir_exists(ROOTFS_DIR)? {
             create_dir(ROOTFS_DIR).context(MigErrCtx::from_remark(
@@ -238,7 +250,7 @@ impl Stage2 {
 
         info!("migrating '{}'", &device_slug);
 
-        let device= device::from_device_slug(&device_slug)?;
+        let device = device::from_device_slug(&device_slug)?;
 
         device.restore_boot(&PathBuf::from(ROOTFS_DIR), &self.config)?;
 
@@ -323,6 +335,25 @@ impl Stage2 {
                     ));
                 }
             }
+        }
+
+        if self.config.has_backup() {
+            // TODO: check available memory / disk space
+            let target_path = path_append(mig_tmp_dir, BACKUP_FILE);
+            let source_path = path_append(
+                root_fs_dir,
+                path_append(self.config.get_work_path(), BACKUP_FILE),
+            );
+
+            copy(&source_path, &target_path).context(MigErrCtx::from_remark(
+                MigErrorKind::Upstream,
+                &format!(
+                    "Failed copy backup file to migrate temp directory '{}' -> '{}'",
+                    source_path.display(),
+                    target_path.display()
+                ),
+            ))?;
+            info!("copied backup  to '{}'", target_path.display());
         }
 
         info!("Files copied to RAMFS");
@@ -660,7 +691,23 @@ impl Stage2 {
                 &data_path.display()
             );
 
-        // TODO: copy log, backup to data_path
+            // TODO: copy log, backup to data_path
+            if self.config.has_backup() {
+                // TODO: check available disk space
+                let source_path = path_append(mig_tmp_dir, BACKUP_FILE);
+                let target_path = path_append(data_path, BACKUP_FILE);
+
+                copy(&source_path, &target_path).context(MigErrCtx::from_remark(
+                    MigErrorKind::Upstream,
+                    &format!(
+                        "Failed copy backup file to data partition '{}' -> '{}'",
+                        source_path.display(),
+                        target_path.display()
+                    ),
+                ))?;
+                info!("copied backup  to '{}'", target_path.display());
+            }
+
         // TODO: write logs to data_path
         } else {
             let message = format!(

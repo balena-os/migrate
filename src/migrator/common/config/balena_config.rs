@@ -5,9 +5,7 @@ use std::path::{Path, PathBuf};
 
 const MODULE: &str = "common::config::balena_config";
 
-use crate::defs::{
-    DEFAULT_API_CHECK_TIMEOUT, DEFAULT_API_HOST, DEFAULT_API_PORT
-};
+use crate::defs::{DEFAULT_API_CHECK_TIMEOUT, DEFAULT_API_HOST, DEFAULT_API_PORT};
 
 /*
 #[derive(Debug, Deserialize)]

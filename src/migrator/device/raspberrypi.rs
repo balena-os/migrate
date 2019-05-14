@@ -1,6 +1,6 @@
 use failure::{Fail, ResultExt};
 use log::{error, info, trace, warn};
-use regex::{Regex};
+use regex::Regex;
 use std::fs::{copy, File};
 use std::io::{BufRead, BufReader, Write};
 use std::path::Path;
@@ -9,9 +9,9 @@ use std::time::SystemTime;
 use crate::{
     common::{file_exists, is_balena_file, path_append, Config, MigErrCtx, MigError, MigErrorKind},
     defs::BALENA_FILE_TAG,
-    linux_common::{call_cmd, migrate_info::MigrateInfo, CHMOD_CMD,restore_backups},
-    stage2::Stage2Config,
     device::Device,
+    linux_common::{call_cmd, migrate_info::MigrateInfo, restore_backups, CHMOD_CMD},
+    stage2::Stage2Config,
 };
 
 const RPI_MODEL_REGEX: &str = r#"^Raspberry\s+Pi\s+(\S+)\s+Model\s+(.*)$"#;
@@ -166,7 +166,7 @@ impl<'a> Device for RaspberryPi3 {
 
         let mut out_str = String::new();
 
-        if ! balena_config {
+        if !balena_config {
             out_str += &format!("{}\n", BALENA_FILE_TAG);
         }
 
@@ -235,7 +235,10 @@ impl<'a> Device for RaspberryPi3 {
                 &format!("Failed write to file '{}'", config_path.display()),
             ))?;
 
-        info!("Modified '{}' to boot migrate environment", config_path.display());
+        info!(
+            "Modified '{}' to boot migrate environment",
+            config_path.display()
+        );
 
         // TODO: Optional backup & modify cmd_line.txt - eg. add debug
 

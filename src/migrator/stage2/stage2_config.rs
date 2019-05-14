@@ -15,6 +15,7 @@ pub const BOOT_FSTYPE_KEY: &str = "boot_fstype";
 pub const EFI_DEVICE_KEY: &str = "efi_device";
 pub const EFI_FSTYPE_KEY: &str = "efi_fstype";
 pub const FLASH_DEVICE_KEY: &str = "flash_device";
+pub const HAS_BACKUP_KEY: &str = "has_backup";
 pub const SKIP_FLASH_KEY: &str = "skip_flash";
 pub const DEVICE_SLUG_KEY: &str = "device_slug";
 pub const BALENA_IMAGE_KEY: &str = "balena_image";
@@ -61,6 +62,7 @@ pub(crate) struct Stage2Config {
     balena_image: PathBuf,
     work_dir: PathBuf,
     boot_bckup: Option<Vec<(String, String)>>,
+    has_backup: bool,
 }
 
 impl<'a> Stage2Config {
@@ -107,6 +109,8 @@ impl<'a> Stage2Config {
         }
 
         cfg_str.push_str(&format!("{}: {}\n", EFI_BOOT_KEY, mig_info.is_efi_boot()));
+        cfg_str.push_str(&format!("{}: {}\n", HAS_BACKUP_KEY, mig_info.has_backup));
+
         cfg_str.push_str(&format!(
             "{}: '{}'\n",
             DEVICE_SLUG_KEY,
@@ -160,7 +164,7 @@ impl<'a> Stage2Config {
         if mig_info.boot_cfg_bckup.len() > 0 {
             cfg_str.push_str(&format!("{}:\n", BOOT_BACKUP_KEY));
             for bckup in &mig_info.boot_cfg_bckup {
-                cfg_str.push_str(&format!("  - ['{}','{}']\n", bckup.0 , bckup.1));
+                cfg_str.push_str(&format!("  - ['{}','{}']\n", bckup.0, bckup.1));
             }
         }
 
@@ -205,6 +209,10 @@ impl<'a> Stage2Config {
         ))?;
 
         Stage2Config::from_str(&config_str)
+    }
+
+    pub fn has_backup(&self) -> bool {
+        self.has_backup
     }
 
     pub fn is_no_flash(&self) -> bool {

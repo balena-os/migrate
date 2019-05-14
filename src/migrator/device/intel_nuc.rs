@@ -3,9 +3,9 @@ use std::path::Path;
 
 use crate::{
     common::{Config, MigError, MigErrorKind},
+    device::Device,
     linux_common::{get_grub_version, is_efi_boot, is_secure_boot, MigrateInfo},
     stage2::Stage2Config,
-    device::{Device},
 };
 
 const MODULE: &str = "intel_nuc";
@@ -19,7 +19,6 @@ impl IntelNuc {
         IntelNuc {}
     }
 }
-
 
 impl<'a> Device for IntelNuc {
     fn get_device_slug(&self) -> &'static str {

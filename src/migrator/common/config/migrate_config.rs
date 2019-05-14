@@ -143,7 +143,7 @@ impl<'a> MigrateConfig {
         }
     }
 
-    pub fn get_backup_volumes(&'a self) ->  &'a [VolumeConfig] {
+    pub fn get_backup_volumes(&'a self) -> &'a [VolumeConfig] {
         if let Some(ref val) = self.backup {
             val.as_ref()
         } else {

@@ -8,21 +8,20 @@ use std::time::Duration;
 
 use crate::{
     common::{
-        balena_cfg_json::BalenaCfgJson, dir_exists, format_size_with_unit, path_append, Config,
-        FileInfo, FileType, MigErrCtx, MigError, MigErrorKind, MigMode, MigrateWifis, OSArch,
-        backup,
+        backup, balena_cfg_json::BalenaCfgJson, dir_exists, format_size_with_unit, path_append,
+        Config, FileInfo, FileType, MigErrCtx, MigError, MigErrorKind, MigMode, MigrateWifis,
+        OSArch,
     },
-    defs::{STAGE2_CFG_FILE, BACKUP_FILE,},
+    defs::{BACKUP_FILE, STAGE2_CFG_FILE},
+    device::{self, Device},
     linux_common::{
         call_cmd, ensure_cmds, get_mem_info, get_os_arch, get_os_name, is_admin,
-        path_info::PathInfo, DiskInfo, MigrateInfo, WifiConfig, BOOT_DIR, CHMOD_CMD,
-        DF_CMD, EFI_DIR, FILE_CMD, GRUB_INSTALL_CMD, LSBLK_CMD, MOKUTIL_CMD, MOUNT_CMD, REBOOT_CMD,
+        path_info::PathInfo, DiskInfo, MigrateInfo, WifiConfig, BOOT_DIR, CHMOD_CMD, DF_CMD,
+        EFI_DIR, FILE_CMD, GRUB_INSTALL_CMD, LSBLK_CMD, MOKUTIL_CMD, MOUNT_CMD, REBOOT_CMD,
         ROOT_DIR, UNAME_CMD,
     },
     stage2::Stage2Config,
-    device::{self,Device},
 };
-
 
 const REQUIRED_CMDS: &'static [&'static str] = &[
     DF_CMD, LSBLK_CMD, FILE_CMD, UNAME_CMD, MOUNT_CMD, REBOOT_CMD, CHMOD_CMD,
@@ -115,23 +114,26 @@ impl<'a> LinuxMigrator {
         // Add further architectures / functons here
 
         migrator.mig_info.os_arch = Some(get_os_arch()?);
-        info!("OS Architecture is {}", migrator.mig_info.os_arch.as_ref().unwrap());
-
+        info!(
+            "OS Architecture is {}",
+            migrator.mig_info.os_arch.as_ref().unwrap()
+        );
 
         migrator.device = Some(device::get_device(&migrator.mig_info)?);
 
         if let Some(ref device) = migrator.device {
-            if ! device.can_migrate(&migrator.config, &mut migrator.mig_info)? {
-                let message = format!("Your device: '{}' can not be migrated", device.get_device_slug());
+            if !device.can_migrate(&migrator.config, &mut migrator.mig_info)? {
+                let message = format!(
+                    "Your device: '{}' can not be migrated",
+                    device.get_device_slug()
+                );
                 error!("{}", &message);
                 return Err(MigError::from_remark(MigErrorKind::InvParam, &message));
             }
             migrator.mig_info.device_slug = Some(String::from(device.get_device_slug()));
-
         } else {
             panic!("No device identified!")
         }
-
 
         debug!("finished architecture dependant initialization");
 
@@ -357,9 +359,10 @@ impl<'a> LinuxMigrator {
         // TODO: prepare logging
 
         let backup_path = path_append(self.mig_info.get_work_path(), BACKUP_FILE);
-        backup::create(&backup_path, self.config.migrate.get_backup_volumes())?;
-         // TODO: check out backup size
+        self.mig_info.has_backup =
+            backup::create(&backup_path, self.config.migrate.get_backup_volumes())?;
 
+        // TODO: compare total transfer size (kernel, initramfs, backup, configs )  to memory size (needs to fit in ramfs)
 
         let nwmgr_path = self.mig_info.get_work_path().join(SYSTEM_CONNECTIONS_DIR);
 
@@ -423,7 +426,6 @@ impl<'a> LinuxMigrator {
 
         Ok(())
     }
-
 
     // **********************************************************************
     // ** Check required paths on disk

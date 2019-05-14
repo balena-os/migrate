@@ -297,7 +297,6 @@ mod tests {
             Some(String::from("dummy_device"))
         );
 
-
         // TODO: more cecks on backup
         let bckup_vols = config.migrate.get_backup_volumes();
         assert_eq!(bckup_vols.len(), 3);
@@ -312,7 +311,6 @@ mod tests {
         assert_eq!(config.balena.get_api_key(), Some(String::from("secret")));
         assert_eq!(config.balena.is_check_vpn(), false);
         assert_eq!(config.balena.get_check_timeout(), 42);
-
 
         ()
     }

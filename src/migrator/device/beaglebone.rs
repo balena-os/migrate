@@ -8,10 +8,10 @@ use std::path::Path;
 
 use crate::{
     common::{file_exists, is_balena_file, path_append, Config, MigErrCtx, MigError, MigErrorKind},
-    linux_common::{call_cmd, restore_backups,  MigrateInfo, CHMOD_CMD},
     defs::BALENA_FILE_TAG,
+    device::Device,
+    linux_common::{call_cmd, restore_backups, MigrateInfo, CHMOD_CMD},
     stage2::Stage2Config,
-    device::{Device},
 };
 
 const BB_DRIVE_REGEX: &str = r#"^/dev/mmcblk(\d+)p(\d+)$"#;
