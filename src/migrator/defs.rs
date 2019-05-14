@@ -32,7 +32,7 @@ pub const BALENA_FILE_TAG_REGEX: &str = r###"^\s*## created by balena-migrate"##
 // balena config defaults
 pub const DEFAULT_API_HOST: &str = "api.balena-cloud.com";
 pub const DEFAULT_API_PORT: u16 = 443;
-pub const DEFAULT_VPN_HOST: &str = "vpn.balena-cloud.com";
-pub const DEFAULT_VPN_PORT: u16 = 443;
 // check timeout used for API & VPN
 pub const DEFAULT_API_CHECK_TIMEOUT: u64 = 20;
+
+pub const BACKUP_FILE: &str = "backup.tgz";

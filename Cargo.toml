@@ -4,6 +4,10 @@ version = "0.1.0"
 authors = ["Thomas <thomas@etnur.net>"]
 edition = "2018"
 
+# tried this to remove dependency to gcclib - no success
+# [profile.release]
+# panic = 'abort'
+
 [lib]
 path = "src/migrator/lib.rs"
 
@@ -33,12 +37,18 @@ serde = { version = "1.0", features = ["derive"] }
 serde_yaml = "0.8"
 yaml-rust = "0.4"
 url = "*"
-mod_logger = { git = "https://github.com/samothx/ModuleLogger.git" } 
+mod_logger = { git = "https://github.com/samothx/ModuleLogger.git" }
+mktemp = "*"
+
+tar = "*"
+flate2 = "1.0"
+
 # tempfile = "3"
 
 [target.'cfg(unix)'.dependencies]
-libc = { git = "https://github.com/rust-lang/libc" } 
+libc = { git = "https://github.com/rust-lang/libc" }
 nix = "*"
+
 
 [target.'cfg(windows)'.dependencies]
 winapi = {  git = "https://github.com/retep998/winapi-rs.git", branch = "0.3", features = [

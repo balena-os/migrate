@@ -15,7 +15,7 @@ use std::time::Duration;
 
 use crate::{
     common::{
-        dir_exists, file_exists, parse_file, path_append, FailMode, MigErrCtx, MigError,
+        dir_exists, file_exists, path_append, FailMode, MigErrCtx, MigError,
         MigErrorKind,
     },
     defs::{

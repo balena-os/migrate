@@ -10,9 +10,10 @@ use clap::{App, Arg};
 
 use super::{MigErrCtx, MigError, MigErrorKind};
 
-pub(crate) mod backup_config;
+/* moved into migrate_config
+pub(crate) mod volume_config;
 pub(crate) use backup_config::BackupConfig;
-
+*/
 pub(crate) mod migrate_config;
 pub(crate) use migrate_config::{MigMode, MigrateConfig, MigrateWifis};
 
@@ -296,6 +297,12 @@ mod tests {
             Some(String::from("dummy_device"))
         );
 
+
+        // TODO: more cecks on backup
+        let bckup_vols = config.migrate.get_backup_volumes();
+        assert_eq!(bckup_vols.len(), 3);
+        assert_eq!(bckup_vols.get(0).unwrap().volume, "test volume 1");
+
         assert_eq!(config.balena.get_image_path(), Path::new("image.gz"));
         assert_eq!(config.balena.get_config_path(), Path::new("config.json"));
         assert_eq!(config.balena.get_app_name(), Some("test"));
@@ -303,10 +310,9 @@ mod tests {
         assert_eq!(config.balena.get_api_port(), 444);
         assert_eq!(config.balena.is_api_check(), false);
         assert_eq!(config.balena.get_api_key(), Some(String::from("secret")));
-        assert_eq!(config.balena.get_vpn_host(), "vpn1.balena-cloud.com");
-        assert_eq!(config.balena.get_vpn_port(), 444);
-        assert_eq!(config.balena.is_vpn_check(), false);
+        assert_eq!(config.balena.is_check_vpn(), false);
         assert_eq!(config.balena.get_check_timeout(), 42);
+
 
         ()
     }
@@ -393,20 +399,23 @@ migrate:
   initramfs_file: "balena_x86_64.migrate.initramfs"
   # backup configuration
   backup:
-  #  - volume: "test volume 1"
-  #    - source: /home/thomas/develop/balena.io/support
-  #      target: "target dir 1.1"
-  #    - source: "/home/thomas/develop/balena.io/customer/sonder/unitdata/UnitData files"
-  #      target: "target dir 1.2"
-  #  - volume: "test volume 2"
-  #    - source: "/home/thomas/develop/balena.io/migrate/migratecfg/balena-migrate"
-  #      target: "target file 2.1"
-  #    - source: "/home/thomas/develop/balena.io/migrate/migratecfg/init-scripts"
-  #      target: "target dir 2.2"
-  #      filter: 'balena-.*'
-  #  - volume: "test_volume_3"
-  #     - source: "/home/thomas/develop/balena.io/migrate/migratecfg/init-scripts"
-  #       filter: 'balena-.*'
+   - volume: "test volume 1"
+     items:
+     - source: /home/thomas/develop/balena.io/support
+       target: "target dir 1.1"
+     - source: "/home/thomas/develop/balena.io/customer/sonder/unitdata/UnitData files"
+       target: "target dir 1.2"
+   - volume: "test volume 2"
+     items:
+     - source: "/home/thomas/develop/balena.io/migrate/migratecfg/balena-migrate"
+       target: "target file 2.1"
+     - source: "/home/thomas/develop/balena.io/migrate/migratecfg/init-scripts"
+       target: "target dir 2.2"
+       filter: 'balena-.*'
+   - volume: "test_volume_3"
+     items:
+      - source: "/home/thomas/develop/balena.io/migrate/migratecfg/init-scripts"
+        filter: 'balena-.*'
   ## what to do on a recoverable fail in phase 2, either reboot or rescueshell
   fail_mode: Reboot
   ## forced use of a device slug other than the one detected
@@ -427,10 +436,7 @@ balena:
     check: false
     key: "secret"
   ## VPN to use for connectivity check
-  vpn:
-    host: "vpn1.balena-cloud.com"
-    port: 444
-    check: false
+  check_vpn: false
   ## connectivity check timeout
   check_timeout: 42
   ## Api key  to use for agent mode, downloads etc

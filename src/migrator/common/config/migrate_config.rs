@@ -1,4 +1,3 @@
-use super::BackupConfig;
 use std::path::{Path, PathBuf};
 
 use crate::common::{FailMode, MigError, MigErrorKind};
@@ -7,6 +6,8 @@ use serde::Deserialize;
 
 const MODULE: &str = "common::config::migrate_config";
 const NO_NMGR_FILES: &[PathBuf] = &[];
+
+const NO_BACKUP_VOLUMES: &[VolumeConfig] = &[];
 
 #[derive(Debug, PartialEq, Deserialize, Clone)]
 pub(crate) enum MigMode {
@@ -35,6 +36,19 @@ impl MigMode {
 }
 
 const DEFAULT_MIG_MODE: MigMode = MigMode::PRETEND;
+
+#[derive(Debug, Deserialize)]
+pub(crate) struct ItemConfig {
+    pub source: String,
+    pub target: Option<String>,
+    pub filter: Option<String>,
+}
+
+#[derive(Debug, Deserialize)]
+pub(crate) struct VolumeConfig {
+    pub volume: String,
+    pub items: Vec<ItemConfig>,
+}
 
 #[derive(Debug, PartialEq, Clone)]
 pub(crate) enum MigrateWifis {
@@ -72,7 +86,7 @@ pub(crate) struct MigrateConfig {
     initramfs_file: Option<PathBuf>,
     force_slug: Option<String>,
     fail_mode: Option<FailMode>,
-    backup_config: Option<BackupConfig>,
+    backup: Option<Vec<VolumeConfig>>,
     nwmgr_files: Option<Vec<PathBuf>>,
     require_nwmgr_config: Option<bool>,
     // COPY_NMGR_FILES="eth0_static enp2s0_static enp3s0_static"
@@ -93,7 +107,7 @@ impl<'a> MigrateConfig {
             initramfs_file: None,
             force_slug: None,
             fail_mode: None,
-            backup_config: None,
+            backup: None,
             nwmgr_files: None,
             require_nwmgr_config: None,
         }
@@ -126,6 +140,14 @@ impl<'a> MigrateConfig {
 
                 Ok(())
             }
+        }
+    }
+
+    pub fn get_backup_volumes(&'a self) ->  &'a [VolumeConfig] {
+        if let Some(ref val) = self.backup {
+            val.as_ref()
+        } else {
+            NO_BACKUP_VOLUMES
         }
     }
 

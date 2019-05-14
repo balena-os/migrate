@@ -10,8 +10,9 @@ use crate::{
     common::{
         balena_cfg_json::BalenaCfgJson, dir_exists, format_size_with_unit, path_append, Config,
         FileInfo, FileType, MigErrCtx, MigError, MigErrorKind, MigMode, MigrateWifis, OSArch,
+        backup,
     },
-    defs::STAGE2_CFG_FILE,
+    defs::{STAGE2_CFG_FILE, BACKUP_FILE,},
     linux_common::{
         call_cmd, ensure_cmds, get_mem_info, get_os_arch, get_os_name, is_admin,
         path_info::PathInfo, DiskInfo, MigrateInfo, WifiConfig, BOOT_DIR, CHMOD_CMD,
@@ -21,6 +22,7 @@ use crate::{
     stage2::Stage2Config,
     device::{self,Device},
 };
+
 
 const REQUIRED_CMDS: &'static [&'static str] = &[
     DF_CMD, LSBLK_CMD, FILE_CMD, UNAME_CMD, MOUNT_CMD, REBOOT_CMD, CHMOD_CMD,
@@ -353,6 +355,11 @@ impl<'a> LinuxMigrator {
 
     fn do_migrate(&mut self) -> Result<(), MigError> {
         // TODO: prepare logging
+
+        let backup_path = path_append(self.mig_info.get_work_path(), BACKUP_FILE);
+        backup::create(&backup_path, self.config.migrate.get_backup_volumes())?;
+         // TODO: check out backup size
+
 
         let nwmgr_path = self.mig_info.get_work_path().join(SYSTEM_CONNECTIONS_DIR);
 

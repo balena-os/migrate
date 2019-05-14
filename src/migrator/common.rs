@@ -22,6 +22,8 @@ pub(crate) mod mig_error;
 //pub(crate) mod os_release;
 //pub(crate) use os_release::OSRelease;
 
+pub(crate) mod backup;
+
 pub(crate) mod balena_cfg_json;
 pub(crate) mod config;
 // pub(crate) mod config_helper;
@@ -35,6 +37,7 @@ pub(crate) use fail_mode::FailMode;
 pub(crate) use self::config::{Config, MigMode, MigrateWifis};
 pub(crate) use self::file_info::{FileInfo, FileType};
 pub(crate) use self::mig_error::{MigErrCtx, MigError, MigErrorKind};
+pub(crate) use self::backup::{create};
 
 const MODULE: &str = "migrator::common";
 

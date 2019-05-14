@@ -1,34 +1,17 @@
 use std::path::PathBuf;
-use std::process::{Command, Stdio};
+use std::fs::{File};
+use tar::{Builder};
+use flate2::{Compression, write::GzEncoder};
+
 
 fn main() {
-    let gzip_path = PathBuf::from("work/test/test.gz");
+    let encoder = GzEncoder::new(File::create("test.tar.gz").unwrap(), Compression::default());
+    let mut tar_builder = Builder::new(encoder);
 
-    println!("invoking gzip");
+    tar_builder.append_path_with_name("src/test.rs", "save/toast.rs").unwrap();
 
-    let cmd1 = Command::new("gzip")
-        .args(&["-d", "-c", &gzip_path.to_string_lossy()])
-        .stdout(Stdio::piped())
-        .spawn()
-        .unwrap();
+    tar_builder.finish().unwrap();
 
-    /*
-        let stdout = cmd1.stdout.as_mut().unwrap();
-        let mut buf : [u8;1024] = [0; 1024];
-        loop {
-            let read = stdout.read(&mut buf).unwrap();
+    // encoder.finish().unwrap();
 
-            println!("read {} bytes", read);
-            if read == 0 {
-                break;
-            }
-        }
-    */
-
-    if let Some(cmd1_stdout) = cmd1.stdout {
-        let cmd_res = Command::new("cat").stdin(cmd1_stdout).output().unwrap();
-        println!("dd command result: {:?}", cmd_res);
-    } else {
-        println!("no stdout found");
-    }
 }
