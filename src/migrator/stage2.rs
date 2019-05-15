@@ -58,7 +58,8 @@ const BALENA_IMAGE_FILE: &str = "balenaOS.img.gz";
 const BALENA_CONFIG_FILE: &str = "config.json";
 
 const NIX_NONE: Option<&'static [u8]> = None;
-const PARTPROBE_WAIT_SECS: u64 = 5;
+const PRE_PARTPROBE_WAIT_SECS: u64 = 5;
+const POST_PARTPROBE_WAIT_SECS: u64 = 5;
 const PARTPROBE_WAIT_NANOS: u32 = 0;
 
 
@@ -476,6 +477,9 @@ impl Stage2 {
                                     break;
                                 }
                             }
+
+                            let secs_elapsed =  start_time.elapsed().as_secs();
+                            info!("{} written @ {}/sec in {} seconds", format_size_with_unit(write_count as u64), format_size_with_unit((write_count as u64 / secs_elapsed)), secs_elapsed);
                             dd_child.wait_with_output().context(MigErrCtx::from_remark(MigErrorKind::Upstream, "failed to wait for dd command"))?
                         } else {
                             return Err(MigError::from_remark(
@@ -494,6 +498,8 @@ impl Stage2 {
                                     MigErrorKind::Upstream,
                                     &format!("failed to spawn command {}", gzip_cmd),
                                 ))?;
+
+                            // TODO: implement progress for gzip or throw this out alltogether
 
                             if let Some(stdout) = gzip_child.stdout {
                                 self.recoverable_state = false;
@@ -538,7 +544,6 @@ impl Stage2 {
 
                 // TODO: would like to check on gzip process status but ownership issues prevent it
 
-                // TODO: sync !
                 sync();
 
                 info!(
@@ -546,9 +551,17 @@ impl Stage2 {
                     target_path.display()
                 );
 
+                thread::sleep(Duration::new(PRE_PARTPROBE_WAIT_SECS, PARTPROBE_WAIT_NANOS));
+
                 call_cmd(PARTPROBE_CMD, &[&target_path.to_string_lossy()], true)?;
 
-                thread::sleep(Duration::new(PARTPROBE_WAIT_SECS, PARTPROBE_WAIT_NANOS));
+                thread::sleep(Duration::new(POST_PARTPROBE_WAIT_SECS, PARTPROBE_WAIT_NANOS));
+
+                // TODO: saw weird behaviour here, /dev/disk/by-label/resin-boot not found
+                // does something like
+                // 'udevadm settle --timeout=20 --exit-if-exists=/dev/disk/by-label/resin-boot'
+                // make sense ?
+
             } else {
                 return Err(MigError::from_remark(
                     MigErrorKind::NotFound,
