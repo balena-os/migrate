@@ -458,14 +458,19 @@ impl Stage2 {
                                 let bytes_read = decoder.read(&mut buffer)
                                     .context(MigErrCtx::from_remark(MigErrorKind::Upstream, &format!("Failed to read uncompressed data from '{}'", image_path.display())))?;
                                 if bytes_read > 0 {
-                                    write_count += stdin.write(&buffer[0..bytes_read])
+                                    let bytes_written = stdin.write(&buffer[0..bytes_read])
                                         .context(MigErrCtx::from_remark(MigErrorKind::Upstream, "Failed to write to dd stdin"))?;
+                                    write_count += bytes_written;
 
+                                    if bytes_read != bytes_written {
+                                        error!("Read/write count mismatch, read {}, wrote {}", bytes_read, bytes_written);
+                                    }
                                     let curr_elapsed = start_time.elapsed();
                                     let since_last = curr_elapsed.checked_sub(last_elapsed).unwrap();
                                     if since_last.as_secs() >= 10 {
                                         last_elapsed = curr_elapsed;
-                                        info!("{} written in {} seconds", format_size_with_unit(write_count as u64), last_elapsed.as_secs());
+                                        let secs_elapsed =  curr_elapsed.as_secs();
+                                        info!("{} written @ {}/sec in {} seconds", format_size_with_unit(write_count as u64), format_size_with_unit((write_count as u64 / secs_elapsed)), secs_elapsed);
                                     }
                                 } else {
                                     break;
