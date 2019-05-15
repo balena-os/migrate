@@ -7,11 +7,14 @@ use nix::{
     unistd::sync,
 };
 use regex::Regex;
-use std::fs::{copy, create_dir, read_dir, read_link, read_to_string};
+use std::fs::{File, copy, create_dir, read_dir, read_link, read_to_string};
 use std::path::{Path, PathBuf};
 use std::process::{Command, Stdio};
 use std::thread;
 use std::time::Duration;
+use std::io::{Read, Write};
+use flate2::{Decompress, read::GzDecoder};
+
 
 use crate::{
     common::{dir_exists, file_exists, path_append, FailMode, MigErrCtx, MigError, MigErrorKind},
@@ -44,7 +47,9 @@ const MIGRATE_TEMP_DIR: &str = "/migrate_tmp";
 const BOOT_MNT_DIR: &str = "mnt_boot";
 const DATA_MNT_DIR: &str = "mnt_data";
 
-const DD_BLOCK_SIZE: u64 = 4194304;
+const DD_BLOCK_SIZE: usize = 4194304;
+const DD_PRINT_BLOCK_COUNT: usize = 8;
+
 
 const MIG_REQUIRED_CMDS: &'static [&'static str] = &[DD_CMD, PARTPROBE_CMD, GZIP_CMD, REBOOT_CMD];
 const MIG_OPTIONAL_CMDS: &'static [&'static str] = &[];
@@ -55,6 +60,7 @@ const BALENA_CONFIG_FILE: &str = "config.json";
 const NIX_NONE: Option<&'static [u8]> = None;
 const PARTPROBE_WAIT_SECS: u64 = 5;
 const PARTPROBE_WAIT_NANOS: u32 = 0;
+
 
 pub(crate) struct Stage2 {
     config: Stage2Config,
@@ -418,84 +424,126 @@ impl Stage2 {
                 ));
             }
 
-            if let Ok(ref gzip_cmd) = get_cmd(GZIP_CMD) {
-                debug!("gzip found at: {}", gzip_cmd);
-                if let Ok(ref dd_cmd) = get_cmd(DD_CMD) {
-                    debug!("dd found at: {}", dd_cmd);
-                    let gzip_child = Command::new(gzip_cmd)
-                        .args(&["-d", "-c", &image_path.to_string_lossy()])
-                        .stdout(Stdio::piped())
-                        .spawn()
-                        .context(MigErrCtx::from_remark(
-                            MigErrorKind::Upstream,
-                            &format!("failed to spawn command {}", gzip_cmd),
-                        ))?;
 
-                    debug!("invoking dd");
+            if let Ok(ref dd_cmd) = get_cmd(DD_CMD) {
+                debug!("dd found at: {}", dd_cmd);
 
-                    // TODO: plug a progress indicator into the pipe
-                    // Idea extract uncompressed size from gzip
-                    // Plug into the pipe
-                    // report progress at set time or data intervals
-                    // TODO: use crate flate2 instead of external gzip
+                let cmd_res_dd =
+                    if self.config.is_gzip_internal() {
+                        let mut decoder = GzDecoder::new(
+                            File::open(&image_path)
+                                .context(MigErrCtx::from_remark(MigErrorKind::Upstream, &format!("Failed to open gzip file for reading '{}'", image_path.display())))?);
 
-                    if let Some(gzip_stdout) = gzip_child.stdout {
-                        // flashing the device - not recoverable after this
-                        self.recoverable_state = false;
+                        debug!("invoking dd");
 
-                        let cmd_res_dd = Command::new(dd_cmd)
+                        let mut dd_child = Command::new(dd_cmd)
                             .args(&[
                                 &format!("of={}", &target_path.to_string_lossy()),
                                 &format!("bs={}", DD_BLOCK_SIZE),
                             ])
-                            .stdin(gzip_stdout)
-                            .output()
+                            .stdin(Stdio::piped())
+                            .spawn()
                             .context(MigErrCtx::from_remark(
                                 MigErrorKind::Upstream,
                                 &format!("failed to execute command {}", dd_cmd),
                             ))?;
 
-                        debug!("dd command result: {:?}", cmd_res_dd);
+                        self.recoverable_state = false;
 
-                        if cmd_res_dd.status.success() != true {
+                        let mut block_count = 0;
+
+                        if let Some(ref mut stdin) = dd_child.stdin {
+                            let mut buffer: [u8; DD_BLOCK_SIZE] = [0; DD_BLOCK_SIZE];
+                            loop {
+                                let bytes_read = decoder.read(&mut buffer)
+                                    .context(MigErrCtx::from_remark(MigErrorKind::Upstream, &format!("Failed to read uncompressed data from '{}'", image_path.display())))?;
+                                if bytes_read > 0 {
+                                    stdin.write(&buffer[0..bytes_read]).context(MigErrCtx::from_remark(MigErrorKind::Upstream, "Failed to write to dd stdin"))?;
+                                    block_count += 1;
+                                    if (block_count % DD_PRINT_BLOCK_COUNT) == 0 {
+                                        info!("blocks written: {}", block_count);
+                                    }
+                                } else {
+                                    break;
+                                }
+                            }
+                            dd_child.wait_with_output().context(MigErrCtx::from_remark(MigErrorKind::Upstream, "failed to wait for dd command"))?
+                        } else {
                             return Err(MigError::from_remark(
-                                MigErrorKind::ExecProcess,
-                                &format!(
-                                    "dd terminated with exit code: {:?}",
-                                    cmd_res_dd.status.code()
-                                ),
+                                MigErrorKind::NotFound,
+                                "failed to flash image to target disk, gzip command, failed to retrieve dd stdin",
                             ));
                         }
-
-                        // TODO: would like to check on gzip process status but ownership issues prevent it
-
-                        // TODO: sync !
-                        sync();
-
-                        info!(
-                            "The Balena OS image has been written to the device '{}'",
-                            target_path.display()
-                        );
-
-                        call_cmd(PARTPROBE_CMD, &[&target_path.to_string_lossy()], true)?;
-
-                        thread::sleep(Duration::new(PARTPROBE_WAIT_SECS, PARTPROBE_WAIT_NANOS));
                     } else {
-                        return Err(MigError::from_remark(
-                            MigErrorKind::InvState,
-                            "failed to flash image to target disk, gzip stdout not present",
-                        ));
-                    }
-                } else {
+                        if let Ok(ref gzip_cmd) = get_cmd(GZIP_CMD) {
+                            debug!("gzip found at: {}", gzip_cmd);
+                            let gzip_child = Command::new(gzip_cmd)
+                                .args(&["-d", "-c", &image_path.to_string_lossy()])
+                                .stdout(Stdio::piped())
+                                .spawn()
+                                .context(MigErrCtx::from_remark(
+                                    MigErrorKind::Upstream,
+                                    &format!("failed to spawn command {}", gzip_cmd),
+                                ))?;
+
+                            if let Some(stdout) = gzip_child.stdout {
+                                self.recoverable_state = false;
+                                debug!("invoking dd");
+                                Command::new(dd_cmd)
+                                    .args(&[
+                                        &format!("of={}", &target_path.to_string_lossy()),
+                                        &format!("bs={}", DD_BLOCK_SIZE),
+                                    ])
+                                    .stdin(stdout)
+                                    .output()
+                                    .context(MigErrCtx::from_remark(
+                                        MigErrorKind::Upstream,
+                                        &format!("failed to execute command {}", dd_cmd),
+                                    ))?
+                            } else {
+                                return Err(MigError::from_remark(
+                                    MigErrorKind::NotFound,
+                                    "failed to flash image to target disk, gzip command, failed to retrieved stdout",
+                                ));
+                            }
+                        } else {
+                            return Err(MigError::from_remark(
+                                MigErrorKind::NotFound,
+                                "failed to flash image to target disk, gzip command is not present",
+                            ));
+                        }
+                    };
+
+
+                debug!("dd command result: {:?}", cmd_res_dd);
+
+                if cmd_res_dd.status.success() != true {
                     return Err(MigError::from_remark(
-                        MigErrorKind::NotFound,
-                        "failed to flash image to target disk, dd command is not present",
+                        MigErrorKind::ExecProcess,
+                        &format!(
+                            "dd terminated with exit code: {:?}",
+                            cmd_res_dd.status.code()
+                        ),
                     ));
                 }
+
+                // TODO: would like to check on gzip process status but ownership issues prevent it
+
+                // TODO: sync !
+                sync();
+
+                info!(
+                    "The Balena OS image has been written to the device '{}'",
+                    target_path.display()
+                );
+
+                call_cmd(PARTPROBE_CMD, &[&target_path.to_string_lossy()], true)?;
+
+                thread::sleep(Duration::new(PARTPROBE_WAIT_SECS, PARTPROBE_WAIT_NANOS));
             } else {
                 return Err(MigError::from_remark(
                     MigErrorKind::NotFound,
-                    "failed to flash image to target disk, gzip command is not present",
+                    "failed to flash image to target disk, dd command is not present",
                 ));
             }
         }

@@ -89,6 +89,7 @@ pub(crate) struct MigrateConfig {
     backup: Option<Vec<VolumeConfig>>,
     nwmgr_files: Option<Vec<PathBuf>>,
     require_nwmgr_config: Option<bool>,
+    gzip_internal: Option<bool>,
     // COPY_NMGR_FILES="eth0_static enp2s0_static enp3s0_static"
 }
 
@@ -110,6 +111,7 @@ impl<'a> MigrateConfig {
             backup: None,
             nwmgr_files: None,
             require_nwmgr_config: None,
+            gzip_internal: None,
         }
     }
 
@@ -140,6 +142,14 @@ impl<'a> MigrateConfig {
 
                 Ok(())
             }
+        }
+    }
+
+    pub fn is_gzip_internal(&self) -> bool {
+        if let Some(val) = self.gzip_internal {
+            val
+        } else {
+            true
         }
     }
 

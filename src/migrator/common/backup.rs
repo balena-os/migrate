@@ -1,7 +1,6 @@
 use failure::{Fail, ResultExt};
 use flate2::{write::GzEncoder, Compression};
 use log::{debug, info, trace, warn};
-use mktemp::Temp;
 use regex::Regex;
 use std::fs::{create_dir, read_dir, File};
 use std::io::Write;

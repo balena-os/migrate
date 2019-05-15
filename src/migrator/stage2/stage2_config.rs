@@ -26,6 +26,8 @@ pub const WORK_DIR_KEY: &str = "work_dir";
 pub const FAIL_MODE_KEY: &str = "fail_mode";
 pub const NO_FLASH_KEY: &str = "no_flash";
 
+pub const GZIP_INTERNAL_KEY: &str = "gzip_internal";
+
 /*
 pub const BBCKUP_SOURCE_KEY: &str = "source";
 pub const BBCKUP_BCKUP_KEY: &str = "backup";
@@ -63,6 +65,7 @@ pub(crate) struct Stage2Config {
     work_dir: PathBuf,
     boot_bckup: Option<Vec<(String, String)>>,
     has_backup: bool,
+    gzip_internal: bool,
 }
 
 impl<'a> Stage2Config {
@@ -77,6 +80,12 @@ impl<'a> Stage2Config {
             "{}: {}\n",
             NO_FLASH_KEY,
             config.debug.is_no_flash()
+        ));
+
+        cfg_str.push_str(&format!(
+            "{}: {}\n",
+            GZIP_INTERNAL_KEY,
+            config.migrate.is_gzip_internal()
         ));
 
         // allow to configure fake flash device
@@ -217,6 +226,10 @@ impl<'a> Stage2Config {
 
     pub fn is_no_flash(&self) -> bool {
         self.no_flash
+    }
+
+    pub fn is_gzip_internal(&self) -> bool {
+        self.gzip_internal
     }
 
     pub fn is_skip_flash(&self) -> bool {
