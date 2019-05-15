@@ -11,13 +11,13 @@ use std::fs::{File, copy, create_dir, read_dir, read_link, read_to_string};
 use std::path::{Path, PathBuf};
 use std::process::{Command, Stdio};
 use std::thread;
-use std::time::Duration;
 use std::io::{Read, Write};
 use flate2::{Decompress, read::GzDecoder};
+use std::time::{Instant, Duration};
 
 
 use crate::{
-    common::{dir_exists, file_exists, path_append, FailMode, MigErrCtx, MigError, MigErrorKind},
+    common::{dir_exists, file_exists, path_append, format_size_with_unit, FailMode, MigErrCtx, MigError, MigErrorKind},
     defs::{
         BACKUP_FILE, BALENA_BOOT_FSTYPE, BALENA_BOOT_PART, BALENA_DATA_FSTYPE, BALENA_DATA_PART,
         BALENA_ROOTA_PART, BALENA_ROOTB_PART, BALENA_STATE_PART, BOOT_PATH, DISK_BY_LABEL_PATH,
@@ -386,9 +386,6 @@ impl Stage2 {
 
         // ************************************************************************************
         // * write the gzipped image to disk
-        // TODO: try using internal gzip
-
-        // TODO: test-flash to external device
         // * from migrate:
         // * gzip -d -c "${MIGRATE_TMP}/${IMAGE_FILE}" | dd of=${BOOT_DEV} bs=4194304 || fail  "failed with gzip -d -c ${MIGRATE_TMP}/${IMAGE_FILE} | dd of=${BOOT_DEV} bs=4194304"
 
@@ -450,18 +447,25 @@ impl Stage2 {
 
                         self.recoverable_state = false;
 
-                        let mut block_count = 0;
+                        let start_time = Instant::now();
+                        let mut last_elapsed = Duration::new(0,0);
+                        let mut write_count: usize = 0;
 
                         if let Some(ref mut stdin) = dd_child.stdin {
+                            let now = Instant::now();
                             let mut buffer: [u8; DD_BLOCK_SIZE] = [0; DD_BLOCK_SIZE];
                             loop {
                                 let bytes_read = decoder.read(&mut buffer)
                                     .context(MigErrCtx::from_remark(MigErrorKind::Upstream, &format!("Failed to read uncompressed data from '{}'", image_path.display())))?;
                                 if bytes_read > 0 {
-                                    stdin.write(&buffer[0..bytes_read]).context(MigErrCtx::from_remark(MigErrorKind::Upstream, "Failed to write to dd stdin"))?;
-                                    block_count += 1;
-                                    if (block_count % DD_PRINT_BLOCK_COUNT) == 0 {
-                                        info!("blocks written: {}", block_count);
+                                    write_count += stdin.write(&buffer[0..bytes_read])
+                                        .context(MigErrCtx::from_remark(MigErrorKind::Upstream, "Failed to write to dd stdin"))?;
+
+                                    let curr_elapsed = start_time.elapsed();
+                                    let since_last = curr_elapsed.checked_sub(last_elapsed).unwrap();
+                                    if since_last.as_secs() >= 10 {
+                                        last_elapsed = curr_elapsed;
+                                        info!("{} written in {} seconds", format_size_with_unit(write_count as u64), last_elapsed.as_secs());
                                     }
                                 } else {
                                     break;
