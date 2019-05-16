@@ -1,4 +1,5 @@
 use failure::ResultExt;
+use flate2::{read::GzDecoder, Decompress};
 use log::{debug, error, info, warn};
 use mod_logger::Logger;
 use nix::{
@@ -7,24 +8,27 @@ use nix::{
     unistd::sync,
 };
 use regex::Regex;
-use std::fs::{File, copy, create_dir, read_dir, read_link, read_to_string};
+use std::fs::{copy, create_dir, read_dir, read_link, read_to_string, File};
+use std::io::{Read, Write};
 use std::path::{Path, PathBuf};
 use std::process::{Command, Stdio};
 use std::thread;
-use std::io::{Read, Write};
-use flate2::{Decompress, read::GzDecoder};
-use std::time::{Instant, Duration};
-
+use std::time::{Duration, Instant};
 
 use crate::{
-    common::{dir_exists, file_exists, path_append, format_size_with_unit, FailMode, MigErrCtx, MigError, MigErrorKind},
+    common::{
+        dir_exists, file_exists, format_size_with_unit, path_append, FailMode, MigErrCtx, MigError,
+        MigErrorKind,
+    },
     defs::{
         BACKUP_FILE, BALENA_BOOT_FSTYPE, BALENA_BOOT_PART, BALENA_DATA_FSTYPE, BALENA_DATA_PART,
         BALENA_ROOTA_PART, BALENA_ROOTB_PART, BALENA_STATE_PART, BOOT_PATH, DISK_BY_LABEL_PATH,
-        DISK_BY_PARTUUID_PATH, STAGE2_CFG_FILE, SYSTEM_CONNECTIONS_DIR,
+        DISK_BY_PARTUUID_PATH, KERNEL_CMDLINE_PATH, STAGE2_CFG_FILE, SYSTEM_CONNECTIONS_DIR,
     },
     device,
-    linux_common::{call_cmd, ensure_cmds, get_cmd, DD_CMD, GZIP_CMD, PARTPROBE_CMD, REBOOT_CMD},
+    linux_common::{
+        call_cmd, ensure_cmds, get_cmd, get_root_info, DD_CMD, GZIP_CMD, PARTPROBE_CMD, REBOOT_CMD,
+    },
 };
 
 pub(crate) mod stage2_config;
@@ -37,11 +41,6 @@ pub(crate) use stage2_config::Stage2Config;
 const REBOOT_DELAY: u64 = 3;
 
 const INIT_LOG_LEVEL: &str = "debug";
-const KERNEL_CMDLINE: &str = "/proc/cmdline";
-const ROOT_DEVICE_REGEX: &str = r#"\sroot=(\S+)\s"#;
-const ROOT_PARTUUID_REGEX: &str = r#"^PARTUUID=(\S+)$"#;
-
-const ROOT_FSTYPE_REGEX: &str = r#"\srootfstype=(\S+)\s"#;
 const ROOTFS_DIR: &str = "/tmp_root";
 const MIGRATE_TEMP_DIR: &str = "/migrate_tmp";
 const BOOT_MNT_DIR: &str = "mnt_boot";
@@ -49,7 +48,6 @@ const DATA_MNT_DIR: &str = "mnt_data";
 
 const DD_BLOCK_SIZE: usize = 4194304;
 const DD_PRINT_BLOCK_COUNT: usize = 8;
-
 
 const MIG_REQUIRED_CMDS: &'static [&'static str] = &[DD_CMD, PARTPROBE_CMD, GZIP_CMD, REBOOT_CMD];
 const MIG_OPTIONAL_CMDS: &'static [&'static str] = &[];
@@ -61,7 +59,6 @@ const NIX_NONE: Option<&'static [u8]> = None;
 const PRE_PARTPROBE_WAIT_SECS: u64 = 5;
 const POST_PARTPROBE_WAIT_SECS: u64 = 5;
 const PARTPROBE_WAIT_NANOS: u32 = 0;
-
 
 pub(crate) struct Stage2 {
     config: Stage2Config,
@@ -85,63 +82,7 @@ impl Stage2 {
 
         // TODO: beaglebone version - make device_slug dependant
 
-        let cmd_line = read_to_string(KERNEL_CMDLINE).context(MigErrCtx::from_remark(
-            MigErrorKind::Upstream,
-            &format!("Failed to read file: '{}'", KERNEL_CMDLINE),
-        ))?;
-
-        let root_device = if let Some(captures) =
-            Regex::new(ROOT_DEVICE_REGEX).unwrap().captures(&cmd_line)
-        {
-            let root_dev = captures.get(1).unwrap().as_str();
-            if let Some(captures) = Regex::new(ROOT_PARTUUID_REGEX).unwrap().captures(root_dev) {
-                let uuid_part =
-                    path_append(DISK_BY_PARTUUID_PATH, captures.get(1).unwrap().as_str());
-                if file_exists(&uuid_part) {
-                    path_append(
-                        uuid_part.parent().unwrap(),
-                        read_link(&uuid_part).context(MigErrCtx::from_remark(
-                            MigErrorKind::Upstream,
-                            &format!("failed to read link: '{}'", uuid_part.display()),
-                        ))?,
-                    )
-                    .canonicalize()
-                    .context(MigErrCtx::from_remark(
-                        MigErrorKind::Upstream,
-                        &format!(
-                            "failed to canonicalize path from: '{}'",
-                            uuid_part.display()
-                        ),
-                    ))?
-                } else {
-                    return Err(MigError::from_remark(
-                        MigErrorKind::InvParam,
-                        &format!("Failed to get root device from part-uuid: '{}'", root_dev),
-                    ));
-                }
-            } else {
-                PathBuf::from(root_dev)
-            }
-        } else {
-            return Err(MigError::from_remark(
-                MigErrorKind::InvParam,
-                &format!(
-                    "Failed to parse root device from kernel command line: '{}'",
-                    cmd_line
-                ),
-            ));
-        };
-
-        let root_fs_type =
-            if let Some(captures) = Regex::new(&ROOT_FSTYPE_REGEX).unwrap().captures(&cmd_line) {
-                captures.get(1).unwrap().as_str()
-            } else {
-                // TODO: manually scan possible devices for config file
-                return Err(MigError::from_remark(
-                    MigErrorKind::InvState,
-                    &format!("failed to parse {} for root fs type", KERNEL_CMDLINE),
-                ));
-            };
+        let (root_device, root_fs_type) = get_root_info()?;
 
         info!(
             "Using root device '{}' with fs-type: '{}'",
@@ -163,7 +104,7 @@ impl Stage2 {
         mount(
             Some(&root_device),
             root_fs_dir,
-            Some(root_fs_type),
+            Some(root_fs_type.as_str()),
             MsFlags::empty(),
             NIX_NONE,
         )
@@ -422,113 +363,141 @@ impl Stage2 {
                 ));
             }
 
-
             if let Ok(ref dd_cmd) = get_cmd(DD_CMD) {
                 debug!("dd found at: {}", dd_cmd);
 
-                let cmd_res_dd =
-                    if self.config.is_gzip_internal() {
-                        let mut decoder = GzDecoder::new(
-                            File::open(&image_path)
-                                .context(MigErrCtx::from_remark(MigErrorKind::Upstream, &format!("Failed to open gzip file for reading '{}'", image_path.display())))?);
+                let cmd_res_dd = if self.config.is_gzip_internal() {
+                    let mut decoder =
+                        GzDecoder::new(File::open(&image_path).context(MigErrCtx::from_remark(
+                            MigErrorKind::Upstream,
+                            &format!(
+                                "Failed to open gzip file for reading '{}'",
+                                image_path.display()
+                            ),
+                        ))?);
 
-                        debug!("invoking dd");
+                    debug!("invoking dd");
 
-                        let mut dd_child = Command::new(dd_cmd)
-                            .args(&[
-                                &format!("of={}", &target_path.to_string_lossy()),
-                                &format!("bs={}", DD_BLOCK_SIZE),
-                            ])
-                            .stdin(Stdio::piped())
-                            .spawn()
-                            .context(MigErrCtx::from_remark(
-                                MigErrorKind::Upstream,
-                                &format!("failed to execute command {}", dd_cmd),
-                            ))?;
+                    let mut dd_child = Command::new(dd_cmd)
+                        .args(&[
+                            &format!("of={}", &target_path.to_string_lossy()),
+                            &format!("bs={}", DD_BLOCK_SIZE),
+                        ])
+                        .stdin(Stdio::piped())
+                        .spawn()
+                        .context(MigErrCtx::from_remark(
+                            MigErrorKind::Upstream,
+                            &format!("failed to execute command {}", dd_cmd),
+                        ))?;
 
-                        self.recoverable_state = false;
+                    self.recoverable_state = false;
 
-                        let start_time = Instant::now();
-                        let mut last_elapsed = Duration::new(0,0);
-                        let mut write_count: usize = 0;
+                    let start_time = Instant::now();
+                    let mut last_elapsed = Duration::new(0, 0);
+                    let mut write_count: usize = 0;
 
-                        if let Some(ref mut stdin) = dd_child.stdin {
-                            let now = Instant::now();
-                            let mut buffer: [u8; DD_BLOCK_SIZE] = [0; DD_BLOCK_SIZE];
-                            loop {
-                                let bytes_read = decoder.read(&mut buffer)
-                                    .context(MigErrCtx::from_remark(MigErrorKind::Upstream, &format!("Failed to read uncompressed data from '{}'", image_path.display())))?;
-                                if bytes_read > 0 {
-                                    let bytes_written = stdin.write(&buffer[0..bytes_read])
-                                        .context(MigErrCtx::from_remark(MigErrorKind::Upstream, "Failed to write to dd stdin"))?;
-                                    write_count += bytes_written;
+                    if let Some(ref mut stdin) = dd_child.stdin {
+                        let now = Instant::now();
+                        let mut buffer: [u8; DD_BLOCK_SIZE] = [0; DD_BLOCK_SIZE];
+                        loop {
+                            let bytes_read =
+                                decoder.read(&mut buffer).context(MigErrCtx::from_remark(
+                                    MigErrorKind::Upstream,
+                                    &format!(
+                                        "Failed to read uncompressed data from '{}'",
+                                        image_path.display()
+                                    ),
+                                ))?;
+                            if bytes_read > 0 {
+                                let bytes_written = stdin.write(&buffer[0..bytes_read]).context(
+                                    MigErrCtx::from_remark(
+                                        MigErrorKind::Upstream,
+                                        "Failed to write to dd stdin",
+                                    ),
+                                )?;
+                                write_count += bytes_written;
 
-                                    if bytes_read != bytes_written {
-                                        error!("Read/write count mismatch, read {}, wrote {}", bytes_read, bytes_written);
-                                    }
-                                    let curr_elapsed = start_time.elapsed();
-                                    let since_last = curr_elapsed.checked_sub(last_elapsed).unwrap();
-                                    if since_last.as_secs() >= 10 {
-                                        last_elapsed = curr_elapsed;
-                                        let secs_elapsed =  curr_elapsed.as_secs();
-                                        info!("{} written @ {}/sec in {} seconds", format_size_with_unit(write_count as u64), format_size_with_unit((write_count as u64 / secs_elapsed)), secs_elapsed);
-                                    }
-                                } else {
-                                    break;
+                                if bytes_read != bytes_written {
+                                    error!(
+                                        "Read/write count mismatch, read {}, wrote {}",
+                                        bytes_read, bytes_written
+                                    );
                                 }
+                                let curr_elapsed = start_time.elapsed();
+                                let since_last = curr_elapsed.checked_sub(last_elapsed).unwrap();
+                                if since_last.as_secs() >= 10 {
+                                    last_elapsed = curr_elapsed;
+                                    let secs_elapsed = curr_elapsed.as_secs();
+                                    info!(
+                                        "{} written @ {}/sec in {} seconds",
+                                        format_size_with_unit(write_count as u64),
+                                        format_size_with_unit((write_count as u64 / secs_elapsed)),
+                                        secs_elapsed
+                                    );
+                                }
+                            } else {
+                                break;
                             }
+                        }
 
-                            let secs_elapsed =  start_time.elapsed().as_secs();
-                            info!("{} written @ {}/sec in {} seconds", format_size_with_unit(write_count as u64), format_size_with_unit((write_count as u64 / secs_elapsed)), secs_elapsed);
-                            dd_child.wait_with_output().context(MigErrCtx::from_remark(MigErrorKind::Upstream, "failed to wait for dd command"))?
-                        } else {
-                            return Err(MigError::from_remark(
+                        let secs_elapsed = start_time.elapsed().as_secs();
+                        info!(
+                            "{} written @ {}/sec in {} seconds",
+                            format_size_with_unit(write_count as u64),
+                            format_size_with_unit((write_count as u64 / secs_elapsed)),
+                            secs_elapsed
+                        );
+                        dd_child.wait_with_output().context(MigErrCtx::from_remark(
+                            MigErrorKind::Upstream,
+                            "failed to wait for dd command",
+                        ))?
+                    } else {
+                        return Err(MigError::from_remark(
                                 MigErrorKind::NotFound,
                                 "failed to flash image to target disk, gzip command, failed to retrieve dd stdin",
                             ));
-                        }
-                    } else {
-                        if let Ok(ref gzip_cmd) = get_cmd(GZIP_CMD) {
-                            debug!("gzip found at: {}", gzip_cmd);
-                            let gzip_child = Command::new(gzip_cmd)
-                                .args(&["-d", "-c", &image_path.to_string_lossy()])
-                                .stdout(Stdio::piped())
-                                .spawn()
+                    }
+                } else {
+                    if let Ok(ref gzip_cmd) = get_cmd(GZIP_CMD) {
+                        debug!("gzip found at: {}", gzip_cmd);
+                        let gzip_child = Command::new(gzip_cmd)
+                            .args(&["-d", "-c", &image_path.to_string_lossy()])
+                            .stdout(Stdio::piped())
+                            .spawn()
+                            .context(MigErrCtx::from_remark(
+                                MigErrorKind::Upstream,
+                                &format!("failed to spawn command {}", gzip_cmd),
+                            ))?;
+
+                        // TODO: implement progress for gzip or throw this out alltogether
+
+                        if let Some(stdout) = gzip_child.stdout {
+                            self.recoverable_state = false;
+                            debug!("invoking dd");
+                            Command::new(dd_cmd)
+                                .args(&[
+                                    &format!("of={}", &target_path.to_string_lossy()),
+                                    &format!("bs={}", DD_BLOCK_SIZE),
+                                ])
+                                .stdin(stdout)
+                                .output()
                                 .context(MigErrCtx::from_remark(
                                     MigErrorKind::Upstream,
-                                    &format!("failed to spawn command {}", gzip_cmd),
-                                ))?;
-
-                            // TODO: implement progress for gzip or throw this out alltogether
-
-                            if let Some(stdout) = gzip_child.stdout {
-                                self.recoverable_state = false;
-                                debug!("invoking dd");
-                                Command::new(dd_cmd)
-                                    .args(&[
-                                        &format!("of={}", &target_path.to_string_lossy()),
-                                        &format!("bs={}", DD_BLOCK_SIZE),
-                                    ])
-                                    .stdin(stdout)
-                                    .output()
-                                    .context(MigErrCtx::from_remark(
-                                        MigErrorKind::Upstream,
-                                        &format!("failed to execute command {}", dd_cmd),
-                                    ))?
-                            } else {
-                                return Err(MigError::from_remark(
+                                    &format!("failed to execute command {}", dd_cmd),
+                                ))?
+                        } else {
+                            return Err(MigError::from_remark(
                                     MigErrorKind::NotFound,
                                     "failed to flash image to target disk, gzip command, failed to retrieved stdout",
                                 ));
-                            }
-                        } else {
-                            return Err(MigError::from_remark(
-                                MigErrorKind::NotFound,
-                                "failed to flash image to target disk, gzip command is not present",
-                            ));
                         }
-                    };
-
+                    } else {
+                        return Err(MigError::from_remark(
+                            MigErrorKind::NotFound,
+                            "failed to flash image to target disk, gzip command is not present",
+                        ));
+                    }
+                };
 
                 debug!("dd command result: {:?}", cmd_res_dd);
 
@@ -555,13 +524,15 @@ impl Stage2 {
 
                 call_cmd(PARTPROBE_CMD, &[&target_path.to_string_lossy()], true)?;
 
-                thread::sleep(Duration::new(POST_PARTPROBE_WAIT_SECS, PARTPROBE_WAIT_NANOS));
+                thread::sleep(Duration::new(
+                    POST_PARTPROBE_WAIT_SECS,
+                    PARTPROBE_WAIT_NANOS,
+                ));
 
-                // TODO: saw weird behaviour here, /dev/disk/by-label/resin-boot not found
-                // does something like
-                // 'udevadm settle --timeout=20 --exit-if-exists=/dev/disk/by-label/resin-boot'
-                // make sense ?
-
+            // TODO: saw weird behaviour here, /dev/disk/by-label/resin-boot not found
+            // does something like
+            // 'udevadm settle --timeout=20 --exit-if-exists=/dev/disk/by-label/resin-boot'
+            // make sense ?
             } else {
                 return Err(MigError::from_remark(
                     MigErrorKind::NotFound,

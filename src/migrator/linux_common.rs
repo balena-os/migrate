@@ -4,14 +4,17 @@ use log::{debug, error, info, trace, warn};
 use regex::Regex;
 use std::cell::RefCell;
 use std::collections::HashMap;
-use std::fs::copy;
-use std::path::Path;
+use std::fs::{copy, read_link, read_to_string};
+use std::path::{Path, PathBuf};
 
 use libc::getuid;
 
-use crate::common::{
-    call, file_exists, parse_file, path_append, CmdRes, Config, MigErrCtx, MigError, MigErrorKind,
-    OSArch,
+use crate::{
+    common::{
+        call, file_exists, parse_file, path_append, CmdRes, Config, MigErrCtx, MigError,
+        MigErrorKind, OSArch,
+    },
+    defs::{DISK_BY_PARTUUID_PATH, KERNEL_CMDLINE_PATH},
 };
 
 pub(crate) mod wifi_config;
@@ -33,11 +36,12 @@ pub const DF_CMD: &str = "df";
 pub const LSBLK_CMD: &str = "lsblk";
 //pub const MOUNT_CMD: &str = "mount";
 //pub const UMOUNT_CMD: &str = "umount";
+pub const FDISK_CMD: &str = "fdisk";
 pub const FILE_CMD: &str = "file";
 pub const UNAME_CMD: &str = "uname";
 pub const MOUNT_CMD: &str = "mount";
 pub const MOKUTIL_CMD: &str = "mokutil";
-pub const GRUB_INSTALL_CMD: &str = "grub-install";
+pub const GRUB_UPDT_CMD: &str = "update-grub";
 pub const REBOOT_CMD: &str = "reboot";
 pub const CHMOD_CMD: &str = "chmod";
 pub const DD_CMD: &str = "dd";
@@ -48,8 +52,8 @@ pub const BOOT_DIR: &str = "/boot";
 pub const ROOT_DIR: &str = "/";
 pub const EFI_DIR: &str = "/boot/efi";
 
-const GRUB_INST_VERSION_ARGS: [&str; 1] = ["--version"];
-const GRUB_INST_VERSION_RE: &str = r#"^.*\s+\(GRUB\)\s+([0-9]+)\.([0-9]+)[^0-9].*$"#;
+const GRUB_UPDT_VERSION_ARGS: [&str; 1] = ["--version"];
+const GRUB_UPDT_VERSION_RE: &str = r#"^.*\s+\(GRUB\)\s+([0-9]+)\.([0-9]+)[^0-9].*$"#;
 
 const MOKUTIL_ARGS_SB_STATE: [&str; 1] = ["--sb-state"];
 
@@ -57,9 +61,6 @@ const UNAME_ARGS_OS_ARCH: [&str; 1] = ["-m"];
 
 // TODO: make this more complete
 const BIN_DIRS: &[&str] = &["/bin", "/usr/bin", "/sbin", "/usr/sbin"];
-
-// const OS_KERNEL_RELEASE_FILE: &str = "/proc/sys/kernel/osrelease";
-// const OS_MEMINFO_FILE: &str = "/proc/meminfo";
 
 const OS_RELEASE_FILE: &str = "/etc/os-release";
 const OS_NAME_REGEX: &str = r#"^PRETTY_NAME="([^"]+)"$"#;
@@ -260,8 +261,15 @@ pub(crate) fn is_efi_boot() -> Result<bool, MigError> {
     }
 }
 
+/******************************************************************
+ * Get OS name from /etc/os-release
+ ******************************************************************/
+
 pub(crate) fn get_os_name() -> Result<String, MigError> {
     trace!("get_os_name: entered");
+
+    // TODO: implement other source as fallback
+
     if file_exists(OS_RELEASE_FILE) {
         // TODO: ensure availabilty of method / file exists
         if let Some(os_name) = parse_file(OS_RELEASE_FILE, &Regex::new(OS_NAME_REGEX).unwrap())? {
@@ -286,25 +294,25 @@ pub(crate) fn get_os_name() -> Result<String, MigError> {
     }
 }
 
+/******************************************************************
+ * Try to find out if secure boot is enabled using mokutil
+ * assuming secure boot is not enabled if mokutil is absent
+ ******************************************************************/
+
 pub(crate) fn is_secure_boot() -> Result<bool, MigError> {
     trace!("{}::is_secure_boot: entered", MODULE);
-    let cmd_res = match call_cmd(MOKUTIL_CMD, &MOKUTIL_ARGS_SB_STATE, true) {
-        Ok(cr) => {
-            debug!("{}::is_secure_boot: {} -> {:?}", MODULE, MOKUTIL_CMD, cr);
-            cr
-        }
+
+    // TODO: check for efi vars
+
+    let mokutil_path = match whereis(MOKUTIL_CMD) {
+        Ok(path) => path,
         Err(why) => {
-            debug!("{}::is_secure_boot: {} -> {:?}", MODULE, MOKUTIL_CMD, why);
-            match why.kind() {
-                MigErrorKind::NotFound => {
-                    return Ok(false);
-                }
-                _ => {
-                    return Err(why);
-                }
-            }
+            warn!("The mokutil command '{}' could not be found", MOKUTIL_CMD);
+            return Ok(false);
         }
     };
+
+    let cmd_res = call(&mokutil_path, &MOKUTIL_ARGS_SB_STATE, true)?;
 
     let regex = Regex::new(r"^SecureBoot\s+(disabled|enabled)$").unwrap();
     let lines = cmd_res.stdout.lines();
@@ -327,17 +335,39 @@ pub(crate) fn is_secure_boot() -> Result<bool, MigError> {
     ))
 }
 
+/******************************************************************
+ * Ensure grub (update-grub) exists and retrieve its version
+ * as (major,minor)
+ ******************************************************************/
+
 pub(crate) fn get_grub_version() -> Result<(String, String), MigError> {
-    trace!("LinuxMigrator::get_grub_version: entered");
-    let cmd_res = call_cmd(GRUB_INSTALL_CMD, &GRUB_INST_VERSION_ARGS, true).context(
-        MigErrCtx::from_remark(
+    trace!("get_grub_version: entered");
+
+    let grub_path = match whereis(GRUB_UPDT_CMD) {
+        Ok(path) => path,
+        Err(why) => {
+            warn!(
+                "The grub update command '{}' could not be found",
+                GRUB_UPDT_CMD
+            );
+            return Err(MigError::from(why.context(MigErrCtx::from_remark(
+                MigErrorKind::Upstream,
+                &format!("failed to find command {}", GRUB_UPDT_CMD),
+            ))));
+        }
+    };
+
+    let cmd_res =
+        call(&grub_path, &GRUB_UPDT_VERSION_ARGS, true).context(MigErrCtx::from_remark(
             MigErrorKind::Upstream,
-            &format!("{}::get_grub_version: call {}", MODULE, UNAME_CMD),
-        ),
-    )?;
+            &format!(
+                "{}::get_grub_version: call '{} {:?}'",
+                MODULE, grub_path, GRUB_UPDT_VERSION_ARGS
+            ),
+        ))?;
 
     if cmd_res.status.success() {
-        let re = Regex::new(GRUB_INST_VERSION_RE).unwrap();
+        let re = Regex::new(GRUB_UPDT_VERSION_RE).unwrap();
         if let Some(captures) = re.captures(cmd_res.stdout.as_ref()) {
             Ok((
                 String::from(captures.get(1).unwrap().as_str()),
@@ -364,6 +394,11 @@ pub(crate) fn get_grub_version() -> Result<(String, String), MigError> {
     }
 }
 
+/******************************************************************
+ * Restore a list of backed up files to a path
+ * Backups are coded as list of ("orig-file","backup-file")
+ ******************************************************************/
+
 pub(crate) fn restore_backups(
     root_path: &Path,
     backups: &[(String, String)],
@@ -384,6 +419,86 @@ pub(crate) fn restore_backups(
     }
 
     Ok(())
+}
+
+/******************************************************************
+ * parse /proc/cmdline to extract root device & fs_type
+ ******************************************************************/
+
+pub(crate) fn get_root_info() -> Result<(PathBuf, String), MigError> {
+    const ROOT_DEVICE_REGEX: &str = r#"\sroot=(\S+)\s"#;
+    const ROOT_PARTUUID_REGEX: &str = r#"^PARTUUID=(\S+)$"#;
+    const ROOT_FSTYPE_REGEX: &str = r#"\srootfstype=(\S+)\s"#;
+
+    let cmd_line = read_to_string(KERNEL_CMDLINE_PATH).context(MigErrCtx::from_remark(
+        MigErrorKind::Upstream,
+        &format!("Failed to read from file: '{}'", KERNEL_CMDLINE_PATH),
+    ))?;
+
+    let root_device = if let Some(captures) =
+        Regex::new(ROOT_DEVICE_REGEX).unwrap().captures(&cmd_line)
+    {
+        let root_dev = captures.get(1).unwrap().as_str();
+        if let Some(captures) = Regex::new(ROOT_PARTUUID_REGEX).unwrap().captures(root_dev) {
+            let uuid_part = path_append(DISK_BY_PARTUUID_PATH, captures.get(1).unwrap().as_str());
+            if file_exists(&uuid_part) {
+                path_append(
+                    uuid_part.parent().unwrap(),
+                    read_link(&uuid_part).context(MigErrCtx::from_remark(
+                        MigErrorKind::Upstream,
+                        &format!("failed to read link: '{}'", uuid_part.display()),
+                    ))?,
+                )
+                .canonicalize()
+                .context(MigErrCtx::from_remark(
+                    MigErrorKind::Upstream,
+                    &format!(
+                        "failed to canonicalize path from: '{}'",
+                        uuid_part.display()
+                    ),
+                ))?
+            } else {
+                return Err(MigError::from_remark(
+                    MigErrorKind::InvParam,
+                    &format!("Failed to get root device from part-uuid: '{}'", root_dev),
+                ));
+            }
+        } else {
+            PathBuf::from(root_dev)
+        }
+    } else {
+        return Err(MigError::from_remark(
+            MigErrorKind::InvParam,
+            &format!(
+                "Failed to parse root device from kernel command line: '{}'",
+                cmd_line
+            ),
+        ));
+    };
+
+    if !file_exists(&root_device) {
+        return Err(MigError::from_remark(
+            MigErrorKind::NotFound,
+            &format!(
+                "The root device path '{}' parsed from kernel command line: '{}' does not exist",
+                root_device.display(),
+                cmd_line
+            ),
+        ));
+    }
+
+    let root_fs_type =
+        if let Some(captures) = Regex::new(&ROOT_FSTYPE_REGEX).unwrap().captures(&cmd_line) {
+            captures.get(1).unwrap().as_str()
+        } else {
+            // TODO: manually scan possible devices for config file
+            return Err(MigError::from_remark(
+                MigErrorKind::InvState,
+                &format!("failed to parse {} for root fs type", KERNEL_CMDLINE_PATH),
+            ));
+        };
+
+    Ok((root_device, String::from(root_fs_type)))
 }
 
 /*

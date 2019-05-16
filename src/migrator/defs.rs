@@ -1,4 +1,5 @@
 pub const BOOT_PATH: &str = "/boot";
+pub const KERNEL_CMDLINE_PATH: &str = "/proc/cmdline";
 
 // where does the stage 2 config file live
 pub const STAGE2_CFG_FILE: &str = "/etc/balena-stage2.yml";

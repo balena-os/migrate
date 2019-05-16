@@ -1,6 +1,6 @@
 use chrono::Local;
 use failure::ResultExt;
-use log::{error, info, trace, warn};
+use log::{debug, error, info, trace, warn};
 use regex::Regex;
 use std::fs::{remove_file, File};
 use std::io::Write;
@@ -9,7 +9,7 @@ use std::path::Path;
 use crate::{
     common::{file_exists, is_balena_file, path_append, Config, MigErrCtx, MigError, MigErrorKind},
     defs::BALENA_FILE_TAG,
-    device::Device,
+    device::{grub_install, grub_valid, Device},
     linux_common::{call_cmd, restore_backups, MigrateInfo, CHMOD_CMD},
     stage2::Stage2Config,
 };
@@ -63,8 +63,14 @@ pub(crate) fn is_bb(model_string: &str) -> Result<Box<Device>, MigError> {
             .trim_matches(char::from(0));
 
         match model {
-            "xM" => Ok(Box::new(BeagleboardXM {})),
-            "Green" => Ok(Box::new(BeagleboneGreen {})),
+            "xM" => {
+                debug!("match found for BeagleboardXM");
+                Ok(Box::new(BeagleboardXM {}))
+            }
+            "Green" => {
+                debug!("match found for BeagleboardGreen");
+                Ok(Box::new(BeagleboneGreen {}))
+            }
             _ => {
                 let message = format!("The beaglebone model reported by your device ('{}') is not supported by balena-migrate", model);
                 error!("{}", message);
@@ -72,7 +78,7 @@ pub(crate) fn is_bb(model_string: &str) -> Result<Box<Device>, MigError> {
             }
         }
     } else {
-        warn!("no match for beaglebone on: {}", model_string);
+        debug!("no match for beaglebone on: {}", model_string);
         Err(MigError::from(MigErrorKind::NoMatch))
     }
 }
@@ -203,9 +209,28 @@ impl<'a> Device for BeagleboneGreen {
         Ok(())
     }
 
-    fn can_migrate(&self, _config: &Config, _mig_info: &mut MigrateInfo) -> Result<bool, MigError> {
-        // TODO: check
-        Ok(true)
+    fn can_migrate(&self, config: &Config, mig_info: &mut MigrateInfo) -> Result<bool, MigError> {
+        const SUPPORTED_OSSES: &'static [&'static str] =
+            &["Debian GNU/Linux 9 (stretch)", "Ubuntu 18.04.2 LTS"];
+
+        let os_name = mig_info.get_os_name();
+
+        if let None = SUPPORTED_OSSES.iter().position(|&r| r == os_name) {
+            error!(
+                "The OS '{}' is not supported for '{}'",
+                os_name,
+                self.get_device_slug()
+            );
+            return Ok(false);
+        }
+
+        if mig_info.get_os_name().starts_with("Ubuntu") {
+            // TODO: migrate ubuntus without grub ?
+            Ok(grub_valid(config, mig_info)?)
+        } else {
+            // TODO: look for valid u-boot config
+            Ok(true)
+        }
     }
 
     fn restore_boot(&self, root_path: &Path, config: &Stage2Config) -> Result<(), MigError> {
@@ -234,18 +259,6 @@ impl<'a> Device for BeagleboneGreen {
 
         Ok(())
     }
-
-    fn is_supported_os(&self, mig_info: &MigrateInfo) -> Result<bool, MigError> {
-        const SUPPORTED_OSSES: &'static [&'static str] = &["Debian GNU/Linux 9 (stretch)"];
-
-        let os_name = mig_info.get_os_name();
-
-        if let None = SUPPORTED_OSSES.iter().position(|&r| r == os_name) {
-            Ok(false)
-        } else {
-            Ok(true)
-        }
-    }
 }
 
 pub(crate) struct BeagleboardXM {}
@@ -262,16 +275,31 @@ impl<'a> Device for BeagleboardXM {
         "beagleboard-xm"
     }
 
-    fn is_supported_os(&self, mig_info: &MigrateInfo) -> Result<bool, MigError> {
-        Err(MigError::from(MigErrorKind::NotImpl))
-    }
-
     fn restore_boot(&self, root_path: &Path, config: &Stage2Config) -> Result<(), MigError> {
         Err(MigError::from(MigErrorKind::NotImpl))
     }
 
-    fn can_migrate(&self, _config: &Config, _mig_info: &mut MigrateInfo) -> Result<bool, MigError> {
-        Err(MigError::from(MigErrorKind::NotImpl))
+    fn can_migrate(&self, config: &Config, mig_info: &mut MigrateInfo) -> Result<bool, MigError> {
+        const SUPPORTED_OSSES: &'static [&'static str] = &["Ubuntu 18.04.2 LTS"];
+
+        let os_name = mig_info.get_os_name();
+
+        if let None = SUPPORTED_OSSES.iter().position(|&r| r == os_name) {
+            error!(
+                "The OS '{}' is not supported for '{}'",
+                os_name,
+                self.get_device_slug()
+            );
+            return Ok(false);
+        }
+
+        if mig_info.get_os_name().starts_with("Ubuntu") {
+            // TODO: migrate ubuntus without grub ?
+            Ok(grub_valid(config, mig_info)?)
+        } else {
+            // TODO: look for valid u-boot config
+            Ok(false)
+        }
     }
 
     fn setup(&self, _config: &Config, mig_info: &mut MigrateInfo) -> Result<(), MigError> {

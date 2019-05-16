@@ -1,5 +1,5 @@
 use failure::{Fail, ResultExt};
-use log::{error, info, trace, warn};
+use log::{debug, error, info, trace, warn};
 use regex::Regex;
 use std::fs::{copy, File};
 use std::io::{BufRead, BufReader, Write};
@@ -25,7 +25,7 @@ const RPI_MIG_INITRD_NAME: &str = "balena.initramfs.cpio.gz";
 
 pub(crate) fn is_rpi(model_string: &str) -> Result<Box<Device>, MigError> {
     trace!(
-        "Beaglebone::is_bb: entered with model string: '{}'",
+        "raspberrypi::is_rpi: entered with model string: '{}'",
         model_string
     );
 
@@ -49,7 +49,7 @@ pub(crate) fn is_rpi(model_string: &str) -> Result<Box<Device>, MigError> {
             }
         }
     } else {
-        warn!("no match for Raspberry PI on: {}", model_string);
+        debug!("no match for Raspberry PI on: {}", model_string);
         Err(MigError::from(MigErrorKind::NoMatch))
     }
 }
@@ -245,7 +245,20 @@ impl<'a> Device for RaspberryPi3 {
         Ok(())
     }
 
-    fn can_migrate(&self, _config: &Config, _mig_info: &mut MigrateInfo) -> Result<bool, MigError> {
+    fn can_migrate(&self, _config: &Config, mig_info: &mut MigrateInfo) -> Result<bool, MigError> {
+        const SUPPORTED_OSSES: &'static [&'static str] = &["Raspbian GNU/Linux 9 (stretch)"];
+
+        let os_name = mig_info.get_os_name();
+
+        if let None = SUPPORTED_OSSES.iter().position(|&r| r == os_name) {
+            error!(
+                "The OS '{}' is not supported for '{}'",
+                os_name,
+                self.get_device_slug()
+            );
+            return Ok(false);
+        }
+
         // TODO: check
         Ok(true)
     }
@@ -258,17 +271,5 @@ impl<'a> Device for RaspberryPi3 {
         info!("The original boot configuration was restored");
 
         Ok(())
-    }
-
-    fn is_supported_os(&self, mig_info: &MigrateInfo) -> Result<bool, MigError> {
-        const SUPPORTED_OSSES: &'static [&'static str] = &["Raspbian GNU/Linux 9 (stretch)"];
-
-        let os_name = mig_info.get_os_name();
-
-        if let None = SUPPORTED_OSSES.iter().position(|&r| r == os_name) {
-            Ok(false)
-        } else {
-            Ok(true)
-        }
     }
 }

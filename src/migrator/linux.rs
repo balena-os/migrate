@@ -17,8 +17,7 @@ use crate::{
     linux_common::{
         call_cmd, ensure_cmds, get_mem_info, get_os_arch, get_os_name, is_admin,
         path_info::PathInfo, DiskInfo, MigrateInfo, WifiConfig, BOOT_DIR, CHMOD_CMD, DF_CMD,
-        EFI_DIR, FILE_CMD, GRUB_INSTALL_CMD, LSBLK_CMD, MOKUTIL_CMD, MOUNT_CMD, REBOOT_CMD,
-        ROOT_DIR, UNAME_CMD,
+        EFI_DIR, FILE_CMD, LSBLK_CMD, MOKUTIL_CMD, MOUNT_CMD, REBOOT_CMD, ROOT_DIR, UNAME_CMD,
     },
     stage2::Stage2Config,
 };
@@ -26,7 +25,7 @@ use crate::{
 const REQUIRED_CMDS: &'static [&'static str] = &[
     DF_CMD, LSBLK_CMD, FILE_CMD, UNAME_CMD, MOUNT_CMD, REBOOT_CMD, CHMOD_CMD,
 ];
-const OPTIONAL_CMDS: &'static [&'static str] = &[MOKUTIL_CMD, GRUB_INSTALL_CMD];
+const OPTIONAL_CMDS: &'static [&'static str] = &[];
 
 const MODULE: &str = "migrator::linux";
 
@@ -105,16 +104,12 @@ impl<'a> LinuxMigrator {
         migrator.device = Some(device::get_device(&migrator.mig_info)?);
 
         if let Some(ref device) = migrator.device {
-            if !device.is_supported_os(&migrator.mig_info)? {
-                let message = format!(
-                    "Your devices OS '{}' is not supported on this platform: {}",
-                    migrator.mig_info.get_os_name(),
-                    device.get_device_slug()
-                );
-                error!("{}", &message);
-                return Err(MigError::from_remark(MigErrorKind::InvParam, &message));
-            }
+            info!("got device: '{}'", device.get_device_slug());
 
+            debug!(
+                "ensuring that '{}' can migrate this device",
+                device.get_device_slug()
+            );
             if !device.can_migrate(&migrator.config, &mut migrator.mig_info)? {
                 let message = format!(
                     "Your device: '{}' can not be migrated",
@@ -428,6 +423,10 @@ impl<'a> LinuxMigrator {
         trace!("LinuxMigrator::get_disk_info: entered");
 
         let mut disk_info = DiskInfo::default();
+
+        // TODO: also retrieve:
+        //  partition type (GPT/msdos)
+        //  partition set as bootable
 
         // **********************************************************************
         // check /boot
