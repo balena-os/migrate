@@ -58,6 +58,28 @@ impl<'a> MigrateInfo {
         panic!("{} uninitialized field install_path in MigrateInfo", MODULE);
     }
 
+    /*    pub(crate) fn get_install_size(&self) -> u64 {
+            if let Some(ref install_path) = self.install_path {
+                return install_path.drive_size;
+            }
+            panic!("{} uninitialized field install_path in MigrateInfo", MODULE);
+        }
+
+        pub(crate) fn get_install_drive(&'a self) -> &'a Path {
+            if let Some(ref install_path) = self.install_path {
+                return &install_path.drive;
+            }
+            panic!("{} uninitialized field install_path in MigrateInfo", MODULE);
+        }
+
+        pub(crate) fn get_install_part(&'a self) -> &'a Path {
+            if let Some(ref install_path) = self.install_path {
+                return &install_path.device;
+            }
+            panic!("{} uninitialized field install_path in MigrateInfo", MODULE);
+        }
+    */
+
     pub(crate) fn get_os_name(&'a self) -> &'a str {
         if let Some(ref os_name) = self.os_name {
             return os_name;
@@ -86,20 +108,6 @@ impl<'a> MigrateInfo {
         } else {
             panic!("kernel path is not initialized");
         }
-    }
-
-    pub(crate) fn get_install_size(&self) -> u64 {
-        if let Some(ref install_path) = self.install_path {
-            return install_path.drive_size;
-        }
-        panic!("{} uninitialized field install_path in MigrateInfo", MODULE);
-    }
-
-    pub(crate) fn get_install_device(&'a self) -> &'a Path {
-        if let Some(ref install_path) = self.install_path {
-            return &install_path.device;
-        }
-        panic!("{} uninitialized field install_path in MigrateInfo", MODULE);
     }
 
     pub(crate) fn is_efi_boot(&self) -> bool {

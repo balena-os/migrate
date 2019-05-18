@@ -236,9 +236,9 @@ impl<'a> Stage2Config {
         self.skip_flash
     }
 
-    pub fn is_efi_boot(&self) -> bool {
+    /*pub fn is_efi_boot(&self) -> bool {
         self.efi_boot
-    }
+    }*/
 
     pub fn get_flash_device(&'a self) -> &'a Path {
         self.flash_device.as_path()

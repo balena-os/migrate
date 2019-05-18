@@ -5,7 +5,7 @@ use crate::linux_common::disk_info::DiskInfo;
 use crate::{
     common::{BootType, Config, MigError, MigErrorKind},
     device::Device,
-    linux_common::{get_grub_version, is_efi_boot, is_secure_boot, migrate_info::MigrateInfo},
+    linux_common::{get_grub_version, is_secure_boot, migrate_info::MigrateInfo},
     stage2::Stage2Config,
 };
 
@@ -43,6 +43,7 @@ impl<'a> Device for IntelNuc {
             "Ubuntu 18.04.2 LTS",
             //    "Ubuntu 16.04.2 LTS",
             "Ubuntu 14.04.2 LTS",
+            "Ubuntu 14.04.5 LTS",
         ];
 
         let os_name = mig_info.get_os_name();
@@ -59,7 +60,7 @@ impl<'a> Device for IntelNuc {
         // ** AMD64 specific initialisation/checks
         // **********************************************************************
 
-        if mig_info.get_os_name().starts_with("Ubuntu") {
+        if mig_info.get_os_name().to_lowercase().starts_with("ubuntu") {
             mig_info.boot_type = Some(BootType::GRUB);
             mig_info.disk_info = Some(DiskInfo::new(false, &config.migrate.get_work_dir())?);
             mig_info.install_path = Some(mig_info.disk_info.as_ref().unwrap().root_path.clone());

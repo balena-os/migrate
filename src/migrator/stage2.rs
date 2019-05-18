@@ -47,7 +47,6 @@ const BOOT_MNT_DIR: &str = "mnt_boot";
 const DATA_MNT_DIR: &str = "mnt_data";
 
 const DD_BLOCK_SIZE: usize = 4194304;
-const DD_PRINT_BLOCK_COUNT: usize = 8;
 
 const MIG_REQUIRED_CMDS: &'static [&'static str] = &[DD_CMD, PARTPROBE_CMD, GZIP_CMD, REBOOT_CMD];
 const MIG_OPTIONAL_CMDS: &'static [&'static str] = &[];
@@ -401,7 +400,6 @@ impl Stage2 {
                     let mut write_count: usize = 0;
 
                     if let Some(ref mut stdin) = dd_child.stdin {
-                        let now = Instant::now();
                         let mut buffer: [u8; DD_BLOCK_SIZE] = [0; DD_BLOCK_SIZE];
                         loop {
                             let bytes_read =

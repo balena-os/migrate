@@ -7,10 +7,15 @@ use std::io::Write;
 use std::path::Path;
 
 use crate::{
-    common::{file_exists, is_balena_file, path_append, Config, MigErrCtx, MigError, MigErrorKind},
+    common::{
+        file_exists, is_balena_file, path_append, BootType, Config, MigErrCtx, MigError,
+        MigErrorKind,
+    },
     defs::BALENA_FILE_TAG,
     device::{grub_valid, Device},
-    linux_common::{call_cmd, restore_backups, MigrateInfo, CHMOD_CMD},
+    linux_common::{
+        call_cmd, disk_info::DiskInfo, migrate_info::MigrateInfo, restore_backups, CHMOD_CMD,
+    },
     stage2::Stage2Config,
 };
 
@@ -224,13 +229,24 @@ impl<'a> Device for BeagleboneGreen {
             return Ok(false);
         }
 
-        if mig_info.get_os_name().starts_with("Ubuntu") {
-            // TODO: migrate ubuntus without grub ?
-            Ok(grub_valid(config, mig_info)?)
-        } else {
+        mig_info.disk_info = Some(DiskInfo::new(false, &config.migrate.get_work_dir())?);
+
+        if mig_info.get_os_name().to_lowercase().starts_with("ubuntu") {
+            mig_info.boot_type = Some(BootType::GRUB);
+            mig_info.install_path = Some(mig_info.disk_info.as_ref().unwrap().root_path.clone());
+        } else if mig_info.get_os_name().to_lowercase().starts_with("debian") {
             // TODO: look for valid u-boot config
-            Ok(true)
+            // try to find relevant uEnv.txt files
+            mig_info.boot_type = Some(BootType::GRUB);
+            mig_info.install_path = Some(mig_info.disk_info.as_ref().unwrap().root_path.clone());
+        } else {
+            return Err(MigError::from_remark(
+                MigErrorKind::InvParam,
+                &format!("unexpected os encountered: '{}'", mig_info.get_os_name()),
+            ));
         }
+
+        Ok(true)
     }
 
     fn restore_boot(&self, root_path: &Path, config: &Stage2Config) -> Result<(), MigError> {
@@ -275,7 +291,7 @@ impl<'a> Device for BeagleboardXM {
         "beagleboard-xm"
     }
 
-    fn restore_boot(&self, root_path: &Path, config: &Stage2Config) -> Result<(), MigError> {
+    fn restore_boot(&self, _root_path: &Path, _config: &Stage2Config) -> Result<(), MigError> {
         Err(MigError::from(MigErrorKind::NotImpl))
     }
 
@@ -302,7 +318,7 @@ impl<'a> Device for BeagleboardXM {
         }
     }
 
-    fn setup(&self, _config: &Config, mig_info: &mut MigrateInfo) -> Result<(), MigError> {
+    fn setup(&self, _config: &Config, _mig_info: &mut MigrateInfo) -> Result<(), MigError> {
         Err(MigError::from(MigErrorKind::NotImpl))
     }
 }

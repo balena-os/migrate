@@ -10,14 +10,9 @@ pub(crate) mod lsblk_info;
 pub(crate) use lsblk_info::LsblkInfo;
 
 pub(crate) mod label_type;
-pub(crate) use label_type::LabelType;
 
 pub(crate) mod path_info;
 pub(crate) use path_info::PathInfo;
-
-const GPT_EFI_PART: &str = "C12A7328-F81F-11D2-BA4B-00A0C93EC93B";
-
-const DISK_LABEL_REGEX: &str = r#"^Disklabel type:\s*(\S+)$"#;
 
 #[derive(Debug)]
 pub(crate) struct DiskInfo {

@@ -64,16 +64,6 @@ pub struct LogConfig {
     pub fs_type: Option<String>,
 }
 
-impl LogConfig {
-    pub fn default() -> LogConfig {
-        LogConfig {
-            level: None,
-            drive: None,
-            fs_type: None,
-        }
-    }
-}
-
 #[derive(Debug, Deserialize)]
 pub(crate) struct MigrateConfig {
     work_dir: Option<PathBuf>,

@@ -127,7 +127,10 @@ pub(crate) fn grub_valid(_config: &Config, _mig_info: &MigrateInfo) -> Result<bo
         >= 2)
 }
 
-pub(crate) fn grub_install(config: &Config, mig_info: &mut MigrateInfo) -> Result<bool, MigError> {
+pub(crate) fn grub_install(
+    _config: &Config,
+    _mig_info: &mut MigrateInfo,
+) -> Result<bool, MigError> {
     // TODO: implement
     // a) look for grub, ensure version
     // b) create a boot config for balena migration

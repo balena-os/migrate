@@ -53,7 +53,8 @@ impl BalenaCfgJson {
             let vpn_addr = self.get_vpn_endpoint()?;
             let vpn_port = self.get_vpn_port()?;
 
-            if let Ok(_v) = check_tcp_connect(vpn_addr, vpn_port, 60) {
+            if let Ok(_v) = check_tcp_connect(vpn_addr, vpn_port, config.balena.get_check_timeout())
+            {
                 info!("connection to vpn: {}:{} is ok", vpn_addr, vpn_port);
             } else {
                 // TODO: add option require_connect and fail if cobnnection is required but not available

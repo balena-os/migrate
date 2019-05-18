@@ -4,6 +4,8 @@ pub const ROOT_PATH: &str = "/";
 
 pub const KERNEL_CMDLINE_PATH: &str = "/proc/cmdline";
 
+pub const SYS_UEFI_DIR: &str = "/sys/firmware/efi";
+
 // where does the stage 2 config file live
 pub const STAGE2_CFG_FILE: &str = "/etc/balena-stage2.yml";
 
@@ -41,3 +43,7 @@ pub const DEFAULT_API_PORT: u16 = 443;
 pub const DEFAULT_API_CHECK_TIMEOUT: u64 = 20;
 
 pub const BACKUP_FILE: &str = "backup.tgz";
+
+pub const MEM_THRESHOLD: u64 = 128 * 1024 * 1024; // 128 MiB
+
+pub const MIN_DISK_SIZE: u64 = 2 * 1024 * 1024 * 1024; // 2 GiB

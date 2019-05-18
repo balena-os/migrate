@@ -2,7 +2,6 @@ use failure::ResultExt;
 use lazy_static::lazy_static;
 use log::{debug, trace};
 use regex::Regex;
-use serde_json::Value;
 use std::fmt::{self, Display, Formatter};
 use std::path::{Path, PathBuf};
 
@@ -15,7 +14,6 @@ use crate::{
 const MODULE: &str = "linux_common::path_info";
 
 const SIZE_REGEX: &str = r#"^(\d+)K?$"#;
-const LSBLK_REGEX: &str = r#"^(\S+)\s+(\d+)\s+(\S+)\s+(\S+)(\s+(.*))?$"#;
 
 const MOUNT_REGEX: &str = r#"^(\S+)\s+on\s+(\S+)\s+type\s+(\S+)\s+\(([^\)]+)\).*$"#;
 
@@ -70,7 +68,7 @@ impl PathInfo {
         ))?;
 
         let (device, partition) = if path == Path::new(ROOT_PATH) {
-            let (root_device, root_fs_type) = get_root_info()?;
+            let (root_device, _root_fs_type) = get_root_info()?;
             lsblk_info.get_devinfo_from_partition(root_device)?
         } else {
             lsblk_info.get_path_info(&abs_path)?

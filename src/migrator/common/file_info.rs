@@ -5,10 +5,14 @@ use log::{debug, error, trace};
 use regex::Regex;
 use std::path::{Path, PathBuf, MAIN_SEPARATOR};
 
-const OS_IMG_FTYPE_REGEX: &str = r#"^DOS/MBR boot sector.*\(gzip compressed data.*\)$"#;
+// file on ubuntu-14.04 reports x86 boot sector for image and kernel files
+
+const OS_IMG_FTYPE_REGEX: &str =
+    r#"^(DOS/MBR boot sector|x86 boot sector).*\(gzip compressed data.*\)$"#;
 const INITRD_FTYPE_REGEX: &str = r#"^ASCII cpio archive.*\(gzip compressed data.*\)$"#;
 const OS_CFG_FTYPE_REGEX: &str = r#"^ASCII text.*$"#;
-const KERNEL_AMD64_FTYPE_REGEX: &str = r#"^Linux kernel x86 boot executable bzImage.*$"#;
+const KERNEL_AMD64_FTYPE_REGEX: &str =
+    r#"^(Linux kernel x86 boot executable bzImage|x86 boot sector).*$"#;
 const KERNEL_ARMHF_FTYPE_REGEX: &str = r#"^Linux kernel ARM boot executable zImage.*$"#;
 const KERNEL_I386_FTYPE_REGEX: &str = r#"^Linux kernel i386 boot executable bzImage.*$"#;
 const TEXT_FTYPE_REGEX: &str = r#"^ASCII text.*$"#;

@@ -1,6 +1,5 @@
 use failure::ResultExt;
 use log::{debug, error, info, trace, warn};
-use regex::Regex;
 use std::fs::{copy, create_dir};
 use std::path::PathBuf;
 use std::thread;
@@ -12,12 +11,14 @@ use crate::{
         Config, FileInfo, FileType, MigErrCtx, MigError, MigErrorKind, MigMode, MigrateWifis,
         OSArch,
     },
-    defs::{BACKUP_FILE, EFI_PATH, STAGE2_CFG_FILE},
+    defs::{
+        BACKUP_FILE, EFI_PATH, MEM_THRESHOLD, MIN_DISK_SIZE, STAGE2_CFG_FILE,
+        SYSTEM_CONNECTIONS_DIR,
+    },
     device::{self, Device},
     linux_common::{
-        call_cmd, ensure_cmds, get_mem_info, get_os_arch, get_os_name, is_admin, DiskInfo,
-        MigrateInfo, PathInfo, WifiConfig, CHMOD_CMD, DF_CMD, FILE_CMD, LSBLK_CMD, MOUNT_CMD,
-        REBOOT_CMD, UNAME_CMD,
+        call_cmd, ensure_cmds, get_mem_info, get_os_arch, get_os_name, is_admin, MigrateInfo,
+        WifiConfig, CHMOD_CMD, DF_CMD, FILE_CMD, LSBLK_CMD, MOUNT_CMD, REBOOT_CMD, UNAME_CMD,
     },
     stage2::Stage2Config,
 };
@@ -28,14 +29,6 @@ const REQUIRED_CMDS: &'static [&'static str] = &[
 const OPTIONAL_CMDS: &'static [&'static str] = &[];
 
 const MODULE: &str = "migrator::linux";
-
-const MEM_THRESHOLD: u64 = 128 * 1024 * 1024; // 128 MiB
-
-const LSBLK_REGEX: &str = r#"^(\d+)(\s+(.*))?$"#;
-
-const MIN_DISK_SIZE: u64 = 2 * 1024 * 1024 * 1024; // 2 GiB
-
-const SYSTEM_CONNECTIONS_DIR: &str = "system-connections";
 
 pub(crate) struct LinuxMigrator {
     config: Config,
@@ -99,7 +92,7 @@ impl<'a> LinuxMigrator {
 
         // **********************************************************************
         // Run the architecture dependent part of initialization
-        // Add further architectures / functons here
+        // Add further architectures / functons in device.rs
 
         migrator.device = Some(device::get_device(&migrator.mig_info)?);
 
@@ -110,6 +103,7 @@ impl<'a> LinuxMigrator {
                 "ensuring that '{}' can migrate this device",
                 device.get_device_slug()
             );
+
             if !device.can_migrate(&migrator.config, &mut migrator.mig_info)? {
                 let message = format!(
                     "Your device: '{}' can not be migrated",
@@ -139,11 +133,13 @@ impl<'a> LinuxMigrator {
         info!("using device slug '{}", migrator.mig_info.get_device_slug());
 
         // Check out relevant paths
-        let drive_size = migrator.mig_info.get_install_size();
-        let drive_dev = migrator.mig_info.get_install_device();
+
+        let drive_dev = migrator.mig_info.get_install_path();
+        let drive_size = drive_dev.drive_size;
+
         info!(
-            "Boot device is {}, size: {}",
-            drive_dev.display(),
+            "The install device is {}, size: {}",
+            drive_dev.drive.display(),
             format_size_with_unit(drive_size)
         );
 
@@ -152,8 +148,8 @@ impl<'a> LinuxMigrator {
 
         if drive_size < MIN_DISK_SIZE {
             let message = format!(
-                "The size of your harddrive {} = {} is too small to install balenaOS",
-                drive_dev.display(),
+                "The size of the target drive '{}' = {} is too small to install balenaOS",
+                drive_dev.drive.display(),
                 format_size_with_unit(drive_size)
             );
             error!("{}", &message);
@@ -274,6 +270,7 @@ impl<'a> LinuxMigrator {
             return Err(MigError::from_remark(MigErrorKind::InvParam, &message));
         }
 
+        // TODO: test this
         for file in migrator.config.migrate.get_nwmgr_files() {
             if let Some(file_info) = FileInfo::new(&file, &work_dir)? {
                 file_info.expect_type(&FileType::Text)?;
@@ -296,7 +293,7 @@ impl<'a> LinuxMigrator {
         if MigrateWifis::NONE != wifis {
             // **********************************************************************
             // ** migrate wifi config
-            // TODO: ...
+            // TODO: NetworkManager configs
             debug!("looking for wifi configurations to migrate");
 
             let empty_list: Vec<String> = Vec::new();

@@ -14,16 +14,16 @@ use crate::{
         call, file_exists, parse_file, path_append, CmdRes, Config, MigErrCtx, MigError,
         MigErrorKind, OSArch,
     },
-    defs::{DISK_BY_PARTUUID_PATH, DISK_BY_UUID_PATH, KERNEL_CMDLINE_PATH},
+    defs::{DISK_BY_PARTUUID_PATH, DISK_BY_UUID_PATH, KERNEL_CMDLINE_PATH, SYS_UEFI_DIR},
 };
 
 pub(crate) mod wifi_config;
 pub(crate) use wifi_config::WifiConfig;
 
 pub(crate) mod disk_info;
-pub(crate) use disk_info::{DiskInfo, PathInfo};
 
 pub(crate) mod migrate_info;
+use crate::common::dir_exists;
 pub(crate) use migrate_info::MigrateInfo;
 
 const MODULE: &str = "linux_common";
@@ -31,8 +31,6 @@ const WHEREIS_CMD: &str = "whereis";
 
 pub const DF_CMD: &str = "df";
 pub const LSBLK_CMD: &str = "lsblk";
-//pub const MOUNT_CMD: &str = "mount";
-//pub const UMOUNT_CMD: &str = "umount";
 pub const FDISK_CMD: &str = "fdisk";
 pub const FILE_CMD: &str = "file";
 pub const UNAME_CMD: &str = "uname";
@@ -57,8 +55,6 @@ const BIN_DIRS: &[&str] = &["/bin", "/usr/bin", "/sbin", "/usr/sbin"];
 
 const OS_RELEASE_FILE: &str = "/etc/os-release";
 const OS_NAME_REGEX: &str = r#"^PRETTY_NAME="([^"]+)"$"#;
-
-const SYS_UEFI_DIR: &str = "/sys/firmware/efi";
 
 thread_local! {
     static CMD_TABLE: RefCell<HashMap<String,Option<String>>> = RefCell::new(HashMap::new());
@@ -297,35 +293,39 @@ pub(crate) fn is_secure_boot() -> Result<bool, MigError> {
 
     // TODO: check for efi vars
 
-    let mokutil_path = match whereis(MOKUTIL_CMD) {
-        Ok(path) => path,
-        Err(why) => {
-            warn!("The mokutil command '{}' could not be found", MOKUTIL_CMD);
-            return Ok(false);
-        }
-    };
-
-    let cmd_res = call(&mokutil_path, &MOKUTIL_ARGS_SB_STATE, true)?;
-
-    let regex = Regex::new(r"^SecureBoot\s+(disabled|enabled)$").unwrap();
-    let lines = cmd_res.stdout.lines();
-    for line in lines {
-        if let Some(cap) = regex.captures(line) {
-            if cap.get(1).unwrap().as_str() == "enabled" {
-                return Ok(true);
-            } else {
+    if dir_exists(SYS_UEFI_DIR)? {
+        let mokutil_path = match whereis(MOKUTIL_CMD) {
+            Ok(path) => path,
+            Err(_why) => {
+                warn!("The mokutil command '{}' could not be found", MOKUTIL_CMD);
                 return Ok(false);
             }
+        };
+
+        let cmd_res = call(&mokutil_path, &MOKUTIL_ARGS_SB_STATE, true)?;
+
+        let regex = Regex::new(r"^SecureBoot\s+(disabled|enabled)$").unwrap();
+        let lines = cmd_res.stdout.lines();
+        for line in lines {
+            if let Some(cap) = regex.captures(line) {
+                if cap.get(1).unwrap().as_str() == "enabled" {
+                    return Ok(true);
+                } else {
+                    return Ok(false);
+                }
+            }
         }
+        error!(
+            "{}::is_secure_boot: failed to parse command output: '{}'",
+            MODULE, cmd_res.stdout
+        );
+        Err(MigError::from_remark(
+            MigErrorKind::InvParam,
+            &format!("{}::is_secure_boot: failed to parse command output", MODULE),
+        ))
+    } else {
+        Ok(false)
     }
-    error!(
-        "{}::is_secure_boot: failed to parse command output: '{}'",
-        MODULE, cmd_res.stdout
-    );
-    Err(MigError::from_remark(
-        MigErrorKind::InvParam,
-        &format!("{}::is_secure_boot: failed to parse command output", MODULE),
-    ))
 }
 
 /******************************************************************
