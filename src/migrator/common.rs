@@ -34,12 +34,19 @@ pub(crate) use fail_mode::FailMode;
 //pub mod logger;
 //pub(crate) use logger::Logger;
 
-pub(crate) use self::backup::create;
 pub(crate) use self::config::{Config, MigMode, MigrateWifis};
 pub(crate) use self::file_info::{FileInfo, FileType};
 pub(crate) use self::mig_error::{MigErrCtx, MigError, MigErrorKind};
 
 const MODULE: &str = "migrator::common";
+
+#[derive(Debug)]
+pub(crate) enum BootType {
+    UBoot,
+    Raspi,
+    EFI,
+    GRUB,
+}
 
 #[derive(Debug)]
 pub enum OSArch {

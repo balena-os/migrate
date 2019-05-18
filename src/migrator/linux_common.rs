@@ -14,20 +14,17 @@ use crate::{
         call, file_exists, parse_file, path_append, CmdRes, Config, MigErrCtx, MigError,
         MigErrorKind, OSArch,
     },
-    defs::{DISK_BY_PARTUUID_PATH, KERNEL_CMDLINE_PATH},
+    defs::{DISK_BY_PARTUUID_PATH, DISK_BY_UUID_PATH, KERNEL_CMDLINE_PATH},
 };
 
 pub(crate) mod wifi_config;
 pub(crate) use wifi_config::WifiConfig;
 
 pub(crate) mod disk_info;
-pub(crate) use disk_info::DiskInfo;
+pub(crate) use disk_info::{DiskInfo, PathInfo};
 
 pub(crate) mod migrate_info;
 pub(crate) use migrate_info::MigrateInfo;
-
-pub(crate) mod path_info;
-pub(crate) use path_info::PathInfo;
 
 const MODULE: &str = "linux_common";
 const WHEREIS_CMD: &str = "whereis";
@@ -47,10 +44,6 @@ pub const CHMOD_CMD: &str = "chmod";
 pub const DD_CMD: &str = "dd";
 pub const PARTPROBE_CMD: &str = "partprobe";
 pub const GZIP_CMD: &str = "gzip";
-
-pub const BOOT_DIR: &str = "/boot";
-pub const ROOT_DIR: &str = "/";
-pub const EFI_DIR: &str = "/boot/efi";
 
 const GRUB_UPDT_VERSION_ARGS: [&str; 1] = ["--version"];
 const GRUB_UPDT_VERSION_RE: &str = r#"^.*\s+\(GRUB\)\s+([0-9]+)\.([0-9]+)[^0-9].*$"#;
@@ -425,22 +418,43 @@ pub(crate) fn restore_backups(
  * parse /proc/cmdline to extract root device & fs_type
  ******************************************************************/
 
-pub(crate) fn get_root_info() -> Result<(PathBuf, String), MigError> {
+pub(crate) fn get_root_info() -> Result<(PathBuf, Option<String>), MigError> {
     const ROOT_DEVICE_REGEX: &str = r#"\sroot=(\S+)\s"#;
     const ROOT_PARTUUID_REGEX: &str = r#"^PARTUUID=(\S+)$"#;
+    const ROOT_UUID_REGEX: &str = r#"^UUID=(\S+)$"#;
     const ROOT_FSTYPE_REGEX: &str = r#"\srootfstype=(\S+)\s"#;
+
+    trace!("get_root_info: entered");
 
     let cmd_line = read_to_string(KERNEL_CMDLINE_PATH).context(MigErrCtx::from_remark(
         MigErrorKind::Upstream,
         &format!("Failed to read from file: '{}'", KERNEL_CMDLINE_PATH),
     ))?;
 
+    debug!("get_root_info: got cmdline: '{}'", cmd_line);
+
     let root_device = if let Some(captures) =
         Regex::new(ROOT_DEVICE_REGEX).unwrap().captures(&cmd_line)
     {
         let root_dev = captures.get(1).unwrap().as_str();
-        if let Some(captures) = Regex::new(ROOT_PARTUUID_REGEX).unwrap().captures(root_dev) {
-            let uuid_part = path_append(DISK_BY_PARTUUID_PATH, captures.get(1).unwrap().as_str());
+
+        if let Some(uuid_part) =
+            if let Some(captures) = Regex::new(ROOT_PARTUUID_REGEX).unwrap().captures(root_dev) {
+                Some(path_append(
+                    DISK_BY_PARTUUID_PATH,
+                    captures.get(1).unwrap().as_str(),
+                ))
+            } else {
+                if let Some(captures) = Regex::new(ROOT_UUID_REGEX).unwrap().captures(root_dev) {
+                    Some(path_append(
+                        DISK_BY_UUID_PATH,
+                        captures.get(1).unwrap().as_str(),
+                    ))
+                } else {
+                    None
+                }
+            }
+        {
             if file_exists(&uuid_part) {
                 path_append(
                     uuid_part.parent().unwrap(),
@@ -459,8 +473,12 @@ pub(crate) fn get_root_info() -> Result<(PathBuf, String), MigError> {
                 ))?
             } else {
                 return Err(MigError::from_remark(
-                    MigErrorKind::InvParam,
-                    &format!("Failed to get root device from part-uuid: '{}'", root_dev),
+                    MigErrorKind::NotFound,
+                    &format!(
+                        "The root device path '{}' parsed from kernel command line: '{}' does not exist",
+                        uuid_part.display(),
+                        cmd_line
+                    ),
                 ));
             }
         } else {
@@ -468,37 +486,23 @@ pub(crate) fn get_root_info() -> Result<(PathBuf, String), MigError> {
         }
     } else {
         return Err(MigError::from_remark(
-            MigErrorKind::InvParam,
+            MigErrorKind::NotFound,
             &format!(
-                "Failed to parse root device from kernel command line: '{}'",
+                "Failed to parse root device path from kernel command line: '{}'",
                 cmd_line
             ),
         ));
     };
 
-    if !file_exists(&root_device) {
-        return Err(MigError::from_remark(
-            MigErrorKind::NotFound,
-            &format!(
-                "The root device path '{}' parsed from kernel command line: '{}' does not exist",
-                root_device.display(),
-                cmd_line
-            ),
-        ));
-    }
-
     let root_fs_type =
         if let Some(captures) = Regex::new(&ROOT_FSTYPE_REGEX).unwrap().captures(&cmd_line) {
-            captures.get(1).unwrap().as_str()
+            Some(String::from(captures.get(1).unwrap().as_str()))
         } else {
-            // TODO: manually scan possible devices for config file
-            return Err(MigError::from_remark(
-                MigErrorKind::InvState,
-                &format!("failed to parse {} for root fs type", KERNEL_CMDLINE_PATH),
-            ));
+            warn!("failed to parse {} for root fs type", cmd_line);
+            None
         };
 
-    Ok((root_device, String::from(root_fs_type)))
+    Ok((root_device, root_fs_type))
 }
 
 /*

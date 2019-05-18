@@ -1,10 +1,11 @@
 use log::{error, info, trace};
 use std::path::Path;
 
+use crate::linux_common::disk_info::DiskInfo;
 use crate::{
-    common::{Config, MigError, MigErrorKind},
+    common::{BootType, Config, MigError, MigErrorKind},
     device::Device,
-    linux_common::{get_grub_version, is_efi_boot, is_secure_boot, MigrateInfo},
+    linux_common::{get_grub_version, is_efi_boot, is_secure_boot, migrate_info::MigrateInfo},
     stage2::Stage2Config,
 };
 
@@ -37,7 +38,7 @@ impl<'a> Device for IntelNuc {
         Err(MigError::from(MigErrorKind::NotImpl))
     }
 
-    fn can_migrate(&self, _config: &Config, mig_info: &mut MigrateInfo) -> Result<bool, MigError> {
+    fn can_migrate(&self, config: &Config, mig_info: &mut MigrateInfo) -> Result<bool, MigError> {
         const SUPPORTED_OSSES: &'static [&'static str] = &[
             "Ubuntu 18.04.2 LTS",
             //    "Ubuntu 16.04.2 LTS",
@@ -58,38 +59,34 @@ impl<'a> Device for IntelNuc {
         // ** AMD64 specific initialisation/checks
         // **********************************************************************
 
-        mig_info.efi_boot = Some(is_efi_boot()?);
+        if mig_info.get_os_name().starts_with("Ubuntu") {
+            mig_info.boot_type = Some(BootType::GRUB);
+            mig_info.disk_info = Some(DiskInfo::new(false, &config.migrate.get_work_dir())?);
+            mig_info.install_path = Some(mig_info.disk_info.as_ref().unwrap().root_path.clone());
+        }
 
         info!(
-            "System is booted in {} mode",
-            match mig_info.is_efi_boot() {
-                true => "EFI",
-                false => "Legacy BIOS",
-            }
+            "System is booted in {:?} mode",
+            mig_info.boot_type.as_ref().unwrap()
         );
 
-        if mig_info.is_efi_boot() == true {
-            // check for EFI dir & size
-            mig_info.secure_boot = Some(is_secure_boot()?);
-            if let Some(secure_boot) = mig_info.secure_boot {
-                info!(
-                    "Secure boot is {}enabled",
-                    match secure_boot {
-                        true => "",
-                        false => "not ",
-                    }
-                );
-                if secure_boot == true {
-                    let message = format!(
-                        "balena-migrate does not currently support systems with secure boot enabled."
-                    );
-                    error!("{}", &message);
-                    return Ok(false);
+        mig_info.secure_boot = Some(is_secure_boot()?);
+
+        if let Some(secure_boot) = mig_info.secure_boot {
+            info!(
+                "Secure boot is {}enabled",
+                match secure_boot {
+                    true => "",
+                    false => "not ",
                 }
+            );
+            if secure_boot == true {
+                let message = format!(
+                    "balena-migrate does not currently support systems with secure boot enabled."
+                );
+                error!("{}", &message);
+                return Ok(false);
             }
-        } else {
-            mig_info.secure_boot = Some(false);
-            info!("Assuming that Secure boot is not enabled for Legacy BIOS system");
         }
 
         let grub_version = get_grub_version()?;

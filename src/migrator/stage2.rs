@@ -1,5 +1,5 @@
 use failure::ResultExt;
-use flate2::{read::GzDecoder, Decompress};
+use flate2::read::GzDecoder;
 use log::{debug, error, info, warn};
 use mod_logger::Logger;
 use nix::{
@@ -7,8 +7,8 @@ use nix::{
     sys::reboot::{reboot, RebootMode},
     unistd::sync,
 };
-use regex::Regex;
-use std::fs::{copy, create_dir, read_dir, read_link, read_to_string, File};
+
+use std::fs::{copy, create_dir, read_dir, read_link, File};
 use std::io::{Read, Write};
 use std::path::{Path, PathBuf};
 use std::process::{Command, Stdio};
@@ -23,7 +23,7 @@ use crate::{
     defs::{
         BACKUP_FILE, BALENA_BOOT_FSTYPE, BALENA_BOOT_PART, BALENA_DATA_FSTYPE, BALENA_DATA_PART,
         BALENA_ROOTA_PART, BALENA_ROOTB_PART, BALENA_STATE_PART, BOOT_PATH, DISK_BY_LABEL_PATH,
-        DISK_BY_PARTUUID_PATH, KERNEL_CMDLINE_PATH, STAGE2_CFG_FILE, SYSTEM_CONNECTIONS_DIR,
+        STAGE2_CFG_FILE, SYSTEM_CONNECTIONS_DIR,
     },
     device,
     linux_common::{
@@ -85,7 +85,7 @@ impl Stage2 {
         let (root_device, root_fs_type) = get_root_info()?;
 
         info!(
-            "Using root device '{}' with fs-type: '{}'",
+            "Using root device '{}' with fs-type: '{:?}'",
             root_device.display(),
             root_fs_type
         );
@@ -104,14 +104,18 @@ impl Stage2 {
         mount(
             Some(&root_device),
             root_fs_dir,
-            Some(root_fs_type.as_str()),
+            if let Some(ref fs_type) = root_fs_type {
+                Some(fs_type.as_bytes())
+            } else {
+                NIX_NONE
+            },
             MsFlags::empty(),
             NIX_NONE,
         )
         .context(MigErrCtx::from_remark(
             MigErrorKind::Upstream,
             &format!(
-                "Failed to mount previous root device '{}' to '{}' with type: {}",
+                "Failed to mount previous root device '{}' to '{}' with type: {:?}",
                 &root_device.display(),
                 &root_fs_dir.display(),
                 root_fs_type
@@ -431,7 +435,7 @@ impl Stage2 {
                                     info!(
                                         "{} written @ {}/sec in {} seconds",
                                         format_size_with_unit(write_count as u64),
-                                        format_size_with_unit((write_count as u64 / secs_elapsed)),
+                                        format_size_with_unit(write_count as u64 / secs_elapsed),
                                         secs_elapsed
                                     );
                                 }
@@ -444,7 +448,7 @@ impl Stage2 {
                         info!(
                             "{} written @ {}/sec in {} seconds",
                             format_size_with_unit(write_count as u64),
-                            format_size_with_unit((write_count as u64 / secs_elapsed)),
+                            format_size_with_unit(write_count as u64 / secs_elapsed),
                             secs_elapsed
                         );
                         dd_child.wait_with_output().context(MigErrCtx::from_remark(

@@ -1,4 +1,6 @@
 use log::error;
+use mod_logger::Logger;
+use std::path::Path;
 
 mod stage2;
 use stage2::Stage2;
@@ -17,6 +19,7 @@ mod linux_common;
 pub(crate) mod defs;
 
 //pub(crate) use common::config::{Config, YamlConfig};
+use crate::linux_common::{ensure_cmds, FDISK_CMD, LSBLK_CMD};
 use common::mig_error::MigError;
 //pub(crate) use common::os_release::OSRelease;
 //pub(crate) use common::OSArch;
@@ -56,5 +59,12 @@ pub fn stage2() -> Result<(), MigError> {
 
     stage2.error_exit()?;
     // should not be getting here
+    Ok(())
+}
+
+pub fn test() -> Result<(), MigError> {
+    Logger::initialise(Some("trace"));
+    ensure_cmds(&[LSBLK_CMD, FDISK_CMD], &[])?;
+    linux_common::disk_info::DiskInfo::new(true, &Path::new("."))?;
     Ok(())
 }

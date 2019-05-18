@@ -1,8 +1,12 @@
 use std::path::Path;
 
-use crate::common::{FileInfo, OSArch};
-
-use super::{DiskInfo, WifiConfig};
+use crate::{
+    common::{BootType, FileInfo, OSArch},
+    linux_common::{
+        disk_info::{path_info::PathInfo, DiskInfo},
+        WifiConfig,
+    },
+};
 
 const MODULE: &str = "linux_common::migrate_info";
 
@@ -11,9 +15,10 @@ pub(crate) struct MigrateInfo {
     // os_release: Option<OSRelease>,
     // pub fail_mode: Option<FailMode>,
     pub os_arch: Option<OSArch>,
-    pub efi_boot: Option<bool>,
+    pub boot_type: Option<BootType>,
     pub secure_boot: Option<bool>,
     pub disk_info: Option<DiskInfo>,
+    pub install_path: Option<PathInfo>,
     pub os_image_info: Option<FileInfo>,
     pub has_backup: bool,
     pub nwmgr_files: Vec<FileInfo>,
@@ -30,9 +35,10 @@ impl<'a> MigrateInfo {
         MigrateInfo {
             os_name: None,
             os_arch: None,
-            efi_boot: None,
+            boot_type: None,
             secure_boot: None,
             disk_info: None,
+            install_path: None,
             os_image_info: None,
             has_backup: false,
             os_config_info: None,
@@ -43,6 +49,13 @@ impl<'a> MigrateInfo {
             boot_cfg_bckup: Vec::new(),
             wifis: Vec::new(),
         }
+    }
+
+    pub fn get_install_path(&'a self) -> &'a PathInfo {
+        if let Some(ref val) = self.install_path {
+            return val;
+        }
+        panic!("{} uninitialized field install_path in MigrateInfo", MODULE);
     }
 
     pub(crate) fn get_os_name(&'a self) -> &'a str {
@@ -75,37 +88,29 @@ impl<'a> MigrateInfo {
         }
     }
 
-    pub(crate) fn get_drive_size(&self) -> u64 {
-        if let Some(ref disk_info) = self.disk_info {
-            return disk_info.drive_size;
+    pub(crate) fn get_install_size(&self) -> u64 {
+        if let Some(ref install_path) = self.install_path {
+            return install_path.drive_size;
         }
-        panic!("{} uninitialized field drive_info in MigrateInfo", MODULE);
+        panic!("{} uninitialized field install_path in MigrateInfo", MODULE);
     }
-    /*
-        pub(crate) fn get_efi_device(&'a self) -> Option<&'a Path> {
-            if let Some(ref disk_info) = self.disk_info {
-                if let Some(ref efi_path) = disk_info.efi_path {
-                    return Some(efi_path.device.as_path());
-                } else {
-                    return None;
-                }
-            }
-            panic!("{} uninitialized field drive_info in MigrateInfo", MODULE);
-        }
-    */
 
-    pub(crate) fn get_drive_device(&'a self) -> &'a Path {
-        if let Some(ref disk_info) = self.disk_info {
-            return disk_info.drive_dev.as_path();
+    pub(crate) fn get_install_device(&'a self) -> &'a Path {
+        if let Some(ref install_path) = self.install_path {
+            return &install_path.device;
         }
-        panic!("{} uninitialized field drive_info in MigrateInfo", MODULE);
+        panic!("{} uninitialized field install_path in MigrateInfo", MODULE);
     }
 
     pub(crate) fn is_efi_boot(&self) -> bool {
-        if let Some(efi_boot) = self.efi_boot {
-            efi_boot
+        if let Some(ref boot_type) = self.boot_type {
+            if let BootType::EFI = boot_type {
+                true
+            } else {
+                false
+            }
         } else {
-            false
+            panic!("{} uninitialized boot_type in MigrateInfo", MODULE);
         }
     }
 
@@ -129,9 +134,7 @@ impl<'a> MigrateInfo {
 
     pub(crate) fn get_work_path(&'a self) -> &'a Path {
         if let Some(ref disk_info) = self.disk_info {
-            if let Some(ref work_path) = disk_info.work_path {
-                return work_path.path.as_path();
-            }
+            return disk_info.work_path.path.as_path();
         }
         panic!("{} uninitialized field drive_info in MigrateInfo", MODULE);
     }
@@ -160,52 +163,35 @@ impl<'a> MigrateInfo {
         panic!("{} uninitialized field device_slug in MigrateInfo", MODULE);
     }
 
-    /*
-        pub(crate) fn get_backups(&'a self) -> &'a Vec<(String,String)> {
-            &self.boot_cfg_bckup
-        }
-    */
-
-    pub(crate) fn get_flash_device(&'a self) -> &'a Path {
-        if let Some(ref disk_info) = self.disk_info {
-            return &disk_info.drive_dev;
-        }
-        panic!("{} uninitialized field drive_info in MigrateInfo", MODULE);
-    }
-
     pub(crate) fn get_boot_path(&'a self) -> &'a Path {
         if let Some(ref disk_info) = self.disk_info {
-            if let Some(ref boot_path) = disk_info.boot_path {
-                return &boot_path.path;
-            }
+            disk_info.boot_path.path.as_path()
+        } else {
+            panic!("{} uninitialized field drive_info in MigrateInfo", MODULE);
         }
-        panic!("{} uninitialized field drive_info in MigrateInfo", MODULE);
     }
 
     pub(crate) fn get_boot_device(&'a self) -> &'a Path {
         if let Some(ref disk_info) = self.disk_info {
-            if let Some(ref boot_path) = disk_info.boot_path {
-                return boot_path.device.as_path();
-            }
+            return disk_info.boot_path.device.as_path();
+        } else {
+            panic!("{} uninitialized field drive_info in MigrateInfo", MODULE);
         }
-        panic!("{} uninitialized field drive_info in MigrateInfo", MODULE);
     }
 
     pub(crate) fn get_boot_fstype(&'a self) -> &'a str {
         if let Some(ref disk_info) = self.disk_info {
-            if let Some(ref boot_path) = disk_info.boot_path {
-                return &boot_path.fs_type;
-            }
+            &disk_info.boot_path.fs_type
+        } else {
+            panic!("{} uninitialized field drive_info in MigrateInfo", MODULE);
         }
-        panic!("{} uninitialized field drive_info in MigrateInfo", MODULE);
     }
 
     pub(crate) fn get_root_device(&'a self) -> &'a Path {
         if let Some(ref disk_info) = self.disk_info {
-            if let Some(ref root_path) = disk_info.root_path {
-                return root_path.device.as_path();
-            }
+            disk_info.root_path.device.as_path()
+        } else {
+            panic!("{} uninitialized field drive_info in MigrateInfo", MODULE);
         }
-        panic!("{} uninitialized field drive_info in MigrateInfo", MODULE);
     }
 }

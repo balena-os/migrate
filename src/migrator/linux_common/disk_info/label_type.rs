@@ -1,4 +1,4 @@
-use regex::{Captures, Regex};
+use regex::Regex;
 use std::path::Path;
 
 use crate::{
@@ -8,14 +8,16 @@ use crate::{
 
 const DISK_LABEL_REGEX: &str = r#"^Disklabel type:\s*(\S+)$"#;
 
-pub(crate) enum PartLabelType {
+#[derive(Debug)]
+pub(crate) enum LabelType {
     GPT,
     DOS,
     OTHER,
 }
 
-impl PartLabelType {
-    pub fn from_device(device_path: &Path) -> Result<PartLabelType, MigError> {
+impl LabelType {
+    pub fn from_device<P: AsRef<Path>>(device_path: P) -> Result<LabelType, MigError> {
+        let device_path = device_path.as_ref();
         let cmd_res = call_cmd(FDISK_CMD, &["-l", &device_path.to_string_lossy()], true)?;
 
         if cmd_res.status.success() {
@@ -30,10 +32,10 @@ impl PartLabelType {
             }
 
             if let Some(disk_label_type) = disk_label_type {
-                match disk_label_type.as_str() {
-                    "gpt" => Ok(PartLabelType::GPT),
-                    "dos" => Ok(PartLabelType::DOS),
-                    _ => Ok(PartLabelType::OTHER),
+                match disk_label_type {
+                    "gpt" => Ok(LabelType::GPT),
+                    "dos" => Ok(LabelType::DOS),
+                    _ => Ok(LabelType::OTHER),
                 }
             } else {
                 Err(MigError::from_remark(

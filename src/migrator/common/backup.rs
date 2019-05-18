@@ -1,15 +1,13 @@
 use failure::{Fail, ResultExt};
 use flate2::{write::GzEncoder, Compression};
-use log::{debug, info, trace, warn};
+use log::{debug, info, trace};
 use regex::Regex;
-use std::fs::{create_dir, read_dir, File};
-use std::io::Write;
+use std::fs::{read_dir, File};
 use std::path::{Path, PathBuf};
 use tar::Builder;
 
 use crate::common::{
-    config::migrate_config::VolumeConfig, file_exists, path_append, MigErrCtx, MigError,
-    MigErrorKind,
+    config::migrate_config::VolumeConfig, path_append, MigErrCtx, MigError, MigErrorKind,
 };
 
 // Recurse through directories

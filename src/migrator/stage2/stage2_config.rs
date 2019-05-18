@@ -110,7 +110,7 @@ impl<'a> Stage2Config {
             cfg_str.push_str(&format!(
                 "{}: {}\n",
                 FLASH_DEVICE_KEY,
-                &mig_info.get_flash_device().to_string_lossy()
+                &mig_info.get_install_path().drive.to_string_lossy()
             ));
 
             // no skipping when using the real device

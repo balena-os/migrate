@@ -12,12 +12,12 @@ use crate::{
         Config, FileInfo, FileType, MigErrCtx, MigError, MigErrorKind, MigMode, MigrateWifis,
         OSArch,
     },
-    defs::{BACKUP_FILE, STAGE2_CFG_FILE},
+    defs::{BACKUP_FILE, EFI_PATH, STAGE2_CFG_FILE},
     device::{self, Device},
     linux_common::{
-        call_cmd, ensure_cmds, get_mem_info, get_os_arch, get_os_name, is_admin,
-        path_info::PathInfo, DiskInfo, MigrateInfo, WifiConfig, BOOT_DIR, CHMOD_CMD, DF_CMD,
-        EFI_DIR, FILE_CMD, LSBLK_CMD, MOKUTIL_CMD, MOUNT_CMD, REBOOT_CMD, ROOT_DIR, UNAME_CMD,
+        call_cmd, ensure_cmds, get_mem_info, get_os_arch, get_os_name, is_admin, DiskInfo,
+        MigrateInfo, PathInfo, WifiConfig, CHMOD_CMD, DF_CMD, FILE_CMD, LSBLK_CMD, MOUNT_CMD,
+        REBOOT_CMD, UNAME_CMD,
     },
     stage2::Stage2Config,
 };
@@ -138,14 +138,9 @@ impl<'a> LinuxMigrator {
         }
         info!("using device slug '{}", migrator.mig_info.get_device_slug());
 
-        // **********************************************************************
-        // Check the disk for required paths / structure / size
-
-        migrator.mig_info.disk_info = Some(migrator.get_disk_info()?);
-
         // Check out relevant paths
-        let drive_size = migrator.mig_info.get_drive_size();
-        let drive_dev = migrator.mig_info.get_drive_device();
+        let drive_size = migrator.mig_info.get_install_size();
+        let drive_dev = migrator.mig_info.get_install_device();
         info!(
             "Boot device is {}, size: {}",
             drive_dev.display(),
@@ -222,14 +217,10 @@ impl<'a> LinuxMigrator {
                     // TODO: add required space for efi boot files
                     efi_path
                 } else {
-                    panic!("no {} path info found", EFI_DIR)
+                    panic!("no {} path info found", EFI_PATH)
                 }
             } else {
-                if let Some(ref boot_path) = disk_info.boot_path {
-                    boot_path
-                } else {
-                    panic!("no {} path info found", BOOT_DIR)
-                }
+                &disk_info.boot_path
             }
         } else {
             panic!("no disk info found")
@@ -415,6 +406,7 @@ impl<'a> LinuxMigrator {
         Ok(())
     }
 
+    /*
     // **********************************************************************
     // ** Check required paths on disk
     // **********************************************************************
@@ -422,7 +414,7 @@ impl<'a> LinuxMigrator {
     fn get_disk_info(&mut self) -> Result<DiskInfo, MigError> {
         trace!("LinuxMigrator::get_disk_info: entered");
 
-        let mut disk_info = DiskInfo::default();
+        let mut disk_info =
 
         // TODO: also retrieve:
         //  partition type (GPT/msdos)
@@ -431,13 +423,13 @@ impl<'a> LinuxMigrator {
         // **********************************************************************
         // check /boot
 
-        disk_info.boot_path = PathInfo::new(BOOT_DIR)?;
+        disk_info.boot_path = PathInfo::new(BOOT_PATH)?;
         if let Some(ref boot_part) = disk_info.boot_path {
             debug!("{}", boot_part);
         } else {
             let message = format!(
                 "Unable to retrieve attributes for {} file system, giving up.",
-                BOOT_DIR
+                BOOT_PATH
             );
             error!("{}", message);
             return Err(MigError::from_remark(MigErrorKind::InvState, &message));
@@ -447,7 +439,7 @@ impl<'a> LinuxMigrator {
             // **********************************************************************
             // check /boot/efi
             // TODO: detect efi dir in other locations (via parted / mount)
-            disk_info.efi_path = PathInfo::new(EFI_DIR)?;
+            disk_info.efi_path = PathInfo::new(EFI_PATH)?;
             if let Some(ref efi_part) = disk_info.efi_path {
                 debug!("{}", efi_part);
             }
@@ -470,88 +462,88 @@ impl<'a> LinuxMigrator {
                     debug!("{}", work_part);
                 }
         */
+    // **********************************************************************
+    // check /
 
-        // **********************************************************************
-        // check /
+    disk_info.root_path = PathInfo::new(ROOT_PATH)?;
 
-        disk_info.root_path = PathInfo::new(ROOT_DIR)?;
+    if let Some(ref root_part) = disk_info.root_path {
+    debug!("{}", root_part);
 
-        if let Some(ref root_part) = disk_info.root_path {
-            debug!("{}", root_part);
+    // **********************************************************************
+    // Make sure all relevant paths are on one drive
 
-            // **********************************************************************
-            // Make sure all relevant paths are on one drive
-
-            if let Some(ref boot_part) = disk_info.boot_path {
-                if root_part.drive != boot_part.drive {
-                    let message = "Your device has a disk layout that is incompatible with balena-migrate. balena migrate requires the /boot /boot/efi and / partitions to be on one drive";
-                    error!("{}", message);
-                    return Err(MigError::from_remark(
-                        MigErrorKind::InvParam,
-                        &format!("{}::get_disk_info: {}", MODULE, message),
-                    ));
-                }
-            }
-
-            if let Some(ref efi_part) = disk_info.efi_path {
-                if root_part.drive != efi_part.drive {
-                    let message = "Your device has a disk layout that is incompatible with balena-migrate. balena migrate requires the /boot /boot/efi and / partitions to be on one drive";
-                    error!("{}", message);
-                    return Err(MigError::from_remark(
-                        MigErrorKind::InvParam,
-                        &format!("{}::get_disk_info: {}", MODULE, message),
-                    ));
-                }
-            }
-
-            // **********************************************************************
-            // get size & UUID of installation drive
-
-            let root_part_str = root_part.drive.to_string_lossy();
-            let args: Vec<&str> = vec!["-b", "--output=SIZE,UUID", &root_part_str];
-
-            let cmd_res = call_cmd(LSBLK_CMD, &args, true)?;
-            if !cmd_res.status.success() || cmd_res.stdout.is_empty() {
-                return Err(MigError::from_remark(
-                    MigErrorKind::ExecProcess,
-                    &format!(
-                        "{}::new: failed to retrieve device attributes for {}",
-                        MODULE,
-                        &root_part.drive.display()
-                    ),
-                ));
-            }
-
-            // debug!("lsblk output: {:?}",&cmd_res.stdout);
-            let output: Vec<&str> = cmd_res.stdout.lines().collect();
-            if output.len() < 2 {
-                return Err(MigError::from_remark(
-                    MigErrorKind::InvParam,
-                    &format!(
-                        "{}::new: failed to parse block device attributes for {}",
-                        MODULE,
-                        &root_part.drive.display()
-                    ),
-                ));
-            }
-
-            debug!("lsblk output: {:?}", &output[1]);
-            if let Some(captures) = Regex::new(LSBLK_REGEX).unwrap().captures(&output[1]) {
-                disk_info.drive_size = captures.get(1).unwrap().as_str().parse::<u64>().unwrap();
-                if let Some(cap) = captures.get(3) {
-                    disk_info.drive_uuid = String::from(cap.as_str());
-                }
-            }
-            disk_info.drive_dev = root_part.drive.clone();
-
-            Ok(disk_info)
-        } else {
-            let message = format!(
-                "Unable to retrieve attributes for {} file system, giving up.",
-                ROOT_DIR
-            );
-            error!("{}", message);
-            Err(MigError::from_remark(MigErrorKind::InvState, &message))
-        }
+    if let Some(ref boot_part) = disk_info.boot_path {
+    if root_part.drive != boot_part.drive {
+    let message = "Your device has a disk layout that is incompatible with balena-migrate. balena migrate requires the /boot /boot/efi and / partitions to be on one drive";
+    error!("{}", message);
+    return Err(MigError::from_remark(
+    MigErrorKind::InvParam,
+    &format!("{}::get_disk_info: {}", MODULE, message),
+    ));
     }
+    }
+
+    if let Some(ref efi_part) = disk_info.efi_path {
+    if root_part.drive != efi_part.drive {
+    let message = "Your device has a disk layout that is incompatible with balena-migrate. balena migrate requires the /boot /boot/efi and / partitions to be on one drive";
+    error!("{}", message);
+    return Err(MigError::from_remark(
+    MigErrorKind::InvParam,
+    &format!("{}::get_disk_info: {}", MODULE, message),
+    ));
+    }
+    }
+
+    // **********************************************************************
+    // get size & UUID of installation drive
+
+    let root_part_str = root_part.drive.to_string_lossy();
+    let args: Vec<&str> = vec!["-b", "--output=SIZE,UUID", &root_part_str];
+
+    let cmd_res = call_cmd(LSBLK_CMD, &args, true)?;
+    if !cmd_res.status.success() || cmd_res.stdout.is_empty() {
+    return Err(MigError::from_remark(
+    MigErrorKind::ExecProcess,
+    &format!(
+    "{}::new: failed to retrieve device attributes for {}",
+    MODULE,
+    &root_part.drive.display()
+    ),
+    ));
+    }
+
+    // debug!("lsblk output: {:?}",&cmd_res.stdout);
+    let output: Vec<&str> = cmd_res.stdout.lines().collect();
+    if output.len() < 2 {
+    return Err(MigError::from_remark(
+    MigErrorKind::InvParam,
+    &format!(
+    "{}::new: failed to parse block device attributes for {}",
+    MODULE,
+    &root_part.drive.display()
+    ),
+    ));
+    }
+
+    debug!("lsblk output: {:?}", &output[1]);
+    if let Some(captures) = Regex::new(LSBLK_REGEX).unwrap().captures(&output[1]) {
+    disk_info.drive_size = captures.get(1).unwrap().as_str().parse::<u64>().unwrap();
+    if let Some(cap) = captures.get(3) {
+    disk_info.drive_uuid = String::from(cap.as_str());
+    }
+    }
+    disk_info.drive_dev = root_part.drive.clone();
+
+    Ok(disk_info)
+    } else {
+    let message = format!(
+    "Unable to retrieve attributes for {} file system, giving up.",
+    ROOT_PATH
+    );
+    error!("{}", message);
+    Err(MigError::from_remark(MigErrorKind::InvState, &message))
+    }
+    }
+     */
 }

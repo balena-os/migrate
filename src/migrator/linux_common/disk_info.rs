@@ -1,100 +1,93 @@
-use failure::ResultExt;
-use log::info;
-use regex::{Captures, Regex};
-use serde::Deserialize;
-use serde_json;
-use std::fs::{read_to_string, File};
-use std::path::{Path, PathBuf};
+use log::debug;
+use std::path::Path;
 
 use crate::{
-    common::{MigErrCtx, MigError, MigErrorKind},
-    defs::KERNEL_CMDLINE_PATH,
-    linux_common::{call_cmd, get_root_info, path_info::PathInfo, FDISK_CMD, LSBLK_CMD},
+    common::{MigError, MigErrorKind},
+    defs::{BOOT_PATH, EFI_PATH, ROOT_PATH},
 };
 
 pub(crate) mod lsblk_info;
-pub(crate) use lsblk_info::{LsblkDevice, LsblkInfo, LsblkPartition};
+pub(crate) use lsblk_info::LsblkInfo;
 
-pub(crate) mod part_label_type;
-pub(crate) use part_label_type::PartLabelType;
+pub(crate) mod label_type;
+pub(crate) use label_type::LabelType;
+
+pub(crate) mod path_info;
+pub(crate) use path_info::PathInfo;
 
 const GPT_EFI_PART: &str = "C12A7328-F81F-11D2-BA4B-00A0C93EC93B";
 
 const DISK_LABEL_REGEX: &str = r#"^Disklabel type:\s*(\S+)$"#;
 
+#[derive(Debug)]
 pub(crate) struct DiskInfo {
-    pub drive_dev: PathBuf,
-    pub drive_size: u64,
-    pub part_label_type: PartLabelType,
-    pub drive_uuid: String,
-    pub root_path: Option<PathInfo>,
-    pub boot_path: Option<PathInfo>,
+    pub root_path: PathInfo,
+    pub boot_path: PathInfo,
     pub efi_path: Option<PathInfo>,
-    pub work_path: Option<PathInfo>,
+    pub work_path: PathInfo,
     pub log_path: Option<PathInfo>,
 }
 
 impl DiskInfo {
     pub(crate) fn new(efi_boot: bool, work_path: &Path) -> Result<DiskInfo, MigError> {
-        // Start with root from kernel command line
-        let (root_device, root_fs_type) = get_root_info()?;
-
-        let root_dev_name = if let Some(name) = root_device.file_name() {
-            name.to_string_lossy()
-        } else {
-            return Err(MigError::from_remark(
-                MigErrorKind::InvParam,
-                &format!(
-                    "new: failed to block device name from path '{}'",
-                    root_device.display()
-                ),
-            ));
-        };
-
         // find the root device in lsblk output
-        let (root_dev, root_part) = LsblkInfo::new()?.get_devinfo_from_partition(&root_device)?;
+        let lsblk_info = LsblkInfo::new()?;
 
-        // check mountpoint
-        if let Some(ref mountpoint) = root_part.mountpoint {
-            if mountpoint != "/" {
+        let result = DiskInfo {
+            root_path: if let Some(path_info) = PathInfo::new(ROOT_PATH, &lsblk_info)? {
+                path_info
+            } else {
                 return Err(MigError::from_remark(
-                    MigErrorKind::InvParam,
+                    MigErrorKind::NotFound,
                     &format!(
-                        "new: expected mountpoint '/' but found '{}' in lsblk output for root partition device '{}'  ",
-                        mountpoint,
-                        root_device.display(),
+                        "the device for path '{}' could not be established",
+                        ROOT_PATH
                     ),
                 ));
-            }
-        } else {
-            return Err(MigError::from_remark(
-                MigErrorKind::NotFound,
-                &format!(
-                    "new: expected mountpoint '/' not found in lsblk output for root partition device '{}'  ",
-                    root_device.display()
-                ),
-            ));
-        }
-
-        info!("Found root device '{}'", root_part.name,);
-
-        // establish partition table type
-        let root_dev_path = format!("/dev/{}", root_dev.name);
-
-        Err(MigError::from(MigErrorKind::NotImpl))
-    }
-
-    pub(crate) fn default() -> DiskInfo {
-        DiskInfo {
-            drive_dev: PathBuf::from(""),
-            drive_uuid: String::from(""),
-            drive_size: 0,
-            part_label_type: PartLabelType::OTHER,
-            root_path: None,
-            boot_path: None,
-            efi_path: None,
+            },
+            boot_path: if let Some(path_info) = PathInfo::new(BOOT_PATH, &lsblk_info)? {
+                path_info
+            } else {
+                return Err(MigError::from_remark(
+                    MigErrorKind::NotFound,
+                    &format!(
+                        "the device for path '{}' could not be established",
+                        BOOT_PATH
+                    ),
+                ));
+            },
+            work_path: if let Some(path_info) = PathInfo::new(work_path, &lsblk_info)? {
+                path_info
+            } else {
+                return Err(MigError::from_remark(
+                    MigErrorKind::NotFound,
+                    &format!(
+                        "the device for path '{}' could not be established",
+                        work_path.display()
+                    ),
+                ));
+            },
+            efi_path: if efi_boot {
+                if let Some(path_info) = PathInfo::new(EFI_PATH, &lsblk_info)? {
+                    Some(path_info)
+                } else {
+                    return Err(MigError::from_remark(
+                        MigErrorKind::NotFound,
+                        &format!(
+                            "the device for path '{}' could not be established",
+                            EFI_PATH
+                        ),
+                    ));
+                }
+            } else {
+                None
+            },
+            // TODO: take care of log path or discard the option
             log_path: None,
-            work_path: None,
-        }
+        };
+
+        debug!("Diskinfo: {:?}", result);
+
+        Ok(result)
     }
 }

@@ -1,4 +1,7 @@
 pub const BOOT_PATH: &str = "/boot";
+pub const EFI_PATH: &str = "/boot/efi";
+pub const ROOT_PATH: &str = "/";
+
 pub const KERNEL_CMDLINE_PATH: &str = "/proc/cmdline";
 
 // where does the stage 2 config file live
@@ -10,6 +13,7 @@ pub const SYSTEM_CONNECTIONS_DIR: &str = "system-connections";
 // where do disk labels live ?
 pub const DISK_BY_LABEL_PATH: &str = "/dev/disk/by-label";
 pub const DISK_BY_PARTUUID_PATH: &str = "/dev/disk/by-partuuid";
+pub const DISK_BY_UUID_PATH: &str = "/dev/disk/by-uuid";
 
 // Default balena partition labels and FS types
 pub const BALENA_BOOT_PART: &str = "resin-boot";

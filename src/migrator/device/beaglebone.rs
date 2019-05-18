@@ -9,7 +9,7 @@ use std::path::Path;
 use crate::{
     common::{file_exists, is_balena_file, path_append, Config, MigErrCtx, MigError, MigErrorKind},
     defs::BALENA_FILE_TAG,
-    device::{grub_install, grub_valid, Device},
+    device::{grub_valid, Device},
     linux_common::{call_cmd, restore_backups, MigrateInfo, CHMOD_CMD},
     stage2::Stage2Config,
 };
