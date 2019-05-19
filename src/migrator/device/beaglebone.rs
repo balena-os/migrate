@@ -222,7 +222,6 @@ impl<'a> Device for BeagleboneGreen {
         if let Some(ref boot_type) = mig_info.boot_type {
             match boot_type {
                 BootType::UBoot => self.setup_uboot(config, mig_info),
-                BootType::GRUB => self.setup_grub(config, mig_info),
                 _ => Err(MigError::from_remark(
                     MigErrorKind::InvParam,
                     &format!(
@@ -255,22 +254,16 @@ impl<'a> Device for BeagleboneGreen {
             return Ok(false);
         }
 
+        mig_info.boot_type = Some(BootType::UBoot);
         mig_info.disk_info = Some(DiskInfo::new(false, &config.migrate.get_work_dir())?);
-
-        if mig_info.get_os_name().to_lowercase().starts_with("ubuntu") {
-            // TODO: check for uboot boot setup too ?
-            mig_info.boot_type = Some(BootType::GRUB);
-            mig_info.install_path = Some(mig_info.disk_info.as_ref().unwrap().root_path.clone());
-        } else if mig_info.get_os_name().to_lowercase().starts_with("debian") {
-            // TODO: look for valid u-boot config
-            // try to find relevant uEnv.txt files
-            mig_info.boot_type = Some(BootType::GRUB);
-            mig_info.install_path = Some(mig_info.disk_info.as_ref().unwrap().root_path.clone());
-        } else {
-            return Err(MigError::from_remark(
-                MigErrorKind::InvParam,
-                &format!("unexpected os encountered: '{}'", mig_info.get_os_name()),
-            ));
+        if let Some(ref disk_info) = mig_info.disk_info {
+            if mig_info.get_boot_path().drive != mig_info.get_root_path().drive {
+                error!(
+                    "The partition layout is not supported, /boot and / are required to be on the same harddrive",
+                );
+                return Ok(false);
+            }
+            mig_info.install_path = Some(mig_info.get_root_path().clone());
         }
 
         Ok(true)
