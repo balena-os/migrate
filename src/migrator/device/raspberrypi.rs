@@ -111,7 +111,7 @@ impl<'a> Device for RaspberryPi3 {
             RPI_MIG_INITRD_PATH
         );
 
-        let boot_path = mig_info.get_boot_path();
+        let boot_path = &mig_info.get_boot_path().path;
         let config_path = path_append(boot_path, RPI_CONFIG_TXT);
 
         if !file_exists(&config_path) {

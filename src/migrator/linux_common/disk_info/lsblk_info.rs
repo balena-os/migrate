@@ -18,64 +18,6 @@ const BLOC_DEV_SUPP_MAJ_NUMBERS: [&str; 45] = [
     "78", "79", "80", "81", "82", "83", "84", "85", "86", "87", "179", "180", "259",
 ];
 
-/*
-    Old versions of lsblk, eg Ubuntu 14.04 do not support -O --json
-Usage:
- lsblk [options] [<device> ...]
-
-Options:
- -a, --all            print all devices
- -b, --bytes          print SIZE in bytes rather than in human readable format
- -d, --nodeps         don't print slaves or holders
- -D, --discard        print discard capabilities
- -e, --exclude <list> exclude devices by major number (default: RAM disks)
- -f, --fs             output info about filesystems
- -h, --help           usage information (this)
- -i, --ascii          use ascii characters only
- -m, --perms          output info about permissions
- -l, --list           use list format ouput
- -n, --noheadings     don't print headings
- -o, --output <list>  output columns
- -P, --pairs          use key="value" output format
- -r, --raw            use raw output format
- -t, --topology       output info about topology
-
-Available columns:
-
-       NAME  device name
-      KNAME  internal kernel device name
-    MAJ:MIN  major:minor device number
-     FSTYPE  filesystem type
- MOUNTPOINT  where the device is mounted
-      LABEL  filesystem LABEL
-       UUID  filesystem UUID
-         RO  read-only device
-         RM  removable device
-      MODEL  device identifier
-       SIZE  size of the device
-      STATE  state of the device
-      OWNER  user name
-      GROUP  group name
-       MODE  device node permissions
-  ALIGNMENT  alignment offset
-     MIN-IO  minimum I/O size
-     OPT-IO  optimal I/O size
-    PHY-SEC  physical sector size
-    LOG-SEC  logical sector size
-       ROTA  rotational device
-      SCHED  I/O scheduler name
-    RQ-SIZE  request queue size
-       TYPE  device type
-   DISC-ALN  discard alignment offset
-  DISC-GRAN  discard granularity
-   DISC-MAX  discard max bytes
-  DISC-ZERO  discard zeroes data
-
-So make it
-lsblk -b -P -o NAME,KNAME,MAJ:MIN,FSTYPE,MOUNTPOINT,LABEL,UUID,RO,SIZE,TYPE
-
-*/
-
 #[derive(Debug, Deserialize, Clone)]
 pub(crate) struct LsblkPartition {
     pub name: String,
@@ -91,6 +33,8 @@ pub(crate) struct LsblkPartition {
     pub partlabel: Option<String>,
     pub partuuid: Option<String>,
     pub size: Option<String>,
+    #[serde(skip)]
+    pub index: Option<u16>,
 }
 
 impl LsblkPartition {
@@ -150,10 +94,7 @@ impl<'a> LsblkInfo {
         let args: Vec<&str> = vec!["-b", "-O", "--json"];
         let cmd_res = call_cmd(LSBLK_CMD, &args, true)?;
         let mut lsblk_info = if cmd_res.status.success() {
-            serde_json::from_str::<LsblkInfo>(&cmd_res.stdout).context(MigErrCtx::from_remark(
-                MigErrorKind::Upstream,
-                "failed to deserialze lsblk output from json",
-            ))?
+            LsblkInfo::from_json(&cmd_res.stdout)?
         } else {
             let args: Vec<&str> = vec![
                 "-b",
@@ -351,6 +292,8 @@ impl<'a> LsblkInfo {
                             parttype: None,
                             partlabel: None,
                             partuuid: None,
+                            // TODO: bit dodgy this one
+                            index: Some((children.len() + 1) as u16),
                         });
                     } else {
                         return Err(MigError::from_remark(
@@ -372,6 +315,26 @@ impl<'a> LsblkInfo {
         if let Some(curr_dev) = curr_dev {
             lsblk_info.blockdevices.push(curr_dev);
             // curr_dev = None;
+        }
+
+        Ok(lsblk_info)
+    }
+
+    fn from_json(json_str: &str) -> Result<LsblkInfo, MigError> {
+        let mut lsblk_info =
+            serde_json::from_str::<LsblkInfo>(json_str).context(MigErrCtx::from_remark(
+                MigErrorKind::Upstream,
+                "failed to deserialze lsblk output from json",
+            ))?;
+
+        for mut device in &mut lsblk_info.blockdevices {
+            if let Some(ref mut children) = device.children {
+                let mut count: u16 = 1;
+                for mut partition in children {
+                    partition.index = Some(count);
+                    count += 1;
+                }
+            }
         }
 
         Ok(lsblk_info)

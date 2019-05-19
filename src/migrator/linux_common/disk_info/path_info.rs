@@ -27,6 +27,10 @@ pub(crate) struct PathInfo {
     pub drive_size: u64,
     // the partition fs type
     pub device: PathBuf,
+    // the partition index
+    pub index: u16,
+    // the devices mountpoint
+    pub mountpoint: PathBuf,
     // the drive device path
     pub fs_type: String,
     // the partition read only flag
@@ -67,7 +71,9 @@ impl PathInfo {
             ),
         ))?;
 
-        let (device, partition) = if path == Path::new(ROOT_PATH) {
+        debug!("looking fo path: '{}'", abs_path.display());
+
+        let (device, partition) = if abs_path == Path::new(ROOT_PATH) {
             let (root_device, _root_fs_type) = get_root_info()?;
             lsblk_info.get_devinfo_from_partition(root_device)?
         } else {
@@ -174,6 +180,28 @@ impl PathInfo {
         let result = PathInfo {
             path: abs_path,
             device: PathBuf::from(partition.get_path()),
+            index: if let Some(index) = partition.index {
+                index
+            } else {
+                return Err(MigError::from_remark(
+                    MigErrorKind::InvParam,
+                    &format!(
+                        "index not found for partition: '{}'",
+                        partition.get_path().display()
+                    ),
+                ));
+            },
+            mountpoint: if let Some(ref mountpoint) = partition.mountpoint {
+                PathBuf::from(mountpoint)
+            } else {
+                return Err(MigError::from_remark(
+                    MigErrorKind::InvParam,
+                    &format!(
+                        "mountpoint not found for partition: '{}'",
+                        partition.get_path().display()
+                    ),
+                ));
+            },
             drive: PathBuf::from(device.get_path()),
             drive_size: if let Some(ref size) = device.size {
                 size.parse::<u64>().context(MigErrCtx::from_remark(

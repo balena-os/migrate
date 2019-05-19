@@ -37,6 +37,7 @@ pub const UNAME_CMD: &str = "uname";
 pub const MOUNT_CMD: &str = "mount";
 pub const MOKUTIL_CMD: &str = "mokutil";
 pub const GRUB_UPDT_CMD: &str = "update-grub";
+pub const GRUB_REBOOT_CMD: &str = "grub-reboot";
 pub const REBOOT_CMD: &str = "reboot";
 pub const CHMOD_CMD: &str = "chmod";
 pub const DD_CMD: &str = "dd";
@@ -136,7 +137,7 @@ pub(crate) fn is_admin(config: &Config) -> Result<bool, MigError> {
     Ok(admin.unwrap() | config.debug.is_fake_admin())
 }
 
-fn whereis(cmd: &str) -> Result<String, MigError> {
+pub(crate) fn whereis(cmd: &str) -> Result<String, MigError> {
     // try manually first
     for path in BIN_DIRS {
         let path = format!("{}/{}", &path, cmd);

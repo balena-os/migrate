@@ -4,6 +4,11 @@ pub const ROOT_PATH: &str = "/";
 
 pub const KERNEL_CMDLINE_PATH: &str = "/proc/cmdline";
 
+pub const MIG_KERNEL_NAME: &str = "balena-migrate.zImage";
+pub const MIG_INITRD_NAME: &str = "balena-migrate.initrd";
+
+pub const GRUB_CONF_PATH: &str = "/etc/grub.d/43_balena-migrate";
+
 pub const SYS_UEFI_DIR: &str = "/sys/firmware/efi";
 
 // where does the stage 2 config file live

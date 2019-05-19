@@ -1,14 +1,23 @@
-use failure::ResultExt;
-use log::{debug, error, warn};
-use std::fs;
-use std::path::Path;
+use failure::{Fail, ResultExt};
+use log::{debug, error, info, warn};
+use regex::Regex;
+use std::fs::{read_to_string, File};
+use std::path::{Path, PathBuf};
 
+use crate::common::file_exists;
+use crate::linux_common::GRUB_UPDT_CMD;
 use crate::{
+    common::{call, path_append, Config, MigErrCtx, MigError, MigErrorKind, OSArch},
     //linux::LinuxMigrator,
-    common::{Config, MigErrCtx, MigError, MigErrorKind, OSArch},
-    linux_common::{get_grub_version, MigrateInfo},
+    defs::{
+        BOOT_PATH, GRUB_CONF_PATH, KERNEL_CMDLINE_PATH, MIG_INITRD_NAME, MIG_KERNEL_NAME, ROOT_PATH,
+    },
+    linux_common::{
+        disk_info::label_type::LabelType, get_grub_version, whereis, MigrateInfo, GRUB_REBOOT_CMD,
+    },
     stage2::Stage2Config,
 };
+use std::io::Write;
 
 mod beaglebone;
 mod intel_nuc;
@@ -24,15 +33,14 @@ exec tail -n +3 \$0
 # menu entries you want to add after this comment.  Be careful not to change
 # the 'exec tail' line above.
 
-menuentry "resin-migration" {
+menuentry "balena-migrate" {
   insmod gzio
-  insmod __$partMod__
-  insmod ext2
+  insmod __PART_MOD__
+  insmod __FSTYPE_MOD__
 
-  __$setRootA__
-  $setRootB
-  linux __$KERNEL_CMD_LINE__
-  initrd  __${BOOT_DIR}/${INITRAMFS_NAME}__
+  __ROOT_CMD__
+  linux __LINUX__
+  initrd  __INITRD_NAME__
 }
 "##;
 
@@ -62,7 +70,7 @@ pub(crate) fn get_device(mig_info: &MigrateInfo) -> Result<Box<Device>, MigError
     match os_arch {
         OSArch::ARMHF => {
             let dev_tree_model =
-                fs::read_to_string(DEVICE_TREE_MODEL).context(MigErrCtx::from_remark(
+                read_to_string(DEVICE_TREE_MODEL).context(MigErrCtx::from_remark(
                     MigErrorKind::Upstream,
                     &format!(
                         "{}::init_armhf: unable to determine model due to inaccessible file '{}'",
@@ -127,16 +135,192 @@ pub(crate) fn grub_valid(_config: &Config, _mig_info: &MigrateInfo) -> Result<bo
         >= 2)
 }
 
-pub(crate) fn grub_install(
-    _config: &Config,
-    _mig_info: &mut MigrateInfo,
-) -> Result<bool, MigError> {
+pub(crate) fn grub_install(_config: &Config, mig_info: &mut MigrateInfo) -> Result<(), MigError> {
     // TODO: implement
     // a) look for grub, ensure version
     // b) create a boot config for balena migration
     // c) call grub-reboot to enable boot once to migrate env
 
-    Err(MigError::from(MigErrorKind::NotImpl))
+    // let install_drive = mig_info.get_installPath().drive;
+    let boot_path = mig_info.get_boot_path();
+    let root_path = mig_info.get_root_path();
+
+    /*
+        let grub_root = if Some(uuid) = root_path.uuid {
+            format!("root=UUID={}", uuid)
+        } else {
+            if let Some(uuid) = root_path.part_uuid {
+                format!("root=PARTUUID={}", uuid)
+            } else {
+                format!("root={}", &root_path.path.to_string_lossy());
+            }
+        };
+    */
+
+    let grub_boot = if boot_path.device == root_path.device {
+        PathBuf::from(BOOT_PATH)
+    } else {
+        if boot_path.mountpoint == Path::new(BOOT_PATH) {
+            PathBuf::from(ROOT_PATH)
+        } else {
+            // TODO: create appropriate path
+            panic!("boot partition mus be mounted in /boot for now");
+        }
+    };
+
+    let part_type = match LabelType::from_device(&boot_path.drive)? {
+        LabelType::GPT => "gpt",
+        LabelType::DOS => "msdos",
+        _ => {
+            return Err(MigError::from_remark(
+                MigErrorKind::InvParam,
+                &format!("Invalid partition type for '{}'", boot_path.drive.display()),
+            ));
+        }
+    };
+
+    let part_mod = format!("part_{}", part_type);
+
+    info!(
+        "Boot partition type is '{}' is type '{}'",
+        boot_path.drive.display(),
+        part_mod
+    );
+
+    let root_cmd = if let Some(ref uuid) = boot_path.uuid {
+        // TODO: try partuuid too ?local setRootA="set root='${GRUB_BOOT_DEV},msdos${ROOT_PART_NO}'"
+        format!("search --no-floppy --fs-uuid --set=root {}", uuid)
+    } else {
+        format!(
+            "search --no-floppy --fs-uuid --set=root {},{}{}",
+            boot_path.drive.to_string_lossy(),
+            part_type,
+            boot_path.index
+        )
+    };
+
+    debug!("root set to '{}", root_cmd);
+
+    let fstype_mod = match boot_path.fs_type.as_str() {
+        "ext2" | "ext3" | "ext4" => "ext2",
+        "vfat" => "fat",
+        _ => {
+            return Err(MigError::from_remark(
+                MigErrorKind::InvParam,
+                &format!(
+                    "Cannot determine grub mod for boot fs type '{}'",
+                    boot_path.fs_type
+                ),
+            ));
+        }
+    };
+
+    let mut linux = String::from(path_append(&grub_boot, MIG_KERNEL_NAME).to_string_lossy());
+
+    // filter some bullshit out of commandline, else leave it as is
+    for word in read_to_string(KERNEL_CMDLINE_PATH)
+        .context(MigErrCtx::from_remark(
+            MigErrorKind::Upstream,
+            &format!(
+                "Unable to read kernel command line from '{}'",
+                KERNEL_CMDLINE_PATH
+            ),
+        ))?
+        .split_whitespace()
+    {
+        if !word.starts_with("BOOT_IMAGE=") {
+            linux.push_str(&format!(" {}", word));
+        }
+    }
+
+    let mut grub_cfg = String::from(GRUB_CFG_TEMPLATE);
+
+    grub_cfg = grub_cfg.replace("__PART_MOD__", &part_mod);
+    grub_cfg = grub_cfg.replace("__FSTYPE_MOD__", &fstype_mod);
+    grub_cfg = grub_cfg.replace("__ROOT_CMD__", &root_cmd);
+    grub_cfg = grub_cfg.replace("__LINUX__", &linux);
+    grub_cfg = grub_cfg.replace(
+        "__INITRD_NAME__",
+        &path_append(&grub_boot, MIG_INITRD_NAME).to_string_lossy(),
+    );
+
+    debug!("grub config: {}", grub_cfg);
+
+    // let mut grub_cfg_file =
+    File::create(GRUB_CONF_PATH)
+        .context(MigErrCtx::from_remark(
+            MigErrorKind::Upstream,
+            &format!("Failed to create grub config file '{}'", GRUB_CONF_PATH),
+        ))?
+        .write(grub_cfg.as_bytes())
+        .context(MigErrCtx::from_remark(
+            MigErrorKind::Upstream,
+            &format!("Failed to write to grub config file '{}'", GRUB_CONF_PATH),
+        ))?;
+
+    info!("Grub config written to '{}'", GRUB_CONF_PATH);
+
+    let grub_path = match whereis(GRUB_UPDT_CMD) {
+        Ok(path) => path,
+        Err(why) => {
+            warn!(
+                "The grub rupdate command '{}' could not be found",
+                GRUB_UPDT_CMD
+            );
+            return Err(MigError::from(why.context(MigErrCtx::from_remark(
+                MigErrorKind::Upstream,
+                &format!("failed to find command {}", GRUB_UPDT_CMD),
+            ))));
+        }
+    };
+
+    let grub_args = [];
+    let cmd_res = call(&grub_path, &grub_args, true).context(MigErrCtx::from_remark(
+        MigErrorKind::Upstream,
+        "Failed to set up boot configuration'",
+    ))?;
+
+    if !cmd_res.status.success() {
+        return Err(MigError::from_remark(
+            MigErrorKind::ExecProcess,
+            &format!("Failure from '{}': {:?}", GRUB_UPDT_CMD, cmd_res),
+        ));
+    }
+
+    let grub_path = match whereis(GRUB_REBOOT_CMD) {
+        Ok(path) => path,
+        Err(why) => {
+            warn!(
+                "The grub reboot update command '{}' could not be found",
+                GRUB_REBOOT_CMD
+            );
+            return Err(MigError::from(why.context(MigErrCtx::from_remark(
+                MigErrorKind::Upstream,
+                &format!("failed to find command {}", GRUB_REBOOT_CMD),
+            ))));
+        }
+    };
+
+    let grub_args = ["balena-migrate"];
+    let cmd_res = call(&grub_path, &grub_args, true).context(MigErrCtx::from_remark(
+        MigErrorKind::Upstream,
+        &format!(
+            "Failed to activate boot configuration using '{}'",
+            GRUB_REBOOT_CMD,
+        ),
+    ))?;
+
+    if !cmd_res.status.success() {
+        return Err(MigError::from_remark(
+            MigErrorKind::ExecProcess,
+            &format!(
+                "Failed to activate boot configuration using '{}': {:?}",
+                GRUB_REBOOT_CMD, cmd_res
+            ),
+        ));
+    }
+
+    Ok(())
 }
 
 pub(crate) fn u_boot_valid() -> Result<bool, MigError> {

@@ -12,7 +12,7 @@ use crate::{
         MigErrorKind,
     },
     defs::BALENA_FILE_TAG,
-    device::{grub_valid, Device},
+    device::{grub_install, grub_valid, Device},
     linux_common::{
         call_cmd, disk_info::DiskInfo, migrate_info::MigrateInfo, restore_backups, CHMOD_CMD,
     },
@@ -94,26 +94,12 @@ impl BeagleboneGreen {
     pub(crate) fn new() -> BeagleboneGreen {
         BeagleboneGreen {}
     }
-}
 
-impl<'a> Device for BeagleboneGreen {
-    fn get_device_slug(&self) -> &'static str {
-        "beaglebone-green"
-    }
-
-    fn setup(&self, _config: &Config, mig_info: &mut MigrateInfo) -> Result<(), MigError> {
-        trace!(
-            "BeagleboneGreen::setup: entered with type: '{}'",
-            match &mig_info.device_slug {
-                Some(s) => s,
-                _ => panic!("no device type slug found"),
-            }
-        );
-
+    fn setup_uboot(&self, _config: &Config, mig_info: &mut MigrateInfo) -> Result<(), MigError> {
         // **********************************************************************
         // ** read drive number & partition number from boot device
         let drive_num = {
-            let dev_name = mig_info.get_boot_device();
+            let dev_name = &mig_info.get_boot_path().device;
 
             if let Some(captures) = Regex::new(BB_DRIVE_REGEX)
                 .unwrap()
@@ -197,7 +183,7 @@ impl<'a> Device for BeagleboneGreen {
         uenv_text = uenv_text.replace("__PARTITION__", &drive_num.1);
         uenv_text = uenv_text.replace(
             "__ROOT_DEV__",
-            &mig_info.get_root_device().to_string_lossy(),
+            &mig_info.get_root_path().device.to_string_lossy(),
         );
 
         let mut uenv_file = File::create(BBG_UENV_PATH).context(MigErrCtx::from_remark(
@@ -212,6 +198,46 @@ impl<'a> Device for BeagleboneGreen {
             ))?;
         info!("created new file in '{}'", BBG_UENV_PATH);
         Ok(())
+    }
+
+    fn setup_grub(&self, config: &Config, mig_info: &mut MigrateInfo) -> Result<(), MigError> {
+        grub_install(config, mig_info)
+    }
+}
+
+impl<'a> Device for BeagleboneGreen {
+    fn get_device_slug(&self) -> &'static str {
+        "beaglebone-green"
+    }
+
+    fn setup(&self, config: &Config, mig_info: &mut MigrateInfo) -> Result<(), MigError> {
+        trace!(
+            "BeagleboneGreen::setup: entered with type: '{}'",
+            match &mig_info.device_slug {
+                Some(s) => s,
+                _ => panic!("no device type slug found"),
+            }
+        );
+
+        if let Some(ref boot_type) = mig_info.boot_type {
+            match boot_type {
+                BootType::UBoot => self.setup_uboot(config, mig_info),
+                BootType::GRUB => self.setup_grub(config, mig_info),
+                _ => Err(MigError::from_remark(
+                    MigErrorKind::InvParam,
+                    &format!(
+                        "Invalid boot type for '{}' : {:?}'",
+                        self.get_device_slug(),
+                        mig_info.boot_type
+                    ),
+                )),
+            }
+        } else {
+            Err(MigError::from_remark(
+                MigErrorKind::InvParam,
+                &format!("No boot type specified for '{}'", self.get_device_slug()),
+            ))
+        }
     }
 
     fn can_migrate(&self, config: &Config, mig_info: &mut MigrateInfo) -> Result<bool, MigError> {
@@ -232,6 +258,7 @@ impl<'a> Device for BeagleboneGreen {
         mig_info.disk_info = Some(DiskInfo::new(false, &config.migrate.get_work_dir())?);
 
         if mig_info.get_os_name().to_lowercase().starts_with("ubuntu") {
+            // TODO: check for uboot boot setup too ?
             mig_info.boot_type = Some(BootType::GRUB);
             mig_info.install_path = Some(mig_info.disk_info.as_ref().unwrap().root_path.clone());
         } else if mig_info.get_os_name().to_lowercase().starts_with("debian") {

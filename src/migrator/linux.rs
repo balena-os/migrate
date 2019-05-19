@@ -18,13 +18,14 @@ use crate::{
     device::{self, Device},
     linux_common::{
         call_cmd, ensure_cmds, get_mem_info, get_os_arch, get_os_name, is_admin, MigrateInfo,
-        WifiConfig, CHMOD_CMD, DF_CMD, FILE_CMD, LSBLK_CMD, MOUNT_CMD, REBOOT_CMD, UNAME_CMD,
+        WifiConfig, CHMOD_CMD, DF_CMD, FDISK_CMD, FILE_CMD, LSBLK_CMD, MOUNT_CMD, REBOOT_CMD,
+        UNAME_CMD,
     },
     stage2::Stage2Config,
 };
 
 const REQUIRED_CMDS: &'static [&'static str] = &[
-    DF_CMD, LSBLK_CMD, FILE_CMD, UNAME_CMD, MOUNT_CMD, REBOOT_CMD, CHMOD_CMD,
+    DF_CMD, LSBLK_CMD, FILE_CMD, UNAME_CMD, MOUNT_CMD, REBOOT_CMD, CHMOD_CMD, FDISK_CMD,
 ];
 const OPTIONAL_CMDS: &'static [&'static str] = &[];
 

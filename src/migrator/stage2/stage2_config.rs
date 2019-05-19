@@ -139,29 +139,32 @@ impl<'a> Stage2Config {
         cfg_str.push_str(&format!(
             "{}: '{}'\n",
             ROOT_DEVICE_KEY,
-            mig_info.get_root_device().to_string_lossy()
+            mig_info.get_root_path().device.to_string_lossy()
         ));
         cfg_str.push_str(&format!(
             "{}: '{}'\n",
             BOOT_DEVICE_KEY,
-            mig_info.get_boot_device().to_string_lossy()
+            mig_info.get_boot_path().device.to_string_lossy()
         ));
         cfg_str.push_str(&format!(
             "{}: '{}'\n",
             BOOT_FSTYPE_KEY,
-            mig_info.get_boot_fstype()
+            mig_info.get_boot_path().fs_type
         ));
         if mig_info.is_efi_boot() {
-            cfg_str.push_str(&format!(
-                "{}: '{}'\n",
-                EFI_DEVICE_KEY,
-                mig_info.get_efi_device().unwrap().to_string_lossy()
-            ));
-            cfg_str.push_str(&format!(
-                "{}: '{}'\n",
-                EFI_FSTYPE_KEY,
-                mig_info.get_efi_fstype().unwrap()
-            ));
+            if let Some(efi_path) = mig_info.get_efi_path() {
+                cfg_str.push_str(&format!(
+                    "{}: '{}'\n",
+                    EFI_DEVICE_KEY,
+                    efi_path.device.to_string_lossy()
+                ));
+                cfg_str.push_str(&format!("{}: '{}'\n", EFI_FSTYPE_KEY, efi_path.fs_type));
+            } else {
+                return Err(MigError::from_remark(
+                    MigErrorKind::Upstream,
+                    "efipath was not configured for efi type boot",
+                ));
+            }
         }
         cfg_str.push_str(&format!(
             "{}: '{}'\n",
