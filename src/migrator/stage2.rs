@@ -73,7 +73,7 @@ impl Stage2 {
         // TODO: wait a couple of seconds for more devices to show up ?
 
         match Logger::initialise(Some(INIT_LOG_LEVEL)) {
-            Ok(_s) => info!("Balena Migrate Stage 2 initializing"),
+            Ok(_s) => (),
             Err(_why) => {
                 println!("Balena Migrate Stage 2 initializing");
                 println!("failed to initalize logger");
@@ -81,6 +81,8 @@ impl Stage2 {
         }
 
         let _res = Logger::set_log_dest(&LogDestination::BufferStderr, NO_STREAM);
+
+        info!("Balena Migrate Stage 2 initializing");
 
         let root_fs_dir = Path::new(ROOTFS_DIR);
 
@@ -755,7 +757,7 @@ impl Stage2 {
                     if let Ok(file) = File::create(&log_dest) {
                         let mut writer = BufWriter::new(file);
                         let _res = writer.write(&buffer);
-                        Logger::set_log_dest(&LogDestination::StreamStderr, Some(writer));
+                        let _res = Logger::set_log_dest(&LogDestination::StreamStderr, Some(writer));
                         info!("Set up logger to log to '{}'", log_dest.display());
                     }
                 }
@@ -882,17 +884,19 @@ impl Stage2 {
             }
         });
 
+        debug!("Attempting to flush log buffer to '{}'", log_file.display());
         if let Some(buffer) = Logger::get_buffer() {
-            info!("Flushing buffer to '{}'", log_file.display());
+
             if let Err(_why) = writer.write(&buffer) {
                 warn!("Failed to write to log file '{}' ", log_file.display(),);
                 return;
             }
         }
 
-        info!("Setting up logger to log to '{}'", log_file.display());
         if let Err(_why) = Logger::set_log_dest(&LogDestination::StreamStderr, Some(writer)) {
             warn!("Failed to set logfile to file '{}' ", log_file.display(),);
+        } else {
+            info!("Set up logger to log to '{}'", log_file.display());
         }
     }
 }
