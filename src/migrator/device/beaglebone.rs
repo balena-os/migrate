@@ -251,11 +251,12 @@ impl<'a> Device for BeagleboneGreen {
             return Ok(false);
         }
 
-        if os_name.to_lowercase().starts_with("ubuntu") {
-            mig_info.boot_type = Some(BootType::GRUB);
-        } else {
-            mig_info.boot_type = Some(BootType::UBoot);
-        }
+
+        //if os_name.to_lowercase().starts_with("ubuntu") {
+        //    mig_info.boot_type = Some(BootType::GRUB);
+        //} else {
+        mig_info.boot_type = Some(BootType::UBoot);
+        //}
 
 
         mig_info.disk_info = Some(DiskInfo::new(
