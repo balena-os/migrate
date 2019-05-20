@@ -144,6 +144,7 @@ impl Stage2 {
             stage2_cfg_file.display()
         );
 
+        info!("Setting log level to {:?}", stage2_cfg.get_log_level());
         Logger::set_default_level(&stage2_cfg.get_log_level());
         if let Some((device, fstype)) = stage2_cfg.get_log_device() {
             Stage2::init_logging(device, fstype);
@@ -824,6 +825,8 @@ impl Stage2 {
     }
 
     fn init_logging(device: &Path, fstype: &str) {
+        info!("Attempting to set up logging to '{}' with fstype: {}", device.display(), fstype);
+
         let log_mnt_dir = PathBuf::from(LOG_MOUNT_DIR);
 
         if !if let Ok(res) = dir_exists(&log_mnt_dir) {
@@ -843,6 +846,8 @@ impl Stage2 {
             warn!("root mount directory {} exists", log_mnt_dir.display());
         }
 
+        debug!("Attempting to mount mount dir '{}' on '{}'", device.display(), log_mnt_dir.display());
+
         if let Err(_why) = mount(
             Some(device),
             &log_mnt_dir,
@@ -860,6 +865,7 @@ impl Stage2 {
         }
 
         let log_file = path_append(&log_mnt_dir, LOG_FILE_NAME);
+
         let mut writer = BufWriter::new(match File::create(&log_file) {
             Ok(file) => file,
             Err(_why) => {
@@ -869,12 +875,14 @@ impl Stage2 {
         });
 
         if let Some(buffer) = Logger::get_buffer() {
+            info!("Flushing buffer to '{}'", log_file.display());
             if let Err(_why) = writer.write(&buffer) {
                 warn!("Failed to write to log file '{}' ", log_file.display(),);
                 return;
             }
         }
 
+        info!("Setting up logger to log to '{}'", log_file.display());
         if let Err(_why) = Logger::set_log_dest(&LogDestination::StreamStderr, Some(writer)) {
             warn!("Failed to set logfile to file '{}' ", log_file.display(),);
         }
