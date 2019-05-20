@@ -155,4 +155,12 @@ impl<'a> MigrateInfo {
             panic!("{} uninitialized field drive_info in MigrateInfo", MODULE);
         }
     }
+
+    pub(crate) fn get_disk_info(&'a self) -> &'a DiskInfo {
+        if let Some(ref disk_info) = self.disk_info {
+            disk_info
+        } else {
+            panic!("{} uninitialized field drive_info in MigrateInfo", MODULE);
+        }
+    }
 }

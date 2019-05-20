@@ -8,6 +8,7 @@ pub const MIG_KERNEL_NAME: &str = "balena-migrate.zImage";
 pub const MIG_INITRD_NAME: &str = "balena-migrate.initrd";
 
 pub const GRUB_CONF_PATH: &str = "/etc/grub.d/43_balena-migrate";
+pub const GRUB_MIN_VERSION: &str = "2";
 
 pub const SYS_UEFI_DIR: &str = "/sys/firmware/efi";
 

@@ -1,8 +1,9 @@
 use failure::ResultExt;
-use log::warn;
+use log::{warn, Level};
 use std::fs::{read_to_string, File};
 use std::io::Write;
 use std::path::{Path, PathBuf};
+use std::str::FromStr;
 
 use serde::Deserialize;
 use serde_yaml;
@@ -21,6 +22,11 @@ pub const DEVICE_SLUG_KEY: &str = "device_slug";
 pub const BALENA_IMAGE_KEY: &str = "balena_image";
 pub const BALENA_CONFIG_KEY: &str = "balena_config";
 pub const BOOT_BACKUP_KEY: &str = "boot_bckup";
+
+pub const LOG_LEVEL_KEY: &str = "log_level";
+pub const LOG_TO_KEY: &str = "log_to";
+pub const LOG_DRIVE_KEY: &str = "device";
+pub const LOG_FSTYPE_KEY: &str = "fstype";
 
 pub const WORK_DIR_KEY: &str = "work_dir";
 pub const FAIL_MODE_KEY: &str = "fail_mode";
@@ -42,6 +48,12 @@ use crate::{
     defs::STAGE2_CFG_FILE,
     linux_common::MigrateInfo,
 };
+
+#[derive(Debug, Deserialize)]
+pub(crate) struct Stage2LogConfig {
+    device: PathBuf,
+    fstype: String,
+}
 
 #[derive(Debug, Deserialize)]
 pub(crate) struct Stage2Config {
@@ -66,15 +78,19 @@ pub(crate) struct Stage2Config {
     boot_bckup: Option<Vec<(String, String)>>,
     has_backup: bool,
     gzip_internal: bool,
+    log_level: String,
+    log_to: Option<Stage2LogConfig>,
 }
 
 impl<'a> Stage2Config {
     pub fn write_stage2_cfg(config: &Config, mig_info: &MigrateInfo) -> Result<(), MigError> {
         let mut cfg_str = String::from("# Balena Migrate Stage2 Config\n");
 
+        cfg_str.push_str("# this file was created automatically, do not edit\n");
+
         let fail_mode = config.migrate.get_fail_mode();
 
-        cfg_str.push_str(&format!("{}: '{}'\n", FAIL_MODE_KEY, fail_mode.to_string()));
+        cfg_str.push_str(&format!("{}: '{:?}'\n", FAIL_MODE_KEY, fail_mode));
 
         cfg_str.push_str(&format!(
             "{}: {}\n",
@@ -180,6 +196,21 @@ impl<'a> Stage2Config {
             }
         }
 
+        cfg_str.push_str(&format!(
+            "{}: '{}'\n",
+            LOG_LEVEL_KEY,
+            config.migrate.get_log_level()
+        ));
+        if let Some(ref log_path) = mig_info.get_disk_info().log_path {
+            cfg_str.push_str(&format!("{}:\n", LOG_TO_KEY));
+            cfg_str.push_str(&format!(
+                "  {}: '{}'\n",
+                LOG_DRIVE_KEY,
+                &log_path.0.to_string_lossy()
+            ));
+            cfg_str.push_str(&format!("  {}: '{}'\n", LOG_FSTYPE_KEY, log_path.1));
+        }
+
         let mut cfg_file = File::create(STAGE2_CFG_FILE).context(MigErrCtx::from_remark(
             MigErrorKind::Upstream,
             &format!(
@@ -221,6 +252,22 @@ impl<'a> Stage2Config {
         ))?;
 
         Stage2Config::from_str(&config_str)
+    }
+
+    pub fn get_log_level(&self) -> Level {
+        if let Ok(level) = Level::from_str(&self.log_level) {
+            level
+        } else {
+            Level::Debug
+        }
+    }
+
+    pub fn get_log_device(&'a self) -> Option<(&'a Path, &'a str)> {
+        if let Some(ref log_to) = self.log_to {
+            Some((&log_to.device, &log_to.fstype))
+        } else {
+            None
+        }
     }
 
     pub fn has_backup(&self) -> bool {

@@ -11,8 +11,8 @@ use crate::{
         file_exists, is_balena_file, path_append, BootType, Config, MigErrCtx, MigError,
         MigErrorKind,
     },
-    defs::BALENA_FILE_TAG,
-    device::{grub_install, grub_valid, Device},
+    defs::{BALENA_FILE_TAG, MIG_INITRD_NAME, MIG_KERNEL_NAME},
+    device::Device,
     linux_common::{
         call_cmd, disk_info::DiskInfo, migrate_info::MigrateInfo, restore_backups, CHMOD_CMD,
     },
@@ -25,8 +25,6 @@ const BB_DRIVE_REGEX: &str = r#"^/dev/mmcblk(\d+)p(\d+)$"#;
 // TI OMAP3 BeagleBoard xM
 const BB_MODEL_REGEX: &str = r#"^((\S+\s+)*\S+)\s+Beagle(Bone|Board)\s+(\S+)$"#;
 
-const BBG_MIG_KERNEL_PATH: &str = "/boot/balena-migrate.zImage";
-const BBG_MIG_INITRD_PATH: &str = "/boot/balena-migrate.initrd";
 const BBG_UENV_PATH: &str = "/uEnv.txt";
 
 const UENV_TXT: &str = r###"
@@ -123,36 +121,38 @@ impl BeagleboneGreen {
         // **********************************************************************
         // ** copy new kernel & iniramfs
 
-        let kernel_path = mig_info.get_kernel_path();
-        std::fs::copy(kernel_path, BBG_MIG_KERNEL_PATH).context(MigErrCtx::from_remark(
+        let source_path = mig_info.get_kernel_path();
+        let kernel_path = path_append(&mig_info.get_boot_path().path, MIG_KERNEL_NAME);
+        std::fs::copy(&source_path, &kernel_path).context(MigErrCtx::from_remark(
             MigErrorKind::Upstream,
             &format!(
                 "failed to copy kernel file '{}' to '{}'",
-                kernel_path.display(),
-                BBG_MIG_KERNEL_PATH
+                source_path.display(),
+                kernel_path.display()
             ),
         ))?;
         info!(
             "copied kernel: '{}' -> '{}'",
-            kernel_path.display(),
-            BBG_MIG_KERNEL_PATH
+            source_path.display(),
+            kernel_path.display()
         );
 
-        call_cmd(CHMOD_CMD, &["+x", BBG_MIG_KERNEL_PATH], false)?;
-        let initrd_path = mig_info.get_initrd_path();
+        call_cmd(CHMOD_CMD, &["+x", &kernel_path.to_string_lossy()], false)?;
 
-        std::fs::copy(initrd_path, BBG_MIG_INITRD_PATH).context(MigErrCtx::from_remark(
+        let source_path = mig_info.get_initrd_path();
+        let initrd_path = path_append(&mig_info.get_boot_path().path, MIG_INITRD_NAME);
+        std::fs::copy(&source_path, &initrd_path).context(MigErrCtx::from_remark(
             MigErrorKind::Upstream,
             &format!(
                 "failed to copy initrd file '{}' to '{}'",
-                initrd_path.display(),
-                BBG_MIG_INITRD_PATH
+                source_path.display(),
+                initrd_path.display()
             ),
         ))?;
         info!(
-            "copied initrd: '{}' -> '{}'",
-            initrd_path.display(),
-            BBG_MIG_INITRD_PATH
+            "initramfs kernel: '{}' -> '{}'",
+            source_path.display(),
+            initrd_path.display()
         );
 
         // **********************************************************************
@@ -177,8 +177,8 @@ impl BeagleboneGreen {
         // ** create new /uEnv.txt
         let mut uenv_text = String::from(BALENA_FILE_TAG);
         uenv_text.push_str(UENV_TXT);
-        uenv_text = uenv_text.replace("__KERNEL_PATH__", BBG_MIG_KERNEL_PATH);
-        uenv_text = uenv_text.replace("__INITRD_PATH__", BBG_MIG_INITRD_PATH);
+        uenv_text = uenv_text.replace("__KERNEL_PATH__", &initrd_path.to_string_lossy());
+        uenv_text = uenv_text.replace("__INITRD_PATH__", &initrd_path.to_string_lossy());
         uenv_text = uenv_text.replace("__DRIVE__", &drive_num.0);
         uenv_text = uenv_text.replace("__PARTITION__", &drive_num.1);
         uenv_text = uenv_text.replace(
@@ -198,10 +198,6 @@ impl BeagleboneGreen {
             ))?;
         info!("created new file in '{}'", BBG_UENV_PATH);
         Ok(())
-    }
-
-    fn setup_grub(&self, config: &Config, mig_info: &mut MigrateInfo) -> Result<(), MigError> {
-        grub_install(config, mig_info)
     }
 }
 
@@ -255,16 +251,21 @@ impl<'a> Device for BeagleboneGreen {
         }
 
         mig_info.boot_type = Some(BootType::UBoot);
-        mig_info.disk_info = Some(DiskInfo::new(false, &config.migrate.get_work_dir())?);
-        if let Some(ref disk_info) = mig_info.disk_info {
-            if mig_info.get_boot_path().drive != mig_info.get_root_path().drive {
-                error!(
-                    "The partition layout is not supported, /boot and / are required to be on the same harddrive",
-                );
-                return Ok(false);
-            }
-            mig_info.install_path = Some(mig_info.get_root_path().clone());
+        mig_info.disk_info = Some(DiskInfo::new(
+            false,
+            &config.migrate.get_work_dir(),
+            config.migrate.get_log_device(),
+        )?);
+
+        if mig_info.get_boot_path().drive != mig_info.get_root_path().drive {
+            error!(
+                "The partition layout is not supported, /boot and / are required to be on the same harddrive",
+            );
+            return Ok(false);
         }
+        mig_info.install_path = Some(mig_info.get_root_path().clone());
+
+        // TODO: check for valid uboot setup
 
         Ok(true)
     }
@@ -329,13 +330,8 @@ impl<'a> Device for BeagleboardXM {
             return Ok(false);
         }
 
-        if mig_info.get_os_name().starts_with("Ubuntu") {
-            // TODO: migrate ubuntus without grub ?
-            Ok(grub_valid(config, mig_info)?)
-        } else {
-            // TODO: look for valid u-boot config
-            Ok(false)
-        }
+        // TODO: look for valid u-boot config
+        Ok(false)
     }
 
     fn setup(&self, _config: &Config, _mig_info: &mut MigrateInfo) -> Result<(), MigError> {

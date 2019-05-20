@@ -65,6 +65,6 @@ pub fn stage2() -> Result<(), MigError> {
 pub fn test() -> Result<(), MigError> {
     Logger::initialise(Some("trace")).unwrap();
     ensure_cmds(&[LSBLK_CMD, FDISK_CMD], &[])?;
-    linux_common::disk_info::DiskInfo::new(true, &Path::new("."))?;
+    linux_common::disk_info::DiskInfo::new(true, &Path::new("."), None)?;
     Ok(())
 }

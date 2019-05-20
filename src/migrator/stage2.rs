@@ -1,7 +1,7 @@
 use failure::ResultExt;
 use flate2::read::GzDecoder;
 use log::{debug, error, info, warn};
-use mod_logger::Logger;
+use mod_logger::{LogDestination, Logger, NO_STREAM};
 use nix::{
     mount::{mount, umount, MsFlags},
     sys::reboot::{reboot, RebootMode},
@@ -9,7 +9,7 @@ use nix::{
 };
 
 use std::fs::{copy, create_dir, read_dir, read_link, File};
-use std::io::{Read, Write};
+use std::io::{BufWriter, Read, Write};
 use std::path::{Path, PathBuf};
 use std::process::{Command, Stdio};
 use std::thread;
@@ -42,6 +42,9 @@ const REBOOT_DELAY: u64 = 3;
 
 const INIT_LOG_LEVEL: &str = "debug";
 const ROOTFS_DIR: &str = "/tmp_root";
+const LOG_MOUNT_DIR: &str = "/migrate_log";
+const LOG_FILE_NAME: &str = "migrate.log";
+
 const MIGRATE_TEMP_DIR: &str = "/migrate_tmp";
 const BOOT_MNT_DIR: &str = "mnt_boot";
 const DATA_MNT_DIR: &str = "mnt_data";
@@ -76,6 +79,8 @@ impl Stage2 {
                 println!("failed to initalize logger");
             }
         }
+
+        let _res = Logger::set_log_dest(&LogDestination::BufferStderr, NO_STREAM);
 
         let root_fs_dir = Path::new(ROOTFS_DIR);
 
@@ -138,6 +143,11 @@ impl Stage2 {
             "Read stage 2 config file from {}",
             stage2_cfg_file.display()
         );
+
+        Logger::set_default_level(&stage2_cfg.get_log_level());
+        if let Some((device, fstype)) = stage2_cfg.get_log_device() {
+            Stage2::init_logging(device, fstype);
+        }
 
         // TODO: probably paranoid
         if root_device != stage2_cfg.get_root_device() {
@@ -737,8 +747,8 @@ impl Stage2 {
             // TODO: copy log, backup to data_path
             if self.config.has_backup() {
                 // TODO: check available disk space
-                let source_path = path_append(mig_tmp_dir, BACKUP_FILE);
-                let target_path = path_append(data_path, BACKUP_FILE);
+                let source_path = path_append(&mig_tmp_dir, BACKUP_FILE);
+                let target_path = path_append(&data_path, BACKUP_FILE);
 
                 copy(&source_path, &target_path).context(MigErrCtx::from_remark(
                     MigErrorKind::Upstream,
@@ -751,7 +761,14 @@ impl Stage2 {
                 info!("copied backup  to '{}'", target_path.display());
             }
 
-        // TODO: write logs to data_path
+            Logger::flush();
+            if Logger::get_log_dest().is_buffer_dest() {
+                if let Some(buffer) = Logger::get_buffer() {
+                    if let Ok(ref mut file) = File::create(path_append(&data_path, LOG_FILE_NAME)) {
+                        let _res = file.write(&buffer);
+                    }
+                }
+            }
         } else {
             let message = format!(
                 "unable to find labeled partition: '{}'",
@@ -803,6 +820,63 @@ impl Stage2 {
             Stage2::exit(self.config.get_fail_mode())
         } else {
             Stage2::exit(&FailMode::RescueShell)
+        }
+    }
+
+    fn init_logging(device: &Path, fstype: &str) {
+        let log_mnt_dir = PathBuf::from(LOG_MOUNT_DIR);
+
+        if !if let Ok(res) = dir_exists(&log_mnt_dir) {
+            res
+        } else {
+            warn!("unable to stat path {}", log_mnt_dir.display());
+            return;
+        } {
+            if let Err(_why) = create_dir(&log_mnt_dir) {
+                warn!(
+                    "failed to create log mount directory directory {}",
+                    log_mnt_dir.display()
+                );
+                return;
+            }
+        } else {
+            warn!("root mount directory {} exists", log_mnt_dir.display());
+        }
+
+        if let Err(_why) = mount(
+            Some(device),
+            &log_mnt_dir,
+            Some(fstype.as_bytes()),
+            MsFlags::empty(),
+            NIX_NONE,
+        ) {
+            warn!(
+                "Failed to mount log device '{}' to '{}' with type: {:?}",
+                &device.display(),
+                &log_mnt_dir.display(),
+                fstype
+            );
+            return;
+        }
+
+        let log_file = path_append(&log_mnt_dir, LOG_FILE_NAME);
+        let mut writer = BufWriter::new(match File::create(&log_file) {
+            Ok(file) => file,
+            Err(_why) => {
+                warn!("Failed to create log file '{}' ", log_file.display(),);
+                return;
+            }
+        });
+
+        if let Some(buffer) = Logger::get_buffer() {
+            if let Err(_why) = writer.write(&buffer) {
+                warn!("Failed to write to log file '{}' ", log_file.display(),);
+                return;
+            }
+        }
+
+        if let Err(_why) = Logger::set_log_dest(&LogDestination::StreamStderr, Some(writer)) {
+            warn!("Failed to set logfile to file '{}' ", log_file.display(),);
         }
     }
 }

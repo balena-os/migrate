@@ -1,3 +1,4 @@
+use log::warn;
 use regex::Regex;
 use std::path::Path;
 
@@ -38,13 +39,8 @@ impl LabelType {
                     _ => Ok(LabelType::OTHER),
                 }
             } else {
-                Err(MigError::from_remark(
-                    MigErrorKind::Upstream,
-                    &format!(
-                        "new: failed to retrieve partition type information from device '{}'",
-                        device_path.display()
-                    ),
-                ))
+                warn!("No Disk Label information found in fdisk output, assuming 'dos'");
+                Ok(LabelType::DOS)
             }
         } else {
             Err(MigError::from_remark(

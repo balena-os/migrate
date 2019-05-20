@@ -272,7 +272,7 @@ impl<'a> LsblkInfo {
                 }
                 "part" => {
                     if let Some(ref mut curr_dev) = curr_dev {
-                        let mut children = if let Some(ref mut children) = curr_dev.children {
+                        let children = if let Some(ref mut children) = curr_dev.children {
                             children
                         } else {
                             curr_dev.children = Some(Vec::new());
@@ -327,7 +327,7 @@ impl<'a> LsblkInfo {
                 "failed to deserialze lsblk output from json",
             ))?;
 
-        for mut device in &mut lsblk_info.blockdevices {
+        for device in &mut lsblk_info.blockdevices {
             if let Some(ref mut children) = device.children {
                 let mut count: u16 = 1;
                 for mut partition in children {

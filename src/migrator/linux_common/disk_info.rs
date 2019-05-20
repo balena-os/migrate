@@ -1,5 +1,5 @@
 use log::debug;
-use std::path::Path;
+use std::path::{Path, PathBuf};
 
 use crate::{
     common::{MigError, MigErrorKind},
@@ -20,11 +20,15 @@ pub(crate) struct DiskInfo {
     pub boot_path: PathInfo,
     pub efi_path: Option<PathInfo>,
     pub work_path: PathInfo,
-    pub log_path: Option<PathInfo>,
+    pub log_path: Option<(PathBuf, String)>,
 }
 
 impl DiskInfo {
-    pub(crate) fn new(efi_boot: bool, work_path: &Path) -> Result<DiskInfo, MigError> {
+    pub(crate) fn new(
+        efi_boot: bool,
+        work_path: &Path,
+        log_dev: Option<&Path>,
+    ) -> Result<DiskInfo, MigError> {
         // find the root device in lsblk output
         let lsblk_info = LsblkInfo::new()?;
 
@@ -78,7 +82,22 @@ impl DiskInfo {
                 None
             },
             // TODO: take care of log path or discard the option
-            log_path: None,
+            log_path: if let Some(log_dev) = log_dev {
+                let (_lsblk_drive, lsblk_part) = lsblk_info.get_devinfo_from_partition(log_dev)?;
+                Some((
+                    lsblk_part.get_path(),
+                    if let Some(ref fs_type) = lsblk_part.fstype {
+                        fs_type.clone()
+                    } else {
+                        return Err(MigError::from_remark(
+                            MigErrorKind::InvState,
+                            &format!("Log fstype was not initialized for '{}'", log_dev.display()),
+                        ));
+                    },
+                ))
+            } else {
+                None
+            },
         };
 
         debug!("Diskinfo: {:?}", result);

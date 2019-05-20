@@ -1,23 +1,24 @@
 use log::{error, info, trace};
 use std::path::Path;
 
-use crate::linux_common::disk_info::DiskInfo;
 use crate::{
     common::{BootType, Config, MigError, MigErrorKind},
-    device::Device,
+    defs::GRUB_MIN_VERSION,
+    device::{grub_install, Device},
+    linux_common::disk_info::DiskInfo,
     linux_common::{get_grub_version, is_secure_boot, migrate_info::MigrateInfo},
     stage2::Stage2Config,
 };
-
-const MODULE: &str = "intel_nuc";
-
-const GRUB_MIN_VERSION: &str = "2";
 
 pub(crate) struct IntelNuc {}
 
 impl IntelNuc {
     pub fn new() -> IntelNuc {
         IntelNuc {}
+    }
+
+    fn setup_grub(&self, config: &Config, mig_info: &mut MigrateInfo) -> Result<(), MigError> {
+        grub_install(config, mig_info)
     }
 }
 
@@ -26,22 +27,38 @@ impl<'a> Device for IntelNuc {
         "intel-nuc"
     }
 
-    fn setup(&self, _config: &Config, mig_info: &mut MigrateInfo) -> Result<(), MigError> {
+    fn setup(&self, config: &Config, mig_info: &mut MigrateInfo) -> Result<(), MigError> {
         trace!(
-            "BeagleboneGreen::setup: entered with type: '{}'",
+            "IntelNuc::setup: entered with type: '{}'",
             match &mig_info.device_slug {
                 Some(s) => s,
                 _ => panic!("no device type slug found"),
             }
         );
-
-        Err(MigError::from(MigErrorKind::NotImpl))
+        if let Some(ref boot_type) = mig_info.boot_type {
+            match boot_type {
+                BootType::GRUB => self.setup_grub(config, mig_info),
+                _ => Err(MigError::from_remark(
+                    MigErrorKind::InvParam,
+                    &format!(
+                        "Invalid boot type for '{}' : {:?}'",
+                        self.get_device_slug(),
+                        mig_info.boot_type
+                    ),
+                )),
+            }
+        } else {
+            Err(MigError::from_remark(
+                MigErrorKind::InvParam,
+                &format!("No boot type specified for '{}'", self.get_device_slug()),
+            ))
+        }
     }
 
     fn can_migrate(&self, config: &Config, mig_info: &mut MigrateInfo) -> Result<bool, MigError> {
         const SUPPORTED_OSSES: &'static [&'static str] = &[
             "Ubuntu 18.04.2 LTS",
-            //    "Ubuntu 16.04.2 LTS",
+            "Ubuntu 16.04.2 LTS",
             "Ubuntu 14.04.2 LTS",
             "Ubuntu 14.04.5 LTS",
         ];
@@ -62,7 +79,11 @@ impl<'a> Device for IntelNuc {
 
         if mig_info.get_os_name().to_lowercase().starts_with("ubuntu") {
             mig_info.boot_type = Some(BootType::GRUB);
-            mig_info.disk_info = Some(DiskInfo::new(false, &config.migrate.get_work_dir())?);
+            mig_info.disk_info = Some(DiskInfo::new(
+                false,
+                &config.migrate.get_work_dir(),
+                config.migrate.get_log_device(),
+            )?);
             mig_info.install_path = Some(mig_info.disk_info.as_ref().unwrap().root_path.clone());
         }
 

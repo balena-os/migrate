@@ -1,11 +1,9 @@
 use failure::{Fail, ResultExt};
 use log::{debug, error, info, warn};
-use regex::Regex;
 use std::fs::{read_to_string, File};
 use std::path::{Path, PathBuf};
 
-use crate::common::file_exists;
-use crate::linux_common::GRUB_UPDT_CMD;
+use crate::linux_common::call_cmd;
 use crate::{
     common::{call, path_append, Config, MigErrCtx, MigError, MigErrorKind, OSArch},
     //linux::LinuxMigrator,
@@ -13,7 +11,8 @@ use crate::{
         BOOT_PATH, GRUB_CONF_PATH, KERNEL_CMDLINE_PATH, MIG_INITRD_NAME, MIG_KERNEL_NAME, ROOT_PATH,
     },
     linux_common::{
-        disk_info::label_type::LabelType, get_grub_version, whereis, MigrateInfo, GRUB_REBOOT_CMD,
+        disk_info::label_type::LabelType, get_grub_version, whereis, MigrateInfo, CHMOD_CMD,
+        GRUB_REBOOT_CMD, GRUB_UPDT_CMD,
     },
     stage2::Stage2Config,
 };
@@ -28,7 +27,7 @@ const DEVICE_TREE_MODEL: &str = "/proc/device-tree/model";
 
 const GRUB_CFG_TEMPLATE: &str = r##"
 #!/bin/sh
-exec tail -n +3 \$0
+exec tail -n +3 $0
 # This file provides an easy way to add custom menu entries.  Simply type the
 # menu entries you want to add after this comment.  Be careful not to change
 # the 'exec tail' line above.
@@ -218,6 +217,7 @@ pub(crate) fn grub_install(_config: &Config, mig_info: &mut MigrateInfo) -> Resu
     let mut linux = String::from(path_append(&grub_boot, MIG_KERNEL_NAME).to_string_lossy());
 
     // filter some bullshit out of commandline, else leave it as is
+
     for word in read_to_string(KERNEL_CMDLINE_PATH)
         .context(MigErrCtx::from_remark(
             MigErrorKind::Upstream,
@@ -228,9 +228,15 @@ pub(crate) fn grub_install(_config: &Config, mig_info: &mut MigrateInfo) -> Resu
         ))?
         .split_whitespace()
     {
-        if !word.starts_with("BOOT_IMAGE=") {
-            linux.push_str(&format!(" {}", word));
+        if word.starts_with("BOOT_IMAGE=") {
+            continue;
         }
+
+        if word.to_lowercase() == "debug" {
+            continue;
+        }
+
+        linux.push_str(&format!(" {}", word));
     }
 
     let mut grub_cfg = String::from(GRUB_CFG_TEMPLATE);
@@ -258,7 +264,52 @@ pub(crate) fn grub_install(_config: &Config, mig_info: &mut MigrateInfo) -> Resu
             &format!("Failed to write to grub config file '{}'", GRUB_CONF_PATH),
         ))?;
 
+    let cmd_res = call_cmd(CHMOD_CMD, &["+x", GRUB_CONF_PATH], true)?;
+    if !cmd_res.status.success() {
+        return Err(MigError::from_remark(
+            MigErrorKind::ExecProcess,
+            &format!("Failure from '{}': {:?}", CHMOD_CMD, cmd_res),
+        ));
+    }
+
     info!("Grub config written to '{}'", GRUB_CONF_PATH);
+
+    // **********************************************************************
+    // ** copy new kernel & iniramfs
+
+    let source_path = mig_info.get_kernel_path();
+    let kernel_path = path_append(&mig_info.get_boot_path().path, MIG_KERNEL_NAME);
+    std::fs::copy(&source_path, &kernel_path).context(MigErrCtx::from_remark(
+        MigErrorKind::Upstream,
+        &format!(
+            "failed to copy kernel file '{}' to '{}'",
+            source_path.display(),
+            kernel_path.display()
+        ),
+    ))?;
+    info!(
+        "copied kernel: '{}' -> '{}'",
+        source_path.display(),
+        kernel_path.display()
+    );
+
+    call_cmd(CHMOD_CMD, &["+x", &kernel_path.to_string_lossy()], false)?;
+
+    let source_path = mig_info.get_initrd_path();
+    let initrd_path = path_append(&mig_info.get_boot_path().path, MIG_INITRD_NAME);
+    std::fs::copy(&source_path, &initrd_path).context(MigErrCtx::from_remark(
+        MigErrorKind::Upstream,
+        &format!(
+            "failed to copy initrd file '{}' to '{}'",
+            source_path.display(),
+            initrd_path.display()
+        ),
+    ))?;
+    info!(
+        "initramfs kernel: '{}' -> '{}'",
+        source_path.display(),
+        initrd_path.display()
+    );
 
     let grub_path = match whereis(GRUB_UPDT_CMD) {
         Ok(path) => path,

@@ -118,7 +118,12 @@ impl<'a> LinuxMigrator {
             panic!("No device identified!")
         }
 
-        debug!("finished architecture dependant initialization");
+        debug!("Finished architecture dependant initialization");
+
+        info!(
+            "Boot mode is {:?}",
+            migrator.mig_info.boot_type.as_ref().unwrap()
+        );
 
         // **********************************************************************
         // Set the custom device slug here if configured

@@ -3,6 +3,7 @@ use failure::ResultExt;
 use log::debug;
 use log::trace;
 use regex::Regex;
+use serde::Deserialize;
 use std::fmt::{self, Display, Formatter};
 use std::fs::read_to_string;
 use std::fs::File;
@@ -11,11 +12,6 @@ use std::path::{Path, PathBuf};
 use std::process::{Command, ExitStatus, Stdio};
 
 use crate::defs::BALENA_FILE_TAG_REGEX;
-
-/*
-pub mod stage_info;
-pub use stage_info::{Stage1Info, Stage2Info};
-*/
 
 pub(crate) mod mig_error;
 
@@ -27,9 +23,7 @@ pub(crate) mod backup;
 pub(crate) mod balena_cfg_json;
 pub(crate) mod config;
 // pub(crate) mod config_helper;
-pub(crate) mod fail_mode;
 pub(crate) mod file_info;
-pub(crate) use fail_mode::FailMode;
 
 //pub mod logger;
 //pub(crate) use logger::Logger;
@@ -67,6 +61,18 @@ pub enum OSArch {
 impl Display for OSArch {
     fn fmt(&self, f: &mut Formatter) -> fmt::Result {
         write!(f, "{:?}", self)
+    }
+}
+
+#[derive(Debug, Clone, Deserialize, PartialEq)]
+pub(crate) enum FailMode {
+    Reboot,
+    RescueShell,
+}
+
+impl FailMode {
+    pub(crate) fn get_default() -> &'static FailMode {
+        &FailMode::RescueShell
     }
 }
 

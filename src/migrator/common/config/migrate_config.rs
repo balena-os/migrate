@@ -61,7 +61,6 @@ pub(crate) enum MigrateWifis {
 pub struct LogConfig {
     pub level: Option<String>,
     pub drive: Option<PathBuf>,
-    pub fs_type: Option<String>,
 }
 
 #[derive(Debug, Deserialize)]
@@ -252,21 +251,12 @@ impl<'a> MigrateConfig {
         return None;
     }
 
-    pub fn get_log_fstype(&'a self) -> Option<&'a str> {
-        if let Some(ref log_info) = self.log {
-            if let Some(ref val) = log_info.fs_type {
-                return Some(val);
-            }
-        }
-        return None;
-    }
-
-    pub fn get_log_level(&'a self) -> Option<&'a str> {
+    pub fn get_log_level(&'a self) -> &'a str {
         if let Some(ref log_info) = self.log {
             if let Some(ref val) = log_info.level {
-                return Some(val);
+                return val;
             }
         }
-        return Some("warn");
+        return "warn";
     }
 }
