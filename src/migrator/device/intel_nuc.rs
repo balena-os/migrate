@@ -6,7 +6,7 @@ use crate::{
     defs::GRUB_MIN_VERSION,
     device::{grub_install, Device},
     linux_common::disk_info::DiskInfo,
-    linux_common::{get_grub_version, is_secure_boot, migrate_info::MigrateInfo},
+    linux_common::{get_grub_version, is_secure_boot, migrate_info::MigrateInfo, restore_backups},
     stage2::Stage2Config,
 };
 
@@ -125,7 +125,10 @@ impl<'a> Device for IntelNuc {
         Ok(true)
     }
 
-    fn restore_boot(&self, _root_path: &Path, _config: &Stage2Config) -> Result<(), MigError> {
-        Err(MigError::from(MigErrorKind::NotImpl))
+    fn restore_boot(&self, root_path: &Path, config: &Stage2Config) -> Result<(), MigError> {
+        info!("restoring boot configuration for IntelNuc");
+        restore_backups(root_path, config.get_boot_backups())?;
+        info!("The original boot configuration was restored");
+        Ok(())
     }
 }

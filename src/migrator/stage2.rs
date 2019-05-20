@@ -1,6 +1,6 @@
 use failure::ResultExt;
 use flate2::read::GzDecoder;
-use log::{debug, error, info, warn};
+use log::{debug, error, info, trace, warn};
 use mod_logger::{LogDestination, Logger, NO_STREAM};
 use nix::{
     mount::{mount, umount, MsFlags},
@@ -71,6 +71,7 @@ pub(crate) struct Stage2 {
 impl Stage2 {
     pub fn try_init() -> Result<Stage2, MigError> {
         // TODO: wait a couple of seconds for more devices to show up ?
+        trace!("try_init: entered");
 
         match Logger::initialise(Some(INIT_LOG_LEVEL)) {
             Ok(_s) => (),
@@ -207,6 +208,7 @@ impl Stage2 {
     }
 
     pub fn migrate(&mut self) -> Result<(), MigError> {
+        trace!("migrate: entered");
         let device_slug = self.config.get_device_slug();
 
         let root_fs_dir = Path::new(ROOTFS_DIR);
@@ -757,7 +759,9 @@ impl Stage2 {
                     if let Ok(file) = File::create(&log_dest) {
                         let mut writer = BufWriter::new(file);
                         let _res = writer.write(&buffer);
-                        let _res = Logger::set_log_dest(&LogDestination::StreamStderr, Some(writer));
+                        let _res = writer.flush();
+                        let _res =
+                            Logger::set_log_dest(&LogDestination::StreamStderr, Some(writer));
                         info!("Set up logger to log to '{}'", log_dest.display());
                     }
                 }
@@ -779,7 +783,6 @@ impl Stage2 {
                 ))?;
                 info!("copied backup  to '{}'", target_path.display());
             }
-
         } else {
             let message = format!(
                 "unable to find labeled partition: '{}'",
@@ -802,6 +805,11 @@ impl Stage2 {
     }
 
     fn exit(fail_mode: &FailMode) -> Result<(), MigError> {
+        trace!("exit: entered with {:?}", fail_mode);
+
+        Logger::flush();
+        sync();
+
         match fail_mode {
             FailMode::Reboot => {
                 reboot(RebootMode::RB_AUTOBOOT).context(MigErrCtx::from_remark(
@@ -821,12 +829,12 @@ impl Stage2 {
     }
 
     pub(crate) fn default_exit() -> Result<(), MigError> {
+        trace!("default_exit: entered ");
         Stage2::exit(FailMode::get_default())
     }
 
     pub(crate) fn error_exit(&self) -> Result<(), MigError> {
-        Logger::flush();
-        sync();
+        trace!("error_exit: entered");
         if self.recoverable_state {
             Stage2::exit(self.config.get_fail_mode())
         } else {
@@ -835,7 +843,16 @@ impl Stage2 {
     }
 
     fn init_logging(device: &Path, fstype: &str) {
-        info!("Attempting to set up logging to '{}' with fstype: {}", device.display(), fstype);
+        trace!(
+            "init_logging: entered with '{}' fstype: {}",
+            device.display(),
+            fstype
+        );
+        info!(
+            "Attempting to set up logging to '{}' with fstype: {}",
+            device.display(),
+            fstype
+        );
 
         let log_mnt_dir = PathBuf::from(LOG_MOUNT_DIR);
 
@@ -856,7 +873,11 @@ impl Stage2 {
             warn!("root mount directory {} exists", log_mnt_dir.display());
         }
 
-        debug!("Attempting to mount mount dir '{}' on '{}'", device.display(), log_mnt_dir.display());
+        debug!(
+            "Attempting to mount mount dir '{}' on '{}'",
+            device.display(),
+            log_mnt_dir.display()
+        );
 
         if let Err(_why) = mount(
             Some(device),
@@ -886,7 +907,6 @@ impl Stage2 {
 
         debug!("Attempting to flush log buffer to '{}'", log_file.display());
         if let Some(buffer) = Logger::get_buffer() {
-
             if let Err(_why) = writer.write(&buffer) {
                 warn!("Failed to write to log file '{}' ", log_file.display(),);
                 return;

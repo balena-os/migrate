@@ -72,7 +72,7 @@ pub(crate) enum FailMode {
 
 impl FailMode {
     pub(crate) fn get_default() -> &'static FailMode {
-        &FailMode::RescueShell
+        &FailMode::Reboot
     }
 }
 

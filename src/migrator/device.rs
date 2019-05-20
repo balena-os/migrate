@@ -228,7 +228,8 @@ pub(crate) fn grub_install(_config: &Config, mig_info: &mut MigrateInfo) -> Resu
         ))?
         .split_whitespace()
     {
-        if word.starts_with("BOOT_IMAGE=") {
+        let word_lc = word.to_lowercase();
+        if word_lc.starts_with("boot_image=") {
             continue;
         }
 
@@ -236,8 +237,14 @@ pub(crate) fn grub_install(_config: &Config, mig_info: &mut MigrateInfo) -> Resu
             continue;
         }
 
+        if word.starts_with("rootfstype=") {
+            continue;
+        }
+
         linux.push_str(&format!(" {}", word));
     }
+
+    linux.push_str(&format!(" rootfstype={} debug", root_path.fs_type));
 
     let mut grub_cfg = String::from(GRUB_CFG_TEMPLATE);
 
