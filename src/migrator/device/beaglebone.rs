@@ -12,7 +12,7 @@ use crate::{
         MigErrorKind,
     },
     defs::{BALENA_FILE_TAG, MIG_INITRD_NAME, MIG_KERNEL_NAME},
-    device::Device,
+    device::{Device,grub_install},
     linux_common::{
         call_cmd, disk_info::DiskInfo, migrate_info::MigrateInfo, restore_backups, CHMOD_CMD,
     },
@@ -218,6 +218,7 @@ impl<'a> Device for BeagleboneGreen {
         if let Some(ref boot_type) = mig_info.boot_type {
             match boot_type {
                 BootType::UBoot => self.setup_uboot(config, mig_info),
+                BootType::GRUB => grub_install(config, mig_info),
                 _ => Err(MigError::from_remark(
                     MigErrorKind::InvParam,
                     &format!(
@@ -250,7 +251,13 @@ impl<'a> Device for BeagleboneGreen {
             return Ok(false);
         }
 
-        mig_info.boot_type = Some(BootType::UBoot);
+        if os_name.to_lowercase().starts_with("ubuntu") {
+            mig_info.boot_type = Some(BootType::GRUB);
+        } else {
+            mig_info.boot_type = Some(BootType::UBoot);
+        }
+
+
         mig_info.disk_info = Some(DiskInfo::new(
             false,
             &config.migrate.get_work_dir(),
