@@ -177,7 +177,7 @@ impl BeagleboneGreen {
         // ** create new /uEnv.txt
         let mut uenv_text = String::from(BALENA_FILE_TAG);
         uenv_text.push_str(UENV_TXT);
-        uenv_text = uenv_text.replace("__KERNEL_PATH__", &initrd_path.to_string_lossy());
+        uenv_text = uenv_text.replace("__KERNEL_PATH__", &kernel_path.to_string_lossy());
         uenv_text = uenv_text.replace("__INITRD_PATH__", &initrd_path.to_string_lossy());
         uenv_text = uenv_text.replace("__DRIVE__", &drive_num.0);
         uenv_text = uenv_text.replace("__PARTITION__", &drive_num.1);
