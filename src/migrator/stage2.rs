@@ -140,7 +140,7 @@ impl Stage2 {
         let stage2_cfg = Stage2Config::from_config(&stage2_cfg_file)?;
 
         info!(
-            "Read stage 2 config file from {}",
+            "Sucessfully read stage 2 config file from {}",
             stage2_cfg_file.display()
         );
 
@@ -359,6 +359,8 @@ impl Stage2 {
 
         if self.config.is_no_flash() {
             info!("Not flashing due to config parameter no_flash");
+            Logger::flush();
+            sync();
             Stage2::exit(&FailMode::Reboot)?;
         }
 
@@ -745,6 +747,20 @@ impl Stage2 {
                 &data_path.display()
             );
 
+            if Logger::get_log_dest().is_buffer_dest() {
+                Logger::flush();
+
+                if let Some(buffer) = Logger::get_buffer() {
+                    let log_dest = path_append(&data_path, LOG_FILE_NAME);
+                    if let Ok(file) = File::create(&log_dest) {
+                        let mut writer = BufWriter::new(file);
+                        let _res = writer.write(&buffer);
+                        Logger::set_log_dest(&LogDestination::StreamStderr, Some(writer));
+                        info!("Set up logger to log to '{}'", log_dest.display());
+                    }
+                }
+            }
+
             // TODO: copy log, backup to data_path
             if self.config.has_backup() {
                 // TODO: check available disk space
@@ -762,14 +778,6 @@ impl Stage2 {
                 info!("copied backup  to '{}'", target_path.display());
             }
 
-            Logger::flush();
-            if Logger::get_log_dest().is_buffer_dest() {
-                if let Some(buffer) = Logger::get_buffer() {
-                    if let Ok(ref mut file) = File::create(path_append(&data_path, LOG_FILE_NAME)) {
-                        let _res = file.write(&buffer);
-                    }
-                }
-            }
         } else {
             let message = format!(
                 "unable to find labeled partition: '{}'",
@@ -778,8 +786,6 @@ impl Stage2 {
             error!("{}", &message);
             return Err(MigError::from_remark(MigErrorKind::NotFound, &message));
         }
-
-        sync();
 
         info!(
             "Migration stage 2 was successful, rebooting in {} seconds!",
@@ -817,6 +823,8 @@ impl Stage2 {
     }
 
     pub(crate) fn error_exit(&self) -> Result<(), MigError> {
+        Logger::flush();
+        sync();
         if self.recoverable_state {
             Stage2::exit(self.config.get_fail_mode())
         } else {
