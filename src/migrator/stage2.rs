@@ -1,6 +1,6 @@
 use failure::ResultExt;
 use flate2::read::GzDecoder;
-use log::{debug, error, info, trace, warn};
+use log::{debug, error, info, trace, warn, Level};
 use mod_logger::{LogDestination, Logger, NO_STREAM};
 use nix::{
     mount::{mount, umount, MsFlags},
@@ -17,7 +17,7 @@ use std::time::{Duration, Instant};
 
 use crate::{
     common::{
-        dir_exists, file_exists, format_size_with_unit, path_append, FailMode, MigErrCtx, MigError,
+        dir_exists, file_exists, file_size, format_size_with_unit, path_append, FailMode, MigErrCtx, MigError,
         MigErrorKind,
     },
     defs::{
@@ -33,9 +33,7 @@ use crate::{
 
 pub(crate) mod stage2_config;
 pub(crate) use stage2_config::Stage2Config;
-use crate::common::file_size;
-use nix::sys::stat::stat;
-use serde_json::ser::CharEscape::Backspace;
+
 
 // for starters just restore old boot config, only required command is mount
 
@@ -43,7 +41,7 @@ use serde_json::ser::CharEscape::Backspace;
 
 const REBOOT_DELAY: u64 = 3;
 
-const INIT_LOG_LEVEL: &str = "debug";
+const INIT_LOG_LEVEL: Level = Level::Info;
 const ROOTFS_DIR: &str = "/tmp_root";
 const LOG_MOUNT_DIR: &str = "/migrate_log";
 const LOG_FILE_NAME: &str = "migrate.log";
@@ -69,26 +67,28 @@ pub(crate) struct Stage2 {
     config: Stage2Config,
     boot_mounted: bool,
     recoverable_state: bool,
+    root_fs_path: PathBuf,
 }
 
 impl Stage2 {
+
+    // try to mount former root device and /boot if it is on a separate partition and
+    // load the stage2 config
+
     pub fn try_init() -> Result<Stage2, MigError> {
         // TODO: wait a couple of seconds for more devices to show up ?
-        trace!("try_init: entered");
 
-        match Logger::initialise(Some(INIT_LOG_LEVEL)) {
-            Ok(_s) => (),
+        match Logger::initialise_v2(Some(&INIT_LOG_LEVEL), Some(&LogDestination::BufferStderr), NO_STREAM) {
+            Ok(_s) =>  {
+                info!("Balena Migrate Stage 2 initializing");
+            },
             Err(_why) => {
                 println!("Balena Migrate Stage 2 initializing");
                 println!("failed to initalize logger");
             }
         }
 
-        let _res = Logger::set_log_dest(&LogDestination::BufferStderr, NO_STREAM);
-
-        info!("Balena Migrate Stage 2 initializing");
-
-        let root_fs_dir = Path::new(ROOTFS_DIR);
+        let root_fs_dir = PathBuf::from(ROOTFS_DIR);
 
         // TODO: beaglebone version - make device_slug dependant
 
@@ -100,20 +100,20 @@ impl Stage2 {
             root_fs_type
         );
 
-        if !dir_exists(ROOTFS_DIR)? {
-            create_dir(ROOTFS_DIR).context(MigErrCtx::from_remark(
+        if !dir_exists(&root_fs_dir)? {
+            create_dir(&root_fs_dir).context(MigErrCtx::from_remark(
                 MigErrorKind::Upstream,
-                &format!("failed to create mountpoint for roofs in {}", ROOTFS_DIR),
+                &format!("failed to create mountpoint for roofs in {}", &root_fs_dir.display()),
             ))?;
         } else {
-            warn!("root mount directory {} exists", ROOTFS_DIR);
+            warn!("root mount directory {} exists", &root_fs_dir.display());
         }
 
         // TODO: add options to make this more reliable)
 
         mount(
             Some(&root_device),
-            root_fs_dir,
+            &root_fs_dir,
             if let Some(ref fs_type) = root_fs_type {
                 Some(fs_type.as_bytes())
             } else {
@@ -132,7 +132,7 @@ impl Stage2 {
             ),
         ))?;
 
-        let stage2_cfg_file = path_append(root_fs_dir, STAGE2_CFG_FILE);
+        let stage2_cfg_file = path_append(&root_fs_dir, STAGE2_CFG_FILE);
 
         if !file_exists(&stage2_cfg_file) {
             let message = format!(
@@ -146,7 +146,7 @@ impl Stage2 {
         let stage2_cfg = Stage2Config::from_config(&stage2_cfg_file)?;
 
         info!(
-            "Sucessfully read stage 2 config file from {}",
+            "Successfully read stage 2 config file from {}",
             stage2_cfg_file.display()
         );
 
@@ -156,6 +156,7 @@ impl Stage2 {
             Stage2::init_logging(device, fstype);
         }
 
+        /*
         // TODO: probably paranoid
         if root_device != stage2_cfg.get_root_device() {
             let message = format!(
@@ -166,10 +167,11 @@ impl Stage2 {
             error!("{}", &message);
             return Err(MigError::from_remark(MigErrorKind::InvState, &message));
         }
+        */
 
         // Ensure /boot is mounted in ROOTFS_DIR/boot
 
-        let boot_path = path_append(root_fs_dir, BOOT_PATH);
+        let boot_path = path_append(&root_fs_dir, BOOT_PATH);
         if !dir_exists(&boot_path)? {
             let message = format!(
                 "cannot find boot mount point on root device: {}, path {}",
@@ -203,16 +205,33 @@ impl Stage2 {
             boot_mounted = true;
         }
 
+        return Ok(Stage2 {
+            config: stage2_cfg,
+            boot_mounted,
+            recoverable_state: false,
+            root_fs_path: root_fs_dir,
+        });
+    }
+
+    pub fn migrate(&mut self) -> Result<(), MigError> {
+        trace!("migrate: entered");
+        let device_slug = self.config.get_device_slug();
+
+        let mig_tmp_dir = Path::new(MIGRATE_TEMP_DIR);
+
+        info!("migrating '{}'", &device_slug);
+
+        // check if we have enough space to copy files to initramfs
         match get_mem_info() {
             Ok((mem_tot,mem_avail)) => {
                 info!("Memory available is {} of {}", format_size_with_unit(mem_avail) , format_size_with_unit(mem_tot));
 
-                let mut required_size = file_size(path_append(root_fs_dir, stage2_cfg.get_balena_image()))?;
-                required_size += file_size(path_append(root_fs_dir,stage2_cfg.get_balena_config()))?;
+                let mut required_size = file_size(path_append(&self.root_fs_path, &self.config.get_balena_image()))?;
+                required_size += file_size(path_append(&self.root_fs_path,&self.config.get_balena_config()))?;
 
-                let work_dir = path_append(root_fs_dir,stage2_cfg.get_work_path());
+                let work_dir = path_append(&self.root_fs_path,&self.config.get_work_path());
 
-                if (stage2_cfg.has_backup()) {
+                if self.config.has_backup() {
                     required_size += file_size(path_append(&work_dir,BACKUP_FILE))?;
                 }
 
@@ -243,25 +262,10 @@ impl Stage2 {
             }
         }
 
-        return Ok(Stage2 {
-            config: stage2_cfg,
-            boot_mounted,
-            recoverable_state: false,
-        });
-    }
-
-    pub fn migrate(&mut self) -> Result<(), MigError> {
-        trace!("migrate: entered");
-        let device_slug = self.config.get_device_slug();
-
-        let root_fs_dir = Path::new(ROOTFS_DIR);
-        let mig_tmp_dir = Path::new(MIGRATE_TEMP_DIR);
-
-        info!("migrating '{}'", &device_slug);
 
         let device = device::from_device_slug(&device_slug)?;
 
-        device.restore_boot(&PathBuf::from(ROOTFS_DIR), &self.config)?;
+        device.restore_boot(&self.root_fs_path, &self.config)?;
 
         // boot config restored can reboot
         self.recoverable_state = true;
@@ -278,7 +282,7 @@ impl Stage2 {
             ))?;
         }
 
-        let src = path_append(root_fs_dir, self.config.get_balena_image());
+        let src = path_append(&self.root_fs_path, self.config.get_balena_image());
         let tgt = path_append(mig_tmp_dir, BALENA_IMAGE_FILE);
         copy(&src, &tgt).context(MigErrCtx::from_remark(
             MigErrorKind::Upstream,
@@ -291,7 +295,7 @@ impl Stage2 {
 
         info!("copied balena OS image to '{}'", tgt.display());
 
-        let src = path_append(root_fs_dir, self.config.get_balena_config());
+        let src = path_append(&self.root_fs_path, self.config.get_balena_config());
         let tgt = path_append(mig_tmp_dir, BALENA_CONFIG_FILE);
         copy(&src, &tgt).context(MigErrCtx::from_remark(
             MigErrorKind::Upstream,
@@ -305,7 +309,7 @@ impl Stage2 {
         info!("copied balena OS config to '{}'", tgt.display());
 
         let src_nwmgr_dir = path_append(
-            root_fs_dir,
+            &self.root_fs_path,
             path_append(self.config.get_work_path(), SYSTEM_CONNECTIONS_DIR),
         );
         let tgt_nwmgr_dir = path_append(mig_tmp_dir, SYSTEM_CONNECTIONS_DIR);
@@ -350,7 +354,7 @@ impl Stage2 {
             // TODO: check available memory / disk space
             let target_path = path_append(mig_tmp_dir, BACKUP_FILE);
             let source_path = path_append(
-                root_fs_dir,
+                &self.root_fs_path,
                 path_append(self.config.get_work_path(), BACKUP_FILE),
             );
 
@@ -368,7 +372,7 @@ impl Stage2 {
         info!("Files copied to RAMFS");
 
         if self.boot_mounted {
-            umount(&path_append(ROOTFS_DIR, BOOT_PATH)).context(MigErrCtx::from_remark(
+            umount(&path_append(&self.root_fs_path, BOOT_PATH)).context(MigErrCtx::from_remark(
                 MigErrorKind::Upstream,
                 &format!(
                     "Failed to unmount former boot device: '{}'",
@@ -379,7 +383,7 @@ impl Stage2 {
 
         // Write our buffered log to workdir before unmounting boot if we are not flashing anyway
         if self.config.is_no_flash() && Logger::get_log_dest().is_buffer_dest() {
-            let log_dest = path_append(path_append(root_fs_dir, self.config.get_work_path()), LOG_FILE_NAME);
+            let log_dest = path_append(path_append(&self.root_fs_path, self.config.get_work_path()), LOG_FILE_NAME);
             info!("Saving the log to '{}'", log_dest.display());
             Logger::flush();
 
@@ -391,11 +395,12 @@ impl Stage2 {
                     sync();
                 }
             }
-            Logger::set_log_dest(&LogDestination::StreamStderr, NO_STREAM);
+
+            let _res = Logger::set_log_dest(&LogDestination::StreamStderr, NO_STREAM);
         }
 
 
-        umount(ROOTFS_DIR).context(MigErrCtx::from_remark(
+        umount(&self.root_fs_path).context(MigErrCtx::from_remark(
             MigErrorKind::Upstream,
             &format!(
                 "Failed to unmount former root device: '{}'",
