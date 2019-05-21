@@ -5,8 +5,7 @@ use log::trace;
 use regex::Regex;
 use serde::Deserialize;
 use std::fmt::{self, Display, Formatter};
-use std::fs::read_to_string;
-use std::fs::File;
+use std::fs::{read_to_string, File, metadata};
 use std::io::{BufRead, BufReader};
 use std::path::{Path, PathBuf};
 use std::process::{Command, ExitStatus, Stdio};
@@ -97,6 +96,18 @@ pub(crate) fn path_append<P1: AsRef<Path>, P2: AsRef<Path>>(base: P1, append: P2
         curr
     } else {
         base.join(append)
+    }
+}
+
+pub(crate) fn file_size<P: AsRef<Path>>(file_name: P) -> Result<u64, MigError> {
+    let file_name = file_name.as_ref();
+    let metadata = metadata(file_name)
+        .context(MigErrCtx::from_remark(MigErrorKind::Upstream, &format!("failed to retrieve metadata for file: '{}'", file_name.display())))?;
+
+    if metadata.is_file() {
+        Ok(metadata.len())
+    } else {
+        Ok(0)
     }
 }
 

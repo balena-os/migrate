@@ -23,16 +23,19 @@ use crate::{
     defs::{
         BACKUP_FILE, BALENA_BOOT_FSTYPE, BALENA_BOOT_PART, BALENA_DATA_FSTYPE, BALENA_DATA_PART,
         BALENA_ROOTA_PART, BALENA_ROOTB_PART, BALENA_STATE_PART, BOOT_PATH, DISK_BY_LABEL_PATH,
-        STAGE2_CFG_FILE, SYSTEM_CONNECTIONS_DIR,
+        STAGE2_CFG_FILE, SYSTEM_CONNECTIONS_DIR,MIG_KERNEL_NAME, MIG_INITRD_NAME, STAGE2_MEM_THRESHOLD
     },
     device,
     linux_common::{
-        call_cmd, ensure_cmds, get_cmd, get_root_info, DD_CMD, GZIP_CMD, PARTPROBE_CMD, REBOOT_CMD,
+        call_cmd, ensure_cmds, get_cmd, get_root_info, get_mem_info, DD_CMD, GZIP_CMD, PARTPROBE_CMD, REBOOT_CMD,
     },
 };
 
 pub(crate) mod stage2_config;
 pub(crate) use stage2_config::Stage2Config;
+use crate::common::file_size;
+use nix::sys::stat::stat;
+use serde_json::ser::CharEscape::Backspace;
 
 // for starters just restore old boot config, only required command is mount
 
@@ -200,6 +203,46 @@ impl Stage2 {
             boot_mounted = true;
         }
 
+        match get_mem_info() {
+            Ok((mem_tot,mem_avail)) => {
+                info!("Memory available is {} of {}", format_size_with_unit(mem_avail) , format_size_with_unit(mem_tot));
+
+                let mut required_size = file_size(path_append(root_fs_dir, stage2_cfg.get_balena_image()))?;
+                required_size += file_size(path_append(root_fs_dir,stage2_cfg.get_balena_config()))?;
+
+                let work_dir = path_append(root_fs_dir,stage2_cfg.get_work_path());
+
+                if (stage2_cfg.has_backup()) {
+                    required_size += file_size(path_append(&work_dir,BACKUP_FILE))?;
+                }
+
+                let src_nwmgr_dir = path_append(&work_dir, SYSTEM_CONNECTIONS_DIR);
+                if dir_exists(&src_nwmgr_dir)? {
+                    let paths = read_dir(&src_nwmgr_dir).context(MigErrCtx::from_remark(
+                        MigErrorKind::Upstream,
+                        &format!("Failed to list directory '{}'", src_nwmgr_dir.display()),
+                    ))?;
+
+                    for path in paths {
+                        if let Ok(path) = path {
+                            required_size += file_size(path.path())?;
+                        }
+                    }
+                }
+
+                info!("Memory required for copying files is {}", format_size_with_unit(required_size));
+
+                if mem_avail < required_size + STAGE2_MEM_THRESHOLD {
+                    error!("Not enough memory available for copying files");
+                    return Err(MigError::from_remark(MigErrorKind::InvState,"Not enough memory available for copying files" ));
+                }
+
+            },
+            Err(why) => {
+                warn!("Failed to retrieve mem info, error: {:?}", why);
+            }
+        }
+
         return Ok(Stage2 {
             config: stage2_cfg,
             boot_mounted,
@@ -334,6 +377,24 @@ impl Stage2 {
             ))?;
         }
 
+        // Write our buffered log to workdir before unmounting boot if we are not flashing anyway
+        if self.config.is_no_flash() && Logger::get_log_dest().is_buffer_dest() {
+            let log_dest = path_append(path_append(root_fs_dir, self.config.get_work_path()), LOG_FILE_NAME);
+            info!("Saving the log to '{}'", log_dest.display());
+            Logger::flush();
+
+            if let Some(buffer) = Logger::get_buffer() {
+                if let Ok(file) = File::create(&log_dest) {
+                    let mut writer = BufWriter::new(file);
+                    let _res = writer.write(&buffer);
+                    let _res = writer.flush();
+                    sync();
+                }
+            }
+            Logger::set_log_dest(&LogDestination::StreamStderr, NO_STREAM);
+        }
+
+
         umount(ROOTFS_DIR).context(MigErrCtx::from_remark(
             MigErrorKind::Upstream,
             &format!(
@@ -363,8 +424,6 @@ impl Stage2 {
 
         if self.config.is_no_flash() {
             info!("Not flashing due to config parameter no_flash");
-            Logger::flush();
-            sync();
             Stage2::exit(&FailMode::Reboot)?;
         }
 
