@@ -18,6 +18,7 @@ use crate::{
     },
     stage2::Stage2Config,
 };
+use crate::device::u_boot_valid;
 
 const BB_DRIVE_REGEX: &str = r#"^/dev/mmcblk(\d+)p(\d+)$"#;
 
@@ -50,7 +51,7 @@ mmcargs=setenv bootargs console=tty0 console=${console} ${optargs} ${cape_disabl
 uenvcmd=run loadall; run mmcargs; echo debug: [${bootargs}] ... ; echo debug: [bootz ${loadaddr} ${rdaddr}:${rdsize} ${fdtaddr}] ... ; bootz ${loadaddr} ${rdaddr}:${rdsize} ${fdtaddr};
 "###;
 
-// TODO: create/return trait for device processing
+// TODO: check location of uEnv.txt or other files files to improve reliability
 
 pub(crate) fn is_bb(model_string: &str) -> Result<Box<Device>, MigError> {
     trace!(
@@ -86,6 +87,8 @@ pub(crate) fn is_bb(model_string: &str) -> Result<Box<Device>, MigError> {
     }
 }
 
+
+
 pub(crate) struct BeagleboneGreen {}
 
 impl BeagleboneGreen {
@@ -93,112 +96,6 @@ impl BeagleboneGreen {
         BeagleboneGreen {}
     }
 
-    fn setup_uboot(&self, _config: &Config, mig_info: &mut MigrateInfo) -> Result<(), MigError> {
-        // **********************************************************************
-        // ** read drive number & partition number from boot device
-        let drive_num = {
-            let dev_name = &mig_info.get_boot_path().device;
-
-            if let Some(captures) = Regex::new(BB_DRIVE_REGEX)
-                .unwrap()
-                .captures(&dev_name.to_string_lossy())
-            {
-                (
-                    String::from(captures.get(1).unwrap().as_str()),
-                    String::from(captures.get(2).unwrap().as_str()),
-                )
-            } else {
-                return Err(MigError::from_remark(
-                    MigErrorKind::InvParam,
-                    &format!(
-                        "failed to parse drive & partition numbers from boot device name '{}'",
-                        dev_name.display()
-                    ),
-                ));
-            }
-        };
-
-        // **********************************************************************
-        // ** copy new kernel & iniramfs
-
-        let source_path = mig_info.get_kernel_path();
-        let kernel_path = path_append(&mig_info.get_boot_path().path, MIG_KERNEL_NAME);
-        std::fs::copy(&source_path, &kernel_path).context(MigErrCtx::from_remark(
-            MigErrorKind::Upstream,
-            &format!(
-                "failed to copy kernel file '{}' to '{}'",
-                source_path.display(),
-                kernel_path.display()
-            ),
-        ))?;
-        info!(
-            "copied kernel: '{}' -> '{}'",
-            source_path.display(),
-            kernel_path.display()
-        );
-
-        call_cmd(CHMOD_CMD, &["+x", &kernel_path.to_string_lossy()], false)?;
-
-        let source_path = mig_info.get_initrd_path();
-        let initrd_path = path_append(&mig_info.get_boot_path().path, MIG_INITRD_NAME);
-        std::fs::copy(&source_path, &initrd_path).context(MigErrCtx::from_remark(
-            MigErrorKind::Upstream,
-            &format!(
-                "failed to copy initrd file '{}' to '{}'",
-                source_path.display(),
-                initrd_path.display()
-            ),
-        ))?;
-        info!(
-            "initramfs kernel: '{}' -> '{}'",
-            source_path.display(),
-            initrd_path.display()
-        );
-
-        // **********************************************************************
-        // ** backup /uEnv.txt if exists
-
-        if file_exists(BBG_UENV_PATH) {
-            // TODO: make sure we do not backup our own files
-            if !is_balena_file(BBG_UENV_PATH)? {
-                let backup_uenv = format!("{}-{}", BBG_UENV_PATH, Local::now().format("%s"));
-                std::fs::copy(BBG_UENV_PATH, &backup_uenv).context(MigErrCtx::from_remark(
-                    MigErrorKind::Upstream,
-                    &format!("failed to file '{}' to '{}'", BBG_UENV_PATH, &backup_uenv),
-                ))?;
-                info!("copied backup of '{}' to '{}'", BBG_UENV_PATH, &backup_uenv);
-                mig_info
-                    .boot_cfg_bckup
-                    .push((String::from(BBG_UENV_PATH), backup_uenv));
-            }
-        }
-
-        // **********************************************************************
-        // ** create new /uEnv.txt
-        let mut uenv_text = String::from(BALENA_FILE_TAG);
-        uenv_text.push_str(UENV_TXT);
-        uenv_text = uenv_text.replace("__KERNEL_PATH__", &kernel_path.to_string_lossy());
-        uenv_text = uenv_text.replace("__INITRD_PATH__", &initrd_path.to_string_lossy());
-        uenv_text = uenv_text.replace("__DRIVE__", &drive_num.0);
-        uenv_text = uenv_text.replace("__PARTITION__", &drive_num.1);
-        uenv_text = uenv_text.replace(
-            "__ROOT_DEV__",
-            &mig_info.get_root_path().device.to_string_lossy(),
-        );
-
-        let mut uenv_file = File::create(BBG_UENV_PATH).context(MigErrCtx::from_remark(
-            MigErrorKind::Upstream,
-            &format!("failed to create new '{}'", BBG_UENV_PATH),
-        ))?;
-        uenv_file
-            .write_all(uenv_text.as_bytes())
-            .context(MigErrCtx::from_remark(
-                MigErrorKind::Upstream,
-                &format!("failed to write new '{}'", BBG_UENV_PATH),
-            ))?;
-        info!("created new file in '{}'", BBG_UENV_PATH);
-        Ok(())
-    }
 }
 
 impl<'a> Device for BeagleboneGreen {
@@ -207,102 +104,15 @@ impl<'a> Device for BeagleboneGreen {
     }
 
     fn setup(&self, config: &Config, mig_info: &mut MigrateInfo) -> Result<(), MigError> {
-        trace!(
-            "BeagleboneGreen::setup: entered with type: '{}'",
-            match &mig_info.device_slug {
-                Some(s) => s,
-                _ => panic!("no device type slug found"),
-            }
-        );
-
-        if let Some(ref boot_type) = mig_info.boot_type {
-            match boot_type {
-                BootType::UBoot => self.setup_uboot(config, mig_info),
-                BootType::GRUB => grub_install(config, mig_info),
-                _ => Err(MigError::from_remark(
-                    MigErrorKind::InvParam,
-                    &format!(
-                        "Invalid boot type for '{}' : {:?}'",
-                        self.get_device_slug(),
-                        mig_info.boot_type
-                    ),
-                )),
-            }
-        } else {
-            Err(MigError::from_remark(
-                MigErrorKind::InvParam,
-                &format!("No boot type specified for '{}'", self.get_device_slug()),
-            ))
-        }
+        def_setup(self.get_device_slug(), config, mig_info)
     }
 
     fn can_migrate(&self, config: &Config, mig_info: &mut MigrateInfo) -> Result<bool, MigError> {
-        const SUPPORTED_OSSES: &'static [&'static str] =
-            &["Debian GNU/Linux 9 (stretch)", "Ubuntu 18.04.2 LTS"];
-
-        let os_name = mig_info.get_os_name();
-
-        if let None = SUPPORTED_OSSES.iter().position(|&r| r == os_name) {
-            error!(
-                "The OS '{}' is not supported for '{}'",
-                os_name,
-                self.get_device_slug()
-            );
-            return Ok(false);
-        }
-
-
-        //if os_name.to_lowercase().starts_with("ubuntu") {
-        //    mig_info.boot_type = Some(BootType::GRUB);
-        //} else {
-        mig_info.boot_type = Some(BootType::UBoot);
-        //}
-
-
-        mig_info.disk_info = Some(DiskInfo::new(
-            false,
-            &config.migrate.get_work_dir(),
-            config.migrate.get_log_device(),
-        )?);
-
-        if mig_info.get_boot_path().drive != mig_info.get_root_path().drive {
-            error!(
-                "The partition layout is not supported, /boot and / are required to be on the same harddrive",
-            );
-            return Ok(false);
-        }
-        mig_info.install_path = Some(mig_info.get_root_path().clone());
-
-        // TODO: check for valid uboot setup
-
-        Ok(true)
+        def_can_migrate(self.get_device_slug(), config, mig_info)
     }
 
     fn restore_boot(&self, root_path: &Path, config: &Stage2Config) -> Result<(), MigError> {
-        info!("restoring boot configuration for Beaglebone Green");
-
-        let uenv_file = path_append(root_path, BBG_UENV_PATH);
-
-        if file_exists(&uenv_file) && is_balena_file(&uenv_file)? {
-            remove_file(&uenv_file).context(MigErrCtx::from_remark(
-                MigErrorKind::Upstream,
-                &format!(
-                    "failed to remove migrate boot config file {}",
-                    uenv_file.display()
-                ),
-            ))?;
-            info!("Removed balena boot config file '{}'", &uenv_file.display());
-            restore_backups(root_path, config.get_boot_backups())?;
-        } else {
-            warn!(
-                "balena boot config file not found in '{}'",
-                &uenv_file.display()
-            );
-        }
-
-        info!("The original boot configuration was restored");
-
-        Ok(())
+        def_restore_boot(self.get_device_slug(), root_path, config)
     }
 }
 
@@ -320,29 +130,216 @@ impl<'a> Device for BeagleboardXM {
         "beagleboard-xm"
     }
 
-    fn restore_boot(&self, _root_path: &Path, _config: &Stage2Config) -> Result<(), MigError> {
-        Err(MigError::from(MigErrorKind::NotImpl))
+    fn restore_boot(&self, root_path: &Path, config: &Stage2Config) -> Result<(), MigError> {
+        def_restore_boot(self.get_device_slug(), root_path, config)
     }
 
     fn can_migrate(&self, config: &Config, mig_info: &mut MigrateInfo) -> Result<bool, MigError> {
-        const SUPPORTED_OSSES: &'static [&'static str] = &["Ubuntu 18.04.2 LTS"];
-
-        let os_name = mig_info.get_os_name();
-
-        if let None = SUPPORTED_OSSES.iter().position(|&r| r == os_name) {
-            error!(
-                "The OS '{}' is not supported for '{}'",
-                os_name,
-                self.get_device_slug()
-            );
-            return Ok(false);
-        }
-
-        // TODO: look for valid u-boot config
-        Ok(false)
+        def_can_migrate(self.get_device_slug(), config, mig_info)
     }
 
-    fn setup(&self, _config: &Config, _mig_info: &mut MigrateInfo) -> Result<(), MigError> {
-        Err(MigError::from(MigErrorKind::NotImpl))
+    fn setup(&self, config: &Config, mig_info: &mut MigrateInfo) -> Result<(), MigError> {
+        def_setup(self.get_device_slug(), config, mig_info)
     }
 }
+
+
+fn def_can_migrate(slug: &str, config: &Config, mig_info: &mut MigrateInfo) -> Result<bool, MigError> {
+    const SUPPORTED_OSSES: &'static [&'static str] = &["Ubuntu 18.04.2 LTS"];
+
+    let os_name = mig_info.get_os_name();
+
+    if let None = SUPPORTED_OSSES.iter().position(|&r| r == os_name) {
+        error!(
+            "The OS '{}' is not supported for '{}'",
+            os_name,
+            slug
+        );
+        return Ok(false);
+    }
+
+
+    if !u_boot_valid(mig_info)? {
+        return Ok(false)
+    }
+
+    mig_info.boot_type = Some(BootType::UBoot);
+
+    mig_info.disk_info = Some(DiskInfo::new(
+        false,
+        &config.migrate.get_work_dir(),
+        config.migrate.get_log_device(),
+    )?);
+
+    if mig_info.get_boot_path().drive != mig_info.get_root_path().drive {
+        error!(
+            "The partition layout is not supported, /boot and / are required to be on the same harddrive",
+        );
+        return Ok(false);
+    }
+
+    mig_info.install_path = Some(mig_info.get_root_path().clone());
+
+    Ok(true)
+}
+
+
+fn def_setup(slug: &str, config: &Config, mig_info: &mut MigrateInfo) -> Result<(), MigError> {
+    trace!("setup: entered with type: '{}'",slug);
+
+    if let Some(ref boot_type) = mig_info.boot_type {
+        match boot_type {
+            BootType::UBoot => setup_uboot(mig_info),
+            BootType::GRUB => grub_install(config, mig_info),
+            _ => Err(MigError::from_remark(
+                MigErrorKind::InvParam,
+                &format!(
+                    "Invalid boot type for '{}' : {:?}'",
+                    slug,
+                    mig_info.boot_type
+                ),
+            )),
+        }
+    } else {
+        Err(MigError::from_remark(
+            MigErrorKind::InvParam,
+            &format!("No boot type specified for '{}'", slug),
+        ))
+    }
+}
+
+
+fn setup_uboot(mig_info: &mut MigrateInfo) -> Result<(), MigError> {
+    // **********************************************************************
+    // ** read drive number & partition number from boot device
+    let drive_num = {
+        let dev_name = &mig_info.get_boot_path().device;
+
+        if let Some(captures) = Regex::new(BB_DRIVE_REGEX)
+            .unwrap()
+            .captures(&dev_name.to_string_lossy())
+        {
+            (
+                String::from(captures.get(1).unwrap().as_str()),
+                String::from(captures.get(2).unwrap().as_str()),
+            )
+        } else {
+            return Err(MigError::from_remark(
+                MigErrorKind::InvParam,
+                &format!(
+                    "failed to parse drive & partition numbers from boot device name '{}'",
+                    dev_name.display()
+                ),
+            ));
+        }
+    };
+
+    // **********************************************************************
+    // ** copy new kernel & iniramfs
+
+    let source_path = mig_info.get_kernel_path();
+    let kernel_path = path_append(&mig_info.get_boot_path().path, MIG_KERNEL_NAME);
+    std::fs::copy(&source_path, &kernel_path).context(MigErrCtx::from_remark(
+        MigErrorKind::Upstream,
+        &format!(
+            "failed to copy kernel file '{}' to '{}'",
+            source_path.display(),
+            kernel_path.display()
+        ),
+    ))?;
+    info!(
+        "copied kernel: '{}' -> '{}'",
+        source_path.display(),
+        kernel_path.display()
+    );
+
+    call_cmd(CHMOD_CMD, &["+x", &kernel_path.to_string_lossy()], false)?;
+
+    let source_path = mig_info.get_initrd_path();
+    let initrd_path = path_append(&mig_info.get_boot_path().path, MIG_INITRD_NAME);
+    std::fs::copy(&source_path, &initrd_path).context(MigErrCtx::from_remark(
+        MigErrorKind::Upstream,
+        &format!(
+            "failed to copy initrd file '{}' to '{}'",
+            source_path.display(),
+            initrd_path.display()
+        ),
+    ))?;
+    info!(
+        "initramfs kernel: '{}' -> '{}'",
+        source_path.display(),
+        initrd_path.display()
+    );
+
+    // **********************************************************************
+    // ** backup /uEnv.txt if exists
+
+    if file_exists(BBG_UENV_PATH) {
+        // TODO: make sure we do not backup our own files
+        if !is_balena_file(BBG_UENV_PATH)? {
+            let backup_uenv = format!("{}-{}", BBG_UENV_PATH, Local::now().format("%s"));
+            std::fs::copy(BBG_UENV_PATH, &backup_uenv).context(MigErrCtx::from_remark(
+                MigErrorKind::Upstream,
+                &format!("failed to file '{}' to '{}'", BBG_UENV_PATH, &backup_uenv),
+            ))?;
+            info!("copied backup of '{}' to '{}'", BBG_UENV_PATH, &backup_uenv);
+            mig_info
+                .boot_cfg_bckup
+                .push((String::from(BBG_UENV_PATH), backup_uenv));
+        }
+    }
+
+    // **********************************************************************
+    // ** create new /uEnv.txt
+    let mut uenv_text = String::from(BALENA_FILE_TAG);
+    uenv_text.push_str(UENV_TXT);
+    uenv_text = uenv_text.replace("__KERNEL_PATH__", &kernel_path.to_string_lossy());
+    uenv_text = uenv_text.replace("__INITRD_PATH__", &initrd_path.to_string_lossy());
+    uenv_text = uenv_text.replace("__DRIVE__", &drive_num.0);
+    uenv_text = uenv_text.replace("__PARTITION__", &drive_num.1);
+    uenv_text = uenv_text.replace(
+        "__ROOT_DEV__",
+        &mig_info.get_root_path().device.to_string_lossy(),
+    );
+
+    let mut uenv_file = File::create(BBG_UENV_PATH).context(MigErrCtx::from_remark(
+        MigErrorKind::Upstream,
+        &format!("failed to create new '{}'", BBG_UENV_PATH),
+    ))?;
+    uenv_file
+        .write_all(uenv_text.as_bytes())
+        .context(MigErrCtx::from_remark(
+            MigErrorKind::Upstream,
+            &format!("failed to write new '{}'", BBG_UENV_PATH),
+        ))?;
+    info!("created new file in '{}'", BBG_UENV_PATH);
+    Ok(())
+}
+
+fn def_restore_boot(slug: &str, root_path: &Path, config: &Stage2Config) -> Result<(), MigError> {
+    info!("restoring boot configuration for {}", slug);
+
+    let uenv_file = path_append(root_path, BBG_UENV_PATH);
+
+    if file_exists(&uenv_file) && is_balena_file(&uenv_file)? {
+        remove_file(&uenv_file).context(MigErrCtx::from_remark(
+            MigErrorKind::Upstream,
+            &format!(
+                "failed to remove migrate boot config file {}",
+                uenv_file.display()
+            ),
+        ))?;
+        info!("Removed balena boot config file '{}'", &uenv_file.display());
+        restore_backups(root_path, config.get_boot_backups())?;
+    } else {
+        warn!(
+            "balena boot config file not found in '{}'",
+            &uenv_file.display()
+        );
+    }
+
+    info!("The original boot configuration was restored");
+
+    Ok(())
+}
+

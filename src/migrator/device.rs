@@ -2,6 +2,7 @@ use failure::{Fail, ResultExt};
 use log::{debug, error, info, warn};
 use std::fs::{read_to_string, File};
 use std::path::{Path, PathBuf};
+use std::io::Write;
 
 use crate::linux_common::call_cmd;
 use crate::{
@@ -16,7 +17,8 @@ use crate::{
     },
     stage2::Stage2Config,
 };
-use std::io::Write;
+
+
 
 mod beaglebone;
 mod intel_nuc;
@@ -381,7 +383,9 @@ pub(crate) fn grub_install(_config: &Config, mig_info: &mut MigrateInfo) -> Resu
     Ok(())
 }
 
-pub(crate) fn u_boot_valid() -> Result<bool, MigError> {
+pub(crate) fn u_boot_valid(_mig_info: &MigrateInfo) -> Result<bool, MigError> {
     // TODO: ensure valid u-boot setup based on partition layout
-    Err(MigError::from(MigErrorKind::NotImpl))
+    // where are uEnv.txt files or other boot configuration files ?
+    // where are kernel files ?
+    Ok(true)
 }
