@@ -69,11 +69,11 @@ pub(crate) fn is_bb(model_string: &str) -> Result<Box<Device>, MigError> {
         match model {
             "xM" => {
                 debug!("match found for BeagleboardXM");
-                Ok(Box::new(BeagleboardXM {}))
+                Ok(Box::new(BeagleboardXM::new()))
             }
             "Green" => {
                 debug!("match found for BeagleboardGreen");
-                Ok(Box::new(BeagleboneGreen {}))
+                Ok(Box::new(BeagleboneGreen::new()))
             }
             _ => {
                 let message = format!("The beaglebone model reported by your device ('{}') is not supported by balena-migrate", model);
@@ -155,11 +155,6 @@ fn def_can_migrate(
     }
 
     if !u_boot_valid(mig_info)? {
-        return Ok(false);
-    }
-
-    if let None = mig_info.get_dtb_path() {
-        error!("The device tree blob file (dtb_file) required for uboot was not found");
         return Ok(false);
     }
 

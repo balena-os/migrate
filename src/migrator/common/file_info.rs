@@ -16,6 +16,9 @@ const KERNEL_AMD64_FTYPE_REGEX: &str =
 const KERNEL_ARMHF_FTYPE_REGEX: &str = r#"^Linux kernel ARM boot executable zImage.*$"#;
 const KERNEL_I386_FTYPE_REGEX: &str = r#"^Linux kernel i386 boot executable bzImage.*$"#;
 const TEXT_FTYPE_REGEX: &str = r#"^ASCII text.*$"#;
+const DTB_FTYPE_REGEX: &str = r#"^Device Tree Blob.*$"#;
+
+
 
 #[cfg(target_os = "linux")]
 use crate::common::{MigErrCtx, MigError, MigErrorKind};
@@ -33,6 +36,7 @@ pub enum FileType {
     InitRD,
     Json,
     Text,
+    DTB,
 }
 
 impl FileType {
@@ -43,6 +47,7 @@ impl FileType {
             FileType::KernelARMHF => "balena migrate kernel image for ARMHF",
             FileType::KernelI386 => "balena migrate kernel image for I386",
             FileType::InitRD => "balena migrate initramfs",
+            FileType::DTB => "Device Tree Blob",
             FileType::Json => "balena config.json file",
             FileType::Text => "Text file",
         }
@@ -140,6 +145,7 @@ impl FileInfo {
             static ref KERNEL_AMD64_FTYPE_RE: Regex = Regex::new(KERNEL_AMD64_FTYPE_REGEX).unwrap();
             static ref KERNEL_ARMHF_FTYPE_RE: Regex = Regex::new(KERNEL_ARMHF_FTYPE_REGEX).unwrap();
             static ref KERNEL_I386_FTYPE_RE: Regex = Regex::new(KERNEL_I386_FTYPE_REGEX).unwrap();
+            static ref DTB_FTYPE_RE: Regex = Regex::new(DTB_FTYPE_REGEX).unwrap();
         }
 
         debug!(
@@ -155,6 +161,7 @@ impl FileInfo {
             FileType::KernelI386 => Ok(KERNEL_I386_FTYPE_RE.is_match(&cmd_res.stdout)),
             FileType::Json => Ok(OS_CFG_FTYPE_RE.is_match(&cmd_res.stdout)),
             FileType::Text => Ok(TEXT_FTYPE_RE.is_match(&cmd_res.stdout)),
+            FileType::DTB => Ok(DTB_FTYPE_RE.is_match(&cmd_res.stdout))
         }
     }
 

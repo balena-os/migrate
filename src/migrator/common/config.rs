@@ -1,6 +1,6 @@
 use failure::ResultExt;
-use log::{debug, info};
-use mod_logger::Logger;
+use log::{debug, info, Level};
+use mod_logger::{Logger, LogDestination, NO_STREAM};
 use serde::Deserialize;
 use serde_yaml;
 use std::fs::read_to_string;
@@ -90,12 +90,13 @@ impl<'a> Config {
 
         let log_level = match arg_matches.occurrences_of("verbose") {
             0 => None,
-            1 => Some("info"),
-            2 => Some("debug"),
-            _ => Some("trace"),
+            1 => Some(&Level::Info),
+            2 => Some(&Level::Debug),
+            _ => Some(&Level::Trace),
         };
 
-        Logger::initialise(log_level).context(MigErrCtx::from_remark(
+        Logger::initialise_v2(log_level, Some(&LogDestination::Stderr), NO_STREAM)
+            .context(MigErrCtx::from_remark(
             MigErrorKind::Upstream,
             "failed to intialize logger",
         ))?;

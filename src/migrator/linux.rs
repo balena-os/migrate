@@ -8,7 +8,7 @@ use std::time::Duration;
 use crate::{
     common::{
         backup, balena_cfg_json::BalenaCfgJson, dir_exists, format_size_with_unit, path_append,
-        Config, FileInfo, FileType, MigErrCtx, MigError, MigErrorKind, MigMode, MigrateWifis,
+        BootType, Config, FileInfo, FileType, MigErrCtx, MigError, MigErrorKind, MigMode, MigrateWifis,
         OSArch,
     },
     defs::{
@@ -18,7 +18,7 @@ use crate::{
     device::{self, Device},
     linux_common::{
         call_cmd, ensure_cmds, get_mem_info, get_os_arch, get_os_name, is_admin, MigrateInfo,
-        WifiConfig, CHMOD_CMD, DF_CMD, FDISK_CMD, FILE_CMD, LSBLK_CMD, MOUNT_CMD, REBOOT_CMD,
+        WifiConfig,CHMOD_CMD, DF_CMD, FDISK_CMD, FILE_CMD, LSBLK_CMD, MOUNT_CMD, REBOOT_CMD,
         UNAME_CMD,
     },
     stage2::Stage2Config,
@@ -208,6 +208,30 @@ impl<'a> LinuxMigrator {
             let message = String::from("The migrate initramfs has not been specified or cannot be accessed. Automatic download is not yet implemented, so you need to specify and supply all required files");
             error!("{}", message);
             return Err(MigError::from_remark(MigErrorKind::InvParam, &message));
+        }
+
+        if let Some(BootType::UBoot) = migrator.mig_info.boot_type {
+            if let Some(ref dtb_path) = migrator.config.migrate.get_dtb_path() {
+                if let Some(file_info) =
+                FileInfo::new(dtb_path, &work_dir)?
+                {
+                    file_info.expect_type(&FileType::DTB)?;
+                    info!(
+                        "The balena migrate device tree blob looks ok: '{}'",
+                        file_info.path.display()
+                    );
+                    boot_required_space += file_info.size;
+                    migrator.mig_info.dtb_info = Some(file_info);
+                } else {
+                    let message = String::from("The migrate device tree blob has not been specified or cannot be accessed. Automatic download is not yet implemented, so you need to specify and supply all required files");
+                    error!("{}", message);
+                    return Err(MigError::from_remark(MigErrorKind::InvParam, &message));
+                }
+            } else {
+                let message = String::from("The migrate device tree blob has not been specified. Automatic download is not yet implemented, so you need to specify and supply all required files");
+                error!("{}", message);
+                return Err(MigError::from_remark(MigErrorKind::InvParam, &message));
+            }
         }
 
         // **********************************************************************
