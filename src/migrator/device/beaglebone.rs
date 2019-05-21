@@ -6,19 +6,19 @@ use std::fs::{remove_file, File};
 use std::io::Write;
 use std::path::Path;
 
+use crate::device::u_boot_valid;
 use crate::{
     common::{
         file_exists, is_balena_file, path_append, BootType, Config, MigErrCtx, MigError,
         MigErrorKind,
     },
-    defs::{BALENA_FILE_TAG, MIG_INITRD_NAME, MIG_KERNEL_NAME},
-    device::{Device,grub_install},
+    defs::{BALENA_FILE_TAG, MIG_DTB_NAME, MIG_INITRD_NAME, MIG_KERNEL_NAME},
+    device::{grub_install, Device},
     linux_common::{
         call_cmd, disk_info::DiskInfo, migrate_info::MigrateInfo, restore_backups, CHMOD_CMD,
     },
     stage2::Stage2Config,
 };
-use crate::device::u_boot_valid;
 
 const BB_DRIVE_REGEX: &str = r#"^/dev/mmcblk(\d+)p(\d+)$"#;
 
@@ -39,12 +39,12 @@ fdt_high=0xffffffff
 ##These are needed to be compliant with Debian 2014-05-14 u-boot.
 
 loadximage=echo debug: [__KERNEL_PATH__] ... ; load mmc __DRIVE__:__PARTITION__ ${loadaddr} __KERNEL_PATH__
-loadxfdt=echo debug: [/boot/dtbs/${uname_r}/${fdtfile}] ... ;load mmc __DRIVE__:__PARTITION__ ${fdtaddr} /boot/dtbs/${uname_r}/${fdtfile}
+loadxfdt=echo debug: [__DTB_PATH__] ... ;load mmc __DRIVE__:__PARTITION__ ${fdtaddr} __DTB_PATH__
 loadxrd=echo debug: [__INITRD_PATH__] ... ; load mmc __DRIVE__:__PARTITION__ ${rdaddr} __INITRD_PATH__; setenv rdsize ${filesize}
 loaduEnvtxt=load mmc __DRIVE__:__PARTITION__ ${loadaddr} /boot/uEnv.txt ; env import -t ${loadaddr} ${filesize};
-check_dtb=if test -n ${dtb}; then setenv fdtfile ${dtb};fi;
 check_uboot_overlays=if test -n ${enable_uboot_overlays}; then setenv enable_uboot_overlays ;fi;
-loadall=run loaduEnvtxt; run check_dtb; run check_uboot_overlays; run loadximage; run loadxrd; run loadxfdt;
+# loadall=run loaduEnvtxt; run check_dtb; run check_uboot_overlays; run loadximage; run loadxrd; run loadxfdt;
+loadall=run run check_dtb; run check_uboot_overlays; run loadximage; run loadxrd; run loadxfdt;
 
 mmcargs=setenv bootargs console=tty0 console=${console} ${optargs} ${cape_disable} ${cape_enable} root=__ROOT_DEV__ rootfstype=${mmcrootfstype} ${cmdline}
 
@@ -87,15 +87,12 @@ pub(crate) fn is_bb(model_string: &str) -> Result<Box<Device>, MigError> {
     }
 }
 
-
-
 pub(crate) struct BeagleboneGreen {}
 
 impl BeagleboneGreen {
     pub(crate) fn new() -> BeagleboneGreen {
         BeagleboneGreen {}
     }
-
 }
 
 impl<'a> Device for BeagleboneGreen {
@@ -143,24 +140,27 @@ impl<'a> Device for BeagleboardXM {
     }
 }
 
-
-fn def_can_migrate(slug: &str, config: &Config, mig_info: &mut MigrateInfo) -> Result<bool, MigError> {
+fn def_can_migrate(
+    slug: &str,
+    config: &Config,
+    mig_info: &mut MigrateInfo,
+) -> Result<bool, MigError> {
     const SUPPORTED_OSSES: &'static [&'static str] = &["Ubuntu 18.04.2 LTS"];
 
     let os_name = mig_info.get_os_name();
 
     if let None = SUPPORTED_OSSES.iter().position(|&r| r == os_name) {
-        error!(
-            "The OS '{}' is not supported for '{}'",
-            os_name,
-            slug
-        );
+        error!("The OS '{}' is not supported for '{}'", os_name, slug);
         return Ok(false);
     }
 
-
     if !u_boot_valid(mig_info)? {
-        return Ok(false)
+        return Ok(false);
+    }
+
+    if let None = mig_info.get_dtb_path() {
+        error!("The device tree blob file (dtb_file) required for uboot was not found");
+        return Ok(false);
     }
 
     mig_info.boot_type = Some(BootType::UBoot);
@@ -183,9 +183,8 @@ fn def_can_migrate(slug: &str, config: &Config, mig_info: &mut MigrateInfo) -> R
     Ok(true)
 }
 
-
 fn def_setup(slug: &str, config: &Config, mig_info: &mut MigrateInfo) -> Result<(), MigError> {
-    trace!("setup: entered with type: '{}'",slug);
+    trace!("setup: entered with type: '{}'", slug);
 
     if let Some(ref boot_type) = mig_info.boot_type {
         match boot_type {
@@ -195,8 +194,7 @@ fn def_setup(slug: &str, config: &Config, mig_info: &mut MigrateInfo) -> Result<
                 MigErrorKind::InvParam,
                 &format!(
                     "Invalid boot type for '{}' : {:?}'",
-                    slug,
-                    mig_info.boot_type
+                    slug, mig_info.boot_type
                 ),
             )),
         }
@@ -207,7 +205,6 @@ fn def_setup(slug: &str, config: &Config, mig_info: &mut MigrateInfo) -> Result<
         ))
     }
 }
-
 
 fn setup_uboot(mig_info: &mut MigrateInfo) -> Result<(), MigError> {
     // **********************************************************************
@@ -266,10 +263,32 @@ fn setup_uboot(mig_info: &mut MigrateInfo) -> Result<(), MigError> {
         ),
     ))?;
     info!(
-        "initramfs kernel: '{}' -> '{}'",
+        "initramfs file: '{}' -> '{}'",
         source_path.display(),
         initrd_path.display()
     );
+
+    let dtb_path = path_append(&mig_info.get_boot_path().path, MIG_DTB_NAME);
+    if let Some(source_path) = mig_info.get_dtb_path() {
+        std::fs::copy(&source_path, &dtb_path).context(MigErrCtx::from_remark(
+            MigErrorKind::Upstream,
+            &format!(
+                "failed to copy dtb file '{}' to '{}'",
+                source_path.display(),
+                dtb_path.display()
+            ),
+        ))?;
+        info!(
+            "dtb file: '{}' -> '{}'",
+            source_path.display(),
+            dtb_path.display()
+        );
+    } else {
+        return Err(MigError::from_remark(
+            MigErrorKind::NotFound,
+            &format!("The device tree blob (dtb_file) could not be found"),
+        ));
+    }
 
     // **********************************************************************
     // ** backup /uEnv.txt if exists
@@ -295,6 +314,7 @@ fn setup_uboot(mig_info: &mut MigrateInfo) -> Result<(), MigError> {
     uenv_text.push_str(UENV_TXT);
     uenv_text = uenv_text.replace("__KERNEL_PATH__", &kernel_path.to_string_lossy());
     uenv_text = uenv_text.replace("__INITRD_PATH__", &initrd_path.to_string_lossy());
+    uenv_text = uenv_text.replace("__DTB_PATH__", &dtb_path.to_string_lossy());
     uenv_text = uenv_text.replace("__DRIVE__", &drive_num.0);
     uenv_text = uenv_text.replace("__PARTITION__", &drive_num.1);
     uenv_text = uenv_text.replace(
@@ -342,4 +362,3 @@ fn def_restore_boot(slug: &str, root_path: &Path, config: &Stage2Config) -> Resu
 
     Ok(())
 }
-

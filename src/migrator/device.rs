@@ -1,8 +1,8 @@
 use failure::{Fail, ResultExt};
 use log::{debug, error, info, warn};
 use std::fs::{read_to_string, File};
-use std::path::{Path, PathBuf};
 use std::io::Write;
+use std::path::{Path, PathBuf};
 
 use crate::linux_common::call_cmd;
 use crate::{
@@ -17,8 +17,6 @@ use crate::{
     },
     stage2::Stage2Config,
 };
-
-
 
 mod beaglebone;
 mod intel_nuc;

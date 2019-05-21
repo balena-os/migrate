@@ -120,7 +120,6 @@ impl<'a> LinuxMigrator {
 
         debug!("Finished architecture dependant initialization");
 
-
         // **********************************************************************
         // Set the custom device slug here if configured
 
@@ -133,7 +132,6 @@ impl<'a> LinuxMigrator {
             migrator.mig_info.device_slug = Some(force_slug);
         }
         info!("using device slug '{}", migrator.mig_info.get_device_slug());
-
 
         // Check out relevant paths
 
@@ -150,7 +148,6 @@ impl<'a> LinuxMigrator {
             "Boot mode is {:?}",
             migrator.mig_info.boot_type.as_ref().unwrap()
         );
-
 
         // **********************************************************************
         // Require a minimum disk device size for installation

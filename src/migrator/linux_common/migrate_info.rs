@@ -25,6 +25,7 @@ pub(crate) struct MigrateInfo {
     pub os_config_info: Option<FileInfo>,
     pub kernel_info: Option<FileInfo>,
     pub initrd_info: Option<FileInfo>,
+    pub dtb_info: Option<FileInfo>,
     pub device_slug: Option<String>,
     pub boot_cfg_bckup: Vec<(String, String)>,
     pub wifis: Vec<WifiConfig>,
@@ -45,6 +46,7 @@ impl<'a> MigrateInfo {
             nwmgr_files: Vec::new(),
             kernel_info: None,
             initrd_info: None,
+            dtb_info: None,
             device_slug: None,
             boot_cfg_bckup: Vec::new(),
             wifis: Vec::new(),
@@ -77,6 +79,14 @@ impl<'a> MigrateInfo {
             &initrd_info.path
         } else {
             panic!("initrd path is not initialized");
+        }
+    }
+
+    pub fn get_dtb_path(&'a self) -> Option<&'a Path> {
+        if let Some(ref dtb_info) = self.dtb_info {
+            Some(&dtb_info.path)
+        } else {
+            None
         }
     }
 

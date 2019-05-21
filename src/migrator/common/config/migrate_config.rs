@@ -73,6 +73,7 @@ pub(crate) struct MigrateConfig {
     log: Option<LogConfig>,
     kernel_file: Option<PathBuf>,
     initramfs_file: Option<PathBuf>,
+    dtb_file: Option<PathBuf>,
     force_slug: Option<String>,
     fail_mode: Option<FailMode>,
     backup: Option<Vec<VolumeConfig>>,
@@ -95,6 +96,7 @@ impl<'a> MigrateConfig {
             log: None,
             kernel_file: None,
             initramfs_file: None,
+            dtb_file: None,
             force_slug: None,
             fail_mode: None,
             backup: None,
@@ -239,6 +241,14 @@ impl<'a> MigrateConfig {
             path
         } else {
             panic!("initramfs path is not set");
+        }
+    }
+
+    pub fn get_dtb_path(&'a self) -> Option<&'a Path> {
+        if let Some(ref path) = self.dtb_file {
+            Some(path)
+        } else {
+            None
         }
     }
 

@@ -17,23 +17,23 @@ use std::time::{Duration, Instant};
 
 use crate::{
     common::{
-        dir_exists, file_exists, file_size, format_size_with_unit, path_append, FailMode, MigErrCtx, MigError,
-        MigErrorKind,
+        dir_exists, file_exists, file_size, format_size_with_unit, path_append, FailMode,
+        MigErrCtx, MigError, MigErrorKind,
     },
     defs::{
         BACKUP_FILE, BALENA_BOOT_FSTYPE, BALENA_BOOT_PART, BALENA_DATA_FSTYPE, BALENA_DATA_PART,
         BALENA_ROOTA_PART, BALENA_ROOTB_PART, BALENA_STATE_PART, BOOT_PATH, DISK_BY_LABEL_PATH,
-        STAGE2_CFG_FILE, SYSTEM_CONNECTIONS_DIR,MIG_KERNEL_NAME, MIG_INITRD_NAME, STAGE2_MEM_THRESHOLD
+        STAGE2_CFG_FILE, STAGE2_MEM_THRESHOLD, SYSTEM_CONNECTIONS_DIR,
     },
     device,
     linux_common::{
-        call_cmd, ensure_cmds, get_cmd, get_root_info, get_mem_info, DD_CMD, GZIP_CMD, PARTPROBE_CMD, REBOOT_CMD,
+        call_cmd, ensure_cmds, get_cmd, get_mem_info, get_root_info, DD_CMD, GZIP_CMD,
+        PARTPROBE_CMD, REBOOT_CMD,
     },
 };
 
 pub(crate) mod stage2_config;
 pub(crate) use stage2_config::Stage2Config;
-
 
 // for starters just restore old boot config, only required command is mount
 
@@ -71,17 +71,20 @@ pub(crate) struct Stage2 {
 }
 
 impl Stage2 {
-
     // try to mount former root device and /boot if it is on a separate partition and
     // load the stage2 config
 
     pub fn try_init() -> Result<Stage2, MigError> {
         // TODO: wait a couple of seconds for more devices to show up ?
 
-        match Logger::initialise_v2(Some(&INIT_LOG_LEVEL), Some(&LogDestination::BufferStderr), NO_STREAM) {
-            Ok(_s) =>  {
+        match Logger::initialise_v2(
+            Some(&INIT_LOG_LEVEL),
+            Some(&LogDestination::BufferStderr),
+            NO_STREAM,
+        ) {
+            Ok(_s) => {
                 info!("Balena Migrate Stage 2 initializing");
-            },
+            }
             Err(_why) => {
                 println!("Balena Migrate Stage 2 initializing");
                 println!("failed to initalize logger");
@@ -103,7 +106,10 @@ impl Stage2 {
         if !dir_exists(&root_fs_dir)? {
             create_dir(&root_fs_dir).context(MigErrCtx::from_remark(
                 MigErrorKind::Upstream,
-                &format!("failed to create mountpoint for roofs in {}", &root_fs_dir.display()),
+                &format!(
+                    "failed to create mountpoint for roofs in {}",
+                    &root_fs_dir.display()
+                ),
             ))?;
         } else {
             warn!("root mount directory {} exists", &root_fs_dir.display());
@@ -223,16 +229,26 @@ impl Stage2 {
 
         // check if we have enough space to copy files to initramfs
         match get_mem_info() {
-            Ok((mem_tot,mem_avail)) => {
-                info!("Memory available is {} of {}", format_size_with_unit(mem_avail) , format_size_with_unit(mem_tot));
+            Ok((mem_tot, mem_avail)) => {
+                info!(
+                    "Memory available is {} of {}",
+                    format_size_with_unit(mem_avail),
+                    format_size_with_unit(mem_tot)
+                );
 
-                let mut required_size = file_size(path_append(&self.root_fs_path, &self.config.get_balena_image()))?;
-                required_size += file_size(path_append(&self.root_fs_path,&self.config.get_balena_config()))?;
+                let mut required_size = file_size(path_append(
+                    &self.root_fs_path,
+                    &self.config.get_balena_image(),
+                ))?;
+                required_size += file_size(path_append(
+                    &self.root_fs_path,
+                    &self.config.get_balena_config(),
+                ))?;
 
-                let work_dir = path_append(&self.root_fs_path,&self.config.get_work_path());
+                let work_dir = path_append(&self.root_fs_path, &self.config.get_work_path());
 
                 if self.config.has_backup() {
-                    required_size += file_size(path_append(&work_dir,BACKUP_FILE))?;
+                    required_size += file_size(path_append(&work_dir, BACKUP_FILE))?;
                 }
 
                 let src_nwmgr_dir = path_append(&work_dir, SYSTEM_CONNECTIONS_DIR);
@@ -249,19 +265,23 @@ impl Stage2 {
                     }
                 }
 
-                info!("Memory required for copying files is {}", format_size_with_unit(required_size));
+                info!(
+                    "Memory required for copying files is {}",
+                    format_size_with_unit(required_size)
+                );
 
                 if mem_avail < required_size + STAGE2_MEM_THRESHOLD {
                     error!("Not enough memory available for copying files");
-                    return Err(MigError::from_remark(MigErrorKind::InvState,"Not enough memory available for copying files" ));
+                    return Err(MigError::from_remark(
+                        MigErrorKind::InvState,
+                        "Not enough memory available for copying files",
+                    ));
                 }
-
-            },
+            }
             Err(why) => {
                 warn!("Failed to retrieve mem info, error: {:?}", why);
             }
         }
-
 
         let device = device::from_device_slug(&device_slug)?;
 
@@ -383,7 +403,10 @@ impl Stage2 {
 
         // Write our buffered log to workdir before unmounting boot if we are not flashing anyway
         if self.config.is_no_flash() && Logger::get_log_dest().is_buffer_dest() {
-            let log_dest = path_append(path_append(&self.root_fs_path, self.config.get_work_path()), LOG_FILE_NAME);
+            let log_dest = path_append(
+                path_append(&self.root_fs_path, self.config.get_work_path()),
+                LOG_FILE_NAME,
+            );
             info!("Saving the log to '{}'", log_dest.display());
             Logger::flush();
 
@@ -398,7 +421,6 @@ impl Stage2 {
 
             let _res = Logger::set_log_dest(&LogDestination::StreamStderr, NO_STREAM);
         }
-
 
         umount(&self.root_fs_path).context(MigErrCtx::from_remark(
             MigErrorKind::Upstream,
