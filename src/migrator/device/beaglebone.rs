@@ -22,7 +22,7 @@ use crate::{
 
 const BB_DRIVE_REGEX: &str = r#"^/dev/mmcblk(\d+)p(\d+)$"#;
 
-const SUPPORTED_OSSES: [&str] = ["Ubuntu 18.04.2 LTS", "Ubuntu 14.04.1 LTS"];
+const SUPPORTED_OSSES: [&str;2] = ["Ubuntu 18.04.2 LTS", "Ubuntu 14.04.1 LTS"];
 
 // Supported models
 // TI OMAP3 BeagleBoard xM
