@@ -11,9 +11,9 @@ mod mswin;
 
 #[cfg(target_os = "linux")]
 mod device;
-/*#[cfg(target_os = "linux")]
+#[cfg(target_os = "linux")]
 mod boot_manager;
-*/
+
 #[cfg(target_os = "linux")]
 mod linux;
 #[cfg(target_os = "linux")]
