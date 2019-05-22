@@ -18,8 +18,6 @@ const KERNEL_I386_FTYPE_REGEX: &str = r#"^Linux kernel i386 boot executable bzIm
 const TEXT_FTYPE_REGEX: &str = r#"^ASCII text.*$"#;
 const DTB_FTYPE_REGEX: &str = r#"^(Device Tree Blob|data).*$"#;
 
-
-
 #[cfg(target_os = "linux")]
 use crate::common::{MigErrCtx, MigError, MigErrorKind};
 #[cfg(target_os = "linux")]
@@ -161,7 +159,7 @@ impl FileInfo {
             FileType::KernelI386 => Ok(KERNEL_I386_FTYPE_RE.is_match(&cmd_res.stdout)),
             FileType::Json => Ok(OS_CFG_FTYPE_RE.is_match(&cmd_res.stdout)),
             FileType::Text => Ok(TEXT_FTYPE_RE.is_match(&cmd_res.stdout)),
-            FileType::DTB => Ok(DTB_FTYPE_RE.is_match(&cmd_res.stdout))
+            FileType::DTB => Ok(DTB_FTYPE_RE.is_match(&cmd_res.stdout)),
         }
     }
 

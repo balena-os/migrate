@@ -7,10 +7,15 @@ use std::path::Path;
 use std::time::SystemTime;
 
 use crate::{
-    common::{file_exists, is_balena_file, path_append, Config, MigErrCtx, MigError, MigErrorKind},
+    common::{
+        file_exists, is_balena_file, path_append, BootType, Config, MigErrCtx, MigError,
+        MigErrorKind,
+    },
     defs::BALENA_FILE_TAG,
     device::Device,
-    linux_common::{call_cmd, migrate_info::MigrateInfo, restore_backups, CHMOD_CMD},
+    linux_common::{
+        call_cmd, disk_info::DiskInfo, migrate_info::MigrateInfo, restore_backups, CHMOD_CMD,
+    },
     stage2::Stage2Config,
 };
 
@@ -245,7 +250,7 @@ impl<'a> Device for RaspberryPi3 {
         Ok(())
     }
 
-    fn can_migrate(&self, _config: &Config, mig_info: &mut MigrateInfo) -> Result<bool, MigError> {
+    fn can_migrate(&self, config: &Config, mig_info: &mut MigrateInfo) -> Result<bool, MigError> {
         const SUPPORTED_OSSES: &'static [&'static str] = &["Raspbian GNU/Linux 9 (stretch)"];
 
         let os_name = mig_info.get_os_name();
@@ -258,6 +263,16 @@ impl<'a> Device for RaspberryPi3 {
             );
             return Ok(false);
         }
+
+        mig_info.boot_type = Some(BootType::Raspi);
+
+        mig_info.disk_info = Some(DiskInfo::new(
+            mig_info.boot_type.as_ref().unwrap(),
+            &config.migrate.get_work_dir(),
+            config.migrate.get_log_device(),
+        )?);
+
+        mig_info.install_path = Some(mig_info.disk_info.as_ref().unwrap().root_path.clone());
 
         // TODO: check
         Ok(true)

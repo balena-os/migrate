@@ -38,7 +38,6 @@ serde_yaml = "0.8"
 yaml-rust = "0.4"
 url = "*"
 mod_logger = { git = "https://github.com/samothx/ModuleLogger.git" }
-
 tar = "*"
 flate2 = "1.0"
 

@@ -110,10 +110,10 @@ impl<'a> MigrateInfo {
         }
     }
 
-    pub(crate) fn get_efi_path(&'a self) -> Option<&'a PathInfo> {
+    pub(crate) fn get_bootmgr_path(&'a self) -> Option<&'a PathInfo> {
         if let Some(ref disk_info) = self.disk_info {
-            if let Some(ref efi_path) = disk_info.efi_path {
-                return Some(efi_path);
+            if let Some(ref bootmgr_path) = disk_info.bootmgr_path {
+                return Some(bootmgr_path);
             }
         }
         return None;

@@ -12,23 +12,23 @@ use crate::{
         file_exists, is_balena_file, path_append, BootType, Config, MigErrCtx, MigError,
         MigErrorKind,
     },
-    defs::{BALENA_FILE_TAG, MIG_DTB_NAME, MIG_INITRD_NAME, MIG_KERNEL_NAME},
+    defs::{BALENA_FILE_TAG, MIG_DTB_NAME, MIG_INITRD_NAME, MIG_KERNEL_NAME, UENV_FILE_NAME},
     device::{grub_install, Device},
     linux_common::{
         call_cmd, disk_info::DiskInfo, migrate_info::MigrateInfo, restore_backups, CHMOD_CMD,
     },
     stage2::Stage2Config,
 };
+use core::borrow::Borrow;
 
 const BB_DRIVE_REGEX: &str = r#"^/dev/mmcblk(\d+)p(\d+)$"#;
 
-const SUPPORTED_OSSES: [&str;2] = ["Ubuntu 18.04.2 LTS", "Ubuntu 14.04.1 LTS"];
+const SUPPORTED_OSSES: [&str; 2] = ["Ubuntu 18.04.2 LTS", "Ubuntu 14.04.1 LTS"];
 
 // Supported models
 // TI OMAP3 BeagleBoard xM
 const BB_MODEL_REGEX: &str = r#"^((\S+\s+)*\S+)\s+Beagle(Bone|Board)\s+(\S+)$"#;
 
-const BBG_UENV_PATH: &str = "/uEnv.txt";
 
 const UENV_TXT: &str = r###"
 loadaddr=0x82000000
@@ -38,12 +38,10 @@ rdaddr=0x88080000
 initrd_high=0xffffffff
 fdt_high=0xffffffff
 
-##These are needed to be compliant with Debian 2014-05-14 u-boot.
-
 loadximage=echo debug: [__KERNEL_PATH__] ... ; load mmc __DRIVE__:__PARTITION__ ${loadaddr} __KERNEL_PATH__
 loadxfdt=echo debug: [__DTB_PATH__] ... ;load mmc __DRIVE__:__PARTITION__ ${fdtaddr} __DTB_PATH__
 loadxrd=echo debug: [__INITRD_PATH__] ... ; load mmc __DRIVE__:__PARTITION__ ${rdaddr} __INITRD_PATH__; setenv rdsize ${filesize}
-loaduEnvtxt=load mmc __DRIVE__:__PARTITION__ ${loadaddr} /boot/uEnv.txt ; env import -t ${loadaddr} ${filesize};
+# loaduEnvtxt=load mmc __DRIVE__:__PARTITION__ ${loadaddr} /boot/uEnv.txt ; env import -t ${loadaddr} ${filesize};
 check_uboot_overlays=if test -n ${enable_uboot_overlays}; then setenv enable_uboot_overlays ;fi;
 loadall=run check_uboot_overlays; run loadximage; run loadxrd; run loadxfdt;
 
@@ -160,11 +158,12 @@ fn def_can_migrate(
     mig_info.boot_type = Some(BootType::UBoot);
 
     mig_info.disk_info = Some(DiskInfo::new(
-        false,
+        mig_info.boot_type.as_ref().unwrap(),
         &config.migrate.get_work_dir(),
         config.migrate.get_log_device(),
     )?);
 
+    // TODO: check bootmgr_path too
     if mig_info.get_boot_path().drive != mig_info.get_root_path().drive {
         error!(
             "The partition layout is not supported, /boot and / are required to be on the same harddrive",
@@ -224,6 +223,9 @@ fn setup_uboot(mig_info: &mut MigrateInfo) -> Result<(), MigError> {
             ));
         }
     };
+
+    // find the u-boot boot device
+    // this is where uEnv.txt has to go
 
     // **********************************************************************
     // ** copy new kernel & iniramfs
@@ -287,18 +289,27 @@ fn setup_uboot(mig_info: &mut MigrateInfo) -> Result<(), MigError> {
     // **********************************************************************
     // ** backup /uEnv.txt if exists
 
-    if file_exists(BBG_UENV_PATH) {
+
+    let bootmgr_path = if let Some(bootmgr_path) = mig_info.get_bootmgr_path() {
+        bootmgr_path
+    } else {
+        mig_info.get_root_path()
+    };
+
+    let uenv_path = path_append(&bootmgr_path.path, UENV_FILE_NAME);
+
+    if file_exists(&uenv_path) {
         // TODO: make sure we do not backup our own files
-        if !is_balena_file(BBG_UENV_PATH)? {
-            let backup_uenv = format!("{}-{}", BBG_UENV_PATH, Local::now().format("%s"));
-            std::fs::copy(BBG_UENV_PATH, &backup_uenv).context(MigErrCtx::from_remark(
+        if !is_balena_file(&uenv_path)? {
+            let backup_uenv = format!("{}-{}", &uenv_path.to_string_lossy(), Local::now().format("%s"));
+            std::fs::copy(&uenv_path, &backup_uenv).context(MigErrCtx::from_remark(
                 MigErrorKind::Upstream,
-                &format!("failed to file '{}' to '{}'", BBG_UENV_PATH, &backup_uenv),
+                &format!("failed to file '{}' to '{}'", uenv_path.display(), &backup_uenv),
             ))?;
-            info!("copied backup of '{}' to '{}'", BBG_UENV_PATH, &backup_uenv);
+            info!("copied backup of '{}' to '{}'", uenv_path.display(), &backup_uenv);
             mig_info
                 .boot_cfg_bckup
-                .push((String::from(BBG_UENV_PATH), backup_uenv));
+                .push((String::from(uenv_path.to_string_lossy().borrow()), backup_uenv));
         }
     }
 
@@ -318,24 +329,25 @@ fn setup_uboot(mig_info: &mut MigrateInfo) -> Result<(), MigError> {
 
     debug!("writing uEnv.txt as:\n {}", uenv_text);
 
-    let mut uenv_file = File::create(BBG_UENV_PATH).context(MigErrCtx::from_remark(
+    let mut uenv_file = File::create(&uenv_path).context(MigErrCtx::from_remark(
         MigErrorKind::Upstream,
-        &format!("failed to create new '{}'", BBG_UENV_PATH),
+        &format!("failed to create new '{}'", uenv_path.display()),
     ))?;
     uenv_file
         .write_all(uenv_text.as_bytes())
         .context(MigErrCtx::from_remark(
             MigErrorKind::Upstream,
-            &format!("failed to write new '{}'", BBG_UENV_PATH),
+            &format!("failed to write new '{}'", uenv_path.display()),
         ))?;
-    info!("created new file in '{}'", BBG_UENV_PATH);
+    info!("created new file in '{}'", uenv_path.display());
     Ok(())
 }
 
 fn def_restore_boot(slug: &str, root_path: &Path, config: &Stage2Config) -> Result<(), MigError> {
     info!("restoring boot configuration for {}", slug);
 
-    let uenv_file = path_append(root_path, BBG_UENV_PATH);
+    // TODO: restore on bootmgr device
+    let uenv_file = path_append(root_path, UENV_FILE_NAME);
 
     if file_exists(&uenv_file) && is_balena_file(&uenv_file)? {
         remove_file(&uenv_file).context(MigErrCtx::from_remark(

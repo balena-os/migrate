@@ -27,7 +27,7 @@ pub(crate) struct LsblkPartition {
     pub ro: String,
     pub uuid: Option<String>,
     pub fstype: Option<String>,
-    pub mountpoint: Option<String>,
+    pub mountpoint: Option<PathBuf>,
     pub label: Option<String>,
     pub parttype: Option<String>,
     pub partlabel: Option<String>,
@@ -51,7 +51,7 @@ pub(crate) struct LsblkDevice {
     pub maj_min: String,
     pub uuid: Option<String>,
     pub size: Option<String>,
-    children: Option<Vec<LsblkPartition>>,
+    pub children: Option<Vec<LsblkPartition>>,
 }
 
 impl<'a> LsblkDevice {
@@ -168,9 +168,14 @@ impl<'a> LsblkInfo {
                         if abs_path == Path::new(mountpoint) {
                             return Ok((&device, part));
                         } else if abs_path.starts_with(mountpoint) {
-                            if let Some(last_found) = mp_match {
-                                if last_found.1.mountpoint.as_ref().unwrap().len()
-                                    > mountpoint.len()
+                            if let Some((_last_dev, last_part)) = mp_match {
+                                if last_part
+                                    .mountpoint
+                                    .as_ref()
+                                    .unwrap()
+                                    .to_string_lossy()
+                                    .len()
+                                    > mountpoint.to_string_lossy().len()
                                 {
                                     mp_match = Some((&device, part))
                                 }
@@ -192,6 +197,38 @@ impl<'a> LsblkInfo {
                     "A mountpoint could not be found for path: '{}'",
                     path.display()
                 ),
+            ))
+        }
+    }
+
+    // get the LsblkDevice & LsblkPartition from partition device path as in /dev/sda1
+    pub fn get_devinfo_from_partition<P: AsRef<Path>>(
+        &'a self,
+        part_path: P,
+    ) -> Result<(&'a LsblkDevice, &'a LsblkPartition), MigError> {
+        let part_path = part_path.as_ref();
+        trace!("get_devinfo_from_partition: '{}", part_path.display());
+        if let Some(part_name) = part_path.file_name() {
+            let cmp_name = part_name.to_string_lossy();
+            if let Some(lsblk_dev) = self
+                .blockdevices
+                .iter()
+                .find(|&dev| *&cmp_name.starts_with(&dev.name))
+            {
+                Ok((lsblk_dev, lsblk_dev.get_devinfo_from_part_name(&cmp_name)?))
+            } else {
+                Err(MigError::from_remark(
+                    MigErrorKind::NotFound,
+                    &format!(
+                        "The device was not found in lsblk output '{}'",
+                        part_path.display()
+                    ),
+                ))
+            }
+        } else {
+            Err(MigError::from_remark(
+                MigErrorKind::InvParam,
+                &format!("The device path is not valid '{}'", part_path.display()),
             ))
         }
     }
@@ -227,6 +264,14 @@ impl<'a> LsblkInfo {
                 None
             } else {
                 Some(s)
+            }
+        };
+
+        let pathbuf_or_none = |s: String| -> Option<PathBuf> {
+            if s.is_empty() {
+                None
+            } else {
+                Some(PathBuf::from(s))
             }
         };
 
@@ -284,7 +329,7 @@ impl<'a> LsblkInfo {
                             kname: parse_it(words[1], "KNAME")?,
                             maj_min: parse_it(words[2], "MAJ:MIN")?,
                             fstype: string_or_none(parse_it(words[3], "FSTYPE")?),
-                            mountpoint: string_or_none(parse_it(words[4], "MOUNTPOINT")?),
+                            mountpoint: pathbuf_or_none(parse_it(words[4], "MOUNTPOINT")?),
                             label: string_or_none(parse_it(words[5], "LABEL")?),
                             uuid: string_or_none(parse_it(words[6], "UUID")?),
                             ro: parse_it(words[7], "RO")?,
@@ -338,37 +383,5 @@ impl<'a> LsblkInfo {
         }
 
         Ok(lsblk_info)
-    }
-
-    // get the LsblkDevice & LsblkPartition from partition device path as in /dev/sda1
-    pub fn get_devinfo_from_partition<P: AsRef<Path>>(
-        &'a self,
-        part_path: P,
-    ) -> Result<(&'a LsblkDevice, &'a LsblkPartition), MigError> {
-        let part_path = part_path.as_ref();
-        trace!("get_devinfo_from_partition: '{}", part_path.display());
-        if let Some(part_name) = part_path.file_name() {
-            let cmp_name = part_name.to_string_lossy();
-            if let Some(lsblk_dev) = self
-                .blockdevices
-                .iter()
-                .find(|&dev| *&cmp_name.starts_with(&dev.name))
-            {
-                Ok((lsblk_dev, lsblk_dev.get_devinfo_from_part_name(&cmp_name)?))
-            } else {
-                Err(MigError::from_remark(
-                    MigErrorKind::NotFound,
-                    &format!(
-                        "The device was not found in lsblk output '{}'",
-                        part_path.display()
-                    ),
-                ))
-            }
-        } else {
-            Err(MigError::from_remark(
-                MigErrorKind::InvParam,
-                &format!("The device path is not valid '{}'", part_path.display()),
-            ))
-        }
     }
 }

@@ -23,7 +23,7 @@ use crate::{
     defs::{
         BACKUP_FILE, BALENA_BOOT_FSTYPE, BALENA_BOOT_PART, BALENA_DATA_FSTYPE, BALENA_DATA_PART,
         BALENA_ROOTA_PART, BALENA_ROOTB_PART, BALENA_STATE_PART, BOOT_PATH, DISK_BY_LABEL_PATH,
-        STAGE2_CFG_FILE, STAGE2_MEM_THRESHOLD, SYSTEM_CONNECTIONS_DIR,
+        NIX_NONE, STAGE2_CFG_FILE, STAGE2_MEM_THRESHOLD, SYSTEM_CONNECTIONS_DIR,
     },
     device,
     linux_common::{
@@ -58,7 +58,6 @@ const MIG_OPTIONAL_CMDS: &'static [&'static str] = &[];
 const BALENA_IMAGE_FILE: &str = "balenaOS.img.gz";
 const BALENA_CONFIG_FILE: &str = "config.json";
 
-const NIX_NONE: Option<&'static [u8]> = None;
 const PRE_PARTPROBE_WAIT_SECS: u64 = 5;
 const POST_PARTPROBE_WAIT_SECS: u64 = 5;
 const PARTPROBE_WAIT_NANOS: u32 = 0;
@@ -66,6 +65,7 @@ const PARTPROBE_WAIT_NANOS: u32 = 0;
 pub(crate) struct Stage2 {
     config: Stage2Config,
     boot_mounted: bool,
+    bootmgr_mounted: bool,
     recoverable_state: bool,
     root_fs_path: PathBuf,
 }
@@ -211,9 +211,37 @@ impl Stage2 {
             boot_mounted = true;
         }
 
+
+        // mount bootmgr partition (EFI, uboot)
+        let mut bootmgr_mounted = false;
+        if let Some(bootmgr) = stage2_cfg.get_bootmgr() {
+            let device = bootmgr.get_device();
+            if device != boot_device  && device != root_device {
+                let mountpoint = path_append(&root_fs_dir, bootmgr.get_mountpoint());
+                mount(
+                    Some(device),
+                    &mountpoint,
+                    Some(bootmgr.get_fstype()),
+                    MsFlags::empty(),
+                    NIX_NONE,
+                )
+                    .context(MigErrCtx::from_remark(
+                        MigErrorKind::Upstream,
+                        &format!(
+                            "Failed to mount previous bootmanager device '{}' to '{}' with fstype: {}",
+                            device.display(),
+                            mountpoint.display(),
+                            bootmgr.get_fstype()
+                        ),
+                    ))?;
+                bootmgr_mounted = true;
+            }
+        }
+
         return Ok(Stage2 {
             config: stage2_cfg,
             boot_mounted,
+            bootmgr_mounted,
             recoverable_state: false,
             root_fs_path: root_fs_dir,
         });
@@ -399,6 +427,20 @@ impl Stage2 {
                     self.config.get_boot_device().display()
                 ),
             ))?;
+        }
+
+        if self.bootmgr_mounted {
+            if let Some(bootmgr) = self.config.get_bootmgr() {
+                let mountpoint = path_append(&self.root_fs_path,bootmgr.get_mountpoint());
+                umount(&mountpoint).context(MigErrCtx::from_remark(
+                    MigErrorKind::Upstream,
+                    &format!(
+                        "Failed to unmount former boot device: '{}' from '{}'",
+                        bootmgr.get_device().display(),
+                        mountpoint.display()
+                    ),
+                ))?;
+            }
         }
 
         // Write our buffered log to workdir before unmounting boot if we are not flashing anyway

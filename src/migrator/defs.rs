@@ -2,6 +2,10 @@ pub const BOOT_PATH: &str = "/boot";
 pub const EFI_PATH: &str = "/boot/efi";
 pub const ROOT_PATH: &str = "/";
 
+pub const MLO_FILE_NAME: &str = "MLO";
+pub const UENV_FILE_NAME: &str = "uEnv.txt";
+pub const UBOOT_FILE_NAME: &str = "u-boot.bin";
+
 pub const KERNEL_CMDLINE_PATH: &str = "/proc/cmdline";
 
 pub const MIG_KERNEL_NAME: &str = "balena-migrate.zImage";
@@ -37,6 +41,8 @@ pub const BALENA_DATA_FSTYPE: &str = "ext4";
 
 // Default migrate config name
 pub const DEFAULT_MIGRATE_CONFIG: &str = "balena-migrate.yml";
+
+pub const NIX_NONE: Option<&'static [u8]> = None;
 
 // tag files with this to determine they are written by balena-migrate
 // and can be overwritten

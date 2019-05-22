@@ -8,8 +8,8 @@ use std::time::Duration;
 use crate::{
     common::{
         backup, balena_cfg_json::BalenaCfgJson, dir_exists, format_size_with_unit, path_append,
-        BootType, Config, FileInfo, FileType, MigErrCtx, MigError, MigErrorKind, MigMode, MigrateWifis,
-        OSArch,
+        BootType, Config, FileInfo, FileType, MigErrCtx, MigError, MigErrorKind, MigMode,
+        MigrateWifis, OSArch,
     },
     defs::{
         BACKUP_FILE, EFI_PATH, MEM_THRESHOLD, MIN_DISK_SIZE, STAGE2_CFG_FILE,
@@ -18,7 +18,7 @@ use crate::{
     device::{self, Device},
     linux_common::{
         call_cmd, ensure_cmds, get_mem_info, get_os_arch, get_os_name, is_admin, MigrateInfo,
-        WifiConfig,CHMOD_CMD, DF_CMD, FDISK_CMD, FILE_CMD, LSBLK_CMD, MOUNT_CMD, REBOOT_CMD,
+        WifiConfig, CHMOD_CMD, DF_CMD, FDISK_CMD, FILE_CMD, LSBLK_CMD, MOUNT_CMD, REBOOT_CMD,
         UNAME_CMD,
     },
     stage2::Stage2Config,
@@ -144,10 +144,30 @@ impl<'a> LinuxMigrator {
             format_size_with_unit(drive_size)
         );
 
+        let boot_path = migrator.mig_info.get_boot_path();
+        if boot_path.device != drive_dev.device {
+            info!(
+                "Found boot device '{}', fs type: {}, free space: {}",
+                boot_path.device.display(),
+                boot_path.fs_type,
+                format_size_with_unit(boot_path.fs_free)
+            );
+        }
+
         info!(
             "Boot mode is {:?}",
             migrator.mig_info.boot_type.as_ref().unwrap()
         );
+
+        if let Some(ref bootmgr_path) = migrator.mig_info.get_bootmgr_path() {
+            info!(
+                "Found boot manager '{}', mounpoint: '{}', fs type: {}, free space: {}",
+                bootmgr_path.device.display(),
+                bootmgr_path.mountpoint.display(),
+                bootmgr_path.fs_type,
+                format_size_with_unit(bootmgr_path.fs_free)
+            );
+        }
 
         // **********************************************************************
         // Require a minimum disk device size for installation
@@ -212,9 +232,7 @@ impl<'a> LinuxMigrator {
 
         if let Some(BootType::UBoot) = migrator.mig_info.boot_type {
             if let Some(ref dtb_path) = migrator.config.migrate.get_dtb_path() {
-                if let Some(file_info) =
-                FileInfo::new(dtb_path, &work_dir)?
-                {
+                if let Some(file_info) = FileInfo::new(dtb_path, &work_dir)? {
                     file_info.expect_type(&FileType::DTB)?;
                     info!(
                         "The balena migrate device tree blob looks ok: '{}'",
@@ -237,11 +255,12 @@ impl<'a> LinuxMigrator {
         // **********************************************************************
         // Check available space on /boot / /boot/efi
 
+        // TODO: this needs to be moved to intel_nuc
         let kernel_path_info = if let Some(ref disk_info) = migrator.mig_info.disk_info {
             if migrator.mig_info.is_efi_boot() == true {
-                if let Some(ref efi_path) = disk_info.efi_path {
+                if let Some(ref bootmgr_path) = disk_info.bootmgr_path {
                     // TODO: add required space for efi boot files
-                    efi_path
+                    bootmgr_path
                 } else {
                     panic!("no {} path info found", EFI_PATH)
                 }

@@ -13,8 +13,7 @@ pub const EFI_BOOT_KEY: &str = "efi_boot";
 pub const ROOT_DEVICE_KEY: &str = "root_device";
 pub const BOOT_DEVICE_KEY: &str = "boot_device";
 pub const BOOT_FSTYPE_KEY: &str = "boot_fstype";
-pub const EFI_DEVICE_KEY: &str = "efi_device";
-pub const EFI_FSTYPE_KEY: &str = "efi_fstype";
+
 pub const FLASH_DEVICE_KEY: &str = "flash_device";
 pub const HAS_BACKUP_KEY: &str = "has_backup";
 pub const SKIP_FLASH_KEY: &str = "skip_flash";
@@ -25,8 +24,10 @@ pub const BOOT_BACKUP_KEY: &str = "boot_bckup";
 
 pub const LOG_LEVEL_KEY: &str = "log_level";
 pub const LOG_TO_KEY: &str = "log_to";
-pub const LOG_DRIVE_KEY: &str = "device";
-pub const LOG_FSTYPE_KEY: &str = "fstype";
+pub const BOOTMGR_KEY: &str = "bootmgr";
+pub const DEVICE_KEY: &str = "device";
+pub const FSTYPE_KEY: &str = "fstype";
+pub const MOUNTPOINT_KEY: &str = "mountpoint";
 
 pub const WORK_DIR_KEY: &str = "work_dir";
 pub const FAIL_MODE_KEY: &str = "fail_mode";
@@ -56,6 +57,28 @@ pub(crate) struct Stage2LogConfig {
 }
 
 #[derive(Debug, Deserialize)]
+pub(crate) struct BootMgrConfig {
+    device: PathBuf,
+    fstype: String,
+    mountpoint: PathBuf,
+}
+
+impl<'a> BootMgrConfig {
+    pub fn get_device(&'a self) -> &'a Path {
+        &self.device.as_path()
+    }
+
+    pub fn get_fstype(&'a self) -> &'a str {
+        &self.fstype
+    }
+
+    pub fn get_mountpoint(&'a self) -> &'a Path {
+        &self.mountpoint.as_path()
+    }
+}
+
+
+#[derive(Debug, Deserialize)]
 pub(crate) struct Stage2Config {
     efi_boot: bool,
     // what to do on failure
@@ -69,8 +92,7 @@ pub(crate) struct Stage2Config {
     boot_device: PathBuf,
     boot_fstype: String,
     root_device: PathBuf,
-    efi_device: Option<PathBuf>,
-    efi_fstype: Option<String>,
+    bootmgr: Option<BootMgrConfig>,
     device_slug: String,
     balena_config: PathBuf,
     balena_image: PathBuf,
@@ -167,21 +189,26 @@ impl<'a> Stage2Config {
             BOOT_FSTYPE_KEY,
             mig_info.get_boot_path().fs_type
         ));
-        if mig_info.is_efi_boot() {
-            if let Some(efi_path) = mig_info.get_efi_path() {
-                cfg_str.push_str(&format!(
-                    "{}: '{}'\n",
-                    EFI_DEVICE_KEY,
-                    efi_path.device.to_string_lossy()
-                ));
-                cfg_str.push_str(&format!("{}: '{}'\n", EFI_FSTYPE_KEY, efi_path.fs_type));
-            } else {
-                return Err(MigError::from_remark(
-                    MigErrorKind::Upstream,
-                    "efipath was not configured for efi type boot",
-                ));
-            }
+
+        if let Some(bootmgr_path) = mig_info.get_bootmgr_path() {
+            cfg_str.push_str(&format!("{}:\n", BOOTMGR_KEY));
+            cfg_str.push_str(&format!(
+                "  {}: '{}'\n",
+                DEVICE_KEY,
+                &bootmgr_path.device.to_string_lossy()
+            ));
+
+            cfg_str.push_str(&format!(
+                "{}: '{}'\n",
+                FSTYPE_KEY,
+                bootmgr_path.fs_type
+            ));
+            cfg_str.push_str(&format!(
+                "{}: '{}'\n",
+                MOUNTPOINT_KEY, bootmgr_path.mountpoint.to_string_lossy()
+            ));
         }
+
         cfg_str.push_str(&format!(
             "{}: '{}'\n",
             WORK_DIR_KEY,
@@ -205,10 +232,10 @@ impl<'a> Stage2Config {
             cfg_str.push_str(&format!("{}:\n", LOG_TO_KEY));
             cfg_str.push_str(&format!(
                 "  {}: '{}'\n",
-                LOG_DRIVE_KEY,
+                DEVICE_KEY,
                 &log_path.0.to_string_lossy()
             ));
-            cfg_str.push_str(&format!("  {}: '{}'\n", LOG_FSTYPE_KEY, log_path.1));
+            cfg_str.push_str(&format!("  {}: '{}'\n", FSTYPE_KEY, log_path.1));
         }
 
         let mut cfg_file = File::create(STAGE2_CFG_FILE).context(MigErrCtx::from_remark(
@@ -252,6 +279,14 @@ impl<'a> Stage2Config {
         ))?;
 
         Stage2Config::from_str(&config_str)
+    }
+
+    pub fn get_bootmgr(&'a self) -> Option<&'a BootMgrConfig> {
+        if let Some(ref bootmgr) = self.bootmgr {
+            Some(bootmgr)
+        } else {
+            None
+        }
     }
 
     pub fn get_log_level(&self) -> Level {

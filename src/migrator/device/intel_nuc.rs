@@ -79,18 +79,17 @@ impl<'a> Device for IntelNuc {
 
         if mig_info.get_os_name().to_lowercase().starts_with("ubuntu") {
             mig_info.boot_type = Some(BootType::GRUB);
-            mig_info.disk_info = Some(DiskInfo::new(
-                false,
-                &config.migrate.get_work_dir(),
-                config.migrate.get_log_device(),
-            )?);
-            mig_info.install_path = Some(mig_info.disk_info.as_ref().unwrap().root_path.clone());
+        } else {
+            panic!("Do something about non ubuntu nuc boot type!!");
         }
 
-        info!(
-            "System is booted in {:?} mode",
-            mig_info.boot_type.as_ref().unwrap()
-        );
+        mig_info.disk_info = Some(DiskInfo::new(
+            mig_info.boot_type.as_ref().unwrap(),
+            &config.migrate.get_work_dir(),
+            config.migrate.get_log_device(),
+        )?);
+        mig_info.install_path = Some(mig_info.disk_info.as_ref().unwrap().root_path.clone());
+
 
         mig_info.secure_boot = Some(is_secure_boot()?);
 

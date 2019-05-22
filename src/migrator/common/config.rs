@@ -1,6 +1,6 @@
 use failure::ResultExt;
 use log::{debug, info, Level};
-use mod_logger::{Logger, LogDestination, NO_STREAM};
+use mod_logger::{LogDestination, Logger, NO_STREAM};
 use serde::Deserialize;
 use serde_yaml;
 use std::fs::read_to_string;
@@ -95,11 +95,9 @@ impl<'a> Config {
             _ => Some(&Level::Trace),
         };
 
-        Logger::initialise_v2(log_level, Some(&LogDestination::Stderr), NO_STREAM)
-            .context(MigErrCtx::from_remark(
-            MigErrorKind::Upstream,
-            "failed to intialize logger",
-        ))?;
+        Logger::initialise_v2(log_level, Some(&LogDestination::Stderr), NO_STREAM).context(
+            MigErrCtx::from_remark(MigErrorKind::Upstream, "failed to intialize logger"),
+        )?;
 
         // try to establish work_dir and config file
         // work_dir can be specified on command line, it defaults to ./ if not

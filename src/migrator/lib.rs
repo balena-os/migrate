@@ -1,6 +1,6 @@
 use log::error;
 use mod_logger::Logger;
-use std::path::Path;
+// use std::path::Path;
 
 mod stage2;
 use stage2::Stage2;
@@ -11,6 +11,9 @@ mod mswin;
 
 #[cfg(target_os = "linux")]
 mod device;
+/*#[cfg(target_os = "linux")]
+mod boot_manager;
+*/
 #[cfg(target_os = "linux")]
 mod linux;
 #[cfg(target_os = "linux")]
@@ -19,7 +22,7 @@ mod linux_common;
 pub(crate) mod defs;
 
 //pub(crate) use common::config::{Config, YamlConfig};
-use crate::linux_common::{ensure_cmds, FDISK_CMD, LSBLK_CMD};
+// use crate::linux_common::{ensure_cmds, FDISK_CMD, LSBLK_CMD};
 use common::mig_error::MigError;
 //pub(crate) use common::os_release::OSRelease;
 //pub(crate) use common::OSArch;
@@ -64,7 +67,8 @@ pub fn stage2() -> Result<(), MigError> {
 
 pub fn test() -> Result<(), MigError> {
     Logger::initialise(Some("trace")).unwrap();
-    ensure_cmds(&[LSBLK_CMD, FDISK_CMD], &[])?;
-    linux_common::disk_info::DiskInfo::new(true, &Path::new("."), None)?;
+    /*    ensure_cmds(&[LSBLK_CMD, FDISK_CMD], &[])?;
+        linux_common::disk_info::DiskInfo::new(BootType::GRUB, &Path::new("."), None)?;
+    */
     Ok(())
 }

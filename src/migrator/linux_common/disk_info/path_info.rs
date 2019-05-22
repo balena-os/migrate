@@ -5,6 +5,7 @@ use regex::Regex;
 use std::fmt::{self, Display, Formatter};
 use std::path::{Path, PathBuf};
 
+use crate::linux_common::disk_info::lsblk_info::{LsblkDevice, LsblkPartition};
 use crate::{
     common::{dir_exists, format_size_with_unit, MigErrCtx, MigError, MigErrorKind},
     defs::ROOT_PATH,
@@ -50,35 +51,14 @@ pub(crate) struct PathInfo {
 }
 
 impl PathInfo {
-    pub fn new<P: AsRef<Path>>(
-        path: P,
-        lsblk_info: &LsblkInfo,
-    ) -> Result<Option<PathInfo>, MigError> {
-        let path = path.as_ref();
-
-        trace!("PathInfo::new: entered with: '{}'", path.display());
-
-        if !dir_exists(path)? {
-            return Ok(None);
-        }
-
-        let abs_path = std::fs::canonicalize(Path::new(path)).context(MigErrCtx::from_remark(
-            MigErrorKind::Upstream,
-            &format!(
-                "{}::new: failed to create absolute path from {}",
-                MODULE,
-                path.display()
-            ),
-        ))?;
+    pub fn from_mounted<P: AsRef<Path>>(
+        abs_path: &P,
+        device: &LsblkDevice,
+        partition: &LsblkPartition,
+    ) -> Result<PathInfo, MigError> {
+        let abs_path = abs_path.as_ref().to_path_buf();
 
         debug!("looking fo path: '{}'", abs_path.display());
-
-        let (device, partition) = if abs_path == Path::new(ROOT_PATH) {
-            let (root_device, _root_fs_type) = get_root_info()?;
-            lsblk_info.get_devinfo_from_partition(root_device)?
-        } else {
-            lsblk_info.get_path_info(&abs_path)?
-        };
 
         lazy_static! {
             static ref SIZE_RE: Regex = Regex::new(SIZE_REGEX).unwrap();
@@ -262,7 +242,42 @@ impl PathInfo {
             result
         );
 
-        Ok(Some(result))
+        Ok(result)
+    }
+
+    pub fn new<P: AsRef<Path>>(
+        path: P,
+        lsblk_info: &LsblkInfo,
+    ) -> Result<Option<PathInfo>, MigError> {
+        let path = path.as_ref();
+
+        trace!("PathInfo::new: entered with: '{}'", path.display());
+
+        if !dir_exists(path)? {
+            return Ok(None);
+        }
+
+        let abs_path = std::fs::canonicalize(path).context(MigErrCtx::from_remark(
+            MigErrorKind::Upstream,
+            &format!(
+                "{}::new: failed to create absolute path from {}",
+                MODULE,
+                path.display()
+            ),
+        ))?;
+
+        debug!("looking fo path: '{}'", abs_path.display());
+
+        let (device, partition) = if abs_path == Path::new(ROOT_PATH) {
+            let (root_device, _root_fs_type) = get_root_info()?;
+            lsblk_info.get_devinfo_from_partition(root_device)?
+        } else {
+            lsblk_info.get_path_info(&abs_path)?
+        };
+
+        Ok(Some(PathInfo::from_mounted(
+            &abs_path, &device, &partition,
+        )?))
     }
 }
 
