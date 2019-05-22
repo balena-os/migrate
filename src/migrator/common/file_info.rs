@@ -16,7 +16,7 @@ const KERNEL_AMD64_FTYPE_REGEX: &str =
 const KERNEL_ARMHF_FTYPE_REGEX: &str = r#"^Linux kernel ARM boot executable zImage.*$"#;
 const KERNEL_I386_FTYPE_REGEX: &str = r#"^Linux kernel i386 boot executable bzImage.*$"#;
 const TEXT_FTYPE_REGEX: &str = r#"^ASCII text.*$"#;
-const DTB_FTYPE_REGEX: &str = r#"^Device Tree Blob.*$"#;
+const DTB_FTYPE_REGEX: &str = r#"^(Device Tree Blob|data).*$"#;
 
 
 
