@@ -22,6 +22,8 @@ use crate::{
 
 const BB_DRIVE_REGEX: &str = r#"^/dev/mmcblk(\d+)p(\d+)$"#;
 
+const SUPPORTED_OSSES: [&str] = ["Ubuntu 18.04.2 LTS", "Ubuntu 14.04.1 LTS"];
+
 // Supported models
 // TI OMAP3 BeagleBoard xM
 const BB_MODEL_REGEX: &str = r#"^((\S+\s+)*\S+)\s+Beagle(Bone|Board)\s+(\S+)$"#;
@@ -144,8 +146,6 @@ fn def_can_migrate(
     config: &Config,
     mig_info: &mut MigrateInfo,
 ) -> Result<bool, MigError> {
-    const SUPPORTED_OSSES: &'static [&'static str] = &["Ubuntu 18.04.2 LTS"];
-
     let os_name = mig_info.get_os_name();
 
     if let None = SUPPORTED_OSSES.iter().position(|&r| r == os_name) {
@@ -315,6 +315,8 @@ fn setup_uboot(mig_info: &mut MigrateInfo) -> Result<(), MigError> {
         "__ROOT_DEV__",
         &mig_info.get_root_path().device.to_string_lossy(),
     );
+
+    debug!("writing uEnv.txt as:\n {}", uenv_text);
 
     let mut uenv_file = File::create(BBG_UENV_PATH).context(MigErrCtx::from_remark(
         MigErrorKind::Upstream,
