@@ -43,7 +43,7 @@ pub const CHMOD_CMD: &str = "chmod";
 pub const DD_CMD: &str = "dd";
 pub const PARTPROBE_CMD: &str = "partprobe";
 pub const GZIP_CMD: &str = "gzip";
-pub const MKTEMP_CMD: &str = "mktmp";
+pub const MKTEMP_CMD: &str = "mktemp";
 
 const GRUB_UPDT_VERSION_ARGS: [&str; 1] = ["--version"];
 const GRUB_UPDT_VERSION_RE: &str = r#"^.*\s+\(GRUB\)\s+([0-9]+)\.([0-9]+)[^0-9].*$"#;

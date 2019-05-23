@@ -58,6 +58,8 @@ impl PathInfo {
     ) -> Result<PathInfo, MigError> {
         let abs_path = abs_path.as_ref().to_path_buf();
 
+        trace!("from_mounted: entered with: path: '{}', device: '{}', partition: '{}'", abs_path.display(), device.name, partition.name);
+
         debug!("looking fo path: '{}'", abs_path.display());
 
         lazy_static! {

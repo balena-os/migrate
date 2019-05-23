@@ -347,7 +347,12 @@ fn def_restore_boot(slug: &str, root_path: &Path, config: &Stage2Config) -> Resu
     info!("restoring boot configuration for {}", slug);
 
     // TODO: restore on bootmgr device
-    let uenv_file = path_append(root_path, UENV_FILE_NAME);
+    let uenv_file = if let Some(bootmgr) = config.get_bootmgr() {
+        path_append(path_append(root_path, bootmgr.get_mountpoint()),UENV_FILE_NAME)
+    } else {
+        path_append(root_path, UENV_FILE_NAME)
+    };
+
 
     if file_exists(&uenv_file) && is_balena_file(&uenv_file)? {
         remove_file(&uenv_file).context(MigErrCtx::from_remark(
