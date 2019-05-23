@@ -6,6 +6,7 @@ use std::cell::RefCell;
 use std::collections::HashMap;
 use std::fs::{copy, read_link, read_to_string};
 use std::path::{Path, PathBuf};
+use lazy_static::{lazy_static};
 
 use libc::getuid;
 
@@ -43,7 +44,7 @@ pub const CHMOD_CMD: &str = "chmod";
 pub const DD_CMD: &str = "dd";
 pub const PARTPROBE_CMD: &str = "partprobe";
 pub const GZIP_CMD: &str = "gzip";
-pub const MKTEMP_CMD: &str = "mktmp";
+pub const MKTEMP_CMD: &str = "mktemp";
 
 const GRUB_UPDT_VERSION_ARGS: [&str; 1] = ["--version"];
 const GRUB_UPDT_VERSION_RE: &str = r#"^.*\s+\(GRUB\)\s+([0-9]+)\.([0-9]+)[^0-9].*$"#;
@@ -518,3 +519,102 @@ pub(crate) fn get_os_release() -> Result<OSRelease, MigError> {
     Ok(OSRelease::parse_from_str(&os_info.trim())?)
 }
 */
+
+
+pub(crate) fn get_fs_space<P: AsRef<Path>>(path: P) -> Result<(u64,u64), MigError> {
+    const SIZE_REGEX: &str = r#"^(\d+)K?$"#;
+    let path = path.as_ref();
+    trace!("get_fs_space: entered with '{}'", path.display());
+
+    let path_str = path.to_string_lossy();
+    let args: Vec<&str> = vec!["--block-size=K", "--output=size,used", &path_str];
+
+    let cmd_res = call_cmd(DF_CMD, &args, true)?;
+
+    if !cmd_res.status.success() || cmd_res.stdout.is_empty() {
+        return Err(MigError::from_remark(
+            MigErrorKind::InvParam,
+            &format!(
+                "get_fs_space: failed to get drive space for path '{}'",
+                path.display()
+            ),
+        ));
+    }
+
+    let output: Vec<&str> = cmd_res.stdout.lines().collect();
+    if output.len() != 2 {
+        return Err(MigError::from_remark(
+            MigErrorKind::InvParam,
+            &format!(
+                "get_fs_space: failed to parse df output attributes for '{}'",
+                path.display()
+            ),
+        ));
+    }
+
+    // debug!("PathInfo::new: '{}' df result: {:?}", path, &output[1]);
+
+    let words: Vec<&str> = output[1].split_whitespace().collect();
+    if words.len() != 2 {
+        debug!(
+            "get_fs_space: '{}' df result: words {}",
+            path.display(),
+            words.len()
+        );
+        return Err(MigError::from_remark(
+            MigErrorKind::InvParam,
+            &format!(
+                "get_fs_space: failed to parse df output for {}",
+                path.display()
+            ),
+        ));
+    }
+
+    debug!(
+        "get_fs_space: '{}' df result: {:?}",
+        path.display(),
+        &words
+    );
+
+    lazy_static! {
+            static ref SIZE_RE: Regex = Regex::new(SIZE_REGEX).unwrap();
+    }
+
+    let fs_size = if let Some(captures) = SIZE_RE.captures(words[0]) {
+        captures
+            .get(1)
+            .unwrap()
+            .as_str()
+            .parse::<u64>()
+            .context(MigErrCtx::from_remark(
+                MigErrorKind::Upstream,
+                &format!("get_fs_space: failed to parse size from {} ", words[0]),
+            ))?
+            * 1024
+    } else {
+        return Err(MigError::from_remark(
+            MigErrorKind::InvParam,
+            &format!("get_fs_space: failed to parse size from {} ", words[0]),
+        ));
+    };
+
+    let fs_used = if let Some(captures) = SIZE_RE.captures(words[1]) {
+        captures
+            .get(1)
+            .unwrap()
+            .as_str()
+            .parse::<u64>()
+            .context(MigErrCtx::from_remark(
+                MigErrorKind::Upstream,
+                &format!("get_fs_space: failed to parse size from {} ", words[1]),
+            ))?
+            * 1024
+    } else {
+        return Err(MigError::from_remark(
+            MigErrorKind::InvParam,
+            &format!("get_fs_space: failed to parse size from {} ", words[1]),
+        ));
+    };
+
+    Ok((fs_size,fs_size - fs_used))
+}

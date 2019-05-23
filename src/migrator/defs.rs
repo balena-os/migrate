@@ -4,7 +4,7 @@ pub const ROOT_PATH: &str = "/";
 
 pub const MLO_FILE_NAME: &str = "MLO";
 pub const UENV_FILE_NAME: &str = "uEnv.txt";
-pub const UBOOT_FILE_NAME: &str = "u-boot.bin";
+pub const UBOOT_FILE_NAME: &str = "u-boot.img";
 
 pub const KERNEL_CMDLINE_PATH: &str = "/proc/cmdline";
 

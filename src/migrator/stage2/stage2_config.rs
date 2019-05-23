@@ -199,12 +199,12 @@ impl<'a> Stage2Config {
             ));
 
             cfg_str.push_str(&format!(
-                "{}: '{}'\n",
+                "  {}: '{}'\n",
                 FSTYPE_KEY,
                 bootmgr_path.fs_type
             ));
             cfg_str.push_str(&format!(
-                "{}: '{}'\n",
+                "  {}: '{}'\n",
                 MOUNTPOINT_KEY, bootmgr_path.mountpoint.to_string_lossy()
             ));
         }

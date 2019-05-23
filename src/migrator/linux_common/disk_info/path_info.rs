@@ -1,22 +1,20 @@
 use failure::ResultExt;
-use lazy_static::lazy_static;
 use log::{debug, trace};
 use regex::Regex;
 use std::fmt::{self, Display, Formatter};
 use std::path::{Path, PathBuf};
 
-use crate::linux_common::disk_info::lsblk_info::{LsblkDevice, LsblkPartition};
 use crate::{
     common::{dir_exists, format_size_with_unit, MigErrCtx, MigError, MigErrorKind},
+    linux_common::{
+        get_root_info, get_fs_space,
+        disk_info::lsblk_info::{
+            LsblkInfo, LsblkDevice, LsblkPartition},
+    },
     defs::ROOT_PATH,
-    linux_common::{call_cmd, disk_info::lsblk_info::LsblkInfo, get_root_info, DF_CMD},
 };
 
 const MODULE: &str = "linux_common::path_info";
-
-const SIZE_REGEX: &str = r#"^(\d+)K?$"#;
-
-const MOUNT_REGEX: &str = r#"^(\S+)\s+on\s+(\S+)\s+type\s+(\S+)\s+\(([^\)]+)\).*$"#;
 
 #[derive(Debug, Clone)]
 pub(crate) struct PathInfo {
@@ -51,114 +49,28 @@ pub(crate) struct PathInfo {
 }
 
 impl PathInfo {
-    pub fn from_mounted<P: AsRef<Path>>(
-        abs_path: &P,
+    pub fn from_mounted<P1: AsRef<Path>, P2: AsRef<Path>>(
+        abs_path: &P1,
+        mountpoint: &P2,
         device: &LsblkDevice,
         partition: &LsblkPartition,
     ) -> Result<PathInfo, MigError> {
-        let abs_path = abs_path.as_ref().to_path_buf();
+        let path = abs_path.as_ref().to_path_buf();
+        let mountpoint = PathBuf::from(mountpoint.as_ref());
 
-        debug!("looking fo path: '{}'", abs_path.display());
+        trace!("from_mounted: entered with: path: '{}', mountpoint: '{}', device: '{}', partition: '{}'", path.display(), mountpoint.display(), device.name, partition.name);
 
-        lazy_static! {
-            static ref SIZE_RE: Regex = Regex::new(SIZE_REGEX).unwrap();
-            static ref MOUNT_RE: Regex = Regex::new(MOUNT_REGEX).unwrap();
-        }
+        debug!("looking fo path: '{}'", path.display());
 
-        let res_path = abs_path.to_string_lossy();
 
-        let args: Vec<&str> = vec!["--block-size=K", "--output=size,used", &res_path];
+        let res_path = path.to_string_lossy();
 
-        let cmd_res = call_cmd(DF_CMD, &args, true)?;
+        // get filesystem space for device
 
-        if !cmd_res.status.success() || cmd_res.stdout.is_empty() {
-            return Err(MigError::from_remark(
-                MigErrorKind::InvParam,
-                &format!(
-                    "{}::new: failed to find mountpoint for {}",
-                    MODULE,
-                    abs_path.display()
-                ),
-            ));
-        }
-
-        let output: Vec<&str> = cmd_res.stdout.lines().collect();
-        if output.len() != 2 {
-            return Err(MigError::from_remark(
-                MigErrorKind::InvParam,
-                &format!(
-                    "{}::new: failed to parse mountpoint attributes for {}",
-                    MODULE,
-                    abs_path.display()
-                ),
-            ));
-        }
-
-        // debug!("PathInfo::new: '{}' df result: {:?}", path, &output[1]);
-
-        let words: Vec<&str> = output[1].split_whitespace().collect();
-        if words.len() != 2 {
-            debug!(
-                "PathInfo::new: '{}' df result: words {}",
-                abs_path.display(),
-                words.len()
-            );
-            return Err(MigError::from_remark(
-                MigErrorKind::InvParam,
-                &format!(
-                    "{}::new: failed to parse mountpoint attributes for {}",
-                    MODULE,
-                    abs_path.display()
-                ),
-            ));
-        }
-
-        debug!(
-            "PathInfo::new: '{}' df result: {:?}",
-            abs_path.display(),
-            &words
-        );
-
-        let fs_size = if let Some(captures) = SIZE_RE.captures(words[0]) {
-            captures
-                .get(1)
-                .unwrap()
-                .as_str()
-                .parse::<u64>()
-                .context(MigErrCtx::from_remark(
-                    MigErrorKind::Upstream,
-                    &format!("{}::new: failed to parse size from {} ", MODULE, words[0]),
-                ))?
-                * 1024
-        } else {
-            return Err(MigError::from_remark(
-                MigErrorKind::InvParam,
-                &format!("{}::new: failed to parse size from {} ", MODULE, words[0]),
-            ));
-        };
-
-        let fs_used = if let Some(captures) = SIZE_RE.captures(words[1]) {
-            captures
-                .get(1)
-                .unwrap()
-                .as_str()
-                .parse::<u64>()
-                .context(MigErrCtx::from_remark(
-                    MigErrorKind::Upstream,
-                    &format!("{}::new: failed to parse size from {} ", MODULE, words[1]),
-                ))?
-                * 1024
-        } else {
-            return Err(MigError::from_remark(
-                MigErrorKind::InvParam,
-                &format!("{}::new: failed to parse size from {} ", MODULE, words[1]),
-            ));
-        };
-
-        let fs_free = fs_size - fs_used;
+        let (fs_size, fs_free) = get_fs_space(&path)?;
 
         let result = PathInfo {
-            path: abs_path,
+            path: path,
             device: PathBuf::from(partition.get_path()),
             index: if let Some(index) = partition.index {
                 index
@@ -171,17 +83,7 @@ impl PathInfo {
                     ),
                 ));
             },
-            mountpoint: if let Some(ref mountpoint) = partition.mountpoint {
-                PathBuf::from(mountpoint)
-            } else {
-                return Err(MigError::from_remark(
-                    MigErrorKind::InvParam,
-                    &format!(
-                        "mountpoint not found for partition: '{}'",
-                        partition.get_path().display()
-                    ),
-                ));
-            },
+            mountpoint: PathBuf::from(mountpoint),
             drive: PathBuf::from(device.get_path()),
             drive_size: if let Some(ref size) = device.size {
                 size.parse::<u64>().context(MigErrCtx::from_remark(
@@ -275,9 +177,14 @@ impl PathInfo {
             lsblk_info.get_path_info(&abs_path)?
         };
 
-        Ok(Some(PathInfo::from_mounted(
-            &abs_path, &device, &partition,
-        )?))
+
+        if let Some(ref mountpoint) = partition.mountpoint {
+            Ok(Some(PathInfo::from_mounted(
+                &abs_path, mountpoint, &device, &partition,
+            )?))
+        } else {
+            Err(MigError::from_remark(MigErrorKind::InvState, &format!("No mountpoint found for partition: '{}'", partition.get_path().display())))
+        }
     }
 }
 
@@ -300,3 +207,5 @@ impl Display for PathInfo {
         )
     }
 }
+
+

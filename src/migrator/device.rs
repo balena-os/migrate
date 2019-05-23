@@ -54,7 +54,7 @@ pub(crate) trait Device {
 pub(crate) fn from_device_slug(slug: &str) -> Result<Box<Device>, MigError> {
     match slug {
         "beaglebone-green" => Ok(Box::new(beaglebone::BeagleboneGreen::new())),
-        "beaglebone-xm" => Ok(Box::new(beaglebone::BeagleboardXM::new())),
+        "beagleboard-xm" => Ok(Box::new(beaglebone::BeagleboardXM::new())),
         "raspberrypi3" => Ok(Box::new(raspberrypi::RaspberryPi3::new())),
         "intel-nuc" => Ok(Box::new(intel_nuc::IntelNuc::new())),
         _ => {

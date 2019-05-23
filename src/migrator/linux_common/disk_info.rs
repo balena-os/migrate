@@ -1,5 +1,5 @@
 use failure::ResultExt;
-use log::debug;
+use log::{debug, trace};
 use std::path::{Path, PathBuf};
 
 use crate::{
@@ -119,19 +119,23 @@ impl DiskInfo {
     // TODO: this is uboot specific stuff in a non uboot specific place - try to concentrate uboot / EFI stuff in dedicated module
     // Try to find a drive containing MLO, uEnv.txt or u-boot.bin, mount it if necessarry and return PathInfo if found
     fn get_uboot_mgr_path(work_path: &Path, lsblk_info: &LsblkInfo) -> Result<Option<PathInfo>, MigError> {
+        trace!("get_uboot_mgr_path: entered with: '{}'", work_path.display());
         let (root_dev, root_part) = lsblk_info.get_path_info(ROOT_PATH)?;
 
         let mut tmp_mountpoint: Option<PathBuf> = None;
 
         if let Some(ref children) = root_dev.children {
             for partition in children {
+                debug!("get_uboot_mgr_path: checking '{}' fstype: {:?}", partition.name, partition.fstype);
                 if let Some(ref fstype) = partition.fstype {
                     if fstype == "vfat" || fstype.starts_with("ext") {
+                        debug!("get_uboot_mgr_path: attempting to scan '{}' for u-boot files", partition.name);
                         let mut mounted = false;
                         let mountpoint = match partition.mountpoint {
                             Some(ref mountpoint) => mountpoint,
                             None => {
                                 // darn ! we will have to mount it
+                                debug!("get_uboot_mgr_path: attempting to mount '{}'", partition.name);
                                 if let None = tmp_mountpoint {
                                     let cmd_res = call_cmd(MKTEMP_CMD, &["-d", "-p", &work_path.to_string_lossy()], true)?;
                                     if cmd_res.status.success() {
@@ -148,11 +152,12 @@ impl DiskInfo {
                                 }
 
                                 let mountpoint = tmp_mountpoint.as_ref().unwrap();
+                                debug!("get_uboot_mgr_path: mountpoint '{}'", mountpoint.display());
 
                                 mount(
                                     Some(&partition.get_path()),
                                     mountpoint,
-                                    NIX_NONE, // Some(fstype),
+                                    Some(fstype.as_bytes()),
                                     MsFlags::empty(),
                                     NIX_NONE,
                                 )
@@ -172,12 +177,14 @@ impl DiskInfo {
                             }
                         };
 
+
                         if file_exists(path_append(mountpoint, MLO_FILE_NAME))
                             || file_exists(path_append(mountpoint, UENV_FILE_NAME))
                             || file_exists(path_append(mountpoint, UBOOT_FILE_NAME))
                         {
+                            debug!("get_uboot_mgr_path: found u-boot files on {}", partition.name);
                             return Ok(Some(PathInfo::from_mounted(
-                                mountpoint, &root_dev, &root_part,
+                                mountpoint, mountpoint, &root_dev, &partition,
                             )?));
                         }
 
@@ -187,10 +194,12 @@ impl DiskInfo {
                                 &format!("Failed to unmount '{}'", mountpoint.display()),
                             ))?;
                         }
+
+                        debug!("get_uboot_mgr_path: nothing found on {}", partition.name);
                     }
                 }
             }
-
+            debug!("get_uboot_mgr_path: nothing found");
             Ok(None)
         } else {
             panic!("root drive must have children");
