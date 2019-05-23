@@ -184,7 +184,7 @@ impl DiskInfo {
                         {
                             debug!("get_uboot_mgr_path: found u-boot files on {}", partition.name);
                             return Ok(Some(PathInfo::from_mounted(
-                                mountpoint, &root_dev, &partition,
+                                mountpoint, mountpoint, &root_dev, &partition,
                             )?));
                         }
 
