@@ -449,7 +449,7 @@ impl Stage2 {
                 path_append(&self.root_fs_path, self.config.get_work_path()),
                 LOG_FILE_NAME,
             );
-            info!("Saving the log to '{}'", log_dest.display());
+            info!("Will not flash due to config parameter no_flash, saving the log to '{}'", log_dest.display());
             Logger::flush();
 
             if let Some(buffer) = Logger::get_buffer() {
