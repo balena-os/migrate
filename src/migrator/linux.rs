@@ -8,7 +8,7 @@ use std::time::Duration;
 use crate::{
     common::{
         backup, balena_cfg_json::BalenaCfgJson, dir_exists, format_size_with_unit, path_append,
-        BootType, Config, FileInfo, FileType, MigErrCtx, MigError, MigErrorKind, MigMode,
+        Config, FileInfo, FileType, MigErrCtx, MigError, MigErrorKind, MigMode,
         MigrateWifis, OSArch,
     },
     defs::{
@@ -17,11 +17,12 @@ use crate::{
     },
     device::{self, Device},
     linux_common::{
-        call_cmd, ensure_cmds, get_mem_info, get_os_arch, get_os_name, is_admin, MigrateInfo,
+        call_cmd, ensure_cmds, get_mem_info, get_os_arch, get_os_name, is_admin, disk_info::DiskInfo, MigrateInfo,
         WifiConfig, CHMOD_CMD, DF_CMD, FDISK_CMD, FILE_CMD, LSBLK_CMD, MOUNT_CMD, REBOOT_CMD,
         UNAME_CMD,MKTEMP_CMD,
     },
     stage2::Stage2Config,
+    boot_manager::{BootType}
 };
 
 
@@ -34,7 +35,9 @@ const MODULE: &str = "migrator::linux";
 
 pub(crate) struct LinuxMigrator {
     config: Config,
-    mig_info: MigrateInfo,
+    stage2_config: Stage2Config,
+    disk_info: DiskInfo,
+    // mig_info: MigrateInfo,
     device: Option<Box<Device>>,
 }
 
@@ -82,23 +85,34 @@ impl<'a> LinuxMigrator {
         // Get os architecture & name
         // and check if we are on a supported OS.
         // Add OS string to SUPPORTED_OSSES_<ARCH> list above  once tested
+        {
+            let os_arch = get_os_arch()?;
+            let os_name = get_os_name()?;
 
-        migrator.mig_info.os_arch = Some(get_os_arch()?);
-        migrator.mig_info.os_name = Some(get_os_name()?);
+            info!(
+                "OS Architecture is {}, OS Name is '{}'",
+                os_arch,
+                os_name
+            );
 
-        info!(
-            "OS Architecture is {}, OS Name is '{}'",
-            migrator.mig_info.get_os_arch(),
-            migrator.mig_info.get_os_name()
-        );
+            migrator.mig_info.os_arch = Some(os_arch);
+            migrator.mig_info.os_name = Some(os_name);
+        }
+
+
+        // **********************************************************************
+        // Get a basic idea of the disk / partition setup
+        migrator.mig_info.disk_info = Some(DiskInfo::new(
+            &config.migrate.get_work_dir(),
+            config.migrate.get_log_device(),
+        )?);
 
         // **********************************************************************
         // Run the architecture dependent part of initialization
         // Add further architectures / functons in device.rs
 
-        migrator.device = Some(device::get_device(&migrator.mig_info)?);
-
-        if let Some(ref device) = migrator.device {
+        {
+            let device = device::get_device(&migrator.mig_info)?;
             info!("got device: '{}'", device.get_device_slug());
 
             debug!(
@@ -115,8 +129,7 @@ impl<'a> LinuxMigrator {
                 return Err(MigError::from_remark(MigErrorKind::InvParam, &message));
             }
             migrator.mig_info.device_slug = Some(String::from(device.get_device_slug()));
-        } else {
-            panic!("No device identified!")
+            migrator.device = Some(device);
         }
 
         debug!("Finished architecture dependant initialization");
@@ -136,7 +149,7 @@ impl<'a> LinuxMigrator {
 
         // Check out relevant paths
 
-        let drive_dev = migrator.mig_info.get_install_path();
+        let drive_dev = migrator.mig_info.get_install_pi();
         let drive_size = drive_dev.drive_size;
 
         info!(
@@ -145,7 +158,7 @@ impl<'a> LinuxMigrator {
             format_size_with_unit(drive_size)
         );
 
-        let boot_path = migrator.mig_info.get_boot_path();
+        let boot_path = migrator.mig_info.get_boot_pi();
         if boot_path.device != drive_dev.device {
             info!(
                 "Found boot device '{}', fs type: {}, free space: {}",
@@ -157,10 +170,10 @@ impl<'a> LinuxMigrator {
 
         info!(
             "Boot mode is {:?}",
-            migrator.mig_info.boot_type.as_ref().unwrap()
+            migrator.mig_info.boot_manager.as_ref().unwrap().get_boot_type()
         );
 
-        if let Some(ref bootmgr_path) = migrator.mig_info.get_bootmgr_path() {
+        if let Some(ref bootmgr_path) = migrator.mig_info.get_bootmgr_pi() {
             info!(
                 "Found boot manager '{}', mounpoint: '{}', fs type: {}, free space: {}",
                 bootmgr_path.device.display(),
@@ -231,7 +244,7 @@ impl<'a> LinuxMigrator {
             return Err(MigError::from_remark(MigErrorKind::InvParam, &message));
         }
 
-        if let Some(BootType::UBoot) = migrator.mig_info.boot_type {
+        if let BootType::UBoot = migrator.mig_info.get_boot_manager().get_boot_type() {
             if let Some(ref dtb_path) = migrator.config.migrate.get_dtb_path() {
                 if let Some(file_info) = FileInfo::new(dtb_path, &work_dir)? {
                     file_info.expect_type(&FileType::DTB)?;

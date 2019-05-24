@@ -3,6 +3,7 @@ use log::{debug, error, info, warn};
 use std::fs::{read_to_string, File};
 use std::io::Write;
 use std::path::{Path, PathBuf};
+use serde::{Deserialize, Serialize};
 
 use crate::linux_common::call_cmd;
 use crate::{
@@ -16,6 +17,7 @@ use crate::{
         GRUB_REBOOT_CMD, GRUB_UPDT_CMD,
     },
     stage2::Stage2Config,
+    boot_manager::{BootType},
 };
 
 mod beaglebone;
@@ -43,29 +45,41 @@ menuentry "balena-migrate" {
 }
 "##;
 
+#[derive(Debug, Deserialize, Serialize, Clone)]
+pub(crate) enum DeviceType {
+    BeagleboneGreen,
+    BeagleboneBlack,
+    BeagleboneXM,
+    IntelNuc,
+    RaspBerryPi3
+}
+
+
 pub(crate) trait Device {
     fn get_device_slug(&self) -> &'static str;
-    fn can_migrate(&self, config: &Config, mig_info: &mut MigrateInfo) -> Result<bool, MigError>;
-    // fn is_supported_os(&self, mig_info: &MigrateInfo) -> Result<bool, MigError>;
+    fn get_device_type(&self) -> DeviceType;
+    fn get_boot_type(&self) -> BootType;
     fn setup(&self, config: &Config, mig_info: &mut MigrateInfo) -> Result<(), MigError>;
     fn restore_boot(&self, root_path: &Path, config: &Stage2Config) -> Result<(), MigError>;
 }
 
-pub(crate) fn from_device_slug(slug: &str) -> Result<Box<Device>, MigError> {
-    match slug {
-        "beaglebone-green" => Ok(Box::new(beaglebone::BeagleboneGreen::new())),
-        "beagleboard-xm" => Ok(Box::new(beaglebone::BeagleboardXM::new())),
-        "raspberrypi3" => Ok(Box::new(raspberrypi::RaspberryPi3::new())),
-        "intel-nuc" => Ok(Box::new(intel_nuc::IntelNuc::new())),
-        _ => {
+pub(crate) fn from_config(device_type: &DeviceType, boot_type: &BootType) -> Result<Box<Device>, MigError> {
+    match device_type {
+        DeviceType::BeagleboneGreen => Ok(Box::new(beaglebone::BeagleboneGreen::from_boot_type(boot_type))),
+        DeviceType::BeagleboneBlack => Ok(Box::new(beaglebone::BeagleboneBlack::from_boot_type(boot_type))),
+        DeviceType::BeagleboneXM => Ok(Box::new(beaglebone::BeagleboardXM::from_boot_type(boot_type))),
+        DeviceType::RaspBerryPi3 => Ok(Box::new(raspberrypi::RaspberryPi3::from_boot_type(boot_type))),
+        DeviceType::IntelNuc => Ok(Box::new(intel_nuc::IntelNuc::from_boot_type(boot_type))),
+/*        _ => {
             let message = format!("unexpected device type: {}", &slug);
             error!("{}", &message);
             Err(MigError::from_remark(MigErrorKind::InvState, &message))
         }
+*/
     }
 }
 
-pub(crate) fn get_device(mig_info: &MigrateInfo) -> Result<Box<Device>, MigError> {
+pub(crate) fn get_device(config: &Config, mig_info: &mut MigrateInfo) -> Result<Box<Device>, MigError> {
     let os_arch = mig_info.get_os_arch();
     match os_arch {
         OSArch::ARMHF => {
@@ -77,6 +91,7 @@ pub(crate) fn get_device(mig_info: &MigrateInfo) -> Result<Box<Device>, MigError
                         MODULE, DEVICE_TREE_MODEL
                     ),
                 ))?;
+
 
             if let Ok(device) = raspberrypi::is_rpi(&dev_tree_model) {
                 return Ok(device);
@@ -142,8 +157,8 @@ pub(crate) fn grub_install(_config: &Config, mig_info: &mut MigrateInfo) -> Resu
     // c) call grub-reboot to enable boot once to migrate env
 
     // let install_drive = mig_info.get_installPath().drive;
-    let boot_path = mig_info.get_boot_path();
-    let root_path = mig_info.get_root_path();
+    let boot_path = mig_info.get_boot_pi();
+    let root_path = mig_info.get_root_pi();
 
     /*
         let grub_root = if Some(uuid) = root_path.uuid {
@@ -286,7 +301,7 @@ pub(crate) fn grub_install(_config: &Config, mig_info: &mut MigrateInfo) -> Resu
     // ** copy new kernel & iniramfs
 
     let source_path = mig_info.get_kernel_path();
-    let kernel_path = path_append(&mig_info.get_boot_path().path, MIG_KERNEL_NAME);
+    let kernel_path = path_append(&mig_info.get_boot_pi().path, MIG_KERNEL_NAME);
     std::fs::copy(&source_path, &kernel_path).context(MigErrCtx::from_remark(
         MigErrorKind::Upstream,
         &format!(
@@ -304,7 +319,7 @@ pub(crate) fn grub_install(_config: &Config, mig_info: &mut MigrateInfo) -> Resu
     call_cmd(CHMOD_CMD, &["+x", &kernel_path.to_string_lossy()], false)?;
 
     let source_path = mig_info.get_initrd_path();
-    let initrd_path = path_append(&mig_info.get_boot_path().path, MIG_INITRD_NAME);
+    let initrd_path = path_append(&mig_info.get_boot_pi().path, MIG_INITRD_NAME);
     std::fs::copy(&source_path, &initrd_path).context(MigErrCtx::from_remark(
         MigErrorKind::Upstream,
         &format!(

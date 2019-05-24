@@ -5,40 +5,8 @@ use std::io::Write;
 use std::path::{Path, PathBuf};
 use std::str::FromStr;
 
-use serde::Deserialize;
+use serde::{Deserialize, Serialize};
 use serde_yaml;
-
-pub const EFI_BOOT_KEY: &str = "efi_boot";
-//pub const DRIVE_DEVICE_KEY: &str = "drive_device";
-pub const ROOT_DEVICE_KEY: &str = "root_device";
-pub const BOOT_DEVICE_KEY: &str = "boot_device";
-pub const BOOT_FSTYPE_KEY: &str = "boot_fstype";
-
-pub const FLASH_DEVICE_KEY: &str = "flash_device";
-pub const HAS_BACKUP_KEY: &str = "has_backup";
-pub const SKIP_FLASH_KEY: &str = "skip_flash";
-pub const DEVICE_SLUG_KEY: &str = "device_slug";
-pub const BALENA_IMAGE_KEY: &str = "balena_image";
-pub const BALENA_CONFIG_KEY: &str = "balena_config";
-pub const BOOT_BACKUP_KEY: &str = "boot_bckup";
-
-pub const LOG_LEVEL_KEY: &str = "log_level";
-pub const LOG_TO_KEY: &str = "log_to";
-pub const BOOTMGR_KEY: &str = "bootmgr";
-pub const DEVICE_KEY: &str = "device";
-pub const FSTYPE_KEY: &str = "fstype";
-pub const MOUNTPOINT_KEY: &str = "mountpoint";
-
-pub const WORK_DIR_KEY: &str = "work_dir";
-pub const FAIL_MODE_KEY: &str = "fail_mode";
-pub const NO_FLASH_KEY: &str = "no_flash";
-
-pub const GZIP_INTERNAL_KEY: &str = "gzip_internal";
-
-/*
-pub const BBCKUP_SOURCE_KEY: &str = "source";
-pub const BBCKUP_BCKUP_KEY: &str = "backup";
-*/
 
 pub const EMPTY_BACKUPS: &[(String, String)] = &[];
 
@@ -48,15 +16,18 @@ use crate::{
     common::{Config, FailMode, MigErrCtx, MigError, MigErrorKind},
     defs::STAGE2_CFG_FILE,
     linux_common::MigrateInfo,
+    device::{DeviceType},
 };
+use crate::boot_manager::{BootType, BootManager, from_boot_type};
+use std::any::Any;
 
-#[derive(Debug, Deserialize)]
+#[derive(Debug, Deserialize, Serialize, Clone)]
 pub(crate) struct Stage2LogConfig {
     device: PathBuf,
     fstype: String,
 }
 
-#[derive(Debug, Deserialize)]
+#[derive(Debug, Deserialize, Serialize, Clone)]
 pub(crate) struct BootMgrConfig {
     device: PathBuf,
     fstype: String,
@@ -78,9 +49,8 @@ impl<'a> BootMgrConfig {
 }
 
 
-#[derive(Debug, Deserialize)]
+#[derive(Debug, Deserialize, Serialize)]
 pub(crate) struct Stage2Config {
-    efi_boot: bool,
     // what to do on failure
     fail_mode: FailMode,
     // pretend mode stop after unmounting root
@@ -93,7 +63,6 @@ pub(crate) struct Stage2Config {
     boot_fstype: String,
     root_device: PathBuf,
     bootmgr: Option<BootMgrConfig>,
-    device_slug: String,
     balena_config: PathBuf,
     balena_image: PathBuf,
     work_dir: PathBuf,
@@ -102,162 +71,11 @@ pub(crate) struct Stage2Config {
     gzip_internal: bool,
     log_level: String,
     log_to: Option<Stage2LogConfig>,
+    device_type: DeviceType,
+    boot_type: BootType,
 }
 
 impl<'a> Stage2Config {
-    pub fn write_stage2_cfg(config: &Config, mig_info: &MigrateInfo) -> Result<(), MigError> {
-        let mut cfg_str = String::from("# Balena Migrate Stage2 Config\n");
-
-        cfg_str.push_str("# this file was created automatically, do not edit\n");
-
-        let fail_mode = config.migrate.get_fail_mode();
-
-        cfg_str.push_str(&format!("{}: '{:?}'\n", FAIL_MODE_KEY, fail_mode));
-
-        cfg_str.push_str(&format!(
-            "{}: {}\n",
-            NO_FLASH_KEY,
-            config.debug.is_no_flash()
-        ));
-
-        cfg_str.push_str(&format!(
-            "{}: {}\n",
-            GZIP_INTERNAL_KEY,
-            config.migrate.is_gzip_internal()
-        ));
-
-        // allow to configure fake flash device
-        if let Some(ref force_flash) = config.debug.get_force_flash_device() {
-            warn!("setting up flash device as '{}'", force_flash.display());
-            cfg_str.push_str(&format!(
-                "{}: {}\n",
-                FLASH_DEVICE_KEY,
-                &force_flash.to_string_lossy()
-            ));
-
-            if config.debug.is_skip_flash() {
-                warn!("setting {} to true", SKIP_FLASH_KEY);
-            }
-
-            cfg_str.push_str(&format!(
-                "{}: {}\n",
-                SKIP_FLASH_KEY,
-                config.debug.is_skip_flash(),
-            ));
-        } else {
-            cfg_str.push_str(&format!(
-                "{}: {}\n",
-                FLASH_DEVICE_KEY,
-                &mig_info.get_install_path().drive.to_string_lossy()
-            ));
-
-            // no skipping when using the real device
-            cfg_str.push_str(&format!("{}: false\n", SKIP_FLASH_KEY,));
-        }
-
-        cfg_str.push_str(&format!("{}: {}\n", EFI_BOOT_KEY, mig_info.is_efi_boot()));
-        cfg_str.push_str(&format!("{}: {}\n", HAS_BACKUP_KEY, mig_info.has_backup));
-
-        cfg_str.push_str(&format!(
-            "{}: '{}'\n",
-            DEVICE_SLUG_KEY,
-            mig_info.get_device_slug()
-        ));
-        //cfg_str.push_str(&format!(      "{}: '{}'\n", DRIVE_DEVICE_KEY, self.get_drive_device()));
-        cfg_str.push_str(&format!(
-            "{}: '{}'\n",
-            BALENA_IMAGE_KEY,
-            mig_info.get_balena_image().to_string_lossy()
-        ));
-        cfg_str.push_str(&format!(
-            "{}: '{}'\n",
-            BALENA_CONFIG_KEY,
-            mig_info.get_balena_config().to_string_lossy()
-        ));
-        cfg_str.push_str(&format!(
-            "{}: '{}'\n",
-            ROOT_DEVICE_KEY,
-            mig_info.get_root_path().device.to_string_lossy()
-        ));
-        cfg_str.push_str(&format!(
-            "{}: '{}'\n",
-            BOOT_DEVICE_KEY,
-            mig_info.get_boot_path().device.to_string_lossy()
-        ));
-        cfg_str.push_str(&format!(
-            "{}: '{}'\n",
-            BOOT_FSTYPE_KEY,
-            mig_info.get_boot_path().fs_type
-        ));
-
-        if let Some(bootmgr_path) = mig_info.get_bootmgr_path() {
-            cfg_str.push_str(&format!("{}:\n", BOOTMGR_KEY));
-            cfg_str.push_str(&format!(
-                "  {}: '{}'\n",
-                DEVICE_KEY,
-                &bootmgr_path.device.to_string_lossy()
-            ));
-
-            cfg_str.push_str(&format!(
-                "  {}: '{}'\n",
-                FSTYPE_KEY,
-                bootmgr_path.fs_type
-            ));
-            cfg_str.push_str(&format!(
-                "  {}: '{}'\n",
-                MOUNTPOINT_KEY, bootmgr_path.mountpoint.to_string_lossy()
-            ));
-        }
-
-        cfg_str.push_str(&format!(
-            "{}: '{}'\n",
-            WORK_DIR_KEY,
-            mig_info.get_work_path().to_string_lossy()
-        ));
-
-        cfg_str.push_str("# backed up files in boot config\n");
-        if mig_info.boot_cfg_bckup.len() > 0 {
-            cfg_str.push_str(&format!("{}:\n", BOOT_BACKUP_KEY));
-            for bckup in &mig_info.boot_cfg_bckup {
-                cfg_str.push_str(&format!("  - ['{}','{}']\n", bckup.0, bckup.1));
-            }
-        }
-
-        cfg_str.push_str(&format!(
-            "{}: '{}'\n",
-            LOG_LEVEL_KEY,
-            config.migrate.get_log_level()
-        ));
-        if let Some(ref log_path) = mig_info.get_disk_info().log_path {
-            cfg_str.push_str(&format!("{}:\n", LOG_TO_KEY));
-            cfg_str.push_str(&format!(
-                "  {}: '{}'\n",
-                DEVICE_KEY,
-                &log_path.0.to_string_lossy()
-            ));
-            cfg_str.push_str(&format!("  {}: '{}'\n", FSTYPE_KEY, log_path.1));
-        }
-
-        let mut cfg_file = File::create(STAGE2_CFG_FILE).context(MigErrCtx::from_remark(
-            MigErrorKind::Upstream,
-            &format!(
-                "failed to create new stage 2 config file '{}'",
-                STAGE2_CFG_FILE
-            ),
-        ))?;
-        cfg_file
-            .write_all(cfg_str.as_bytes())
-            .context(MigErrCtx::from_remark(
-                MigErrorKind::Upstream,
-                &format!(
-                    "failed to write new  stage 2 config file '{}'",
-                    STAGE2_CFG_FILE
-                ),
-            ))?;
-
-        Ok(())
-    }
-
     fn from_str(config_str: &str) -> Result<Stage2Config, MigError> {
         Ok(
             serde_yaml::from_str(&config_str).context(MigErrCtx::from_remark(
@@ -266,6 +84,16 @@ impl<'a> Stage2Config {
             ))?,
         )
     }
+
+    fn to_str(&self) -> Result<String, MigError> {
+        Ok(
+            serde_yaml::to_string(self).context(MigErrCtx::from_remark(
+                MigErrorKind::Upstream,
+                "Failed to serialize stage2 config",
+            ))?,
+        )
+    }
+
 
     pub fn from_config<P: AsRef<Path>>(path: &P) -> Result<Stage2Config, MigError> {
         // TODO: Dummy, parse from yaml
@@ -281,7 +109,7 @@ impl<'a> Stage2Config {
         Stage2Config::from_str(&config_str)
     }
 
-    pub fn get_bootmgr(&'a self) -> Option<&'a BootMgrConfig> {
+    pub fn get_bootmgr_config(&'a self) -> Option<&'a BootMgrConfig> {
         if let Some(ref bootmgr) = self.bootmgr {
             Some(bootmgr)
         } else {
@@ -321,9 +149,9 @@ impl<'a> Stage2Config {
         self.skip_flash
     }
 
-    /*pub fn is_efi_boot(&self) -> bool {
-        self.efi_boot
-    }*/
+    pub fn get_bootmgr(&self) -> Box<BootManager> {
+        from_boot_type(&self.boot_type)
+    }
 
     pub fn get_flash_device(&'a self) -> &'a Path {
         self.flash_device.as_path()
@@ -341,8 +169,12 @@ impl<'a> Stage2Config {
         &self.boot_fstype
     }
 
-    pub fn get_device_slug(&'a self) -> &'a str {
-        &self.device_slug
+    pub fn get_boot_type(&'a self) -> &'a BootType {
+        &self.boot_type
+    }
+
+    pub fn get_device_type(&'a self) -> &'a DeviceType {
+        &self.device_type
     }
 
     pub fn get_balena_image(&'a self) -> &'a Path {
@@ -373,6 +205,157 @@ impl<'a> Stage2Config {
         &self.fail_mode
     }
 }
+
+
+pub(crate) struct Required<T> {
+    data: Option<T>
+}
+
+impl<T: Clone> Required<T> {
+    pub fn new(default: Option<&T>) -> Required<T> {
+        Required{
+            data: if let Some(default) = default {
+                Some(default.clone())
+            } else {
+                None
+            },
+        }
+    }
+
+    fn get<'a>(&'a self) -> Result<&'a T,MigError> {
+        if let Some(ref val) = self.data {
+            Ok(val)
+        } else {
+            Err(MigError::from_remark(MigErrorKind::InvParam, "A required parameters was not initialized"))
+        }
+    }
+
+    fn set(&mut self, val: &T) {
+        self.data = Some(val.clone());
+    }
+
+    fn is_set(&self) -> bool {
+        if let Some(ref _val) = self.data {
+            true
+        } else {
+            false
+        }
+    }
+}
+
+pub(crate) struct Optional<T> {
+    data: Option<T>
+}
+
+impl<T: Clone> Optional<T> {
+    pub fn new(default: Option<&T>) -> Optional<T> {
+        Optional{
+            data: if let Some(default) = default {
+                Some(default.clone())
+            } else {
+                None
+            },
+        }
+    }
+
+    fn get<'a>(&'a self) -> &'a Option<T> {
+        &self.data
+    }
+
+    fn set(&mut self, val: &T) {
+        self.data = Some(val.clone());
+    }
+
+    fn is_set(&self) -> bool {
+        if let Some(ref _val) = self.data {
+            true
+        } else {
+            false
+        }
+    }
+}
+
+pub(crate) struct Stage2ConfigBuilder {
+    fail_mode: Required<FailMode>,
+    no_flash: Required<bool>,
+    skip_flash: Required<bool>,
+    flash_device: Required<PathBuf>,
+    boot_device: Required<PathBuf>,
+    boot_fstype: Required<String>,
+    root_device: Required<PathBuf>,
+    bootmgr: Optional<BootMgrConfig>,
+    balena_config: Required<PathBuf>,
+    balena_image: Required<PathBuf>,
+    work_dir: Required<PathBuf>,
+    boot_bckup: Optional<Vec<(String, String)>>,
+    has_backup: Required<bool>,
+    gzip_internal: Required<bool>,
+    log_level: Required<String>,
+    log_to: Optional<Stage2LogConfig>,
+    device_type: Required<DeviceType>,
+    boot_type: Required<BootType>,
+}
+
+impl Stage2ConfigBuilder {
+    pub fn default() -> Stage2ConfigBuilder {
+        Stage2ConfigBuilder {
+            fail_mode: Required::new(Some(&FailMode::Reboot)),
+            no_flash: Required::new(Some(&true)),
+            skip_flash: Required::new(Some(&false)),
+            flash_device: Required::new(None),
+            boot_device: Required::new(None),
+            boot_fstype: Required::new(None),
+            root_device: Required::new(None),
+            bootmgr: Optional::new(None),
+            balena_config: Required::new(None),
+            balena_image: Required::new(None),
+            work_dir: Required::new(None),
+            boot_bckup: Optional::new(None),
+            has_backup: Required::new(None),
+            gzip_internal: Required::new(Some(&true)),
+            log_level: Required::new(Some(&String::from("warn"))),
+            log_to: Optional::new(None),
+            device_type: Required::new(None),
+            boot_type: Required::new(None),
+        }
+    }
+
+    pub fn build(&self) -> Result<Stage2Config, MigError> {
+        let result = Stage2Config {
+            fail_mode: self.fail_mode.get()?.clone(),
+            no_flash: self.no_flash.get()?.clone(),
+            skip_flash: *self.skip_flash.get()?,
+            flash_device: self.flash_device.get()?.clone(),
+            boot_device: self.boot_device.get()?.clone(),
+            boot_fstype: self.boot_fstype.get()?.clone(),
+            root_device: self.root_device.get()?.clone(),
+            bootmgr: self.bootmgr.get().clone(),
+            balena_config: self.balena_config.get()?.clone(),
+            balena_image: self.balena_image.get()?.clone(),
+            work_dir: self.work_dir.get()?.clone(),
+            boot_bckup: self.boot_bckup.get().clone(),
+            has_backup: *self.has_backup.get()?,
+            gzip_internal: *self.gzip_internal.get()?,
+            log_level: self.log_level.get()?.clone(),
+            log_to: self.log_to.get().clone(),
+            device_type: self.device_type.get()?.clone(),
+            boot_type: self.boot_type.get()?.clone(),
+        };
+
+        Ok(result)
+    }
+
+    pub fn write_stage2_cfg(&self, config: &Config, mig_info: &MigrateInfo) -> Result<(), MigError> {
+        let mut cfg_str = String::from("# Balena Migrate Stage2 Config\n");
+        cfg_str.push_str(&self.build()?.to_str()?);
+        File::create(STAGE2_CFG_FILE)
+            .context(MigErrCtx::from_remark(MigErrorKind::Upstream, &format!("Failed to open file for writing: {}'", STAGE2_CFG_FILE)))?
+            .write_all(cfg_str.as_bytes())
+            .context(MigErrCtx::from_remark(MigErrorKind::Upstream, &format!("Failed to write to config file: {}'", STAGE2_CFG_FILE)))?;
+        Ok(())
+    }
+}
+
 
 #[cfg(test)]
 mod tests {

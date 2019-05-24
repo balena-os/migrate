@@ -214,14 +214,14 @@ impl Stage2 {
 
         // mount bootmgr partition (EFI, uboot)
         let mut bootmgr_mounted = false;
-        if let Some(bootmgr) = stage2_cfg.get_bootmgr() {
-            let device = bootmgr.get_device();
-            if device != boot_device  && device != root_device {
-                let mountpoint = path_append(&root_fs_dir, bootmgr.get_mountpoint());
+        if let Some(bootmgr_cfg) = stage2_cfg.get_bootmgr_config() {
+            let device = bootmgr_cfg.get_device();
+            if device != boot_device && device != root_device {
+                let mountpoint = path_append(&root_fs_dir, bootmgr_cfg.get_mountpoint());
                 mount(
                     Some(device),
                     &mountpoint,
-                    Some(bootmgr.get_fstype()),
+                    Some(bootmgr_cfg.get_fstype()),
                     MsFlags::empty(),
                     NIX_NONE,
                 )
@@ -231,7 +231,7 @@ impl Stage2 {
                             "Failed to mount previous bootmanager device '{}' to '{}' with fstype: {}",
                             device.display(),
                             mountpoint.display(),
-                            bootmgr.get_fstype()
+                            bootmgr_cfg.get_fstype()
                         ),
                     ))?;
                 bootmgr_mounted = true;
@@ -249,11 +249,13 @@ impl Stage2 {
 
     pub fn migrate(&mut self) -> Result<(), MigError> {
         trace!("migrate: entered");
-        let device_slug = self.config.get_device_slug();
 
         let mig_tmp_dir = Path::new(MIGRATE_TEMP_DIR);
 
-        info!("migrating '{}'", &device_slug);
+        let device_type = self.config.get_device_type();
+        let boot_type = self.config.get_boot_type();
+
+        info!("migrating {:?} boot type: {:?}", device_type, boot_type);
 
         // check if we have enough space to copy files to initramfs
         match get_mem_info() {
@@ -311,7 +313,9 @@ impl Stage2 {
             }
         }
 
-        let device = device::from_device_slug(&device_slug)?;
+
+
+        let device = device::from_config(device_type, boot_type)?;
 
         device.restore_boot(&self.root_fs_path, &self.config)?;
 
@@ -430,13 +434,13 @@ impl Stage2 {
         }
 
         if self.bootmgr_mounted {
-            if let Some(bootmgr) = self.config.get_bootmgr() {
-                let mountpoint = path_append(&self.root_fs_path,bootmgr.get_mountpoint());
+            if let Some(bootmgr_cfg) = self.config.get_bootmgr_config() {
+                let mountpoint = path_append(&self.root_fs_path,bootmgr_cfg.get_mountpoint());
                 umount(&mountpoint).context(MigErrCtx::from_remark(
                     MigErrorKind::Upstream,
                     &format!(
                         "Failed to unmount former boot device: '{}' from '{}'",
-                        bootmgr.get_device().display(),
+                        bootmgr_cfg.get_device().display(),
                         mountpoint.display()
                     ),
                 ))?;

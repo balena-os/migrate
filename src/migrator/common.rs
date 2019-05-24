@@ -3,7 +3,7 @@ use failure::ResultExt;
 use log::debug;
 use log::trace;
 use regex::Regex;
-use serde::Deserialize;
+use serde::{Deserialize, Serialize};
 use std::fmt::{self, Display, Formatter};
 use std::fs::{metadata, read_to_string, File};
 use std::io::{BufRead, BufReader};
@@ -34,14 +34,6 @@ pub(crate) use self::mig_error::{MigErrCtx, MigError, MigErrorKind};
 const MODULE: &str = "migrator::common";
 
 #[derive(Debug)]
-pub(crate) enum BootType {
-    UBoot,
-    Raspi,
-    EFI,
-    GRUB,
-}
-
-#[derive(Debug)]
 pub enum OSArch {
     AMD64,
     ARMHF,
@@ -63,7 +55,7 @@ impl Display for OSArch {
     }
 }
 
-#[derive(Debug, Clone, Deserialize, PartialEq)]
+#[derive(Debug, Clone, Deserialize, Serialize, PartialEq)]
 pub(crate) enum FailMode {
     Reboot,
     RescueShell,

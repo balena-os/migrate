@@ -1,6 +1,5 @@
 use failure::ResultExt;
 use log::{debug, trace};
-use regex::Regex;
 use std::fmt::{self, Display, Formatter};
 use std::path::{Path, PathBuf};
 

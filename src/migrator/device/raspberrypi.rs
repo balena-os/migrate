@@ -8,15 +8,16 @@ use std::time::SystemTime;
 
 use crate::{
     common::{
-        file_exists, is_balena_file, path_append, BootType, Config, MigErrCtx, MigError,
+        file_exists, is_balena_file, path_append, Config, MigErrCtx, MigError,
         MigErrorKind,
     },
     defs::BALENA_FILE_TAG,
-    device::Device,
+    device::{Device, DeviceType},
     linux_common::{
         call_cmd, disk_info::DiskInfo, migrate_info::MigrateInfo, restore_backups, CHMOD_CMD,
     },
     stage2::Stage2Config,
+    boot_manager::{BootType, BootManager, RaspiBootManager, from_boot_type}
 };
 
 const RPI_MODEL_REGEX: &str = r#"^Raspberry\s+Pi\s+(\S+)\s+Model\s+(.*)$"#;
@@ -28,7 +29,7 @@ const RPI_MIG_KERNEL_NAME: &str = "balena.zImage";
 const RPI_MIG_INITRD_PATH: &str = "/boot/balena.initramfs.cpio.gz";
 const RPI_MIG_INITRD_NAME: &str = "balena.initramfs.cpio.gz";
 
-pub(crate) fn is_rpi(model_string: &str) -> Result<Box<Device>, MigError> {
+pub(crate) fn is_rpi(config: & Config, mig_info: &mut MigrateInfo, model_string: &str) -> Result<Box<Device>, MigError> {
     trace!(
         "raspberrypi::is_rpi: entered with model string: '{}'",
         model_string
@@ -45,7 +46,7 @@ pub(crate) fn is_rpi(model_string: &str) -> Result<Box<Device>, MigError> {
         match pitype {
             "3" => {
                 info!("Identified RaspberryPi3: model {}", model);
-                Ok(Box::new(RaspberryPi3 {}))
+                Ok(Box::new(RaspberryPi3::from_config(config, mig_info)))
             }
             _ => {
                 let message = format!("The raspberry pi type reported by your device ('{} {}') is not supported by balena-migrate", pitype, model);
@@ -59,17 +60,48 @@ pub(crate) fn is_rpi(model_string: &str) -> Result<Box<Device>, MigError> {
     }
 }
 
-pub(crate) struct RaspberryPi3 {}
+pub(crate) struct RaspberryPi3 {
+    boot_manager: Box<BootManager>
+}
 
 impl RaspberryPi3 {
-    pub(crate) fn new() -> RaspberryPi3 {
-        RaspberryPi3 {}
+    pub fn from_config(config: &Config, mig_info: &mut MigrateInfo) -> Result<RaspberryPi3, MigError> {
+        const SUPPORTED_OSSES: &'static [&'static str] = &["Raspbian GNU/Linux 9 (stretch)"];
+
+        let os_name = mig_info.get_os_name();
+
+        if let None = SUPPORTED_OSSES.iter().position(|&r| r == os_name) {
+            let message = format!(
+                "The OS '{}' is not supported for RaspberryPi3",
+                os_name,
+            );
+            error!("{}", message);
+            return Err(MigError::from_remark(MigErrorKind::InvParam, &message));
+        }
+
+        Ok(RaspberryPi3{
+            boot_manager: Box::new(RaspiBootManager{})
+        })
+    }
+
+    pub fn from_boot_type(boot_type: &BootType) -> RaspberryPi3 {
+        RaspberryPi3 {
+            boot_manager: from_boot_type(boot_type),
+        }
     }
 }
 
 impl<'a> Device for RaspberryPi3 {
     fn get_device_slug(&self) -> &'static str {
         "raspberrypi3"
+    }
+
+    fn get_device_type(&self) -> DeviceType {
+        DeviceType::RaspberryPi3
+    }
+
+    fn get_boot_type(&self) -> BootType {
+        self.boot_manager.get_boot_type()
     }
 
     fn setup(&self, _config: &Config, mig_info: &mut MigrateInfo) -> Result<(), MigError> {
@@ -116,7 +148,7 @@ impl<'a> Device for RaspberryPi3 {
             RPI_MIG_INITRD_PATH
         );
 
-        let boot_path = &mig_info.get_boot_path().path;
+        let boot_path = &mig_info.get_boot_pi().path;
         let config_path = path_append(boot_path, RPI_CONFIG_TXT);
 
         if !file_exists(&config_path) {
@@ -248,34 +280,6 @@ impl<'a> Device for RaspberryPi3 {
         // TODO: Optional backup & modify cmd_line.txt - eg. add debug
 
         Ok(())
-    }
-
-    fn can_migrate(&self, config: &Config, mig_info: &mut MigrateInfo) -> Result<bool, MigError> {
-        const SUPPORTED_OSSES: &'static [&'static str] = &["Raspbian GNU/Linux 9 (stretch)"];
-
-        let os_name = mig_info.get_os_name();
-
-        if let None = SUPPORTED_OSSES.iter().position(|&r| r == os_name) {
-            error!(
-                "The OS '{}' is not supported for '{}'",
-                os_name,
-                self.get_device_slug()
-            );
-            return Ok(false);
-        }
-
-        mig_info.boot_type = Some(BootType::Raspi);
-
-        mig_info.disk_info = Some(DiskInfo::new(
-            mig_info.boot_type.as_ref().unwrap(),
-            &config.migrate.get_work_dir(),
-            config.migrate.get_log_device(),
-        )?);
-
-        mig_info.install_path = Some(mig_info.disk_info.as_ref().unwrap().root_path.clone());
-
-        // TODO: check
-        Ok(true)
     }
 
     fn restore_boot(&self, root_path: &Path, config: &Stage2Config) -> Result<(), MigError> {
