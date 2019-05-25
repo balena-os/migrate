@@ -2,7 +2,7 @@ use log::{debug};
 use std::path::{Path, PathBuf};
 
 use crate::{
-    common::{MigError, MigErrorKind},
+    common::{OSArch, MigError, MigErrorKind},
     defs::{
         BOOT_PATH,  ROOT_PATH,
     },
@@ -17,22 +17,25 @@ pub(crate) mod path_info;
 pub(crate) use path_info::PathInfo;
 
 #[derive(Debug)]
-pub(crate) struct DiskInfo {
+pub(crate) struct DeviceInfo {
+    pub os_name: String,
+    pub os_arch: OSArch,
     pub lsblk_info: LsblkInfo,
-    pub inst_path: PathInfo,
     pub root_path: PathInfo,
     pub boot_path: PathInfo,
-    pub bootmgr_path: Option<PathInfo>,
     pub work_path: PathInfo,
     pub log_path: Option<(PathBuf, String)>,
 }
 
+// TODO: /etc path just in case
 
-impl DiskInfo {
+impl DeviceInfo {
     pub(crate) fn new(
+        os_name: &str,
+        os_arch: &OSArch,
         work_path: &Path,
         log_dev: Option<&Path>,
-    ) -> Result<DiskInfo, MigError> {
+    ) -> Result<DeviceInfo, MigError> {
         // find the root device in lsblk output
         let lsblk_info = LsblkInfo::new()?;
         let root_path =
@@ -91,13 +94,13 @@ impl DiskInfo {
             };
 
 
-        let result = DiskInfo {
+        let result = DeviceInfo {
+            os_name: String::from(os_name),
+            os_arch: *os_arch.clone(),
             lsblk_info,
-            inst_path: root_path.clone(),
             root_path,
             boot_path,
             work_path,
-            bootmgr_path: None,
             log_path,
         };
 

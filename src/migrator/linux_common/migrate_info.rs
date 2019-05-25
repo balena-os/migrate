@@ -3,12 +3,12 @@ use std::path::Path;
 use crate::{
     common::{FileInfo, OSArch},
     linux_common::{
-        disk_info::{path_info::PathInfo, DiskInfo},
+        device_info::{path_info::PathInfo, DeviceInfo},
         WifiConfig,
     },
     boot_manager::{BootManager, BootType},
 };
-use crate::linux_common::disk_info::lsblk_info::LsblkInfo;
+use crate::linux_common::device_info::lsblk_info::LsblkInfo;
 
 // const MODULE: &str = "linux_common::migrate_info";
 
@@ -16,7 +16,7 @@ pub(crate) struct MigrateInfo {
     pub os_name: Option<String>,
     pub os_arch: Option<OSArch>,
     pub secure_boot: Option<bool>,
-    pub disk_info: Option<DiskInfo>,
+    pub disk_info: Option<DeviceInfo>,
     pub install_path: Option<PathInfo>,
     pub os_image_info: Option<FileInfo>,
     pub has_backup: bool,
@@ -79,7 +79,7 @@ impl<'a> MigrateInfo {
     // ***************************************************
     // get PathInfos for root, boot, install, bootmgr,
 
-    pub(crate) fn get_disk_info(&'a self) -> &'a DiskInfo {
+    pub(crate) fn get_disk_info(&'a self) -> &'a DeviceInfo {
         if let Some(ref disk_info) = self.disk_info {
             disk_info
         } else {

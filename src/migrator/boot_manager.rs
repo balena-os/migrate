@@ -2,15 +2,17 @@ use std::path::{Path};
 use serde::{Deserialize, Serialize};
 
 use crate::{
-    common::{Config, MigError, MigErrorKind},
-    linux_common::{MigrateInfo},
-    stage2::stage2_config::{Stage2Config},
+    common::{Config, MigError, MigErrorKind},    
+    stage2::stage2_config::{Stage2Config, Stage2ConfigBuilder},
+    device_info::{DeviceInfo},
 };
 
 pub(crate) mod u_boot_manager;
 pub(crate) use u_boot_manager::{UBootManager};
 pub(crate) mod grub_boot_manager;
 pub(crate) use grub_boot_manager::{GrubBootManager};
+pub(crate) mod raspi_boot_manager;
+pub(crate) use raspi_boot_manager::{RaspiBootManager};
 
 #[derive(Debug, Deserialize, Serialize, Clone)]
 pub(crate) enum BootType {
@@ -31,10 +33,9 @@ pub(crate) fn from_boot_type(boot_type: &BootType) -> Box<BootManager> {
 
 pub(crate) trait BootManager {
     fn get_boot_type(&self) -> BootType;
-    fn can_migrate(&self, config: &Config, mig_info: &MigrateInfo) -> Result<bool, MigError>;
-    fn setup(&self, mig_info: &mut MigrateInfo) -> Result<(), MigError>;
+    fn can_migrate(&self, dev_info:& DeviceInfo, config: &Config, s2_cfg: &mut Stage2ConfigBuilder) -> Result<bool, MigError>;
+    fn setup(&self, dev_info:& DeviceInfo, config: &Config, s2_cfg: &mut Stage2ConfigBuilder) -> Result<(), MigError>;
     fn restore(&self, slug: &str, root_path: &Path, config: &Stage2Config) -> Result<(), MigError>;
-    fn set_bootmgr_path(&self,config: &Config, mig_info: &mut MigrateInfo) -> Result<bool, MigError>;
 }
 
 
@@ -49,42 +50,14 @@ impl BootManager for EfiBootManager {
         BootType::Efi
     }
 
-    fn can_migrate(&self,config: &Config, mig_info: &MigrateInfo) -> Result<bool, MigError> {
+    fn can_migrate(&self,dev_info:& DeviceInfo, config: &Config, s2_cfg: &mut Stage2ConfigBuilder) -> Result<bool, MigError> {
         Err(MigError::from(MigErrorKind::NotImpl))
     }
-    fn setup(&self, mig_info: &mut MigrateInfo) -> Result<(), MigError> {
-        Err(MigError::from(MigErrorKind::NotImpl))
-    }
-    fn restore(&self, slug: &str, root_path: &Path,  config: &Stage2Config) -> Result<(), MigError>  {
-        Err(MigError::from(MigErrorKind::NotImpl))
-    }
-    fn set_bootmgr_path(&self,config: &Config, mig_info: &mut MigrateInfo) -> Result<bool, MigError> {
-        Err(MigError::from(MigErrorKind::NotImpl))
-    }
-
-}
-
-pub(crate) struct RaspiBootManager;
-
-impl RaspiBootManager {
-    pub fn new() -> RaspiBootManager { RaspiBootManager{} }
-}
-
-impl BootManager for RaspiBootManager {
-    fn get_boot_type(&self) -> BootType {
-        BootType::Raspi
-    }
-
-    fn can_migrate(&self, config: &Config, mig_info: &MigrateInfo) -> Result<bool, MigError> {
-        Err(MigError::from(MigErrorKind::NotImpl))
-    }
-    fn setup(&self, mig_info: &mut MigrateInfo) -> Result<(), MigError> {
+    fn setup(&self, dev_info:& DeviceInfo, config: &Config, s2_cfg: &mut Stage2ConfigBuilder) -> Result<(), MigError> {
         Err(MigError::from(MigErrorKind::NotImpl))
     }
     fn restore(&self, slug: &str, root_path: &Path,  config: &Stage2Config) -> Result<(), MigError>  {
         Err(MigError::from(MigErrorKind::NotImpl))
     }
-    fn set_bootmgr_path(&self, config: &Config, mig_info: &mut MigrateInfo) -> Result<bool, MigError> {
-        Err(MigError::from(MigErrorKind::NotImpl))
-    }
 }
+

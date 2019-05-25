@@ -1,5 +1,5 @@
 use failure::ResultExt;
-use log::{debug, error, info, trace, warn};
+use log::{debug, error, info, trace,};
 use std::fs::{copy, create_dir};
 use std::path::PathBuf;
 use std::thread;
@@ -17,11 +17,11 @@ use crate::{
     },
     device::{self, Device},
     linux_common::{
-        call_cmd, ensure_cmds, get_mem_info, get_os_arch, get_os_name, is_admin, disk_info::DiskInfo, MigrateInfo,
+        call_cmd, ensure_cmds, get_mem_info, get_os_arch, get_os_name, is_admin, device_info::DeviceInfo, MigrateInfo,
         WifiConfig, CHMOD_CMD, DF_CMD, FDISK_CMD, FILE_CMD, LSBLK_CMD, MOUNT_CMD, REBOOT_CMD,
-        UNAME_CMD,MKTEMP_CMD,
+        UNAME_CMD, MKTEMP_CMD,
     },
-    stage2::Stage2Config,
+    stage2::stage2_config::{Stage2ConfigBuilder, Stage2Config},
     boot_manager::{BootType}
 };
 
@@ -34,11 +34,10 @@ const OPTIONAL_CMDS: &'static [&'static str] = &[];
 const MODULE: &str = "migrator::linux";
 
 pub(crate) struct LinuxMigrator {
+    dev_info: DeviceInfo,
     config: Config,
-    stage2_config: Stage2Config,
-    disk_info: DiskInfo,
-    // mig_info: MigrateInfo,
-    device: Option<Box<Device>>,
+    stage2_config: Stage2ConfigBuilder,
+    device: Box<Device>,
 }
 
 impl<'a> LinuxMigrator {
@@ -62,18 +61,11 @@ impl<'a> LinuxMigrator {
 
         info!("migrate mode: {:?}", config.migrate.get_mig_mode());
 
-        // create default
-        let mut migrator = LinuxMigrator {
-            config,
-            mig_info: MigrateInfo::default(),
-            device: None,
-        };
-
         // **********************************************************************
         // We need to be root to do this
         // note: fake admin is not honored in release mode
 
-        if !is_admin(&migrator.config)? {
+        if !is_admin(&config)? {
             error!("please run this program as root");
             return Err(MigError::from_remark(
                 MigErrorKind::InvState,
@@ -85,55 +77,92 @@ impl<'a> LinuxMigrator {
         // Get os architecture & name
         // and check if we are on a supported OS.
         // Add OS string to SUPPORTED_OSSES_<ARCH> list above  once tested
-        {
-            let os_arch = get_os_arch()?;
-            let os_name = get_os_name()?;
 
-            info!(
-                "OS Architecture is {}, OS Name is '{}'",
-                os_arch,
-                os_name
-            );
 
-            migrator.mig_info.os_arch = Some(os_arch);
-            migrator.mig_info.os_name = Some(os_name);
+        let dev_info =  DeviceInfo::new(
+            &get_os_name()?,
+            &get_os_arch()?,
+            &config.migrate.get_work_dir(),
+            config.migrate.get_log_device())?;
+
+        info!(
+            "OS Architecture is {}, OS Name is '{}'",
+            dev_info.os_arch,
+            dev_info.os_name
+        );
+
+        let stage2_config = Stage2ConfigBuilder::default();
+
+        stage2_config.set_failmode(config.migrate.get_fail_mode());
+
+        stage2_config.set_no_flash(config.debug.is_no_flash());
+        stage2_config.set_skip_flash(config.debug.is_skip_flash());
+
+        stage2_config.set_boot_device(&dev_info.boot_path.device);
+        stage2_config.set_boot_fstype(&dev_info.boot_path.fs_type);
+
+        stage2_config.set_balena_image(PathBuf::from(config.balena.get_image_path()));
+        stage2_config.set_balena_config(PathBuf::from(config.balena.get_config_path()));
+
+        stage2_config.set_work_dir(&dev_info.work_path.path);
+
+        stage2_config.set_gzip_internal(config.migrate.is_gzip_internal());
+
+        if let Some(flash_device) = config.debug.get_force_flash_device() {
+            stage2_config.set_flash_device(&PathBuf::from(flash_device));
+        } else {
+            stage2_config.set_flash_device(&dev_info.root_path.device);
         }
 
+        stage2_config.set_gzip_internal(config.migrate.is_gzip_internal());
 
-        // **********************************************************************
-        // Get a basic idea of the disk / partition setup
-        migrator.mig_info.disk_info = Some(DiskInfo::new(
-            &config.migrate.get_work_dir(),
-            config.migrate.get_log_device(),
-        )?);
+
+
+        /*
+        fail_mode: FailMode,
+        // pretend mode stop after unmounting root
+        no_flash: bool,
+        // skip the flashing, only makes sense with fake / forced flash device
+        skip_flash: bool,
+        // which device to flash
+        flash_device: PathBuf,
+        boot_device: PathBuf,
+        boot_fstype: String,
+        // root_device: PathBuf,
+        bootmgr: Option<BootMgrConfig>,
+        balena_config: PathBuf,
+        balena_image: PathBuf,
+        work_dir: PathBuf,
+        boot_bckup: Option<Vec<(String, String)>>,
+        has_backup: bool,
+        gzip_internal: bool,
+        log_level: String,
+        log_to: Option<Stage2LogConfig>,
+        device_type: DeviceType,
+        boot_type: BootType,
+*/
 
         // **********************************************************************
         // Run the architecture dependent part of initialization
         // Add further architectures / functons in device.rs
 
-        {
-            let device = device::get_device(&migrator.mig_info)?;
-            info!("got device: '{}'", device.get_device_slug());
+        let device = device::get_device(&dev_info,  &config, &mut stage2_config)?;
 
-            debug!(
-                "ensuring that '{}' can migrate this device",
-                device.get_device_slug()
-            );
+        let mut migrator = LinuxMigrator {
+            dev_info,
+            config,
+            device,
+            stage2_config,
+        };
 
-            if !device.can_migrate(&migrator.config, &mut migrator.mig_info)? {
-                let message = format!(
-                    "Your device: '{}' can not be migrated",
-                    device.get_device_slug()
-                );
-                error!("{}", &message);
-                return Err(MigError::from_remark(MigErrorKind::InvParam, &message));
-            }
-            migrator.mig_info.device_slug = Some(String::from(device.get_device_slug()));
-            migrator.device = Some(device);
-        }
+
+        let dev_type = migrator.device.get_device_type();
+        migrator.stage2_config.set_device_type(&dev_type);
+        info!("got device: '{:?}'", dev_type);
 
         debug!("Finished architecture dependant initialization");
 
+        /* Unclear if this will be used at all
         // **********************************************************************
         // Set the custom device slug here if configured
 
@@ -146,8 +175,10 @@ impl<'a> LinuxMigrator {
             migrator.mig_info.device_slug = Some(force_slug);
         }
         info!("using device slug '{}", migrator.mig_info.get_device_slug());
+        */
 
         // Check out relevant paths
+
 
         let drive_dev = migrator.mig_info.get_install_pi();
         let drive_size = drive_dev.drive_size;
@@ -158,7 +189,7 @@ impl<'a> LinuxMigrator {
             format_size_with_unit(drive_size)
         );
 
-        let boot_path = migrator.mig_info.get_boot_pi();
+        let boot_path = &migrator.dev_info.boot_path;
         if boot_path.device != drive_dev.device {
             info!(
                 "Found boot device '{}', fs type: {}, free space: {}",
@@ -170,18 +201,8 @@ impl<'a> LinuxMigrator {
 
         info!(
             "Boot mode is {:?}",
-            migrator.mig_info.boot_manager.as_ref().unwrap().get_boot_type()
+            migrator.device.get_boot_type()
         );
-
-        if let Some(ref bootmgr_path) = migrator.mig_info.get_bootmgr_pi() {
-            info!(
-                "Found boot manager '{}', mounpoint: '{}', fs type: {}, free space: {}",
-                bootmgr_path.device.display(),
-                bootmgr_path.mountpoint.display(),
-                bootmgr_path.fs_type,
-                format_size_with_unit(bootmgr_path.fs_free)
-            );
-        }
 
         // **********************************************************************
         // Require a minimum disk device size for installation
@@ -210,7 +231,7 @@ impl<'a> LinuxMigrator {
         if let Some(file_info) =
             FileInfo::new(migrator.config.migrate.get_kernel_path(), &work_dir)?
         {
-            file_info.expect_type(match migrator.mig_info.get_os_arch() {
+            file_info.expect_type(match migrator.dev_info.os_arch {
                 OSArch::AMD64 => &FileType::KernelAMD64,
                 OSArch::ARMHF => &FileType::KernelARMHF,
                 OSArch::I386 => &FileType::KernelI386,
@@ -229,7 +250,7 @@ impl<'a> LinuxMigrator {
         }
 
         if let Some(file_info) =
-            FileInfo::new(migrator.config.migrate.get_initramfs_path(), &work_dir)?
+            FileInfo::new(migrator.config.migrate.get_initrd_path(), &work_dir)?
         {
             file_info.expect_type(&FileType::InitRD)?;
             info!(
@@ -474,7 +495,7 @@ impl<'a> LinuxMigrator {
     fn get_disk_info(&mut self) -> Result<DiskInfo, MigError> {
         trace!("LinuxMigrator::get_disk_info: entered");
 
-        let mut disk_info =
+        let mut device_info =
 
         // TODO: also retrieve:
         //  partition type (GPT/msdos)
@@ -483,8 +504,8 @@ impl<'a> LinuxMigrator {
         // **********************************************************************
         // check /boot
 
-        disk_info.boot_path = PathInfo::new(BOOT_PATH)?;
-        if let Some(ref boot_part) = disk_info.boot_path {
+        device_info.boot_path = PathInfo::new(BOOT_PATH)?;
+        if let Some(ref boot_part) = device_info.boot_path {
             debug!("{}", boot_part);
         } else {
             let message = format!(
@@ -499,8 +520,8 @@ impl<'a> LinuxMigrator {
             // **********************************************************************
             // check /boot/efi
             // TODO: detect efi dir in other locations (via parted / mount)
-            disk_info.efi_path = PathInfo::new(EFI_PATH)?;
-            if let Some(ref efi_part) = disk_info.efi_path {
+            device_info.efi_path = PathInfo::new(EFI_PATH)?;
+            if let Some(ref efi_part) = device_info.efi_path {
                 debug!("{}", efi_part);
             }
         }
@@ -508,8 +529,8 @@ impl<'a> LinuxMigrator {
         // **********************************************************************
         // check work_dir
 
-        disk_info.work_path = PathInfo::new(self.config.migrate.get_work_dir())?;
-        if let Some(ref work_part) = disk_info.work_path {
+        device_info.work_path = PathInfo::new(self.config.migrate.get_work_dir())?;
+        if let Some(ref work_part) = device_info.work_path {
             debug!("{}", work_part);
         }
 
@@ -517,23 +538,23 @@ impl<'a> LinuxMigrator {
                 // **********************************************************************
                 // check log path
 
-                disk_info.log_path = PathInfo::new(&self.config.migrate.log_path)?;
-                if let Some(ref work_part) = disk_info.work_path {
+                device_info.log_path = PathInfo::new(&self.config.migrate.log_path)?;
+                if let Some(ref work_part) = device_info.work_path {
                     debug!("{}", work_part);
                 }
         */
     // **********************************************************************
     // check /
 
-    disk_info.root_path = PathInfo::new(ROOT_PATH)?;
+    device_info.root_path = PathInfo::new(ROOT_PATH)?;
 
-    if let Some(ref root_part) = disk_info.root_path {
+    if let Some(ref root_part) = device_info.root_path {
     debug!("{}", root_part);
 
     // **********************************************************************
     // Make sure all relevant paths are on one drive
 
-    if let Some(ref boot_part) = disk_info.boot_path {
+    if let Some(ref boot_part) = device_info.boot_path {
     if root_part.drive != boot_part.drive {
     let message = "Your device has a disk layout that is incompatible with balena-migrate. balena migrate requires the /boot /boot/efi and / partitions to be on one drive";
     error!("{}", message);
@@ -544,7 +565,7 @@ impl<'a> LinuxMigrator {
     }
     }
 
-    if let Some(ref efi_part) = disk_info.efi_path {
+    if let Some(ref efi_part) = device_info.efi_path {
     if root_part.drive != efi_part.drive {
     let message = "Your device has a disk layout that is incompatible with balena-migrate. balena migrate requires the /boot /boot/efi and / partitions to be on one drive";
     error!("{}", message);
@@ -588,14 +609,14 @@ impl<'a> LinuxMigrator {
 
     debug!("lsblk output: {:?}", &output[1]);
     if let Some(captures) = Regex::new(LSBLK_REGEX).unwrap().captures(&output[1]) {
-    disk_info.drive_size = captures.get(1).unwrap().as_str().parse::<u64>().unwrap();
+    device_info.drive_size = captures.get(1).unwrap().as_str().parse::<u64>().unwrap();
     if let Some(cap) = captures.get(3) {
-    disk_info.drive_uuid = String::from(cap.as_str());
+    device_info.drive_uuid = String::from(cap.as_str());
     }
     }
-    disk_info.drive_dev = root_part.drive.clone();
+    device_info.drive_dev = root_part.drive.clone();
 
-    Ok(disk_info)
+    Ok(device_info)
     } else {
     let message = format!(
     "Unable to retrieve attributes for {} file system, giving up.",

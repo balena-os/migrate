@@ -28,7 +28,7 @@ struct SysInfo {
     efi_boot: Option<bool>,
     secure_boot: Option<bool>,
     /*
-        disk_info: Option<DiskInfo>,
+        device_info: Option<DiskInfo>,
         image_info: Option<FileInfo>,
         kernel_info: Option<FileInfo>,
         initrd_info: Option<FileInfo>,
@@ -45,7 +45,7 @@ impl SysInfo {
             efi_boot: None,
             secure_boot: None,
             /*
-                        disk_info: None,
+                        device_info: None,
                         image_info: None,
                         kernel_info: None,
                         initrd_info: None,

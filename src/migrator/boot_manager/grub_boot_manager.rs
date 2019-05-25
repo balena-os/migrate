@@ -4,8 +4,8 @@ use log::{info, trace, debug, error};
 use crate::{
     defs::{BOOT_PATH, ROOT_PATH, NIX_NONE, MIG_KERNEL_NAME, MIG_INITRD_NAME, BALENA_FILE_TAG, GRUB_MIN_VERSION},
     common::{file_exists, is_balena_file, path_append, Config, MigError, MigErrCtx, MigErrorKind,},
-    linux_common::{call_cmd, restore_backups, get_grub_version, MigrateInfo,disk_info::path_info::PathInfo, MKTEMP_CMD, CHMOD_CMD},
-    stage2::stage2_config::{Stage2Config},
+    linux_common::{call_cmd, restore_backups, get_grub_version, device_info::{DeviceInfo, path_info::PathInfo}, MKTEMP_CMD, CHMOD_CMD},
+    stage2::stage2_config::{Stage2ConfigBuilder, Stage2Config},
     boot_manager::{BootManager, BootType},
 };
 
@@ -20,7 +20,7 @@ impl BootManager for GrubBootManager {
         BootType::Grub
     }
 
-    fn can_migrate(&self,config: &Config, mig_info: &MigrateInfo) -> Result<bool, MigError> {
+    fn can_migrate(&self,dev_info: &DeviceInfo, config: &Config, s2_cfg: &mut Stage2ConfigBuilder) -> Result<bool, MigError> {
         trace!("can_migrate: entered");
         let grub_version = get_grub_version()?;
         info!(
@@ -35,7 +35,8 @@ impl BootManager for GrubBootManager {
 
         Err(MigError::from(MigErrorKind::NotImpl))
     }
-    fn setup(&self, mig_info: &mut MigrateInfo) -> Result<(), MigError> {
+
+    fn setup(&self, dev_info: &DeviceInfo, config: &Config, s2_cfg: &mut Stage2ConfigBuilder) -> Result<(), MigError> {
         trace!("setup: entered");
         Err(MigError::from(MigErrorKind::NotImpl))
     }
@@ -43,9 +44,10 @@ impl BootManager for GrubBootManager {
         trace!("restore: entered");
         Err(MigError::from(MigErrorKind::NotImpl))
     }
-    fn set_bootmgr_path(&self,config: &Config, mig_info: &mut MigrateInfo) -> Result<bool, MigError> {
+/*
+    fn set_bootmgr_path(&self,dev_info:& DeviceInfo, config: &Config, s2_cfg: &mut Stage2ConfigBuilder) -> Result<bool, MigError> {
         trace!("set_bootmgr_path: entered");
-
+*/
         /*
 
 match boot_type {
@@ -67,8 +69,9 @@ match boot_type {
         _ => None,
     },
 */
-
+/*
 
         Err(MigError::from(MigErrorKind::NotImpl))
     }
+    */
 }

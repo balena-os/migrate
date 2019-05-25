@@ -7,7 +7,7 @@ use crate::{
     common::{dir_exists, format_size_with_unit, MigErrCtx, MigError, MigErrorKind},
     linux_common::{
         get_root_info, get_fs_space,
-        disk_info::lsblk_info::{
+        device_info::lsblk_info::{
             LsblkInfo, LsblkDevice, LsblkPartition},
     },
     defs::ROOT_PATH,

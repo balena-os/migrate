@@ -21,11 +21,13 @@ use crate::{
 pub(crate) mod wifi_config;
 pub(crate) use wifi_config::WifiConfig;
 
-pub(crate) mod disk_info;
+pub(crate) mod device_info;
 
-pub(crate) mod migrate_info;
+//pub(crate) mod migrate_info;
+//pub(crate) use migrate_info::MigrateInfo;
+
 use crate::common::dir_exists;
-pub(crate) use migrate_info::MigrateInfo;
+
 
 const MODULE: &str = "linux_common";
 const WHEREIS_CMD: &str = "whereis";

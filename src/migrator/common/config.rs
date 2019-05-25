@@ -287,7 +287,7 @@ mod tests {
             Path::new("balena_x86_64.migrate.kernel")
         );
         assert_eq!(
-            config.migrate.get_initramfs_path(),
+            config.migrate.get_initrd_path(),
             Path::new("balena_x86_64.migrate.initramfs")
         );
         assert_eq!(config.migrate.get_fail_mode(), &FailMode::Reboot);

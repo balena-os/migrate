@@ -71,8 +71,8 @@ pub(crate) struct MigrateConfig {
     all_wifis: Option<bool>,
     wifis: Option<Vec<String>>,
     log: Option<LogConfig>,
-    kernel_file: Option<PathBuf>,
-    initramfs_file: Option<PathBuf>,
+    kernel_path: Option<PathBuf>,
+    initrd_path: Option<PathBuf>,
     dtb_file: Option<PathBuf>,
     force_slug: Option<String>,
     fail_mode: Option<FailMode>,
@@ -94,8 +94,8 @@ impl<'a> MigrateConfig {
             all_wifis: None,
             wifis: None,
             log: None,
-            kernel_file: None,
-            initramfs_file: None,
+            kernel_path: None,
+            initrd_path: None,
             dtb_file: None,
             force_slug: None,
             fail_mode: None,
@@ -117,14 +117,14 @@ impl<'a> MigrateConfig {
                     ));
                 }
 
-                if let None = self.kernel_file {
+                if let None = self.kernel_path {
                     return Err(MigError::from_remark(
                         MigErrorKind::InvParam,
                         "A required parameter was not found: 'kernel_file'",
                     ));
                 }
 
-                if let None = self.initramfs_file {
+                if let None = self.initrd_path {
                     return Err(MigError::from_remark(
                         MigErrorKind::InvParam,
                         "A required parameter was not found: 'initramfs_file'",
@@ -229,15 +229,15 @@ impl<'a> MigrateConfig {
     }
 
     pub fn get_kernel_path(&'a self) -> &'a Path {
-        if let Some(ref path) = self.kernel_file {
+        if let Some(ref path) = self.kernel_path {
             path
         } else {
             panic!("kernel path is not set");
         }
     }
 
-    pub fn get_initramfs_path(&'a self) -> &'a Path {
-        if let Some(ref path) = self.initramfs_file {
+    pub fn get_initrd_path(&'a self) -> &'a Path {
+        if let Some(ref path) = self.initrd_path {
             path
         } else {
             panic!("initramfs path is not set");

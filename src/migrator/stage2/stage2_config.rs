@@ -1,5 +1,5 @@
 use failure::ResultExt;
-use log::{warn, Level};
+use log::{Level};
 use std::fs::{read_to_string, File};
 use std::io::Write;
 use std::path::{Path, PathBuf};
@@ -13,13 +13,11 @@ pub const EMPTY_BACKUPS: &[(String, String)] = &[];
 const MODULE: &str = "stage2::stage2:config";
 
 use crate::{
-    common::{Config, FailMode, MigErrCtx, MigError, MigErrorKind},
-    defs::STAGE2_CFG_FILE,
-    linux_common::MigrateInfo,
+    common::{Config, FailMode, MigErrCtx, MigError, MigErrorKind, OSArch},
+    defs::STAGE2_CFG_FILE,    
     device::{DeviceType},
 };
 use crate::boot_manager::{BootType, BootManager, from_boot_type};
-use std::any::Any;
 
 #[derive(Debug, Deserialize, Serialize, Clone)]
 pub(crate) struct Stage2LogConfig {
@@ -38,11 +36,9 @@ impl<'a> BootMgrConfig {
     pub fn get_device(&'a self) -> &'a Path {
         &self.device.as_path()
     }
-
     pub fn get_fstype(&'a self) -> &'a str {
         &self.fstype
     }
-
     pub fn get_mountpoint(&'a self) -> &'a Path {
         &self.mountpoint.as_path()
     }
@@ -61,7 +57,7 @@ pub(crate) struct Stage2Config {
     flash_device: PathBuf,
     boot_device: PathBuf,
     boot_fstype: String,
-    root_device: PathBuf,
+    // root_device: PathBuf,
     bootmgr: Option<BootMgrConfig>,
     balena_config: PathBuf,
     balena_image: PathBuf,
@@ -157,10 +153,6 @@ impl<'a> Stage2Config {
         self.flash_device.as_path()
     }
 
-    pub fn get_root_device(&'a self) -> &'a Path {
-        self.root_device.as_path()
-    }
-
     pub fn get_boot_device(&'a self) -> &'a Path {
         self.boot_device.as_path()
     }
@@ -230,7 +222,10 @@ impl<T: Clone> Required<T> {
         }
     }
 
-    fn set(&mut self, val: &T) {
+    fn set(&mut self, val: T) {
+        self.data = Some(val);
+    }
+    fn set_ref(&mut self, val: &T) {
         self.data = Some(val.clone());
     }
 
@@ -262,8 +257,16 @@ impl<T: Clone> Optional<T> {
         &self.data
     }
 
-    fn set(&mut self, val: &T) {
+    fn set(&mut self, val: T) {
+        self.data = Some(val);
+    }
+
+    fn set_ref(&mut self, val: &T) {
         self.data = Some(val.clone());
+    }
+
+    fn set_empty(&mut self) {
+        self.data = None;
     }
 
     fn is_set(&self) -> bool {
@@ -282,7 +285,6 @@ pub(crate) struct Stage2ConfigBuilder {
     flash_device: Required<PathBuf>,
     boot_device: Required<PathBuf>,
     boot_fstype: Required<String>,
-    root_device: Required<PathBuf>,
     bootmgr: Optional<BootMgrConfig>,
     balena_config: Required<PathBuf>,
     balena_image: Required<PathBuf>,
@@ -296,7 +298,7 @@ pub(crate) struct Stage2ConfigBuilder {
     boot_type: Required<BootType>,
 }
 
-impl Stage2ConfigBuilder {
+impl<'a> Stage2ConfigBuilder {
     pub fn default() -> Stage2ConfigBuilder {
         Stage2ConfigBuilder {
             fail_mode: Required::new(Some(&FailMode::Reboot)),
@@ -305,7 +307,6 @@ impl Stage2ConfigBuilder {
             flash_device: Required::new(None),
             boot_device: Required::new(None),
             boot_fstype: Required::new(None),
-            root_device: Required::new(None),
             bootmgr: Optional::new(None),
             balena_config: Required::new(None),
             balena_image: Required::new(None),
@@ -328,7 +329,7 @@ impl Stage2ConfigBuilder {
             flash_device: self.flash_device.get()?.clone(),
             boot_device: self.boot_device.get()?.clone(),
             boot_fstype: self.boot_fstype.get()?.clone(),
-            root_device: self.root_device.get()?.clone(),
+            // root_device: self.root_device.get()?.clone(),
             bootmgr: self.bootmgr.get().clone(),
             balena_config: self.balena_config.get()?.clone(),
             balena_image: self.balena_image.get()?.clone(),
@@ -345,7 +346,9 @@ impl Stage2ConfigBuilder {
         Ok(result)
     }
 
-    pub fn write_stage2_cfg(&self, config: &Config, mig_info: &MigrateInfo) -> Result<(), MigError> {
+    pub fn write_stage2_cfg(&self) -> Result<(), MigError> {
+        // TODO: check first
+
         let mut cfg_str = String::from("# Balena Migrate Stage2 Config\n");
         cfg_str.push_str(&self.build()?.to_str()?);
         File::create(STAGE2_CFG_FILE)
@@ -353,6 +356,74 @@ impl Stage2ConfigBuilder {
             .write_all(cfg_str.as_bytes())
             .context(MigErrCtx::from_remark(MigErrorKind::Upstream, &format!("Failed to write to config file: {}'", STAGE2_CFG_FILE)))?;
         Ok(())
+    }
+
+    // *****************************************************************
+    // Setter functions
+
+
+    pub fn set_failmode(&mut self, val: &FailMode) {
+        self.fail_mode.set_ref( val);
+    }
+
+    pub fn set_no_flash(&mut self, val: bool) {
+        self.no_flash.set( val);
+    }
+
+    pub fn set_skip_flash(&mut self, val: bool) {
+        self.skip_flash.set( val);
+    }
+
+    pub fn set_flash_device(&mut self, val: &PathBuf) {
+        self.flash_device.set_ref( val);
+    }
+
+    pub fn set_boot_device(&mut self, val: &PathBuf) {
+        self.boot_device.set_ref( val);
+    }
+
+    pub fn set_boot_fstype(&mut self, val: &String) {
+        self.boot_fstype.set_ref( val);
+    }
+
+    pub fn set_bootmgr_cfg(&mut self, bootmgr_cfg: BootMgrConfig) {
+        self.bootmgr.set( bootmgr_cfg);
+    }
+
+    pub fn set_balena_config(&mut self, val: PathBuf) {
+        self.balena_config.set( val);
+    }
+
+    pub fn set_balena_image(&mut self, val: PathBuf) {
+        self.balena_image.set( val);
+    }
+
+    pub fn set_work_dir(&mut self, val: &PathBuf) {
+        self.work_dir.set_ref( val);
+    }
+
+    pub fn set_boot_bckup(&mut self, boot_backup: Vec<(String, String)>) {
+        self.boot_bckup.set(boot_backup);
+    }
+
+    pub fn set_has_backup(&mut self, val: bool) {
+        self.has_backup.set(val);
+    }
+
+    pub fn set_gzip_internal(&mut self, val: bool) {
+        self.gzip_internal.set( val);
+    }
+
+    pub fn set_device_type(&mut self, dev_type: &DeviceType) {
+        self.device_type.set_ref( dev_type);
+    }
+
+    pub fn set_log_to(&mut self, val: Stage2LogConfig) {
+        self.log_to.set(val);
+    }
+
+    pub fn set_boot_type(&mut self, val: &BootType) {
+        self.boot_type.set_ref( val);
     }
 }
 
