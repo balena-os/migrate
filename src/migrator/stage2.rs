@@ -27,7 +27,7 @@ use crate::{
     },
     device,
     linux_common::{
-        call_cmd, ensure_cmds, get_cmd, get_mem_info, get_root_info, DD_CMD, GZIP_CMD,
+        ensured_commands::EnsuredCommands, get_mem_info, get_root_info, DD_CMD, GZIP_CMD,
         PARTPROBE_CMD, REBOOT_CMD,
     },
 };
@@ -52,8 +52,7 @@ const DATA_MNT_DIR: &str = "mnt_data";
 
 const DD_BLOCK_SIZE: usize = 4194304;
 
-const MIG_REQUIRED_CMDS: &'static [&'static str] = &[DD_CMD, PARTPROBE_CMD, GZIP_CMD, REBOOT_CMD];
-const MIG_OPTIONAL_CMDS: &'static [&'static str] = &[];
+const MIG_REQUIRED_CMDS: &'static [&'static str] = &[DD_CMD, PARTPROBE_CMD, REBOOT_CMD];
 
 const BALENA_IMAGE_FILE: &str = "balenaOS.img.gz";
 const BALENA_CONFIG_FILE: &str = "config.json";
@@ -319,7 +318,7 @@ impl Stage2 {
         // boot config restored can reboot
         self.recoverable_state = true;
 
-        ensure_cmds(MIG_REQUIRED_CMDS, MIG_OPTIONAL_CMDS)?;
+        let mut cmds = EnsuredCommands::new(MIG_REQUIRED_CMDS)?;
 
         if !dir_exists(mig_tmp_dir)? {
             create_dir(mig_tmp_dir).context(MigErrCtx::from_remark(
@@ -512,7 +511,7 @@ impl Stage2 {
                 ));
             }
 
-            if let Ok(ref dd_cmd) = get_cmd(DD_CMD) {
+            if let Ok(ref dd_cmd) = cmds.get_cmd(DD_CMD) {
                 debug!("dd found at: {}", dd_cmd);
 
                 let cmd_res_dd = if self.config.is_gzip_internal() {
@@ -606,7 +605,7 @@ impl Stage2 {
                             ));
                     }
                 } else {
-                    if let Ok(ref gzip_cmd) = get_cmd(GZIP_CMD) {
+                    if let Ok(ref gzip_cmd) = cmds.get_cmd(GZIP_CMD) {
                         debug!("gzip found at: {}", gzip_cmd);
                         let gzip_child = Command::new(gzip_cmd)
                             .args(&["-d", "-c", &image_path.to_string_lossy()])
@@ -670,7 +669,7 @@ impl Stage2 {
 
                 thread::sleep(Duration::new(PRE_PARTPROBE_WAIT_SECS, PARTPROBE_WAIT_NANOS));
 
-                call_cmd(PARTPROBE_CMD, &[&target_path.to_string_lossy()], true)?;
+                cmds.call_cmd(PARTPROBE_CMD, &[&target_path.to_string_lossy()], true)?;
 
                 thread::sleep(Duration::new(
                     POST_PARTPROBE_WAIT_SECS,

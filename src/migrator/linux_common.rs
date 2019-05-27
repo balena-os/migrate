@@ -23,6 +23,13 @@ pub(crate) use wifi_config::WifiConfig;
 
 pub(crate) mod migrate_info;
 
+pub(crate) mod ensured_commands;
+pub(crate) use ensured_commands::{
+    EnsuredCommands, CHMOD_CMD, DD_CMD, DF_CMD, FDISK_CMD, FILE_CMD, GRUB_REBOOT_CMD,
+    GRUB_UPDT_CMD, GZIP_CMD, LSBLK_CMD, MKTEMP_CMD, MOKUTIL_CMD, MOUNT_CMD, PARTPROBE_CMD,
+    REBOOT_CMD, UNAME_CMD,
+};
+
 //pub(crate) mod migrate_info;
 //pub(crate) use migrate_info::MigrateInfo;
 
@@ -31,22 +38,6 @@ use crate::common::dir_exists;
 const MODULE: &str = "linux_common";
 const WHEREIS_CMD: &str = "whereis";
 
-pub const DF_CMD: &str = "df";
-pub const LSBLK_CMD: &str = "lsblk";
-pub const FDISK_CMD: &str = "fdisk";
-pub const FILE_CMD: &str = "file";
-pub const UNAME_CMD: &str = "uname";
-pub const MOUNT_CMD: &str = "mount";
-pub const MOKUTIL_CMD: &str = "mokutil";
-pub const GRUB_UPDT_CMD: &str = "update-grub";
-pub const GRUB_REBOOT_CMD: &str = "grub-reboot";
-pub const REBOOT_CMD: &str = "reboot";
-pub const CHMOD_CMD: &str = "chmod";
-pub const DD_CMD: &str = "dd";
-pub const PARTPROBE_CMD: &str = "partprobe";
-pub const GZIP_CMD: &str = "gzip";
-pub const MKTEMP_CMD: &str = "mktemp";
-
 const GRUB_UPDT_VERSION_ARGS: [&str; 1] = ["--version"];
 const GRUB_UPDT_VERSION_RE: &str = r#"^.*\s+\(GRUB\)\s+([0-9]+)\.([0-9]+)[^0-9].*$"#;
 
@@ -54,77 +45,10 @@ const MOKUTIL_ARGS_SB_STATE: [&str; 1] = ["--sb-state"];
 
 const UNAME_ARGS_OS_ARCH: [&str; 1] = ["-m"];
 
-// TODO: make this more complete
 const BIN_DIRS: &[&str] = &["/bin", "/usr/bin", "/sbin", "/usr/sbin"];
 
 const OS_RELEASE_FILE: &str = "/etc/os-release";
 const OS_NAME_REGEX: &str = r#"^PRETTY_NAME="([^"]+)"$"#;
-
-thread_local! {
-    static CMD_TABLE: RefCell<HashMap<String,Option<String>>> = RefCell::new(HashMap::new());
-}
-
-pub(crate) fn ensure_cmds(required: &[&str], optional: &[&str]) -> Result<(), MigError> {
-    CMD_TABLE.with(|cmd_tbl| {
-        let mut cmd_table = cmd_tbl.borrow_mut();
-        for cmd in required {
-            if let Ok(cmd_path) = whereis(cmd) {
-                cmd_table.insert(String::from(*cmd), Some(cmd_path));
-            } else {
-                let message = format!("cannot find required command {}", cmd);
-                error!("{}", message);
-                return Err(MigError::from_remark(
-                    MigErrorKind::NotFound,
-                    &format!("{}", message),
-                ));
-            }
-        }
-
-        for cmd in optional {
-            match whereis(cmd) {
-                Ok(cmd_path) => {
-                    cmd_table.insert(String::from(*cmd), Some(cmd_path));
-                    ()
-                }
-                Err(_why) => {
-                    // TODO: forward upstream error message
-                    let message = format!("cannot find optional command {}", cmd);
-                    warn!("{}", message);
-                    cmd_table.insert(String::from(*cmd), None);
-                    ()
-                }
-            }
-        }
-        Ok(())
-    })
-}
-
-pub(crate) fn get_cmd(cmd: &str) -> Result<String, MigError> {
-    CMD_TABLE.with(|cmd_tbl| match cmd_tbl.borrow().get(cmd) {
-        Some(cmd_path) => match cmd_path {
-            Some(cmd_path) => Ok(cmd_path.clone()),
-            None => Err(MigError::from_remark(
-                MigErrorKind::NotFound,
-                &format!("The command was not found: {}", cmd),
-            )),
-        },
-        None => Err(MigError::from_remark(
-            MigErrorKind::InvParam,
-            &format!("The command is not a checked command: {}", cmd),
-        )),
-    })
-}
-
-pub(crate) fn call_cmd(cmd: &str, args: &[&str], trim_stdout: bool) -> Result<CmdRes, MigError> {
-    trace!(
-        "call_cmd: entered with cmd: '{}', args: {:?}, trim: {}",
-        cmd,
-        args,
-        trim_stdout
-    );
-
-    Ok(call(&get_cmd(cmd)?, args, trim_stdout)?)
-}
 
 #[cfg(not(debug_assertions))]
 pub(crate) fn is_admin(_config: &Config) -> Result<bool, MigError> {
@@ -192,10 +116,11 @@ pub(crate) fn whereis(cmd: &str) -> Result<String, MigError> {
     }
 }
 
-pub(crate) fn get_os_arch() -> Result<OSArch, MigError> {
+pub(crate) fn get_os_arch(cmds: &EnsuredCommands) -> Result<OSArch, MigError> {
     trace!("get_os_arch: entered");
-    let cmd_res =
-        call_cmd(UNAME_CMD, &UNAME_ARGS_OS_ARCH, true).context(MigErrCtx::from_remark(
+    let cmd_res = cmds
+        .call_cmd(UNAME_CMD, &UNAME_ARGS_OS_ARCH, true)
+        .context(MigErrCtx::from_remark(
             MigErrorKind::Upstream,
             &format!("{}::get_os_arch: call {}", MODULE, UNAME_CMD),
         ))?;
@@ -521,7 +446,10 @@ pub(crate) fn get_os_release() -> Result<OSRelease, MigError> {
 }
 */
 
-pub(crate) fn get_fs_space<P: AsRef<Path>>(path: P) -> Result<(u64, u64), MigError> {
+pub(crate) fn get_fs_space<P: AsRef<Path>>(
+    cmds: &EnsuredCommands,
+    path: P,
+) -> Result<(u64, u64), MigError> {
     const SIZE_REGEX: &str = r#"^(\d+)K?$"#;
     let path = path.as_ref();
     trace!("get_fs_space: entered with '{}'", path.display());
@@ -529,7 +457,7 @@ pub(crate) fn get_fs_space<P: AsRef<Path>>(path: P) -> Result<(u64, u64), MigErr
     let path_str = path.to_string_lossy();
     let args: Vec<&str> = vec!["--block-size=K", "--output=size,used", &path_str];
 
-    let cmd_res = call_cmd(DF_CMD, &args, true)?;
+    let cmd_res = cmds.call_cmd(DF_CMD, &args, true)?;
 
     if !cmd_res.status.success() || cmd_res.stdout.is_empty() {
         return Err(MigError::from_remark(

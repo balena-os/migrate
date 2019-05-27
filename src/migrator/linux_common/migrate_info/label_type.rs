@@ -4,7 +4,7 @@ use std::path::Path;
 
 use crate::{
     common::{MigError, MigErrorKind},
-    linux_common::{call_cmd, FDISK_CMD},
+    linux_common::{ensured_commands::EnsuredCommands, FDISK_CMD},
 };
 
 const DISK_LABEL_REGEX: &str = r#"^Disklabel type:\s*(\S+)$"#;
@@ -17,9 +17,12 @@ pub(crate) enum LabelType {
 }
 
 impl LabelType {
-    pub fn from_device<P: AsRef<Path>>(device_path: P) -> Result<LabelType, MigError> {
+    pub fn from_device<P: AsRef<Path>>(
+        cmds: &EnsuredCommands,
+        device_path: P,
+    ) -> Result<LabelType, MigError> {
         let device_path = device_path.as_ref();
-        let cmd_res = call_cmd(FDISK_CMD, &["-l", &device_path.to_string_lossy()], true)?;
+        let cmd_res = cmds.call_cmd(FDISK_CMD, &["-l", &device_path.to_string_lossy()], true)?;
 
         if cmd_res.status.success() {
             let disk_lbl_re = Regex::new(DISK_LABEL_REGEX).unwrap();

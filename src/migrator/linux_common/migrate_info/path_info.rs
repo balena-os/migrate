@@ -9,6 +9,7 @@ use crate::{
     linux_common::{
         get_fs_space, get_root_info,
         migrate_info::lsblk_info::{LsblkDevice, LsblkInfo, LsblkPartition},
+        EnsuredCommands,
     },
 };
 
@@ -48,6 +49,7 @@ pub(crate) struct PathInfo {
 
 impl PathInfo {
     pub fn from_mounted<P1: AsRef<Path>, P2: AsRef<Path>>(
+        cmds: &EnsuredCommands,
         abs_path: &P1,
         mountpoint: &P2,
         device: &LsblkDevice,
@@ -64,7 +66,7 @@ impl PathInfo {
 
         // get filesystem space for device
 
-        let (fs_size, fs_free) = get_fs_space(&path)?;
+        let (fs_size, fs_free) = get_fs_space(cmds, &path)?;
 
         let result = PathInfo {
             path: path,
@@ -145,6 +147,7 @@ impl PathInfo {
     }
 
     pub fn new<P: AsRef<Path>>(
+        cmds: &EnsuredCommands,
         path: P,
         lsblk_info: &LsblkInfo,
     ) -> Result<Option<PathInfo>, MigError> {
@@ -176,7 +179,7 @@ impl PathInfo {
 
         if let Some(ref mountpoint) = partition.mountpoint {
             Ok(Some(PathInfo::from_mounted(
-                &abs_path, mountpoint, &device, &partition,
+                cmds, &abs_path, mountpoint, &device, &partition,
             )?))
         } else {
             Err(MigError::from_remark(

@@ -73,7 +73,7 @@ pub(crate) struct MigrateConfig {
     log: Option<LogConfig>,
     kernel_path: Option<PathBuf>,
     initrd_path: Option<PathBuf>,
-    dtb_file: Option<PathBuf>,
+    dtb_path: Option<PathBuf>,
     force_slug: Option<String>,
     fail_mode: Option<FailMode>,
     backup: Option<Vec<VolumeConfig>>,
@@ -96,7 +96,7 @@ impl<'a> MigrateConfig {
             log: None,
             kernel_path: None,
             initrd_path: None,
-            dtb_file: None,
+            dtb_path: None,
             force_slug: None,
             fail_mode: None,
             backup: None,
@@ -245,7 +245,7 @@ impl<'a> MigrateConfig {
     }
 
     pub fn get_dtb_path(&'a self) -> Option<&'a Path> {
-        if let Some(ref path) = self.dtb_file {
+        if let Some(ref path) = self.dtb_path {
             Some(path)
         } else {
             None

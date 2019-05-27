@@ -9,7 +9,7 @@ use crate::{
         ROOT_PATH,
     },
     linux_common::{
-        call_cmd, get_grub_version,
+        get_grub_version,
         migrate_info::{path_info::PathInfo, MigrateInfo},
         restore_backups, CHMOD_CMD, MKTEMP_CMD,
     },
@@ -37,7 +37,12 @@ impl BootManager for GrubBootManager {
     ) -> Result<bool, MigError> {
         trace!("can_migrate: entered");
 
-        // TODO: calculate/ensure  required space on /boot /bootmgr
+        // TODO: several things to do:
+        //  calculate/ensure  required space on /boot /bootmgr
+        //  look for /etc/grub.d
+        //  look for update_grub
+        //  look for grub_reboot
+        //  make sure grub is actually the active boot manager
 
         let grub_version = get_grub_version()?;
         info!(
@@ -59,11 +64,11 @@ impl BootManager for GrubBootManager {
         config: &Config,
         s2_cfg: &mut Stage2ConfigBuilder,
     ) -> Result<(), MigError> {
-        trace!("setup: entered");
+        dbg!("setup: entered");
         Err(MigError::from(MigErrorKind::NotImpl))
     }
     fn restore(&self, slug: &str, root_path: &Path, config: &Stage2Config) -> Result<(), MigError> {
-        trace!("restore: entered");
+        dbg!("restore: entered");
         Err(MigError::from(MigErrorKind::NotImpl))
     }
     /*

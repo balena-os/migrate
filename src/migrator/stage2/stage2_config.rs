@@ -203,12 +203,14 @@ impl<'a> Stage2Config {
 }
 
 pub(crate) struct Required<T> {
+    name: String,
     data: Option<T>,
 }
 
 impl<T: Clone> Required<T> {
-    pub fn new(default: Option<&T>) -> Required<T> {
+    pub fn new(name: &str, default: Option<&T>) -> Required<T> {
         Required {
+            name: String::from(name),
             data: if let Some(default) = default {
                 Some(default.clone())
             } else {
@@ -223,7 +225,7 @@ impl<T: Clone> Required<T> {
         } else {
             Err(MigError::from_remark(
                 MigErrorKind::InvParam,
-                "A required parameters was not initialized",
+                &format!("A required parameters was not initialized: '{}'", self.name),
             ))
         }
     }
@@ -307,23 +309,23 @@ pub(crate) struct Stage2ConfigBuilder {
 impl<'a> Stage2ConfigBuilder {
     pub fn default() -> Stage2ConfigBuilder {
         Stage2ConfigBuilder {
-            fail_mode: Required::new(Some(&FailMode::Reboot)),
-            no_flash: Required::new(Some(&true)),
-            skip_flash: Required::new(Some(&false)),
-            flash_device: Required::new(None),
-            boot_device: Required::new(None),
-            boot_fstype: Required::new(None),
+            fail_mode: Required::new("fail_mode", Some(&FailMode::Reboot)),
+            no_flash: Required::new("no_flash", Some(&true)),
+            skip_flash: Required::new("skip_flash", Some(&false)),
+            flash_device: Required::new("flash_device", None),
+            boot_device: Required::new("boot_device", None),
+            boot_fstype: Required::new("boot_fstype", None),
             bootmgr: Optional::new(None),
-            balena_config: Required::new(None),
-            balena_image: Required::new(None),
-            work_dir: Required::new(None),
+            balena_config: Required::new("balena_config", None),
+            balena_image: Required::new("balena_image", None),
+            work_dir: Required::new("work_dir", None),
             boot_bckup: Optional::new(None),
-            has_backup: Required::new(None),
-            gzip_internal: Required::new(Some(&true)),
-            log_level: Required::new(Some(&String::from("warn"))),
+            has_backup: Required::new("has_backup", None),
+            gzip_internal: Required::new("gzip_internal", Some(&true)),
+            log_level: Required::new("log_level", Some(&String::from("warn"))),
             log_to: Optional::new(None),
-            device_type: Required::new(None),
-            boot_type: Required::new(None),
+            device_type: Required::new("device_type", None),
+            boot_type: Required::new("boot_type", None),
         }
     }
 

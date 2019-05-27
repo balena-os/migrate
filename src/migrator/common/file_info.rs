@@ -25,12 +25,12 @@ const DTB_FTYPE_REGEX: &str = r#"^(Device Tree Blob|data).*$"#;
 #[cfg(target_os = "linux")]
 use crate::common::{file_exists, MigErrCtx, MigError, MigErrorKind};
 #[cfg(target_os = "linux")]
-use crate::linux_common::{call_cmd, FILE_CMD};
+use crate::linux_common::{ensured_commands::EnsuredCommands, FILE_CMD};
 
 const MODULE: &str = "balean_migrate::common::file_info";
 
 #[derive(Debug)]
-pub enum FileType {
+pub(crate) enum FileType {
     OSImage,
     KernelAMD64,
     KernelARMHF,
@@ -57,7 +57,7 @@ impl FileType {
 }
 
 #[derive(Debug)]
-pub struct FileInfo {
+pub(crate) struct FileInfo {
     pub path: PathBuf,
     pub size: u64,
 }
@@ -108,8 +108,8 @@ impl FileInfo {
         }))
     }
 
-    pub fn expect_type(&self, ftype: &FileType) -> Result<(), MigError> {
-        if !self.is_type(ftype)? {
+    pub fn expect_type(&self, cmds: &EnsuredCommands, ftype: &FileType) -> Result<(), MigError> {
+        if !self.is_type(cmds, ftype)? {
             let message = format!(
                 "Could not determine expected file type '{}' for file '{}'",
                 ftype.get_descr(),
@@ -123,11 +123,11 @@ impl FileInfo {
     }
 
     #[cfg(target_os = "linux")]
-    pub fn is_type(&self, ftype: &FileType) -> Result<bool, MigError> {
+    pub fn is_type(&self, cmds: &EnsuredCommands, ftype: &FileType) -> Result<bool, MigError> {
         let path_str = self.path.to_string_lossy();
         let args: Vec<&str> = vec!["-bz", &path_str];
 
-        let cmd_res = call_cmd(FILE_CMD, &args, true)?;
+        let cmd_res = cmds.call_cmd(FILE_CMD, &args, true)?;
         if !cmd_res.status.success() || cmd_res.stdout.is_empty() {
             return Err(MigError::from_remark(
                 MigErrorKind::InvParam,

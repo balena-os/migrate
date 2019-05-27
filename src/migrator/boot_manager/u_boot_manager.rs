@@ -18,7 +18,6 @@ use crate::{
         ROOT_PATH, UBOOT_FILE_NAME, UENV_FILE_NAME,
     },
     linux_common::{
-        call_cmd,
         migrate_info::{path_info::PathInfo, MigrateInfo},
         restore_backups, CHMOD_CMD, MKTEMP_CMD,
     },
@@ -54,7 +53,6 @@ impl UBootManager {
         UBootManager {}
     }
 
-    // TODO: this is uboot specific stuff in a non uboot specific place - try to concentrate uboot / EFI stuff in dedicated module
     // Try to find a drive containing MLO, uEnv.txt or u-boot.bin, mount it if necessarry and return PathInfo if found
     fn get_bootmgr_path(&self, mig_info: &MigrateInfo) -> Result<Option<PathInfo>, MigError> {
         trace!("set_bootmgr_path: entered");
@@ -85,7 +83,7 @@ impl UBootManager {
                                     partition.name
                                 );
                                 if let None = tmp_mountpoint {
-                                    let cmd_res = call_cmd(
+                                    let cmd_res = mig_info.cmds.call_cmd(
                                         MKTEMP_CMD,
                                         &["-d", "-p", &mig_info.work_path.path.to_string_lossy()],
                                         true,
@@ -138,7 +136,11 @@ impl UBootManager {
                                 partition.name
                             );
                             return Ok(Some(PathInfo::from_mounted(
-                                mountpoint, mountpoint, &root_dev, &partition,
+                                &mig_info.cmds,
+                                mountpoint,
+                                mountpoint,
+                                &root_dev,
+                                &partition,
                             )?));
                         }
 
@@ -173,7 +175,8 @@ impl BootManager for UBootManager {
         s2_cfg: &mut Stage2ConfigBuilder,
     ) -> Result<bool, MigError> {
         // TODO: calculate/ensure  required space on /boot /bootmgr
-        Err(MigError::from(MigErrorKind::NotImpl))
+
+        Ok(false)
     }
 
     fn setup(
@@ -230,7 +233,9 @@ impl BootManager for UBootManager {
             kernel_path.display()
         );
 
-        call_cmd(CHMOD_CMD, &["+x", &kernel_path.to_string_lossy()], false)?;
+        mig_info
+            .cmds
+            .call_cmd(CHMOD_CMD, &["+x", &kernel_path.to_string_lossy()], false)?;
 
         let source_path = config.migrate.get_initrd_path();
         let initrd_path = path_append(&boot_path.path, MIG_INITRD_NAME);

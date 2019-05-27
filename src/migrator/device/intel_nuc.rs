@@ -15,7 +15,7 @@ pub(crate) struct IntelNuc {
 
 impl IntelNuc {
     pub fn from_config(
-        dev_info: &MigrateInfo,
+        mig_info: &MigrateInfo,
         config: &Config,
         s2_cfg: &mut Stage2ConfigBuilder,
     ) -> Result<IntelNuc, MigError> {
@@ -26,7 +26,7 @@ impl IntelNuc {
             "Ubuntu 14.04.5 LTS",
         ];
 
-        let os_name = &dev_info.os_name;
+        let os_name = &mig_info.os_name;
         if let None = SUPPORTED_OSSES.iter().position(|&r| r == os_name) {
             let message = format!(
                 "The OS '{}' is not supported for device type IntelNuc",
@@ -57,9 +57,19 @@ impl IntelNuc {
             return Err(MigError::from_remark(MigErrorKind::InvParam, &message));
         }
 
-        Ok(IntelNuc {
-            boot_manager: Box::new(GrubBootManager {}),
-        })
+        let boot_manager = GrubBootManager::new();
+        if boot_manager.can_migrate(mig_info, config, s2_cfg)? {
+            Ok(IntelNuc {
+                boot_manager: Box::new(GrubBootManager {}),
+            })
+        } else {
+            let message = format!(
+                "The boot manager '{:?}' is not able to set up your device",
+                boot_manager.get_boot_type()
+            );
+            error!("{}", &message);
+            Err(MigError::from_remark(MigErrorKind::InvState, &message))
+        }
     }
 
     pub fn from_boot_type(boot_type: &BootType) -> IntelNuc {
@@ -93,6 +103,7 @@ impl<'a> Device for IntelNuc {
         config: &Config,
         s2_cfg: &mut Stage2ConfigBuilder,
     ) -> Result<(), MigError> {
+        dbg!("setup: entered");
         self.boot_manager.setup(dev_info, config, s2_cfg)
     }
 

@@ -1,4 +1,4 @@
-use failure::ResultExt;
+use failure::{Fail, ResultExt};
 use log::{debug, error, info, trace};
 use std::fs::{copy, create_dir};
 use std::path::PathBuf;
@@ -13,16 +13,11 @@ use crate::{
     defs::{BACKUP_FILE, MIN_DISK_SIZE, SYSTEM_CONNECTIONS_DIR},
     device::{self, Device},
     linux_common::{
-        call_cmd, ensure_cmds, is_admin, migrate_info::MigrateInfo, CHMOD_CMD, DF_CMD, FDISK_CMD,
-        FILE_CMD, LSBLK_CMD, MKTEMP_CMD, MOUNT_CMD, REBOOT_CMD, UNAME_CMD,
+        is_admin, migrate_info::MigrateInfo, CHMOD_CMD, DF_CMD, FDISK_CMD, FILE_CMD, LSBLK_CMD,
+        MKTEMP_CMD, MOUNT_CMD, REBOOT_CMD, UNAME_CMD,
     },
     stage2::stage2_config::Stage2ConfigBuilder,
 };
-
-const REQUIRED_CMDS: &'static [&'static str] = &[
-    DF_CMD, LSBLK_CMD, FILE_CMD, UNAME_CMD, MOUNT_CMD, REBOOT_CMD, CHMOD_CMD, FDISK_CMD, MKTEMP_CMD,
-];
-const OPTIONAL_CMDS: &'static [&'static str] = &[];
 
 const MODULE: &str = "migrator::linux";
 
@@ -50,9 +45,6 @@ impl<'a> LinuxMigrator {
     pub fn try_init(config: Config) -> Result<LinuxMigrator, MigError> {
         trace!("LinuxMigrator::try_init: entered");
 
-        // make sure we have all required tools
-        ensure_cmds(REQUIRED_CMDS, OPTIONAL_CMDS)?;
-
         info!("migrate mode: {:?}", config.migrate.get_mig_mode());
 
         // **********************************************************************
@@ -71,26 +63,45 @@ impl<'a> LinuxMigrator {
         // Get os architecture & name & disk properties, check required paths
         // find wifis etc..
 
-        let mig_info = MigrateInfo::new(&config)?;
-
-        info!(
-            "OS Architecture is {}, OS Name is '{}'",
-            mig_info.os_arch, mig_info.os_name
-        );
+        let mig_info = match MigrateInfo::new(&config) {
+            Ok(mig_info) => {
+                info!(
+                    "OS Architecture is {}, OS Name is '{}'",
+                    mig_info.os_arch, mig_info.os_name
+                );
+                mig_info
+            }
+            Err(why) => {
+                return Err(MigError::from(why.context(MigErrCtx::from_remark(
+                    MigErrorKind::Upstream,
+                    "Failed to create MigrateInfo",
+                ))));
+            }
+        };
 
         // **********************************************************************
         // Run the architecture dependent part of initialization
         // Add further architectures / functons in device.rs
 
         let mut stage2_config = Stage2ConfigBuilder::default();
-        let device = device::get_device(&mig_info, &config, &mut stage2_config)?;
 
-        let dev_type = device.get_device_type();
-        stage2_config.set_device_type(&dev_type);
-
-        info!("Device Type is {:?}", device.get_device_type());
-
-        info!("Boot mode is {:?}", device.get_boot_type());
+        let device = match device::get_device(&mig_info, &config, &mut stage2_config) {
+            Ok(device) => {
+                let dev_type = device.get_device_type();
+                let boot_type = device.get_boot_type();
+                info!("Device Type is {:?}", device.get_device_type());
+                info!("Boot mode is {:?}", boot_type);
+                stage2_config.set_device_type(&dev_type);
+                stage2_config.set_boot_type(&boot_type);
+                device
+            }
+            Err(why) => {
+                return Err(MigError::from(why.context(MigErrCtx::from_remark(
+                    MigErrorKind::Upstream,
+                    "Failed to create Device",
+                ))));
+            }
+        };
 
         debug!("Finished architecture dependant initialization");
 
@@ -162,6 +173,7 @@ impl<'a> LinuxMigrator {
 
         // TODO: compare total transfer size (kernel, initramfs, backup, configs )  to memory size (needs to fit in ramfs)
 
+        trace!("nwmgr_files");
         let nwmgr_path = path_append(work_dir, SYSTEM_CONNECTIONS_DIR);
 
         if self.mig_info.nwmgr_files.len() > 0
@@ -192,6 +204,8 @@ impl<'a> LinuxMigrator {
             }
         }
 
+        trace!("do_migrate: found wifis: {}", self.mig_info.wifis.len());
+
         if self.mig_info.wifis.len() > 0 {
             let mut index = 0;
             for wifi in &self.mig_info.wifis {
@@ -199,8 +213,7 @@ impl<'a> LinuxMigrator {
             }
         }
 
-        self.device
-            .setup(&mut self.mig_info, &self.config, &mut self.stage2_config)?;
+        trace!("stage2 config");
 
         self.stage2_config
             .set_failmode(self.config.migrate.get_fail_mode());
@@ -238,6 +251,12 @@ impl<'a> LinuxMigrator {
         self.stage2_config
             .set_gzip_internal(self.config.migrate.is_gzip_internal());
 
+        trace!("device setup");
+
+        self.device
+            .setup(&mut self.mig_info, &self.config, &mut self.stage2_config)?;
+
+        trace!("write stage 2 config");
         self.stage2_config.write_stage2_cfg()?;
 
         if let Some(delay) = self.config.migrate.get_reboot() {
@@ -248,9 +267,10 @@ impl<'a> LinuxMigrator {
             let delay = Duration::new(*delay, 0);
             thread::sleep(delay);
             println!("Rebooting now..");
-            call_cmd(REBOOT_CMD, &["-f"], false)?;
+            self.mig_info.cmds.call_cmd(REBOOT_CMD, &["-f"], false)?;
         }
 
+        trace!("done");
         Ok(())
     }
 }
