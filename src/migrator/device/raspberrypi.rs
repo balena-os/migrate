@@ -3,22 +3,21 @@ use regex::Regex;
 use std::path::Path;
 
 use crate::{
-    common::{
-        Config,  MigError,  MigErrorKind,
-    },    
+    boot_manager::{from_boot_type, BootManager, BootType, RaspiBootManager},
+    common::{Config, MigError, MigErrorKind},
     device::{Device, DeviceType},
-    linux_common::{
-        device_info::DeviceInfo, restore_backups,
-    },
+    linux_common::{migrate_info::MigrateInfo, restore_backups},
     stage2::stage2_config::{Stage2Config, Stage2ConfigBuilder},
-    boot_manager::{BootType, BootManager, RaspiBootManager, from_boot_type},
 };
 
 const RPI_MODEL_REGEX: &str = r#"^Raspberry\s+Pi\s+(\S+)\s+Model\s+(.*)$"#;
 
-
-
-pub(crate) fn is_rpi(dev_info: &DeviceInfo, config: & Config, s2_cfg: &mut Stage2ConfigBuilder, model_string: &str) -> Result<Option<Box<Device>>, MigError> {
+pub(crate) fn is_rpi(
+    dev_info: &MigrateInfo,
+    config: &Config,
+    s2_cfg: &mut Stage2ConfigBuilder,
+    model_string: &str,
+) -> Result<Option<Box<Device>>, MigError> {
     trace!(
         "raspberrypi::is_rpi: entered with model string: '{}'",
         model_string
@@ -35,7 +34,9 @@ pub(crate) fn is_rpi(dev_info: &DeviceInfo, config: & Config, s2_cfg: &mut Stage
         match pitype {
             "3" => {
                 info!("Identified RaspberryPi3: model {}", model);
-                Ok(Some(Box::new(RaspberryPi3::from_config(dev_info, config, s2_cfg)?)))
+                Ok(Some(Box::new(RaspberryPi3::from_config(
+                    dev_info, config, s2_cfg,
+                )?)))
             }
             _ => {
                 let message = format!("The raspberry pi type reported by your device ('{} {}') is not supported by balena-migrate", pitype, model);
@@ -50,26 +51,27 @@ pub(crate) fn is_rpi(dev_info: &DeviceInfo, config: & Config, s2_cfg: &mut Stage
 }
 
 pub(crate) struct RaspberryPi3 {
-    boot_manager: Box<BootManager>
+    boot_manager: Box<BootManager>,
 }
 
 impl RaspberryPi3 {
-    pub fn from_config(dev_info: &DeviceInfo, config: &Config, s2_cfg: &mut Stage2ConfigBuilder) -> Result<RaspberryPi3, MigError> {
+    pub fn from_config(
+        dev_info: &MigrateInfo,
+        config: &Config,
+        s2_cfg: &mut Stage2ConfigBuilder,
+    ) -> Result<RaspberryPi3, MigError> {
         const SUPPORTED_OSSES: &'static [&'static str] = &["Raspbian GNU/Linux 9 (stretch)"];
 
         let os_name = &dev_info.os_name;
 
         if let None = SUPPORTED_OSSES.iter().position(|&r| r == os_name) {
-            let message = format!(
-                "The OS '{}' is not supported for RaspberryPi3",
-                os_name,
-            );
+            let message = format!("The OS '{}' is not supported for RaspberryPi3", os_name,);
             error!("{}", message);
             return Err(MigError::from_remark(MigErrorKind::InvParam, &message));
         }
 
-        Ok(RaspberryPi3{
-            boot_manager: Box::new(RaspiBootManager{})
+        Ok(RaspberryPi3 {
+            boot_manager: Box::new(RaspiBootManager {}),
         })
     }
 
@@ -93,7 +95,12 @@ impl<'a> Device for RaspberryPi3 {
         self.boot_manager.get_boot_type()
     }
 
-    fn setup(&self, dev_info: &DeviceInfo, config: &Config, s2_cfg: &mut Stage2ConfigBuilder) -> Result<(), MigError> {
+    fn setup(
+        &self,
+        dev_info: &MigrateInfo,
+        config: &Config,
+        s2_cfg: &mut Stage2ConfigBuilder,
+    ) -> Result<(), MigError> {
         self.boot_manager.setup(dev_info, config, s2_cfg)
     }
 

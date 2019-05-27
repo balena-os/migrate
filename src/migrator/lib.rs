@@ -10,14 +10,14 @@ mod common;
 mod mswin;
 
 #[cfg(target_os = "linux")]
-mod device;
-#[cfg(target_os = "linux")]
 mod boot_manager;
+#[cfg(target_os = "linux")]
+mod device;
 
 #[cfg(target_os = "linux")]
-mod linux;
-#[cfg(target_os = "linux")]
 mod linux_common;
+#[cfg(target_os = "linux")]
+mod linux_migrator;
 
 pub(crate) mod defs;
 
@@ -36,7 +36,7 @@ pub fn migrate() -> Result<(), MigError> {
 
 #[cfg(target_os = "linux")]
 pub fn migrate() -> Result<(), MigError> {
-    Ok(linux::LinuxMigrator::migrate()?)
+    Ok(linux_migrator::LinuxMigrator::migrate()?)
 }
 
 #[cfg(target_os = "linux")]
@@ -68,7 +68,7 @@ pub fn stage2() -> Result<(), MigError> {
 pub fn test() -> Result<(), MigError> {
     Logger::initialise(Some("trace")).unwrap();
     /*    ensure_cmds(&[LSBLK_CMD, FDISK_CMD], &[])?;
-        linux_common::device_info::DiskInfo::new(BootType::GRUB, &Path::new("."), None)?;
+        linux_common::migrate_info::DiskInfo::new(BootType::GRUB, &Path::new("."), None)?;
     */
     Ok(())
 }

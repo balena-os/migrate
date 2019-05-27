@@ -51,6 +51,7 @@ enum WpaState {
     Network,
 }
 
+#[derive(Debug)]
 pub(crate) struct WifiConfig {
     ssid: String,
     psk: Option<String>,

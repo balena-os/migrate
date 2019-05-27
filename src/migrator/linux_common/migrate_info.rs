@@ -1,205 +1,290 @@
-use std::path::Path;
+use log::{debug, error, info, trace, warn};
+use std::path::PathBuf;
 
 use crate::{
-    common::{FileInfo, OSArch},
-    linux_common::{
-        device_info::{path_info::PathInfo, DeviceInfo},
-        WifiConfig,
+    common::{
+        balena_cfg_json::BalenaCfgJson, format_size_with_unit, Config, FileInfo, FileType,
+        MigError, MigErrorKind, MigrateWifis, OSArch,
     },
-    boot_manager::{BootManager, BootType},
+    defs::{BOOT_PATH, MEM_THRESHOLD, ROOT_PATH},
+    linux_common::{get_mem_info, get_os_arch, get_os_name, WifiConfig},
 };
-use crate::linux_common::device_info::lsblk_info::LsblkInfo;
 
-// const MODULE: &str = "linux_common::migrate_info";
+// *************************************************************************************************
+// * Digested / Checked device-type independent properties from config and information retrieved
+// * from device required for stage1 of migration
+// *************************************************************************************************
 
+pub(crate) mod lsblk_info;
+pub(crate) use lsblk_info::LsblkInfo;
+
+pub(crate) mod label_type;
+
+pub(crate) mod path_info;
+pub(crate) use path_info::PathInfo;
+
+#[derive(Debug)]
 pub(crate) struct MigrateInfo {
-    pub os_name: Option<String>,
-    pub os_arch: Option<OSArch>,
-    pub secure_boot: Option<bool>,
-    pub disk_info: Option<DeviceInfo>,
-    pub install_path: Option<PathInfo>,
-    pub os_image_info: Option<FileInfo>,
-    pub has_backup: bool,
+    pub os_name: String,
+    pub os_arch: OSArch,
+
+    pub lsblk_info: LsblkInfo,
+    pub root_path: PathInfo,
+    pub boot_path: PathInfo,
+    pub work_path: PathInfo,
+    pub log_path: Option<(PathBuf, String)>,
+
     pub nwmgr_files: Vec<FileInfo>,
-    pub os_config_info: Option<FileInfo>,
-    pub kernel_info: Option<FileInfo>,
-    pub initrd_info: Option<FileInfo>,
-    pub dtb_info: Option<FileInfo>,
-    pub boot_cfg_bckup: Vec<(String, String)>,
     pub wifis: Vec<WifiConfig>,
 
+    pub image_file: FileInfo,
+    pub config_file: BalenaCfgJson,
+    pub kernel_file: FileInfo,
+    pub initrd_file: FileInfo,
+    pub dtb_file: Option<FileInfo>,
 }
 
-impl<'a> MigrateInfo {
-    pub(crate) fn default() -> MigrateInfo {
-        MigrateInfo {
-            os_name: None,
-            os_arch: None,
-            secure_boot: None,
-            disk_info: None,
-            install_path: None,
-            os_image_info: None,
-            has_backup: false,
-            os_config_info: None,
-            nwmgr_files: Vec::new(),
-            kernel_info: None,
-            initrd_info: None,
-            dtb_info: None,
-            boot_cfg_bckup: Vec::new(),
-            wifis: Vec::new(),
-        }
-    }
+// TODO: /etc path just in case
 
+impl MigrateInfo {
+    pub(crate) fn new(config: &Config) -> Result<MigrateInfo, MigError> {
+        trace!("new: entered");
+        // TODO: check files configured in config & create file_infos
 
-    // **************************************************
-    // getter functoins
+        let os_arch = get_os_arch()?;
 
-    pub(crate) fn get_os_name(&'a self) -> &'a str {
-        if let Some(ref os_name) = self.os_name {
-            return os_name;
-        }
-        panic!("Uninitialized field os_name in MigrateInfo");
-    }
+        let lsblk_info = LsblkInfo::new()?;
 
-    pub(crate) fn get_os_arch(&'a self) -> &'a OSArch {
-        if let Some(ref os_arch) = self.os_arch {
-            return os_arch;
-        }
-        panic!("Uninitialized field os_arch in MigrateInfo");
-    }
-
-    pub fn get_lsblk_info(&'a self) -> &'a LsblkInfo {
-        if let Some(ref diskinfo) = self.disk_info {
-            return &diskinfo.lsblk_info;
-        }
-        panic!("Uninitialized field install_path in MigrateInfo");
-    }
-
-
-    // ***************************************************
-    // get PathInfos for root, boot, install, bootmgr,
-
-    pub(crate) fn get_disk_info(&'a self) -> &'a DeviceInfo {
-        if let Some(ref disk_info) = self.disk_info {
-            disk_info
+        // get all required drives
+        let root_path = if let Some(path_info) = PathInfo::new(ROOT_PATH, &lsblk_info)? {
+            path_info
         } else {
-            panic!("Uninitialized field drive_info in MigrateInfo");
-        }
-    }
-
-    pub(crate) fn get_boot_pi(&'a self) -> &'a PathInfo {
-        &self.get_disk_info().boot_path
-    }
-
-    pub(crate) fn get_root_pi(&'a self) -> &'a PathInfo {
-        if let Some(ref disk_info) = self.disk_info {
-            &disk_info.root_path
+            return Err(MigError::from_remark(
+                MigErrorKind::NotFound,
+                &format!(
+                    "the device for path '{}' could not be established",
+                    ROOT_PATH
+                ),
+            ));
+        };
+        let boot_path = if let Some(path_info) = PathInfo::new(BOOT_PATH, &lsblk_info)? {
+            path_info
         } else {
-            panic!("Uninitialized field drive_info in MigrateInfo");
-        }
-    }
+            return Err(MigError::from_remark(
+                MigErrorKind::NotFound,
+                &format!(
+                    "the device for path '{}' could not be established",
+                    BOOT_PATH
+                ),
+            ));
+        };
 
-    pub fn get_install_pi(&'a self) -> &'a PathInfo {
-        if let Some(ref diskinfo) = self.disk_info {
-            return &diskinfo.inst_path;
-        }
-        panic!("Uninitialized field install_path in MigrateInfo");
-    }
+        let work_path =
+            if let Some(path_info) = PathInfo::new(config.migrate.get_work_dir(), &lsblk_info)? {
+                path_info
+            } else {
+                return Err(MigError::from_remark(
+                    MigErrorKind::NotFound,
+                    &format!(
+                        "the device for path '{}' could not be established",
+                        config.migrate.get_work_dir().display()
+                    ),
+                ));
+            };
 
-    pub(crate) fn get_bootmgr_pi(&'a self) -> Option<&'a PathInfo> {
-        if let Some(ref disk_info) = self.disk_info {
-            if let Some(ref bootmgr_path) = disk_info.bootmgr_path {
-                return Some(bootmgr_path);
-            }
-        }
-        return None;
-    }
-
-
-    pub fn set_bootmgr_pi(&mut self, bootmgr: Option<PathInfo>) {
-        if let Some(ref mut diskinfo) = self.disk_info {
-            diskinfo.bootmgr_path = bootmgr;
-        }
-        panic!("Uninitialized field install_path in MigrateInfo");
-    }
-
-    // ***************************************************
-    // Get paths to installable items, workdir
-
-    pub(crate) fn get_work_path(&'a self) -> &'a Path {
-        if let Some(ref disk_info) = self.disk_info {
-            return disk_info.work_path.path.as_path();
-        }
-        panic!("Uninitialized field drive_info in MigrateInfo");
-    }
-
-    pub fn get_initrd_path(&'a self) -> &'a Path {
-        if let Some(ref initrd_info) = self.initrd_info {
-            &initrd_info.path
-        } else {
-            panic!("Initrd path is not initialized");
-        }
-    }
-
-    pub fn get_dtb_path(&'a self) -> Option<&'a Path> {
-        if let Some(ref dtb_info) = self.dtb_info {
-            Some(&dtb_info.path)
+        let log_path = if let Some(log_dev) = config.migrate.get_log_device() {
+            let (_lsblk_drive, lsblk_part) = lsblk_info.get_devinfo_from_partition(log_dev)?;
+            Some((
+                lsblk_part.get_path(),
+                if let Some(ref fs_type) = lsblk_part.fstype {
+                    fs_type.clone()
+                } else {
+                    return Err(MigError::from_remark(
+                        MigErrorKind::InvState,
+                        &format!("Log fstype was not initialized for '{}'", log_dev.display()),
+                    ));
+                },
+            ))
         } else {
             None
-        }
-    }
+        };
 
-    pub fn get_kernel_path(&'a self) -> &'a Path {
-        if let Some(ref kernel_info) = self.kernel_info {
-            &kernel_info.path
+        let work_dir = &work_path.path;
+        info!("Working directory is '{}'", work_dir.display());
+
+        let image_file = if let Some(file_info) =
+            FileInfo::new(&config.balena.get_image_path(), &work_dir)?
+        {
+            file_info.expect_type(&FileType::OSImage)?;
+            info!(
+                "The balena OS image looks ok: '{}'",
+                file_info.path.display()
+            );
+            // TODO: make sure there is enough memory for OSImage
+
+            // TODO: do this in linux_migrator.rs ?
+            let required_mem = file_info.size + MEM_THRESHOLD;
+            if get_mem_info()?.0 < required_mem {
+                let message = format!("We have not found sufficient memory to store the balena OS image in ram. at least {} of memory is required.", format_size_with_unit(required_mem));
+                error!("{}", message);
+                return Err(MigError::from_remark(MigErrorKind::InvParam, &message));
+            }
+
+            file_info
         } else {
-            panic!("Kernel path is not initialized");
-        }
-    }
+            let message = String::from("The balena image has not been specified or cannot be accessed. Automatic download is not yet implemented, so you need to specify and supply all required files");
+            error!("{}", message);
+            return Err(MigError::from_remark(MigErrorKind::InvParam, &message));
+        };
 
-    pub(crate) fn get_image_path(&'a self) -> &'a Path {
-        if let Some(ref image_info) = self.os_image_info {
-            return image_info.path.as_path();
-        }
-        panic!("Uninitialized field balena image in MigrateInfo");
-    }
+        let config_file = if let Some(file_info) =
+            FileInfo::new(&config.balena.get_config_path(), &work_dir)?
+        {
+            file_info.expect_type(&FileType::Json)?;
 
-    pub(crate) fn get_config_path(&'a self) -> &'a Path {
-        if let Some(ref config_info) = self.os_config_info {
-            return config_info.path.as_path();
-        }
-        panic!(
-            "Uninitialized field balena config info in MigrateInfo",
-        );
-    }
+            let required_mem = file_info.size + MEM_THRESHOLD;
+            if get_mem_info()?.0 < required_mem {
+                let message = format!("We have not found sufficient memory to store the balena OS image in ram. at least {} of memory is required.", format_size_with_unit(required_mem));
+                error!("{}", message);
+                return Err(MigError::from_remark(MigErrorKind::InvParam, &message));
+            }
 
+            let balena_cfg = BalenaCfgJson::new(file_info)?;
+            info!(
+                "The balena config file looks ok: '{}'",
+                balena_cfg.get_path().display()
+            );
+            // TODO: make sure there is enough memory for OSImage
 
-    pub(crate) fn is_efi_boot(&self) -> bool {
-        if let Some(ref boot_manager) = self.boot_manager {
-            if let BootType::Efi = boot_manager.get_boot_type() {
-                true
+            // TODO: do this in linux_migrator.rs ?
+
+            balena_cfg
+        } else {
+            let message = String::from("The balena image has not been specified or cannot be accessed. Automatic download is not yet implemented, so you need to specify and supply all required files");
+            error!("{}", message);
+            return Err(MigError::from_remark(MigErrorKind::InvParam, &message));
+        };
+
+        let kernel_file = if let Some(file_info) =
+            FileInfo::new(config.migrate.get_kernel_path(), work_dir)?
+        {
+            file_info.expect_type(match os_arch {
+                OSArch::AMD64 => &FileType::KernelAMD64,
+                OSArch::ARMHF => &FileType::KernelARMHF,
+                OSArch::I386 => &FileType::KernelI386,
+            })?;
+
+            info!(
+                "The balena migrate kernel looks ok: '{}'",
+                file_info.path.display()
+            );
+            file_info
+        } else {
+            let message = String::from("The migrate kernel has not been specified or cannot be accessed. Automatic download is not yet implemented, so you need to specify and supply all required files");
+            error!("{}", message);
+            return Err(MigError::from_remark(MigErrorKind::InvParam, &message));
+        };
+
+        let initrd_file = if let Some(file_info) =
+            FileInfo::new(config.migrate.get_initrd_path(), work_dir)?
+        {
+            file_info.expect_type(&FileType::InitRD)?;
+            info!(
+                "The balena migrate initramfs looks ok: '{}'",
+                file_info.path.display()
+            );
+            file_info
+        } else {
+            let message = String::from("The migrate initramfs has not been specified or cannot be accessed. Automatic download is not yet implemented, so you need to specify and supply all required files");
+            error!("{}", message);
+            return Err(MigError::from_remark(MigErrorKind::InvParam, &message));
+        };
+
+        let dtb_file = if let Some(ref dtb_path) = config.migrate.get_dtb_path() {
+            if let Some(file_info) = FileInfo::new(dtb_path, work_dir)? {
+                file_info.expect_type(&FileType::DTB)?;
+                info!(
+                    "The balena migrate device tree blob looks ok: '{}'",
+                    file_info.path.display()
+                );
+                Some(file_info)
             } else {
-                false
+                let message = String::from("The migrate device tree blob has not been specified or cannot be accessed. Automatic download is not yet implemented, so you need to specify and supply all required files");
+                error!("{}", message);
+                return Err(MigError::from_remark(MigErrorKind::InvParam, &message));
             }
         } else {
-            panic!("Uninitialized boot_type in MigrateInfo");
-        }
-    }
+            None
+        };
 
-    pub(crate) fn get_boot_manager(&'a self) -> &'a Box<BootManager> {
-        if let Some(ref bootmgr) = self.boot_manager {
-            return bootmgr;
+        let mut nwmgr_files: Vec<FileInfo> = Vec::new();
+
+        for file in config.migrate.get_nwmgr_files() {
+            if let Some(file_info) = FileInfo::new(&file, &work_dir)? {
+                file_info.expect_type(&FileType::Text)?;
+                info!(
+                    "Adding network manager config: '{}'",
+                    file_info.path.display()
+                );
+                nwmgr_files.push(file_info);
+            } else {
+                let message = format!(
+                    "The network manager config file '{}' could not be found",
+                    file.display()
+                );
+                error!("{}", message);
+                return Err(MigError::from_remark(MigErrorKind::InvParam, &message));
+            }
+        }
+
+        let wifi_cfg = config.migrate.get_wifis();
+        let wifis: Vec<WifiConfig> = if MigrateWifis::NONE != wifi_cfg {
+            // **********************************************************************
+            // ** migrate wifi config
+            // TODO: NetworkManager configs
+            debug!("looking for wifi configurations to migrate");
+
+            let empty_list: Vec<String> = Vec::new();
+            let list: &Vec<String> = if let MigrateWifis::SOME(ref list) = wifi_cfg {
+                list
+            } else {
+                &empty_list
+            };
+
+            let wifi_list = WifiConfig::scan(list)?;
+
+            if wifi_list.len() > 0 {
+                for wifi in &wifi_list {
+                    info!("Found config for wifi: {}", wifi.get_ssid());
+                }
+                wifi_list
+            } else {
+                info!("No wifi configurations found");
+                Vec::new()
+            }
         } else {
-            panic!("uninitialized boot_manager in MigrateInfo");
-        }
-    }
+            Vec::new()
+        };
 
-/*
-    pub(crate) fn get_device_slug(&'a self) -> &'a str {
-        if let Some(ref device_slug) = self.device_slug {
-            return device_slug;
-        }
-        panic!("Uninitialized field device_slug in MigrateInfo");
+        let result = MigrateInfo {
+            os_name: get_os_name()?,
+            os_arch,
+            lsblk_info,
+            root_path,
+            boot_path,
+            work_path,
+            log_path,
+            image_file,
+            kernel_file,
+            initrd_file,
+            dtb_file,
+            nwmgr_files,
+            config_file,
+            wifis,
+        };
+
+        debug!("Diskinfo: {:?}", result);
+
+        Ok(result)
     }
-*/
 }

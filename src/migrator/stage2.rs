@@ -211,7 +211,6 @@ impl Stage2 {
             boot_mounted = true;
         }
 
-
         // mount bootmgr partition (EFI, uboot)
         let mut bootmgr_mounted = false;
         if let Some(bootmgr_cfg) = stage2_cfg.get_bootmgr_config() {
@@ -225,15 +224,15 @@ impl Stage2 {
                     MsFlags::empty(),
                     NIX_NONE,
                 )
-                    .context(MigErrCtx::from_remark(
-                        MigErrorKind::Upstream,
-                        &format!(
-                            "Failed to mount previous bootmanager device '{}' to '{}' with fstype: {}",
-                            device.display(),
-                            mountpoint.display(),
-                            bootmgr_cfg.get_fstype()
-                        ),
-                    ))?;
+                .context(MigErrCtx::from_remark(
+                    MigErrorKind::Upstream,
+                    &format!(
+                        "Failed to mount previous bootmanager device '{}' to '{}' with fstype: {}",
+                        device.display(),
+                        mountpoint.display(),
+                        bootmgr_cfg.get_fstype()
+                    ),
+                ))?;
                 bootmgr_mounted = true;
             }
         }
@@ -312,8 +311,6 @@ impl Stage2 {
                 warn!("Failed to retrieve mem info, error: {:?}", why);
             }
         }
-
-
 
         let device = device::from_config(device_type, boot_type)?;
 
@@ -435,7 +432,7 @@ impl Stage2 {
 
         if self.bootmgr_mounted {
             if let Some(bootmgr_cfg) = self.config.get_bootmgr_config() {
-                let mountpoint = path_append(&self.root_fs_path,bootmgr_cfg.get_mountpoint());
+                let mountpoint = path_append(&self.root_fs_path, bootmgr_cfg.get_mountpoint());
                 umount(&mountpoint).context(MigErrCtx::from_remark(
                     MigErrorKind::Upstream,
                     &format!(
@@ -472,7 +469,7 @@ impl Stage2 {
             MigErrorKind::Upstream,
             &format!(
                 "Failed to unmount former root device: '{}'",
-                self.config.get_root_device().display()
+                self.root_fs_path.display()
             ),
         ))?;
 

@@ -1,20 +1,14 @@
-use log::{debug, error, trace,};
+use log::{debug, error, trace};
 use regex::Regex;
 use std::path::Path;
 
 use crate::{
-    common::{
-        Config, MigError,
-        MigErrorKind,
-    },
+    boot_manager::{from_boot_type, BootManager, BootType, UBootManager},
+    common::{Config, MigError, MigErrorKind},
     device::{Device, DeviceType},
-    linux_common::{
-        device_info::DeviceInfo,
-    },
-    stage2::stage2_config::{Stage2Config,Stage2ConfigBuilder},
-    boot_manager::{BootManager, UBootManager, BootType, from_boot_type}
+    linux_common::migrate_info::MigrateInfo,
+    stage2::stage2_config::{Stage2Config, Stage2ConfigBuilder},
 };
-
 
 const SUPPORTED_OSSES: [&str; 2] = ["Ubuntu 18.04.2 LTS", "Ubuntu 14.04.1 LTS"];
 
@@ -24,7 +18,12 @@ const BB_MODEL_REGEX: &str = r#"^((\S+\s+)*\S+)\s+Beagle(Bone|Board)\s+(\S+)$"#;
 
 // TODO: check location of uEnv.txt or other files files to improve reliability
 
-pub(crate) fn is_bb(dev_info: &DeviceInfo, config: &Config, s2_cfg: &mut Stage2ConfigBuilder, model_string: &str) -> Result<Option<Box<Device>>, MigError> {
+pub(crate) fn is_bb(
+    dev_info: &MigrateInfo,
+    config: &Config,
+    s2_cfg: &mut Stage2ConfigBuilder,
+    model_string: &str,
+) -> Result<Option<Box<Device>>, MigError> {
     trace!(
         "Beaglebone::is_bb: entered with model string: '{}'",
         model_string
@@ -40,15 +39,21 @@ pub(crate) fn is_bb(dev_info: &DeviceInfo, config: &Config, s2_cfg: &mut Stage2C
         match model {
             "xM" => {
                 debug!("match found for BeagleboardXM");
-                Ok(Some(Box::new(BeagleboardXM::from_config(dev_info, config, s2_cfg)?)))
+                Ok(Some(Box::new(BeagleboardXM::from_config(
+                    dev_info, config, s2_cfg,
+                )?)))
             }
             "Green" => {
                 debug!("match found for BeagleboardGreen");
-                Ok(Some(Box::new(BeagleboardXM::from_config(dev_info, config, s2_cfg)?)))
+                Ok(Some(Box::new(BeagleboardXM::from_config(
+                    dev_info, config, s2_cfg,
+                )?)))
             }
             "Black" => {
                 debug!("match found for BeagleboardGreen");
-                Ok(Some(Box::new(BeagleboardXM::from_config(dev_info, config, s2_cfg)?)))
+                Ok(Some(Box::new(BeagleboardXM::from_config(
+                    dev_info, config, s2_cfg,
+                )?)))
             }
             _ => {
                 let message = format!("The beaglebone model reported by your device ('{}') is not supported by balena-migrate", model);
@@ -68,7 +73,11 @@ pub(crate) struct BeagleboneBlack {
 
 impl BeagleboneGreen {
     // this is used in stage1
-    fn from_config(dev_info: &DeviceInfo, config: &Config, s2_cfg: &mut Stage2ConfigBuilder) -> Result<BeagleboneGreen,MigError> {
+    fn from_config(
+        dev_info: &MigrateInfo,
+        config: &Config,
+        s2_cfg: &mut Stage2ConfigBuilder,
+    ) -> Result<BeagleboneGreen, MigError> {
         let os_name = &dev_info.os_name;
 
         if let Some(_idx) = SUPPORTED_OSSES.iter().position(|&r| r == os_name) {
@@ -76,7 +85,10 @@ impl BeagleboneGreen {
                 boot_manager: Box::new(UBootManager {}),
             })
         } else {
-            let message = format!("The OS '{}' is not supported for the device type BeagleboneGreen", os_name);
+            let message = format!(
+                "The OS '{}' is not supported for the device type BeagleboneGreen",
+                os_name
+            );
             error!("{}", &message);
             Err(MigError::from_remark(MigErrorKind::InvState, &message))
         }
@@ -103,12 +115,18 @@ impl<'a> Device for BeagleboneGreen {
         self.boot_manager.get_boot_type()
     }
 
-    fn setup(&self, dev_info:& DeviceInfo, config: &Config, s2_cfg: &mut Stage2ConfigBuilder) -> Result<(), MigError> {
+    fn setup(
+        &self,
+        dev_info: &MigrateInfo,
+        config: &Config,
+        s2_cfg: &mut Stage2ConfigBuilder,
+    ) -> Result<(), MigError> {
         self.boot_manager.setup(dev_info, config, s2_cfg)
     }
 
     fn restore_boot(&self, root_path: &Path, config: &Stage2Config) -> Result<(), MigError> {
-        self.boot_manager.restore(self.get_device_slug(), root_path, config)
+        self.boot_manager
+            .restore(self.get_device_slug(), root_path, config)
     }
 }
 
@@ -118,7 +136,11 @@ pub(crate) struct BeagleboneGreen {
 
 impl BeagleboneBlack {
     // this is used in stage1
-    fn from_config(dev_info: &DeviceInfo, config: &Config,  s2_cfg: &mut Stage2ConfigBuilder) -> Result<BeagleboneBlack,MigError> {
+    fn from_config(
+        dev_info: &MigrateInfo,
+        config: &Config,
+        s2_cfg: &mut Stage2ConfigBuilder,
+    ) -> Result<BeagleboneBlack, MigError> {
         let os_name = &dev_info.os_name;
 
         if let Some(_idx) = SUPPORTED_OSSES.iter().position(|&r| r == os_name) {
@@ -126,8 +148,11 @@ impl BeagleboneBlack {
                 boot_manager: Box::new(UBootManager {}),
             })
         } else {
-            let message = format!("The OS '{}' is not supported for the device type BeagleboneBlack", os_name);
-            error!("{}",message);
+            let message = format!(
+                "The OS '{}' is not supported for the device type BeagleboneBlack",
+                os_name
+            );
+            error!("{}", message);
             Err(MigError::from_remark(MigErrorKind::InvState, &message))
         }
     }
@@ -153,16 +178,20 @@ impl<'a> Device for BeagleboneBlack {
         self.boot_manager.get_boot_type()
     }
 
-    fn setup(&self, dev_info:& DeviceInfo, config: &Config, s2_cfg: &mut Stage2ConfigBuilder) -> Result<(), MigError> {
+    fn setup(
+        &self,
+        dev_info: &MigrateInfo,
+        config: &Config,
+        s2_cfg: &mut Stage2ConfigBuilder,
+    ) -> Result<(), MigError> {
         self.boot_manager.setup(dev_info, config, s2_cfg)
     }
 
     fn restore_boot(&self, root_path: &Path, config: &Stage2Config) -> Result<(), MigError> {
-        self.boot_manager.restore(self.get_device_slug(), root_path, config)
+        self.boot_manager
+            .restore(self.get_device_slug(), root_path, config)
     }
 }
-
-
 
 pub(crate) struct BeagleboardXM {
     boot_manager: Box<BootManager>,
@@ -170,7 +199,11 @@ pub(crate) struct BeagleboardXM {
 
 impl BeagleboardXM {
     // this is used in stage1
-    fn from_config(dev_info: &DeviceInfo, config: &Config,  s2_cfg: &mut Stage2ConfigBuilder) -> Result<BeagleboardXM,MigError> {
+    fn from_config(
+        dev_info: &MigrateInfo,
+        config: &Config,
+        s2_cfg: &mut Stage2ConfigBuilder,
+    ) -> Result<BeagleboardXM, MigError> {
         let os_name = &dev_info.os_name;
 
         if let Some(_idx) = SUPPORTED_OSSES.iter().position(|&r| r == os_name) {
@@ -178,7 +211,10 @@ impl BeagleboardXM {
                 boot_manager: Box::new(UBootManager {}),
             })
         } else {
-            let message = format!("The OS '{}' is not supported for the device type BeagleboardXM", os_name);
+            let message = format!(
+                "The OS '{}' is not supported for the device type BeagleboardXM",
+                os_name
+            );
             error!("{}", message);
             Err(MigError::from_remark(MigErrorKind::InvState, &message))
         }
@@ -207,11 +243,16 @@ impl<'a> Device for BeagleboardXM {
     }
 
     fn restore_boot(&self, root_path: &Path, config: &Stage2Config) -> Result<(), MigError> {
-        self.boot_manager.restore(self.get_device_slug(), root_path, config)
+        self.boot_manager
+            .restore(self.get_device_slug(), root_path, config)
     }
 
-    fn setup(&self, dev_info:& DeviceInfo, config: &Config, s2_cfg: &mut Stage2ConfigBuilder) -> Result<(), MigError> {
-        self.boot_manager.setup( dev_info, config, s2_cfg)
+    fn setup(
+        &self,
+        dev_info: &MigrateInfo,
+        config: &Config,
+        s2_cfg: &mut Stage2ConfigBuilder,
+    ) -> Result<(), MigError> {
+        self.boot_manager.setup(dev_info, config, s2_cfg)
     }
 }
-

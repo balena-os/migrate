@@ -1,9 +1,13 @@
-// expecting work_path to be absolute
 use failure::ResultExt;
 use lazy_static::lazy_static;
 use log::{debug, error, trace};
 use regex::Regex;
-use std::path::{Path, PathBuf, MAIN_SEPARATOR};
+use std::path::{Path, PathBuf};
+
+// ******************************************************************
+// Find location and size of file as absolute or relative to workdir
+// make a guess on file contents / type and conpare to expected value
+// ******************************************************************
 
 // file on ubuntu-14.04 reports x86 boot sector for image and kernel files
 
@@ -19,7 +23,7 @@ const TEXT_FTYPE_REGEX: &str = r#"^ASCII text.*$"#;
 const DTB_FTYPE_REGEX: &str = r#"^(Device Tree Blob|data).*$"#;
 
 #[cfg(target_os = "linux")]
-use crate::common::{MigErrCtx, MigError, MigErrorKind};
+use crate::common::{file_exists, MigErrCtx, MigError, MigErrorKind};
 #[cfg(target_os = "linux")]
 use crate::linux_common::{call_cmd, FILE_CMD};
 
@@ -56,7 +60,6 @@ impl FileType {
 pub struct FileInfo {
     pub path: PathBuf,
     pub size: u64,
-    pub in_work_dir: bool,
 }
 
 // TODO: make this detect file formats used by migrate, eg: kernel, initramfs, json file, disk image
@@ -76,32 +79,33 @@ impl FileInfo {
 
         // figure out if this a path relative to work_dir rather than absolute or relative to current dir
 
-        let checked_path = if file_path.is_absolute()
-            || file_path.starts_with("./")
-            || file_path.starts_with("../")
-            || ((MAIN_SEPARATOR != '/')
-                && (file_path.starts_with(&format!(".{}", MAIN_SEPARATOR))
-                    || file_path.starts_with(&format!("..{}", MAIN_SEPARATOR))))
-        {
+        let checked_path = if file_exists(file_path) {
             PathBuf::from(file_path)
         } else {
-            work_path.join(file_path)
+            if !file_path.is_absolute() {
+                let search_path = work_path.join(file_path);
+                if search_path.exists() {
+                    search_path
+                } else {
+                    // tried to build path using workdir, but nothing found
+                    return Ok(None);
+                }
+            } else {
+                // Absolute path was not found, no hope
+                return Ok(None);
+            }
         };
 
-        if checked_path.exists() {
-            let abs_path = checked_path.canonicalize().unwrap();
-            let metadata = abs_path.metadata().context(MigErrCtx::from_remark(
-                MigErrorKind::Upstream,
-                &format!("failed to retrieve metadata for path {:?}", abs_path),
-            ))?;
-            Ok(Some(FileInfo {
-                path: abs_path,
-                size: metadata.len(),
-                in_work_dir: false,
-            }))
-        } else {
-            Ok(None)
-        }
+        let abs_path = checked_path.canonicalize().unwrap();
+        let metadata = abs_path.metadata().context(MigErrCtx::from_remark(
+            MigErrorKind::Upstream,
+            &format!("failed to retrieve metadata for path {:?}", abs_path),
+        ))?;
+
+        Ok(Some(FileInfo {
+            path: abs_path,
+            size: metadata.len(),
+        }))
     }
 
     pub fn expect_type(&self, ftype: &FileType) -> Result<(), MigError> {

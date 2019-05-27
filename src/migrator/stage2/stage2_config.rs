@@ -1,5 +1,5 @@
 use failure::ResultExt;
-use log::{Level};
+use log::{info, Level};
 use std::fs::{read_to_string, File};
 use std::io::Write;
 use std::path::{Path, PathBuf};
@@ -12,12 +12,12 @@ pub const EMPTY_BACKUPS: &[(String, String)] = &[];
 
 const MODULE: &str = "stage2::stage2:config";
 
+use crate::boot_manager::{from_boot_type, BootManager, BootType};
 use crate::{
-    common::{Config, FailMode, MigErrCtx, MigError, MigErrorKind, OSArch},
-    defs::STAGE2_CFG_FILE,    
-    device::{DeviceType},
+    common::{FailMode, MigErrCtx, MigError, MigErrorKind},
+    defs::STAGE2_CFG_FILE,
+    device::DeviceType,
 };
-use crate::boot_manager::{BootType, BootManager, from_boot_type};
 
 #[derive(Debug, Deserialize, Serialize, Clone)]
 pub(crate) struct Stage2LogConfig {
@@ -33,6 +33,14 @@ pub(crate) struct BootMgrConfig {
 }
 
 impl<'a> BootMgrConfig {
+    pub fn new(device: PathBuf, fstype: String, mountpoint: PathBuf) -> BootMgrConfig {
+        BootMgrConfig {
+            device,
+            fstype,
+            mountpoint,
+        }
+    }
+
     pub fn get_device(&'a self) -> &'a Path {
         &self.device.as_path()
     }
@@ -43,7 +51,6 @@ impl<'a> BootMgrConfig {
         &self.mountpoint.as_path()
     }
 }
-
 
 #[derive(Debug, Deserialize, Serialize)]
 pub(crate) struct Stage2Config {
@@ -82,14 +89,11 @@ impl<'a> Stage2Config {
     }
 
     fn to_str(&self) -> Result<String, MigError> {
-        Ok(
-            serde_yaml::to_string(self).context(MigErrCtx::from_remark(
-                MigErrorKind::Upstream,
-                "Failed to serialize stage2 config",
-            ))?,
-        )
+        Ok(serde_yaml::to_string(self).context(MigErrCtx::from_remark(
+            MigErrorKind::Upstream,
+            "Failed to serialize stage2 config",
+        ))?)
     }
-
 
     pub fn from_config<P: AsRef<Path>>(path: &P) -> Result<Stage2Config, MigError> {
         // TODO: Dummy, parse from yaml
@@ -198,14 +202,13 @@ impl<'a> Stage2Config {
     }
 }
 
-
 pub(crate) struct Required<T> {
-    data: Option<T>
+    data: Option<T>,
 }
 
 impl<T: Clone> Required<T> {
     pub fn new(default: Option<&T>) -> Required<T> {
-        Required{
+        Required {
             data: if let Some(default) = default {
                 Some(default.clone())
             } else {
@@ -214,11 +217,14 @@ impl<T: Clone> Required<T> {
         }
     }
 
-    fn get<'a>(&'a self) -> Result<&'a T,MigError> {
+    fn get<'a>(&'a self) -> Result<&'a T, MigError> {
         if let Some(ref val) = self.data {
             Ok(val)
         } else {
-            Err(MigError::from_remark(MigErrorKind::InvParam, "A required parameters was not initialized"))
+            Err(MigError::from_remark(
+                MigErrorKind::InvParam,
+                "A required parameters was not initialized",
+            ))
         }
     }
 
@@ -239,12 +245,12 @@ impl<T: Clone> Required<T> {
 }
 
 pub(crate) struct Optional<T> {
-    data: Option<T>
+    data: Option<T>,
 }
 
 impl<T: Clone> Optional<T> {
     pub fn new(default: Option<&T>) -> Optional<T> {
-        Optional{
+        Optional {
             data: if let Some(default) = default {
                 Some(default.clone())
             } else {
@@ -352,54 +358,60 @@ impl<'a> Stage2ConfigBuilder {
         let mut cfg_str = String::from("# Balena Migrate Stage2 Config\n");
         cfg_str.push_str(&self.build()?.to_str()?);
         File::create(STAGE2_CFG_FILE)
-            .context(MigErrCtx::from_remark(MigErrorKind::Upstream, &format!("Failed to open file for writing: {}'", STAGE2_CFG_FILE)))?
+            .context(MigErrCtx::from_remark(
+                MigErrorKind::Upstream,
+                &format!("Failed to open file for writing: {}'", STAGE2_CFG_FILE),
+            ))?
             .write_all(cfg_str.as_bytes())
-            .context(MigErrCtx::from_remark(MigErrorKind::Upstream, &format!("Failed to write to config file: {}'", STAGE2_CFG_FILE)))?;
+            .context(MigErrCtx::from_remark(
+                MigErrorKind::Upstream,
+                &format!("Failed to write to config file: {}'", STAGE2_CFG_FILE),
+            ))?;
+        info!("Wrote stage2 config to '{}'", STAGE2_CFG_FILE);
         Ok(())
     }
 
     // *****************************************************************
     // Setter functions
 
-
     pub fn set_failmode(&mut self, val: &FailMode) {
-        self.fail_mode.set_ref( val);
+        self.fail_mode.set_ref(val);
     }
 
     pub fn set_no_flash(&mut self, val: bool) {
-        self.no_flash.set( val);
+        self.no_flash.set(val);
     }
 
     pub fn set_skip_flash(&mut self, val: bool) {
-        self.skip_flash.set( val);
+        self.skip_flash.set(val);
     }
 
     pub fn set_flash_device(&mut self, val: &PathBuf) {
-        self.flash_device.set_ref( val);
+        self.flash_device.set_ref(val);
     }
 
     pub fn set_boot_device(&mut self, val: &PathBuf) {
-        self.boot_device.set_ref( val);
+        self.boot_device.set_ref(val);
     }
 
     pub fn set_boot_fstype(&mut self, val: &String) {
-        self.boot_fstype.set_ref( val);
+        self.boot_fstype.set_ref(val);
     }
 
     pub fn set_bootmgr_cfg(&mut self, bootmgr_cfg: BootMgrConfig) {
-        self.bootmgr.set( bootmgr_cfg);
+        self.bootmgr.set(bootmgr_cfg);
     }
 
     pub fn set_balena_config(&mut self, val: PathBuf) {
-        self.balena_config.set( val);
+        self.balena_config.set(val);
     }
 
     pub fn set_balena_image(&mut self, val: PathBuf) {
-        self.balena_image.set( val);
+        self.balena_image.set(val);
     }
 
     pub fn set_work_dir(&mut self, val: &PathBuf) {
-        self.work_dir.set_ref( val);
+        self.work_dir.set_ref(val);
     }
 
     pub fn set_boot_bckup(&mut self, boot_backup: Vec<(String, String)>) {
@@ -411,11 +423,11 @@ impl<'a> Stage2ConfigBuilder {
     }
 
     pub fn set_gzip_internal(&mut self, val: bool) {
-        self.gzip_internal.set( val);
+        self.gzip_internal.set(val);
     }
 
     pub fn set_device_type(&mut self, dev_type: &DeviceType) {
-        self.device_type.set_ref( dev_type);
+        self.device_type.set_ref(dev_type);
     }
 
     pub fn set_log_to(&mut self, val: Stage2LogConfig) {
@@ -423,10 +435,9 @@ impl<'a> Stage2ConfigBuilder {
     }
 
     pub fn set_boot_type(&mut self, val: &BootType) {
-        self.boot_type.set_ref( val);
+        self.boot_type.set_ref(val);
     }
 }
-
 
 #[cfg(test)]
 mod tests {

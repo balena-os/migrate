@@ -5,12 +5,11 @@ use std::path::{Path, PathBuf};
 
 use crate::{
     common::{dir_exists, format_size_with_unit, MigErrCtx, MigError, MigErrorKind},
-    linux_common::{
-        get_root_info, get_fs_space,
-        device_info::lsblk_info::{
-            LsblkInfo, LsblkDevice, LsblkPartition},
-    },
     defs::ROOT_PATH,
+    linux_common::{
+        get_fs_space, get_root_info,
+        migrate_info::lsblk_info::{LsblkDevice, LsblkInfo, LsblkPartition},
+    },
 };
 
 const MODULE: &str = "linux_common::path_info";
@@ -60,7 +59,6 @@ impl PathInfo {
         trace!("from_mounted: entered with: path: '{}', mountpoint: '{}', device: '{}', partition: '{}'", path.display(), mountpoint.display(), device.name, partition.name);
 
         debug!("looking fo path: '{}'", path.display());
-
 
         let res_path = path.to_string_lossy();
 
@@ -176,13 +174,18 @@ impl PathInfo {
             lsblk_info.get_path_info(&abs_path)?
         };
 
-
         if let Some(ref mountpoint) = partition.mountpoint {
             Ok(Some(PathInfo::from_mounted(
                 &abs_path, mountpoint, &device, &partition,
             )?))
         } else {
-            Err(MigError::from_remark(MigErrorKind::InvState, &format!("No mountpoint found for partition: '{}'", partition.get_path().display())))
+            Err(MigError::from_remark(
+                MigErrorKind::InvState,
+                &format!(
+                    "No mountpoint found for partition: '{}'",
+                    partition.get_path().display()
+                ),
+            ))
         }
     }
 }
@@ -206,5 +209,3 @@ impl Display for PathInfo {
         )
     }
 }
-
-

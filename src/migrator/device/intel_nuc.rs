@@ -2,11 +2,11 @@ use log::{error, info};
 use std::path::Path;
 
 use crate::{
+    boot_manager::{from_boot_type, BootManager, BootType, GrubBootManager},
     common::{Config, MigError, MigErrorKind},
-    device::{Device, DeviceType},    
-    linux_common::{is_secure_boot, restore_backups, device_info::DeviceInfo},
+    device::{Device, DeviceType},
+    linux_common::{is_secure_boot, migrate_info::MigrateInfo, restore_backups},
     stage2::stage2_config::{Stage2Config, Stage2ConfigBuilder},
-    boot_manager::{BootType, BootManager, GrubBootManager, from_boot_type}
 };
 
 pub(crate) struct IntelNuc {
@@ -14,7 +14,11 @@ pub(crate) struct IntelNuc {
 }
 
 impl IntelNuc {
-    pub fn from_config(dev_info: &DeviceInfo, config: &Config,  s2_cfg: &mut Stage2ConfigBuilder) -> Result<IntelNuc,MigError> {
+    pub fn from_config(
+        dev_info: &MigrateInfo,
+        config: &Config,
+        s2_cfg: &mut Stage2ConfigBuilder,
+    ) -> Result<IntelNuc, MigError> {
         const SUPPORTED_OSSES: &'static [&'static str] = &[
             "Ubuntu 18.04.2 LTS",
             "Ubuntu 16.04.2 LTS",
@@ -24,7 +28,10 @@ impl IntelNuc {
 
         let os_name = &dev_info.os_name;
         if let None = SUPPORTED_OSSES.iter().position(|&r| r == os_name) {
-            let message = format!("The OS '{}' is not supported for device type IntelNuc",os_name,);
+            let message = format!(
+                "The OS '{}' is not supported for device type IntelNuc",
+                os_name,
+            );
             error!("{}", message);
             return Err(MigError::from_remark(MigErrorKind::InvParam, &message));
         }
@@ -50,7 +57,9 @@ impl IntelNuc {
             return Err(MigError::from_remark(MigErrorKind::InvParam, &message));
         }
 
-        Ok(IntelNuc{ boot_manager: Box::new(GrubBootManager{})})
+        Ok(IntelNuc {
+            boot_manager: Box::new(GrubBootManager {}),
+        })
     }
 
     pub fn from_boot_type(boot_type: &BootType) -> IntelNuc {
@@ -59,10 +68,10 @@ impl IntelNuc {
         }
     }
 
-/*    fn setup_grub(&self, config: &Config, mig_info: &mut MigrateInfo) -> Result<(), MigError> {
-        grub_install(config, mig_info)
-    }
-*/
+    /*    fn setup_grub(&self, config: &Config, mig_info: &mut MigrateInfo) -> Result<(), MigError> {
+            grub_install(config, mig_info)
+        }
+    */
 }
 
 impl<'a> Device for IntelNuc {
@@ -78,12 +87,18 @@ impl<'a> Device for IntelNuc {
         self.boot_manager.get_boot_type()
     }
 
-    fn setup(&self, dev_info: &DeviceInfo, config: &Config, s2_cfg: &mut Stage2ConfigBuilder) -> Result<(), MigError> {
+    fn setup(
+        &self,
+        dev_info: &MigrateInfo,
+        config: &Config,
+        s2_cfg: &mut Stage2ConfigBuilder,
+    ) -> Result<(), MigError> {
         self.boot_manager.setup(dev_info, config, s2_cfg)
     }
 
     fn restore_boot(&self, root_path: &Path, config: &Stage2Config) -> Result<(), MigError> {
-        self.boot_manager.restore(self.get_device_slug(), root_path, config)
+        self.boot_manager
+            .restore(self.get_device_slug(), root_path, config)
     }
 }
 

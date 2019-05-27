@@ -3,36 +3,30 @@ use log::{error, info, warn};
 use serde_json::{value::Index, Value};
 use std::fs::File;
 use std::io::BufReader;
-use std::path::{Path, PathBuf};
+use std::path::PathBuf;
 
-use super::{check_tcp_connect, Config, MigErrCtx, MigError, MigErrorKind};
+use super::{check_tcp_connect, Config, FileInfo, MigErrCtx, MigError, MigErrorKind};
 
-const MODULE: &str = "migrator::common::balena_cfg_json";
-
+#[derive(Debug)]
 pub(crate) struct BalenaCfgJson {
     doc: Value,
-    file: PathBuf,
+    file: FileInfo,
 }
 
 impl BalenaCfgJson {
-    pub fn new<P: AsRef<Path>>(cfg_file: P) -> Result<BalenaCfgJson, MigError> {
-        let cfg_file = cfg_file.as_ref();
+    pub fn new(cfg_file: FileInfo) -> Result<BalenaCfgJson, MigError> {
         Ok(BalenaCfgJson {
-            doc: serde_json::from_reader(BufReader::new(File::open(cfg_file).context(
+            doc: serde_json::from_reader(BufReader::new(File::open(&cfg_file.path).context(
                 MigErrCtx::from_remark(
                     MigErrorKind::Upstream,
-                    &format!(
-                        "{}::try_init:cannot open file '{}'",
-                        MODULE,
-                        cfg_file.display()
-                    ),
+                    &format!("new: cannot open file '{}'", cfg_file.path.display()),
                 ),
             )?))
             .context(MigErrCtx::from_remark(
                 MigErrorKind::Upstream,
-                &format!("{}::new: failed to parse '{}'", MODULE, cfg_file.display()),
+                &format!("new: failed to parse '{}'", cfg_file.path.display()),
             ))?,
-            file: PathBuf::from(cfg_file),
+            file: cfg_file,
         })
     }
 
@@ -68,6 +62,10 @@ impl BalenaCfgJson {
         Ok(())
     }
 
+    pub fn get_path<'a>(&'a self) -> &'a PathBuf {
+        &self.file.path
+    }
+
     pub fn get_app_name<'a>(&self) -> Result<&str, MigError> {
         self.get_string_cfg("applicationName")
     }
@@ -93,7 +91,7 @@ impl BalenaCfgJson {
                     &format!(
                         "The key '{}' is missing in the config.json supplied in: '{}'.",
                         name,
-                        self.file.display()
+                        self.file.path.display()
                     ),
                 )),
             },
@@ -102,7 +100,7 @@ impl BalenaCfgJson {
                 &format!(
                     "The key '{}' is invalid in the config.json supplied in: '{}'.",
                     name,
-                    self.file.display()
+                    self.file.path.display()
                 ),
             )))),
         }
@@ -116,7 +114,7 @@ impl BalenaCfgJson {
                     &format!(
                         "invalid value for key '{}' found in '{}'",
                         name,
-                        &self.file.display()
+                        &self.file.path.display()
                     ),
                 ))?),
                 Value::Number(nval) => Ok(nval.as_u64().unwrap() as u16),
@@ -126,7 +124,7 @@ impl BalenaCfgJson {
                         "invalid type {:?} for key '{}' found in '{}'",
                         value,
                         name,
-                        &self.file.display()
+                        &self.file.path.display()
                     ),
                 )),
             }
@@ -136,7 +134,7 @@ impl BalenaCfgJson {
                 &format!(
                     "could not find value for '{}' in '{}'",
                     name,
-                    &self.file.display()
+                    &self.file.path.display()
                 ),
             ))
         }
@@ -148,7 +146,7 @@ impl BalenaCfgJson {
                 Value::String(s) => Ok(Some(&s)),
                 _ => Err(MigError::from_remark(
                     MigErrorKind::InvParam,
-                    &format!("{}::get_json_str: invalid value, not string", MODULE),
+                    "get_json_str: invalid value, not string",
                 )),
             }
         } else {

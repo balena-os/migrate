@@ -1,12 +1,12 @@
 use failure::{Fail, ResultExt};
 
+use lazy_static::lazy_static;
 use log::{debug, error, info, trace, warn};
 use regex::Regex;
 use std::cell::RefCell;
 use std::collections::HashMap;
 use std::fs::{copy, read_link, read_to_string};
 use std::path::{Path, PathBuf};
-use lazy_static::{lazy_static};
 
 use libc::getuid;
 
@@ -21,13 +21,12 @@ use crate::{
 pub(crate) mod wifi_config;
 pub(crate) use wifi_config::WifiConfig;
 
-pub(crate) mod device_info;
+pub(crate) mod migrate_info;
 
 //pub(crate) mod migrate_info;
 //pub(crate) use migrate_info::MigrateInfo;
 
 use crate::common::dir_exists;
-
 
 const MODULE: &str = "linux_common";
 const WHEREIS_CMD: &str = "whereis";
@@ -522,8 +521,7 @@ pub(crate) fn get_os_release() -> Result<OSRelease, MigError> {
 }
 */
 
-
-pub(crate) fn get_fs_space<P: AsRef<Path>>(path: P) -> Result<(u64,u64), MigError> {
+pub(crate) fn get_fs_space<P: AsRef<Path>>(path: P) -> Result<(u64, u64), MigError> {
     const SIZE_REGEX: &str = r#"^(\d+)K?$"#;
     let path = path.as_ref();
     trace!("get_fs_space: entered with '{}'", path.display());
@@ -572,14 +570,10 @@ pub(crate) fn get_fs_space<P: AsRef<Path>>(path: P) -> Result<(u64,u64), MigErro
         ));
     }
 
-    debug!(
-        "get_fs_space: '{}' df result: {:?}",
-        path.display(),
-        &words
-    );
+    debug!("get_fs_space: '{}' df result: {:?}", path.display(), &words);
 
     lazy_static! {
-            static ref SIZE_RE: Regex = Regex::new(SIZE_REGEX).unwrap();
+        static ref SIZE_RE: Regex = Regex::new(SIZE_REGEX).unwrap();
     }
 
     let fs_size = if let Some(captures) = SIZE_RE.captures(words[0]) {
@@ -618,5 +612,5 @@ pub(crate) fn get_fs_space<P: AsRef<Path>>(path: P) -> Result<(u64,u64), MigErro
         ));
     };
 
-    Ok((fs_size,fs_size - fs_used))
+    Ok((fs_size, fs_size - fs_used))
 }

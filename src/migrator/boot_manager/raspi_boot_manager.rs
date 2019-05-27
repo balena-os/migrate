@@ -1,19 +1,17 @@
 use failure::{Fail, ResultExt};
-use log::{info, warn, trace};
+use log::{info, trace, warn};
+use regex::Regex;
 use std::fs::{copy, File};
 use std::io::{BufRead, BufReader, Write};
-use std::path::{Path};
-use regex::{Regex};
+use std::path::Path;
 
 use std::time::SystemTime;
 
 use crate::{
-    defs::{BALENA_FILE_TAG},
-    common::{file_exists, is_balena_file, path_append,Config, MigError, MigErrorKind, MigErrCtx},
-    linux_common::{
-        device_info::{DeviceInfo, },
-        call_cmd, CHMOD_CMD},
-    boot_manager::{BootType, BootManager},
+    boot_manager::{BootManager, BootType},
+    common::{file_exists, is_balena_file, path_append, Config, MigErrCtx, MigError, MigErrorKind},
+    defs::BALENA_FILE_TAG,
+    linux_common::{call_cmd, migrate_info::MigrateInfo, CHMOD_CMD},
     stage2::stage2_config::{Stage2Config, Stage2ConfigBuilder},
 };
 
@@ -28,7 +26,9 @@ const RPI_CONFIG_TXT: &str = "config.txt";
 pub(crate) struct RaspiBootManager;
 
 impl RaspiBootManager {
-    pub fn new() -> RaspiBootManager { RaspiBootManager{} }
+    pub fn new() -> RaspiBootManager {
+        RaspiBootManager {}
+    }
 }
 
 impl BootManager for RaspiBootManager {
@@ -36,15 +36,23 @@ impl BootManager for RaspiBootManager {
         BootType::Raspi
     }
 
-    fn can_migrate(&self, dev_info:& DeviceInfo, config: &Config, s2_cfg: &mut Stage2ConfigBuilder) -> Result<bool, MigError> {
+    fn can_migrate(
+        &self,
+        mig_info: &MigrateInfo,
+        config: &Config,
+        s2_cfg: &mut Stage2ConfigBuilder,
+    ) -> Result<bool, MigError> {
+        // TODO: calculate/ensure  required space on /boot /bootmgr
         Err(MigError::from(MigErrorKind::NotImpl))
     }
 
-    fn setup(&self, dev_info:& DeviceInfo, config: &Config,  s2_cfg: &mut Stage2ConfigBuilder) -> Result<(), MigError> {
-
-        trace!(
-            "setup: entered with type: RaspberryPi3",
-        );
+    fn setup(
+        &self,
+        mig_info: &MigrateInfo,
+        config: &Config,
+        s2_cfg: &mut Stage2ConfigBuilder,
+    ) -> Result<(), MigError> {
+        trace!("setup: entered with type: RaspberryPi3",);
 
         // **********************************************************************
         // ** copy new kernel
@@ -81,7 +89,7 @@ impl BootManager for RaspiBootManager {
             RPI_MIG_INITRD_PATH
         );
 
-        let boot_path = &dev_info.boot_path.path;
+        let boot_path = &mig_info.boot_path.path;
         let config_path = path_append(boot_path, RPI_CONFIG_TXT);
 
         if !file_exists(&config_path) {
@@ -114,8 +122,8 @@ impl BootManager for RaspiBootManager {
                     backup_path.display()
                 ),
             ))?;
-            
-            let mut boot_cfg_bckup: Vec<(String,String)> = Vec::new();
+
+            let mut boot_cfg_bckup: Vec<(String, String)> = Vec::new();
             boot_cfg_bckup.push((
                 String::from(&*config_path.to_string_lossy()),
                 String::from(&*backup_path.to_string_lossy()),
@@ -219,7 +227,7 @@ impl BootManager for RaspiBootManager {
         Ok(())
     }
 
-    fn restore(&self, slug: &str, root_path: &Path,  config: &Stage2Config) -> Result<(), MigError>  {
+    fn restore(&self, slug: &str, root_path: &Path, config: &Stage2Config) -> Result<(), MigError> {
         Err(MigError::from(MigErrorKind::NotImpl))
     }
 }
