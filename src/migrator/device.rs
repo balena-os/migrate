@@ -1,4 +1,4 @@
-use failure::{Fail, ResultExt};
+use failure::ResultExt;
 use log::error;
 use serde::{Deserialize, Serialize};
 use std::fs::read_to_string;
@@ -16,26 +16,7 @@ mod beaglebone;
 mod intel_nuc;
 mod raspberrypi;
 
-const MODULE: &str = "device";
 const DEVICE_TREE_MODEL: &str = "/proc/device-tree/model";
-
-const GRUB_CFG_TEMPLATE: &str = r##"
-#!/bin/sh
-exec tail -n +3 $0
-# This file provides an easy way to add custom menu entries.  Simply type the
-# menu entries you want to add after this comment.  Be careful not to change
-# the 'exec tail' line above.
-
-menuentry "balena-migrate" {
-  insmod gzio
-  insmod __PART_MOD__
-  insmod __FSTYPE_MOD__
-
-  __ROOT_CMD__
-  linux __LINUX__
-  initrd  __INITRD_NAME__
-}
-"##;
 
 #[derive(Debug, Deserialize, Serialize, Clone)]
 pub(crate) enum DeviceType {

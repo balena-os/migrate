@@ -18,6 +18,7 @@ pub const REBOOT_CMD: &str = "reboot";
 pub const CHMOD_CMD: &str = "chmod";
 pub const DD_CMD: &str = "dd";
 pub const PARTPROBE_CMD: &str = "partprobe";
+pub const PARTED_CMD: &str = "parted";
 pub const GZIP_CMD: &str = "gzip";
 pub const MKTEMP_CMD: &str = "mktemp";
 
@@ -72,6 +73,14 @@ impl EnsuredCommands {
                 MigErrorKind::NotFound,
                 &format!("{}", message),
             ))
+        }
+    }
+
+    pub fn has_cmd<'a>(&'a self, cmd: &str) -> bool {
+        if let Some(cmd_path) = self.cmd_table.get(cmd) {
+            true
+        } else {
+            false
         }
     }
 

@@ -14,14 +14,14 @@ use crate::{
     device::{self, Device},
     linux_common::{
         is_admin, migrate_info::MigrateInfo, EnsuredCommands, CHMOD_CMD, DF_CMD, FDISK_CMD,
-        FILE_CMD, LSBLK_CMD, MKTEMP_CMD, MOUNT_CMD, REBOOT_CMD, UNAME_CMD,
+        FILE_CMD, LSBLK_CMD, MKTEMP_CMD, MOUNT_CMD, PARTED_CMD, REBOOT_CMD, UNAME_CMD,
     },
     stage2::stage2_config::Stage2ConfigBuilder,
 };
 
 const MODULE: &str = "migrator::linux";
 const REQUIRED_CMDS: &'static [&'static str] = &[
-    DF_CMD, LSBLK_CMD, FILE_CMD, UNAME_CMD, MOUNT_CMD, REBOOT_CMD, CHMOD_CMD, FDISK_CMD, MKTEMP_CMD,
+    DF_CMD, LSBLK_CMD, FILE_CMD, UNAME_CMD, MOUNT_CMD, REBOOT_CMD, CHMOD_CMD, MKTEMP_CMD,
 ];
 
 pub(crate) struct LinuxMigrator {
@@ -63,6 +63,27 @@ impl<'a> LinuxMigrator {
                 MigErrorKind::InvState,
                 &format!("{}::try_init: was run without admin privileges", MODULE),
             ));
+        }
+
+        // **********************************************************************
+        // Ensure some more vital commands
+        let parted_found = match cmds.ensure_cmd(PARTED_CMD) {
+            Ok(_s) => true,
+            Err(_why) => false,
+        };
+
+        let fdisk_found = match cmds.ensure_cmd(FDISK_CMD) {
+            Ok(_s) => true,
+            Err(_why) => false,
+        };
+
+        if !(fdisk_found || parted_found) {
+            let message = format!(
+                "Missing partitioning commands, please make sure either {} or {} is available",
+                PARTED_CMD, FDISK_CMD
+            );
+            error!("{}", message);
+            return Err(MigError::from_remark(MigErrorKind::InvState, &message));
         }
 
         // **********************************************************************

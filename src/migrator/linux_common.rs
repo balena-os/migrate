@@ -3,8 +3,6 @@ use failure::{Fail, ResultExt};
 use lazy_static::lazy_static;
 use log::{debug, error, info, trace, warn};
 use regex::Regex;
-use std::cell::RefCell;
-use std::collections::HashMap;
 use std::fs::{copy, read_link, read_to_string};
 use std::path::{Path, PathBuf};
 
@@ -12,8 +10,8 @@ use libc::getuid;
 
 use crate::{
     common::{
-        call, file_exists, parse_file, path_append, CmdRes, Config, MigErrCtx, MigError,
-        MigErrorKind, OSArch,
+        call, file_exists, parse_file, path_append, Config, MigErrCtx, MigError, MigErrorKind,
+        OSArch,
     },
     defs::{DISK_BY_PARTUUID_PATH, DISK_BY_UUID_PATH, KERNEL_CMDLINE_PATH, SYS_UEFI_DIR},
 };
@@ -26,8 +24,8 @@ pub(crate) mod migrate_info;
 pub(crate) mod ensured_commands;
 pub(crate) use ensured_commands::{
     EnsuredCommands, CHMOD_CMD, DD_CMD, DF_CMD, FDISK_CMD, FILE_CMD, GRUB_REBOOT_CMD,
-    GRUB_UPDT_CMD, GZIP_CMD, LSBLK_CMD, MKTEMP_CMD, MOKUTIL_CMD, MOUNT_CMD, PARTPROBE_CMD,
-    REBOOT_CMD, UNAME_CMD,
+    GRUB_UPDT_CMD, GZIP_CMD, LSBLK_CMD, MKTEMP_CMD, MOKUTIL_CMD, MOUNT_CMD, PARTED_CMD,
+    PARTPROBE_CMD, REBOOT_CMD, UNAME_CMD,
 };
 
 //pub(crate) mod migrate_info;
@@ -37,9 +35,6 @@ use crate::common::dir_exists;
 
 const MODULE: &str = "linux_common";
 const WHEREIS_CMD: &str = "whereis";
-
-const GRUB_UPDT_VERSION_ARGS: [&str; 1] = ["--version"];
-const GRUB_UPDT_VERSION_RE: &str = r#"^.*\s+\(GRUB\)\s+([0-9]+)\.([0-9]+)[^0-9].*$"#;
 
 const MOKUTIL_ARGS_SB_STATE: [&str; 1] = ["--sb-state"];
 
@@ -254,69 +249,6 @@ pub(crate) fn is_secure_boot() -> Result<bool, MigError> {
         ))
     } else {
         Ok(false)
-    }
-}
-
-/******************************************************************
- * Ensure grub (update-grub) exists and retrieve its version
- * as (major,minor)
- ******************************************************************/
-
-pub(crate) fn get_grub_version(cmds: &mut EnsuredCommands) -> Result<(String, String), MigError> {
-    trace!("get_grub_version: entered");
-
-    let _dummy = cmds.ensure_cmd(GRUB_REBOOT_CMD)?;
-
-    let grub_path = cmds.ensure_cmd(GRUB_UPDT_CMD)?;
-
-    let grub_path = match whereis(GRUB_UPDT_CMD) {
-        Ok(path) => path,
-        Err(why) => {
-            warn!(
-                "The grub update command '{}' could not be found",
-                GRUB_UPDT_CMD
-            );
-            return Err(MigError::from(why.context(MigErrCtx::from_remark(
-                MigErrorKind::Upstream,
-                &format!("failed to find command {}", GRUB_UPDT_CMD),
-            ))));
-        }
-    };
-
-    let cmd_res =
-        call(&grub_path, &GRUB_UPDT_VERSION_ARGS, true).context(MigErrCtx::from_remark(
-            MigErrorKind::Upstream,
-            &format!(
-                "{}::get_grub_version: call '{} {:?}'",
-                MODULE, grub_path, GRUB_UPDT_VERSION_ARGS
-            ),
-        ))?;
-
-    if cmd_res.status.success() {
-        let re = Regex::new(GRUB_UPDT_VERSION_RE).unwrap();
-        if let Some(captures) = re.captures(cmd_res.stdout.as_ref()) {
-            Ok((
-                String::from(captures.get(1).unwrap().as_str()),
-                String::from(captures.get(2).unwrap().as_str()),
-            ))
-        } else {
-            Err(MigError::from_remark(
-                MigErrorKind::InvParam,
-                &format!(
-                    "{}::get_grub_version: failed to parse grub version string: {}",
-                    MODULE, cmd_res.stdout
-                ),
-            ))
-        }
-    } else {
-        Err(MigError::from_remark(
-            MigErrorKind::ExecProcess,
-            &format!(
-                "{}::get_os_arch: command failed: {}",
-                MODULE,
-                cmd_res.status.code().unwrap_or(0)
-            ),
-        ))
     }
 }
 
