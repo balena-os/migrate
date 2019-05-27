@@ -9,8 +9,6 @@ use crate::{
     defs::{BOOT_PATH, MEM_THRESHOLD, ROOT_PATH},
     linux_common::{
         ensured_commands::EnsuredCommands, get_mem_info, get_os_arch, get_os_name, WifiConfig,
-        CHMOD_CMD, DF_CMD, FDISK_CMD, FILE_CMD, LSBLK_CMD, MKTEMP_CMD, MOUNT_CMD, REBOOT_CMD,
-        UNAME_CMD,
     },
 };
 
@@ -46,22 +44,17 @@ pub(crate) struct MigrateInfo {
     pub kernel_file: FileInfo,
     pub initrd_file: FileInfo,
     pub dtb_file: Option<FileInfo>,
-
-    pub cmds: EnsuredCommands,
 }
-
-const REQUIRED_CMDS: &'static [&'static str] = &[
-    DF_CMD, LSBLK_CMD, FILE_CMD, UNAME_CMD, MOUNT_CMD, REBOOT_CMD, CHMOD_CMD, FDISK_CMD, MKTEMP_CMD,
-];
 
 // TODO: /etc path just in case
 
 impl MigrateInfo {
-    pub(crate) fn new(config: &Config) -> Result<MigrateInfo, MigError> {
+    pub(crate) fn new(
+        config: &Config,
+        cmds: &mut EnsuredCommands,
+    ) -> Result<MigrateInfo, MigError> {
         trace!("new: entered");
         // TODO: check files configured in config & create file_infos
-
-        let mut cmds = EnsuredCommands::new(REQUIRED_CMDS)?;
 
         let os_arch = get_os_arch(&cmds)?;
 
@@ -297,7 +290,6 @@ impl MigrateInfo {
             nwmgr_files,
             config_file,
             wifis,
-            cmds,
         };
 
         debug!("Diskinfo: {:?}", result);

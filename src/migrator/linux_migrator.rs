@@ -13,15 +13,19 @@ use crate::{
     defs::{BACKUP_FILE, MIN_DISK_SIZE, SYSTEM_CONNECTIONS_DIR},
     device::{self, Device},
     linux_common::{
-        is_admin, migrate_info::MigrateInfo, CHMOD_CMD, DF_CMD, FDISK_CMD, FILE_CMD, LSBLK_CMD,
-        MKTEMP_CMD, MOUNT_CMD, REBOOT_CMD, UNAME_CMD,
+        is_admin, migrate_info::MigrateInfo, EnsuredCommands, CHMOD_CMD, DF_CMD, FDISK_CMD,
+        FILE_CMD, LSBLK_CMD, MKTEMP_CMD, MOUNT_CMD, REBOOT_CMD, UNAME_CMD,
     },
     stage2::stage2_config::Stage2ConfigBuilder,
 };
 
 const MODULE: &str = "migrator::linux";
+const REQUIRED_CMDS: &'static [&'static str] = &[
+    DF_CMD, LSBLK_CMD, FILE_CMD, UNAME_CMD, MOUNT_CMD, REBOOT_CMD, CHMOD_CMD, FDISK_CMD, MKTEMP_CMD,
+];
 
 pub(crate) struct LinuxMigrator {
+    cmds: EnsuredCommands,
     mig_info: MigrateInfo,
     config: Config,
     stage2_config: Stage2ConfigBuilder,
@@ -47,6 +51,8 @@ impl<'a> LinuxMigrator {
 
         info!("migrate mode: {:?}", config.migrate.get_mig_mode());
 
+        let mut cmds = EnsuredCommands::new(REQUIRED_CMDS)?;
+
         // **********************************************************************
         // We need to be root to do this
         // note: fake admin is not honored in release mode
@@ -63,7 +69,7 @@ impl<'a> LinuxMigrator {
         // Get os architecture & name & disk properties, check required paths
         // find wifis etc..
 
-        let mig_info = match MigrateInfo::new(&config) {
+        let mig_info = match MigrateInfo::new(&config, &mut cmds) {
             Ok(mig_info) => {
                 info!(
                     "OS Architecture is {}, OS Name is '{}'",
@@ -85,7 +91,7 @@ impl<'a> LinuxMigrator {
 
         let mut stage2_config = Stage2ConfigBuilder::default();
 
-        let device = match device::get_device(&mig_info, &config, &mut stage2_config) {
+        let device = match device::get_device(&mut cmds, &mig_info, &config, &mut stage2_config) {
             Ok(device) => {
                 let dev_type = device.get_device_type();
                 let boot_type = device.get_boot_type();
@@ -149,6 +155,7 @@ impl<'a> LinuxMigrator {
         }
 
         Ok(LinuxMigrator {
+            cmds,
             mig_info,
             config,
             device,
@@ -253,8 +260,12 @@ impl<'a> LinuxMigrator {
 
         trace!("device setup");
 
-        self.device
-            .setup(&mut self.mig_info, &self.config, &mut self.stage2_config)?;
+        self.device.setup(
+            &self.cmds,
+            &mut self.mig_info,
+            &self.config,
+            &mut self.stage2_config,
+        )?;
 
         trace!("write stage 2 config");
         self.stage2_config.write_stage2_cfg()?;
@@ -267,7 +278,7 @@ impl<'a> LinuxMigrator {
             let delay = Duration::new(*delay, 0);
             thread::sleep(delay);
             println!("Rebooting now..");
-            self.mig_info.cmds.call_cmd(REBOOT_CMD, &["-f"], false)?;
+            self.cmds.call_cmd(REBOOT_CMD, &["-f"], false)?;
         }
 
         trace!("done");

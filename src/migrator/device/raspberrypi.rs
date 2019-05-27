@@ -6,13 +6,14 @@ use crate::{
     boot_manager::{from_boot_type, BootManager, BootType, RaspiBootManager},
     common::{Config, MigError, MigErrorKind},
     device::{Device, DeviceType},
-    linux_common::{migrate_info::MigrateInfo, restore_backups},
+    linux_common::{migrate_info::MigrateInfo, restore_backups, EnsuredCommands},
     stage2::stage2_config::{Stage2Config, Stage2ConfigBuilder},
 };
 
 const RPI_MODEL_REGEX: &str = r#"^Raspberry\s+Pi\s+(\S+)\s+Model\s+(.*)$"#;
 
 pub(crate) fn is_rpi(
+    cmds: &mut EnsuredCommands,
     dev_info: &MigrateInfo,
     config: &Config,
     s2_cfg: &mut Stage2ConfigBuilder,
@@ -35,7 +36,7 @@ pub(crate) fn is_rpi(
             "3" => {
                 info!("Identified RaspberryPi3: model {}", model);
                 Ok(Some(Box::new(RaspberryPi3::from_config(
-                    dev_info, config, s2_cfg,
+                    cmds, dev_info, config, s2_cfg,
                 )?)))
             }
             _ => {
@@ -55,7 +56,13 @@ pub(crate) struct RaspberryPi3 {
 }
 
 impl RaspberryPi3 {
+    pub fn new() -> RaspberryPi3 {
+        RaspberryPi3 {
+            boot_manager: Box::new(RaspiBootManager::new()),
+        }
+    }
     pub fn from_config(
+        cmds: &mut EnsuredCommands,
         dev_info: &MigrateInfo,
         config: &Config,
         s2_cfg: &mut Stage2ConfigBuilder,
@@ -70,9 +77,7 @@ impl RaspberryPi3 {
             return Err(MigError::from_remark(MigErrorKind::InvParam, &message));
         }
 
-        Ok(RaspberryPi3 {
-            boot_manager: Box::new(RaspiBootManager {}),
-        })
+        Ok(RaspberryPi3::new())
     }
 
     pub fn from_boot_type(boot_type: &BootType) -> RaspberryPi3 {
@@ -97,11 +102,12 @@ impl<'a> Device for RaspberryPi3 {
 
     fn setup(
         &self,
+        cmds: &EnsuredCommands,
         dev_info: &MigrateInfo,
         config: &Config,
         s2_cfg: &mut Stage2ConfigBuilder,
     ) -> Result<(), MigError> {
-        self.boot_manager.setup(dev_info, config, s2_cfg)
+        self.boot_manager.setup(cmds, dev_info, config, s2_cfg)
     }
 
     fn restore_boot(&self, root_path: &Path, config: &Stage2Config) -> Result<(), MigError> {

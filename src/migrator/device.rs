@@ -8,7 +8,7 @@ use crate::{
     boot_manager::BootType,
     common::{Config, MigErrCtx, MigError, MigErrorKind, OSArch},
     //linux::LinuxMigrator,
-    linux_common::migrate_info::MigrateInfo,
+    linux_common::{migrate_info::MigrateInfo, EnsuredCommands},
     stage2::stage2_config::{Stage2Config, Stage2ConfigBuilder},
 };
 
@@ -52,6 +52,7 @@ pub(crate) trait Device {
     fn get_boot_type(&self) -> BootType;
     fn setup(
         &self,
+        cmds: &EnsuredCommands,
         dev_info: &MigrateInfo,
         config: &Config,
         s2_cfg: &mut Stage2ConfigBuilder,
@@ -87,11 +88,12 @@ pub(crate) fn from_config(
 }
 
 pub(crate) fn get_device(
-    dev_info: &MigrateInfo,
+    cmds: &mut EnsuredCommands,
+    mig_info: &MigrateInfo,
     config: &Config,
     s2_cfg: &mut Stage2ConfigBuilder,
 ) -> Result<Box<Device>, MigError> {
-    match dev_info.os_arch {
+    match mig_info.os_arch {
         OSArch::ARMHF => {
             let dev_tree_model =
                 read_to_string(DEVICE_TREE_MODEL).context(MigErrCtx::from_remark(
@@ -102,11 +104,15 @@ pub(crate) fn get_device(
                     ),
                 ))?;
 
-            if let Some(device) = raspberrypi::is_rpi(dev_info, config, s2_cfg, &dev_tree_model)? {
+            if let Some(device) =
+                raspberrypi::is_rpi(cmds, mig_info, config, s2_cfg, &dev_tree_model)?
+            {
                 return Ok(device);
             }
 
-            if let Some(device) = beaglebone::is_bb(dev_info, config, s2_cfg, &dev_tree_model)? {
+            if let Some(device) =
+                beaglebone::is_bb(cmds, mig_info, config, s2_cfg, &dev_tree_model)?
+            {
                 return Ok(device);
             }
 
@@ -119,7 +125,7 @@ pub(crate) fn get_device(
         }
         OSArch::AMD64 => {
             return Ok(Box::new(intel_nuc::IntelNuc::from_config(
-                dev_info, config, s2_cfg,
+                cmds, mig_info, config, s2_cfg,
             )?))
         }
         /*            OSArch::I386 => {
@@ -131,7 +137,7 @@ pub(crate) fn get_device(
                 MigErrorKind::InvParam,
                 &format!(
                     "get_device: unexpected OsArch encountered: {}",
-                    dev_info.os_arch
+                    mig_info.os_arch
                 ),
             ));
         }

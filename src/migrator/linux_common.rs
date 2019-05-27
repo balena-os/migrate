@@ -262,8 +262,12 @@ pub(crate) fn is_secure_boot() -> Result<bool, MigError> {
  * as (major,minor)
  ******************************************************************/
 
-pub(crate) fn get_grub_version() -> Result<(String, String), MigError> {
+pub(crate) fn get_grub_version(cmds: &mut EnsuredCommands) -> Result<(String, String), MigError> {
     trace!("get_grub_version: entered");
+
+    let _dummy = cmds.ensure_cmd(GRUB_REBOOT_CMD)?;
+
+    let grub_path = cmds.ensure_cmd(GRUB_UPDT_CMD)?;
 
     let grub_path = match whereis(GRUB_UPDT_CMD) {
         Ok(path) => path,

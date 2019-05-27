@@ -3,7 +3,7 @@ use std::path::Path;
 
 use crate::{
     common::{Config, MigError, MigErrorKind},
-    linux_common::migrate_info::MigrateInfo,
+    linux_common::{migrate_info::MigrateInfo, EnsuredCommands},
     stage2::stage2_config::{Stage2Config, Stage2ConfigBuilder},
 };
 
@@ -35,12 +35,14 @@ pub(crate) trait BootManager {
     fn get_boot_type(&self) -> BootType;
     fn can_migrate(
         &self,
+        cmds: &mut EnsuredCommands,
         mig_info: &MigrateInfo,
         config: &Config,
         s2_cfg: &mut Stage2ConfigBuilder,
     ) -> Result<bool, MigError>;
     fn setup(
         &self,
+        cmds: &EnsuredCommands,
         mig_info: &MigrateInfo,
         config: &Config,
         s2_cfg: &mut Stage2ConfigBuilder,
@@ -63,6 +65,7 @@ impl BootManager for EfiBootManager {
 
     fn can_migrate(
         &self,
+        cmds: &mut EnsuredCommands,
         dev_info: &MigrateInfo,
         config: &Config,
         s2_cfg: &mut Stage2ConfigBuilder,
@@ -71,6 +74,7 @@ impl BootManager for EfiBootManager {
     }
     fn setup(
         &self,
+        cmds: &EnsuredCommands,
         dev_info: &MigrateInfo,
         config: &Config,
         s2_cfg: &mut Stage2ConfigBuilder,

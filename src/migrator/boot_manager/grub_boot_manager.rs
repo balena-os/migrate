@@ -11,7 +11,7 @@ use crate::{
     linux_common::{
         get_grub_version,
         migrate_info::{path_info::PathInfo, MigrateInfo},
-        restore_backups, CHMOD_CMD, MKTEMP_CMD,
+        restore_backups, EnsuredCommands, CHMOD_CMD, MKTEMP_CMD,
     },
     stage2::stage2_config::{Stage2Config, Stage2ConfigBuilder},
 };
@@ -31,6 +31,7 @@ impl BootManager for GrubBootManager {
 
     fn can_migrate(
         &self,
+        cmds: &mut EnsuredCommands,
         mig_info: &MigrateInfo,
         config: &Config,
         s2_cfg: &mut Stage2ConfigBuilder,
@@ -44,7 +45,7 @@ impl BootManager for GrubBootManager {
         //  look for grub_reboot
         //  make sure grub is actually the active boot manager
 
-        let grub_version = get_grub_version()?;
+        let grub_version = get_grub_version(cmds)?;
         info!(
             "grub-install version is {}.{}",
             grub_version.0, grub_version.1
@@ -60,6 +61,7 @@ impl BootManager for GrubBootManager {
 
     fn setup(
         &self,
+        cmds: &EnsuredCommands,
         mig_info: &MigrateInfo,
         config: &Config,
         s2_cfg: &mut Stage2ConfigBuilder,

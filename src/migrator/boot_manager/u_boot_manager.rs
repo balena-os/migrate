@@ -19,7 +19,7 @@ use crate::{
     },
     linux_common::{
         migrate_info::{path_info::PathInfo, MigrateInfo},
-        restore_backups, CHMOD_CMD, MKTEMP_CMD,
+        restore_backups, EnsuredCommands, CHMOD_CMD, MKTEMP_CMD,
     },
     stage2::stage2_config::{BootMgrConfig, Stage2Config, Stage2ConfigBuilder},
 };
@@ -54,7 +54,11 @@ impl UBootManager {
     }
 
     // Try to find a drive containing MLO, uEnv.txt or u-boot.bin, mount it if necessarry and return PathInfo if found
-    fn get_bootmgr_path(&self, mig_info: &MigrateInfo) -> Result<Option<PathInfo>, MigError> {
+    fn get_bootmgr_path(
+        &self,
+        cmds: &EnsuredCommands,
+        mig_info: &MigrateInfo,
+    ) -> Result<Option<PathInfo>, MigError> {
         trace!("set_bootmgr_path: entered");
 
         let (root_dev, root_part) = mig_info.lsblk_info.get_path_info(ROOT_PATH)?;
@@ -83,7 +87,7 @@ impl UBootManager {
                                     partition.name
                                 );
                                 if let None = tmp_mountpoint {
-                                    let cmd_res = mig_info.cmds.call_cmd(
+                                    let cmd_res = cmds.call_cmd(
                                         MKTEMP_CMD,
                                         &["-d", "-p", &mig_info.work_path.path.to_string_lossy()],
                                         true,
@@ -136,11 +140,7 @@ impl UBootManager {
                                 partition.name
                             );
                             return Ok(Some(PathInfo::from_mounted(
-                                &mig_info.cmds,
-                                mountpoint,
-                                mountpoint,
-                                &root_dev,
-                                &partition,
+                                cmds, mountpoint, mountpoint, &root_dev, &partition,
                             )?));
                         }
 
@@ -170,6 +170,7 @@ impl BootManager for UBootManager {
 
     fn can_migrate(
         &self,
+        cmds: &mut EnsuredCommands,
         mig_info: &MigrateInfo,
         config: &Config,
         s2_cfg: &mut Stage2ConfigBuilder,
@@ -181,6 +182,7 @@ impl BootManager for UBootManager {
 
     fn setup(
         &self,
+        cmds: &EnsuredCommands,
         mig_info: &MigrateInfo,
         config: &Config,
         s2_cfg: &mut Stage2ConfigBuilder,
@@ -233,9 +235,7 @@ impl BootManager for UBootManager {
             kernel_path.display()
         );
 
-        mig_info
-            .cmds
-            .call_cmd(CHMOD_CMD, &["+x", &kernel_path.to_string_lossy()], false)?;
+        cmds.call_cmd(CHMOD_CMD, &["+x", &kernel_path.to_string_lossy()], false)?;
 
         let source_path = config.migrate.get_initrd_path();
         let initrd_path = path_append(&boot_path.path, MIG_INITRD_NAME);
@@ -279,7 +279,7 @@ impl BootManager for UBootManager {
         // **********************************************************************
         // ** find relevant path for boot manager, either /boot or a separate
         // ** boot manager partition
-        let bootmgr_path = if let Some(bootmgr_path) = self.get_bootmgr_path(mig_info)? {
+        let bootmgr_path = if let Some(bootmgr_path) = self.get_bootmgr_path(cmds, mig_info)? {
             let path = bootmgr_path.mountpoint.clone();
 
             info!(

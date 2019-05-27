@@ -11,7 +11,7 @@ use crate::{
     boot_manager::{BootManager, BootType},
     common::{file_exists, is_balena_file, path_append, Config, MigErrCtx, MigError, MigErrorKind},
     defs::BALENA_FILE_TAG,
-    linux_common::{migrate_info::MigrateInfo, CHMOD_CMD},
+    linux_common::{migrate_info::MigrateInfo, EnsuredCommands, CHMOD_CMD},
     stage2::stage2_config::{Stage2Config, Stage2ConfigBuilder},
 };
 
@@ -38,6 +38,7 @@ impl BootManager for RaspiBootManager {
 
     fn can_migrate(
         &self,
+        cmds: &mut EnsuredCommands,
         mig_info: &MigrateInfo,
         config: &Config,
         s2_cfg: &mut Stage2ConfigBuilder,
@@ -48,6 +49,7 @@ impl BootManager for RaspiBootManager {
 
     fn setup(
         &self,
+        cmds: &EnsuredCommands,
         mig_info: &MigrateInfo,
         config: &Config,
         s2_cfg: &mut Stage2ConfigBuilder,
@@ -70,9 +72,8 @@ impl BootManager for RaspiBootManager {
             kernel_path.display(),
             RPI_MIG_KERNEL_PATH
         );
-        mig_info
-            .cmds
-            .call_cmd(CHMOD_CMD, &["+x", RPI_MIG_KERNEL_PATH], false)?;
+
+        cmds.call_cmd(CHMOD_CMD, &["+x", RPI_MIG_KERNEL_PATH], false)?;
 
         // **********************************************************************
         // ** copy new iniramfs

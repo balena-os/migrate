@@ -6,7 +6,7 @@ use crate::{
     boot_manager::{from_boot_type, BootManager, BootType, UBootManager},
     common::{Config, MigError, MigErrorKind},
     device::{Device, DeviceType},
-    linux_common::migrate_info::MigrateInfo,
+    linux_common::{migrate_info::MigrateInfo, EnsuredCommands},
     stage2::stage2_config::{Stage2Config, Stage2ConfigBuilder},
 };
 
@@ -19,6 +19,7 @@ const BB_MODEL_REGEX: &str = r#"^((\S+\s+)*\S+)\s+Beagle(Bone|Board)\s+(\S+)$"#;
 // TODO: check location of uEnv.txt or other files files to improve reliability
 
 pub(crate) fn is_bb(
+    cmds: &mut EnsuredCommands,
     dev_info: &MigrateInfo,
     config: &Config,
     s2_cfg: &mut Stage2ConfigBuilder,
@@ -40,19 +41,19 @@ pub(crate) fn is_bb(
             "xM" => {
                 debug!("match found for BeagleboardXM");
                 Ok(Some(Box::new(BeagleboardXM::from_config(
-                    dev_info, config, s2_cfg,
+                    cmds, dev_info, config, s2_cfg,
                 )?)))
             }
             "Green" => {
                 debug!("match found for BeagleboneGreen");
                 Ok(Some(Box::new(BeagleboneGreen::from_config(
-                    dev_info, config, s2_cfg,
+                    cmds, dev_info, config, s2_cfg,
                 )?)))
             }
             "Black" => {
                 debug!("match found for BeagleboneBlack");
                 Ok(Some(Box::new(BeagleboneBlack::from_config(
-                    dev_info, config, s2_cfg,
+                    cmds, dev_info, config, s2_cfg,
                 )?)))
             }
             _ => {
@@ -74,6 +75,7 @@ pub(crate) struct BeagleboneBlack {
 impl BeagleboneGreen {
     // this is used in stage1
     fn from_config(
+        cmds: &mut EnsuredCommands,
         mig_info: &MigrateInfo,
         config: &Config,
         s2_cfg: &mut Stage2ConfigBuilder,
@@ -83,7 +85,7 @@ impl BeagleboneGreen {
         if let Some(_idx) = SUPPORTED_OSSES.iter().position(|&r| r == os_name) {
             let boot_manager = UBootManager {};
 
-            if boot_manager.can_migrate(mig_info, config, s2_cfg)? {
+            if boot_manager.can_migrate(cmds, mig_info, config, s2_cfg)? {
                 Ok(BeagleboneGreen {
                     boot_manager: Box::new(boot_manager),
                 })
@@ -128,11 +130,12 @@ impl<'a> Device for BeagleboneGreen {
 
     fn setup(
         &self,
+        cmds: &EnsuredCommands,
         dev_info: &MigrateInfo,
         config: &Config,
         s2_cfg: &mut Stage2ConfigBuilder,
     ) -> Result<(), MigError> {
-        self.boot_manager.setup(dev_info, config, s2_cfg)
+        self.boot_manager.setup(cmds, dev_info, config, s2_cfg)
     }
 
     fn restore_boot(&self, root_path: &Path, config: &Stage2Config) -> Result<(), MigError> {
@@ -148,6 +151,7 @@ pub(crate) struct BeagleboneGreen {
 impl BeagleboneBlack {
     // this is used in stage1
     fn from_config(
+        cmds: &mut EnsuredCommands,
         dev_info: &MigrateInfo,
         config: &Config,
         s2_cfg: &mut Stage2ConfigBuilder,
@@ -191,11 +195,12 @@ impl<'a> Device for BeagleboneBlack {
 
     fn setup(
         &self,
+        cmds: &EnsuredCommands,
         dev_info: &MigrateInfo,
         config: &Config,
         s2_cfg: &mut Stage2ConfigBuilder,
     ) -> Result<(), MigError> {
-        self.boot_manager.setup(dev_info, config, s2_cfg)
+        self.boot_manager.setup(cmds, dev_info, config, s2_cfg)
     }
 
     fn restore_boot(&self, root_path: &Path, config: &Stage2Config) -> Result<(), MigError> {
@@ -211,6 +216,7 @@ pub(crate) struct BeagleboardXM {
 impl BeagleboardXM {
     // this is used in stage1
     fn from_config(
+        cmds: &mut EnsuredCommands,
         dev_info: &MigrateInfo,
         config: &Config,
         s2_cfg: &mut Stage2ConfigBuilder,
@@ -260,10 +266,11 @@ impl<'a> Device for BeagleboardXM {
 
     fn setup(
         &self,
+        cmds: &EnsuredCommands,
         dev_info: &MigrateInfo,
         config: &Config,
         s2_cfg: &mut Stage2ConfigBuilder,
     ) -> Result<(), MigError> {
-        self.boot_manager.setup(dev_info, config, s2_cfg)
+        self.boot_manager.setup(cmds, dev_info, config, s2_cfg)
     }
 }

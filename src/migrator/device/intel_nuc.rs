@@ -5,7 +5,7 @@ use crate::{
     boot_manager::{from_boot_type, BootManager, BootType, GrubBootManager},
     common::{Config, MigError, MigErrorKind},
     device::{Device, DeviceType},
-    linux_common::{is_secure_boot, migrate_info::MigrateInfo, restore_backups},
+    linux_common::{is_secure_boot, migrate_info::MigrateInfo, restore_backups, EnsuredCommands},
     stage2::stage2_config::{Stage2Config, Stage2ConfigBuilder},
 };
 
@@ -15,6 +15,7 @@ pub(crate) struct IntelNuc {
 
 impl IntelNuc {
     pub fn from_config(
+        cmds: &mut EnsuredCommands,
         mig_info: &MigrateInfo,
         config: &Config,
         s2_cfg: &mut Stage2ConfigBuilder,
@@ -58,7 +59,7 @@ impl IntelNuc {
         }
 
         let boot_manager = GrubBootManager::new();
-        if boot_manager.can_migrate(mig_info, config, s2_cfg)? {
+        if boot_manager.can_migrate(cmds, mig_info, config, s2_cfg)? {
             Ok(IntelNuc {
                 boot_manager: Box::new(GrubBootManager {}),
             })
@@ -99,12 +100,13 @@ impl<'a> Device for IntelNuc {
 
     fn setup(
         &self,
+        cmds: &EnsuredCommands,
         dev_info: &MigrateInfo,
         config: &Config,
         s2_cfg: &mut Stage2ConfigBuilder,
     ) -> Result<(), MigError> {
         dbg!("setup: entered");
-        self.boot_manager.setup(dev_info, config, s2_cfg)
+        self.boot_manager.setup(cmds, dev_info, config, s2_cfg)
     }
 
     fn restore_boot(&self, root_path: &Path, config: &Stage2Config) -> Result<(), MigError> {
