@@ -1,5 +1,5 @@
 use failure::{Fail, ResultExt};
-use log::{debug, error, info, trace};
+use log::{debug, error, info, trace, warn};
 use std::fs::{copy, create_dir};
 use std::path::PathBuf;
 use std::thread;
@@ -20,11 +20,11 @@ pub(crate) mod boot_manager;
 
 pub(crate) mod stage2;
 
-pub(crate) mod ensured_commands;
-pub(crate) use ensured_commands::{
-    EnsuredCommands, CHMOD_CMD, DD_CMD, DF_CMD, FDISK_CMD, FILE_CMD, GRUB_REBOOT_CMD,
-    GRUB_UPDT_CMD, GZIP_CMD, LSBLK_CMD, MKTEMP_CMD, MOKUTIL_CMD, MOUNT_CMD, PARTED_CMD,
-    PARTPROBE_CMD, REBOOT_CMD, UNAME_CMD,
+pub(crate) mod ensured_cmds;
+pub(crate) use ensured_cmds::{
+    EnsuredCmds, CHMOD_CMD, DD_CMD, DF_CMD, FDISK_CMD, FILE_CMD, GRUB_REBOOT_CMD, GRUB_UPDT_CMD,
+    GZIP_CMD, LSBLK_CMD, MKTEMP_CMD, MOKUTIL_CMD, MOUNT_CMD, PARTED_CMD, PARTPROBE_CMD, REBOOT_CMD,
+    UNAME_CMD,
 };
 
 pub(crate) mod migrate_info;
@@ -35,13 +35,12 @@ pub(crate) use linux_common::is_admin;
 
 use crate::common::stage2_config::{Stage2ConfigBuilder, Stage2LogConfig};
 
-const MODULE: &str = "migrator::linux";
 const REQUIRED_CMDS: &'static [&'static str] = &[
     DF_CMD, LSBLK_CMD, FILE_CMD, UNAME_CMD, MOUNT_CMD, REBOOT_CMD, CHMOD_CMD, MKTEMP_CMD,
 ];
 
 pub(crate) struct LinuxMigrator {
-    cmds: EnsuredCommands,
+    cmds: EnsuredCmds,
     mig_info: MigrateInfo,
     config: Config,
     stage2_config: Stage2ConfigBuilder,
@@ -67,7 +66,7 @@ impl<'a> LinuxMigrator {
 
         info!("migrate mode: {:?}", config.migrate.get_mig_mode());
 
-        let mut cmds = match EnsuredCommands::new(REQUIRED_CMDS) {
+        let mut cmds = match EnsuredCmds::new(REQUIRED_CMDS) {
             Ok(cmds) => cmds,
             Err(why) => {
                 let message = format!("Failed to ensure required commands: {:?}", why);
@@ -157,6 +156,27 @@ impl<'a> LinuxMigrator {
             }
         };
 
+        match mig_info
+            .config_file
+            .check(&config, device.get_device_slug())
+        {
+            Ok(_bla) => info!(
+                "The sanity check on '{}' passed",
+                mig_info.config_file.get_path().display()
+            ),
+            Err(why) => {
+                let message = format!(
+                    "The sanity check on '{}' failed: {:?}",
+                    mig_info.config_file.get_path().display(),
+                    why
+                );
+                error!("{}", message);
+                return Err(MigError::from(
+                    why.context(MigErrCtx::from_remark(MigErrorKind::Upstream, &message)),
+                ));
+            }
+        }
+
         debug!("Finished architecture dependant initialization");
 
         // **********************************************************************
@@ -187,6 +207,10 @@ impl<'a> LinuxMigrator {
         if let Some(force_flash_device) = config.debug.get_force_flash_device() {
             // force annother device to be flashed, strictly debug !!!
             // forced flash device currently  goes unchecked for existence and size
+            warn!(
+                "Overriding chosen flash device with: '{}'",
+                force_flash_device.display()
+            );
             stage2_config.set_flash_device(&PathBuf::from(force_flash_device));
         } else {
             stage2_config.set_flash_device(flash_device);
@@ -270,11 +294,15 @@ impl<'a> LinuxMigrator {
 
         trace!("stage2 config");
 
+        // *****************************************************************************************
+        // Finish Stage2ConfigBuilder & create stage2 config file
+
         self.stage2_config
             .set_failmode(self.config.migrate.get_fail_mode());
 
         self.stage2_config
             .set_no_flash(self.config.debug.is_no_flash());
+
         self.stage2_config
             .set_skip_flash(self.config.debug.is_skip_flash());
 

@@ -6,7 +6,7 @@ use crate::{
         Config, MigError, MigErrorKind,
     },
     defs::BootType,
-    linux_migrator::{EnsuredCommands, MigrateInfo},
+    linux_migrator::{EnsuredCmds, MigrateInfo},
 };
 
 pub(crate) mod u_boot_manager;
@@ -29,14 +29,14 @@ pub(crate) trait BootManager {
     fn get_boot_type(&self) -> BootType;
     fn can_migrate(
         &self,
-        cmds: &mut EnsuredCommands,
+        cmds: &mut EnsuredCmds,
         mig_info: &MigrateInfo,
         config: &Config,
         s2_cfg: &mut Stage2ConfigBuilder,
     ) -> Result<bool, MigError>;
     fn setup(
         &self,
-        cmds: &EnsuredCommands,
+        cmds: &EnsuredCmds,
         mig_info: &MigrateInfo,
         config: &Config,
         s2_cfg: &mut Stage2ConfigBuilder,
@@ -59,23 +59,28 @@ impl BootManager for EfiBootManager {
 
     fn can_migrate(
         &self,
-        cmds: &mut EnsuredCommands,
-        dev_info: &MigrateInfo,
-        config: &Config,
-        s2_cfg: &mut Stage2ConfigBuilder,
+        _cmds: &mut EnsuredCmds,
+        _dev_info: &MigrateInfo,
+        _config: &Config,
+        _s2_cfg: &mut Stage2ConfigBuilder,
     ) -> Result<bool, MigError> {
         Err(MigError::from(MigErrorKind::NotImpl))
     }
     fn setup(
         &self,
-        cmds: &EnsuredCommands,
-        dev_info: &MigrateInfo,
-        config: &Config,
-        s2_cfg: &mut Stage2ConfigBuilder,
+        _cmds: &EnsuredCmds,
+        _dev_info: &MigrateInfo,
+        _config: &Config,
+        _s2_cfg: &mut Stage2ConfigBuilder,
     ) -> Result<(), MigError> {
         Err(MigError::from(MigErrorKind::NotImpl))
     }
-    fn restore(&self, slug: &str, root_path: &Path, config: &Stage2Config) -> Result<(), MigError> {
+    fn restore(
+        &self,
+        _slug: &str,
+        _root_path: &Path,
+        _config: &Stage2Config,
+    ) -> Result<(), MigError> {
         Err(MigError::from(MigErrorKind::NotImpl))
     }
 }

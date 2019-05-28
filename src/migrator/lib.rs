@@ -12,7 +12,7 @@ mod mswin;
 mod linux_migrator;
 
 #[cfg(target_os = "linux")]
-use linux_migrator::stage2::{self, Stage2};
+use linux_migrator::stage2::Stage2;
 
 pub(crate) mod defs;
 

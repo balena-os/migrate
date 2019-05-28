@@ -1,4 +1,4 @@
-use log::{debug, error, info, trace, warn};
+use log::{debug, error, info, trace};
 use std::path::PathBuf;
 
 use crate::{
@@ -6,10 +6,10 @@ use crate::{
         balena_cfg_json::BalenaCfgJson, format_size_with_unit, wifi_config::WifiConfig, Config,
         FileInfo, FileType, MigError, MigErrorKind, MigrateWifis,
     },
-    defs::{OSArch, BOOT_PATH, MEM_THRESHOLD, ROOT_PATH},
+    defs::{OSArch, APPROX_MEM_THRESHOLD, BOOT_PATH, ROOT_PATH},
     linux_migrator::{
         linux_common::{get_mem_info, get_os_arch, get_os_name},
-        EnsuredCommands,
+        EnsuredCmds,
     },
 };
 
@@ -50,10 +50,7 @@ pub(crate) struct MigrateInfo {
 // TODO: /etc path just in case
 
 impl MigrateInfo {
-    pub(crate) fn new(
-        config: &Config,
-        cmds: &mut EnsuredCommands,
-    ) -> Result<MigrateInfo, MigError> {
+    pub(crate) fn new(config: &Config, cmds: &mut EnsuredCmds) -> Result<MigrateInfo, MigError> {
         trace!("new: entered");
         // TODO: check files configured in config & create file_infos
 
@@ -127,10 +124,8 @@ impl MigrateInfo {
                 "The balena OS image looks ok: '{}'",
                 file_info.path.display()
             );
-            // TODO: make sure there is enough memory for OSImage
 
-            // TODO: do this in linux_migrator.rs ?
-            let required_mem = file_info.size + MEM_THRESHOLD;
+            let required_mem = file_info.size + APPROX_MEM_THRESHOLD;
             if get_mem_info()?.0 < required_mem {
                 let message = format!("We have not found sufficient memory to store the balena OS image in ram. at least {} of memory is required.", format_size_with_unit(required_mem));
                 error!("{}", message);
@@ -149,21 +144,11 @@ impl MigrateInfo {
         {
             file_info.expect_type(&cmds, &FileType::Json)?;
 
-            let required_mem = file_info.size + MEM_THRESHOLD;
-            if get_mem_info()?.0 < required_mem {
-                let message = format!("We have not found sufficient memory to store the balena OS image in ram. at least {} of memory is required.", format_size_with_unit(required_mem));
-                error!("{}", message);
-                return Err(MigError::from_remark(MigErrorKind::InvParam, &message));
-            }
-
             let balena_cfg = BalenaCfgJson::new(file_info)?;
             info!(
                 "The balena config file looks ok: '{}'",
                 balena_cfg.get_path().display()
             );
-            // TODO: make sure there is enough memory for OSImage
-
-            // TODO: do this in linux_migrator.rs ?
 
             balena_cfg
         } else {
@@ -275,6 +260,14 @@ impl MigrateInfo {
         } else {
             Vec::new()
         };
+
+        if nwmgr_files.is_empty() && wifis.is_empty() {
+            if config.migrate.require_nwmgr_configs() {
+                let message = "No Network manager files were found, the device might not be able to come online";
+                error!("{}", message);
+                return Err(MigError::from_remark(MigErrorKind::InvParam, message));
+            }
+        }
 
         let result = MigrateInfo {
             os_name: get_os_name()?,

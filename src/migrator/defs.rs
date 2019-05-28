@@ -62,7 +62,7 @@ pub const DEFAULT_API_CHECK_TIMEOUT: u64 = 20;
 pub const BACKUP_FILE: &str = "backup.tgz";
 
 pub const STAGE2_MEM_THRESHOLD: u64 = 32 * 1024 * 1024; // 64 MiB
-pub const MEM_THRESHOLD: u64 = 64 * 1024 * 1024; // 64 MiB
+pub const APPROX_MEM_THRESHOLD: u64 = 64 * 1024 * 1024; // 64 MiB
 
 pub const MIN_DISK_SIZE: u64 = 2 * 1024 * 1024 * 1024; // 2 GiB
 

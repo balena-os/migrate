@@ -25,7 +25,7 @@ const DTB_FTYPE_REGEX: &str = r#"^(Device Tree Blob|data).*$"#;
 #[cfg(target_os = "linux")]
 use crate::common::{file_exists, MigErrCtx, MigError, MigErrorKind};
 #[cfg(target_os = "linux")]
-use crate::linux_migrator::{EnsuredCommands, FILE_CMD};
+use crate::linux_migrator::{EnsuredCmds, FILE_CMD};
 
 const MODULE: &str = "balean_migrate::common::file_info";
 
@@ -108,7 +108,7 @@ impl FileInfo {
         }))
     }
 
-    pub fn expect_type(&self, cmds: &EnsuredCommands, ftype: &FileType) -> Result<(), MigError> {
+    pub fn expect_type(&self, cmds: &EnsuredCmds, ftype: &FileType) -> Result<(), MigError> {
         if !self.is_type(cmds, ftype)? {
             let message = format!(
                 "Could not determine expected file type '{}' for file '{}'",
@@ -123,7 +123,7 @@ impl FileInfo {
     }
 
     #[cfg(target_os = "linux")]
-    pub fn is_type(&self, cmds: &EnsuredCommands, ftype: &FileType) -> Result<bool, MigError> {
+    pub fn is_type(&self, cmds: &EnsuredCmds, ftype: &FileType) -> Result<bool, MigError> {
         let path_str = self.path.to_string_lossy();
         let args: Vec<&str> = vec!["-bz", &path_str];
 

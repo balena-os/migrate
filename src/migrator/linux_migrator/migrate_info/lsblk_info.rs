@@ -7,7 +7,7 @@ use std::path::{Path, PathBuf};
 
 use crate::{
     common::{MigErrCtx, MigError, MigErrorKind},
-    linux_migrator::{EnsuredCommands, LSBLK_CMD},
+    linux_migrator::{EnsuredCmds, LSBLK_CMD},
 };
 
 // const GPT_EFI_PART: &str = "C12A7328-F81F-11D2-BA4B-00A0C93EC93B";
@@ -90,7 +90,7 @@ pub(crate) struct LsblkInfo {
 }
 
 impl<'a> LsblkInfo {
-    pub fn new(cmds: &EnsuredCommands) -> Result<LsblkInfo, MigError> {
+    pub fn new(cmds: &EnsuredCmds) -> Result<LsblkInfo, MigError> {
         let args: Vec<&str> = vec!["-b", "-O", "--json"];
         let cmd_res = cmds.call(LSBLK_CMD, &args, true)?;
         let mut lsblk_info = if cmd_res.status.success() {

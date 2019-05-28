@@ -398,6 +398,10 @@ impl<'a> Stage2ConfigBuilder {
         self.boot_fstype.set_ref(val);
     }
 
+    pub fn get_bootmgr_cfg(&'a mut self) -> &'a Option<BootMgrConfig> {
+        self.bootmgr.get()
+    }
+
     pub fn set_bootmgr_cfg(&mut self, bootmgr_cfg: BootMgrConfig) {
         self.bootmgr.set(bootmgr_cfg);
     }
@@ -460,7 +464,7 @@ balena:
   config: config.json
 "##;
 
-    fn assert_test_config1(config: &Config) -> () {
+    fn assert_test_config1() -> () {
         let config = Stage2Config::from_str(TEST_CONFIG);
     }
 }

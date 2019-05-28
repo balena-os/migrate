@@ -18,7 +18,7 @@ use crate::{
     linux_migrator::{
         boot_manager::BootManager,
         migrate_info::{label_type::LabelType, MigrateInfo},
-        EnsuredCommands, CHMOD_CMD, GRUB_REBOOT_CMD, GRUB_UPDT_CMD,
+        EnsuredCmds, CHMOD_CMD, GRUB_REBOOT_CMD, GRUB_UPDT_CMD,
     },
 };
 
@@ -55,7 +55,7 @@ impl GrubBootManager {
      * as (major,minor)
      ******************************************************************/
 
-    fn get_grub_version(cmds: &mut EnsuredCommands) -> Result<(String, String), MigError> {
+    fn get_grub_version(cmds: &mut EnsuredCmds) -> Result<(String, String), MigError> {
         trace!("get_grub_version: entered");
 
         let _dummy = cmds.ensure(GRUB_REBOOT_CMD)?;
@@ -107,7 +107,7 @@ impl BootManager for GrubBootManager {
 
     fn can_migrate(
         &self,
-        cmds: &mut EnsuredCommands,
+        cmds: &mut EnsuredCmds,
         mig_info: &MigrateInfo,
         _config: &Config,
         _s2_cfg: &mut Stage2ConfigBuilder,
@@ -140,21 +140,21 @@ impl BootManager for GrubBootManager {
         // vs the size of the files that will be copied
         let boot_path = &mig_info.boot_path;
 
-        let mut required_space = if !file_exists(path_append(&boot_path.path, MIG_KERNEL_NAME)) {
+        let mut boot_req_space = if !file_exists(path_append(&boot_path.path, MIG_KERNEL_NAME)) {
             mig_info.kernel_file.size
         } else {
             0
         };
 
-        required_space += if !file_exists(path_append(&boot_path.path, MIG_INITRD_NAME)) {
+        boot_req_space += if !file_exists(path_append(&boot_path.path, MIG_INITRD_NAME)) {
             mig_info.initrd_file.size
         } else {
             0
         };
 
-        if mig_info.boot_path.fs_free < required_space {
+        if mig_info.boot_path.fs_free < boot_req_space {
             error!("The boot directory '{}' does not have enough space to store the migrate kernel and initramfs. Required space is {}",
-                   boot_path.path.display(), format_size_with_unit(required_space));
+                   boot_path.path.display(), format_size_with_unit(boot_req_space));
             return Ok(false);
         }
 
@@ -163,7 +163,7 @@ impl BootManager for GrubBootManager {
 
     fn setup(
         &self,
-        cmds: &EnsuredCommands,
+        cmds: &EnsuredCmds,
         mig_info: &MigrateInfo,
         _config: &Config,
         _s2_cfg: &mut Stage2ConfigBuilder,
@@ -395,7 +395,12 @@ impl BootManager for GrubBootManager {
         Ok(())
     }
 
-    fn restore(&self, slug: &str, root_path: &Path, config: &Stage2Config) -> Result<(), MigError> {
+    fn restore(
+        &self,
+        _slug: &str,
+        _root_path: &Path,
+        _config: &Stage2Config,
+    ) -> Result<(), MigError> {
         trace!("restore: entered");
         // Nothing to restore with grub-reboot
         // TODO: might be worthwhile to remove kernel / initramfs and grub config

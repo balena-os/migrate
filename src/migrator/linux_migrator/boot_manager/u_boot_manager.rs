@@ -1,6 +1,6 @@
 use chrono::Local;
 use failure::ResultExt;
-use log::{debug, info, trace, warn};
+use log::{debug, error, info, trace, warn};
 use nix::mount::{mount, umount, MsFlags};
 use regex::Regex;
 use std::fs::{remove_file, File};
@@ -21,7 +21,7 @@ use crate::{
         boot_manager::BootManager,
         linux_common::restore_backups,
         migrate_info::{path_info::PathInfo, MigrateInfo},
-        EnsuredCommands, CHMOD_CMD, MKTEMP_CMD,
+        EnsuredCmds, CHMOD_CMD, MKTEMP_CMD,
     },
 };
 
@@ -57,12 +57,12 @@ impl UBootManager {
     // Try to find a drive containing MLO, uEnv.txt or u-boot.bin, mount it if necessarry and return PathInfo if found
     fn get_bootmgr_path(
         &self,
-        cmds: &EnsuredCommands,
+        cmds: &EnsuredCmds,
         mig_info: &MigrateInfo,
     ) -> Result<Option<PathInfo>, MigError> {
         trace!("set_bootmgr_path: entered");
 
-        let (root_dev, root_part) = mig_info.lsblk_info.get_path_info(ROOT_PATH)?;
+        let (root_dev, _root_part) = mig_info.lsblk_info.get_path_info(ROOT_PATH)?;
 
         let mut tmp_mountpoint: Option<PathBuf> = None;
 
@@ -171,19 +171,69 @@ impl BootManager for UBootManager {
 
     fn can_migrate(
         &self,
-        cmds: &mut EnsuredCommands,
+        cmds: &mut EnsuredCmds,
         mig_info: &MigrateInfo,
-        config: &Config,
+        _config: &Config,
         s2_cfg: &mut Stage2ConfigBuilder,
     ) -> Result<bool, MigError> {
         // TODO: calculate/ensure  required space on /boot /bootmgr
+
+        // find the u-boot boot device
+        // this is where uEnv.txt has to go
+
+        if let Some(bootmgr_path) = self.get_bootmgr_path(cmds, mig_info)? {
+            info!(
+                "Found boot manager '{}', mounpoint: '{}', fs type: {}, free space: {}",
+                bootmgr_path.device.display(),
+                bootmgr_path.mountpoint.display(),
+                bootmgr_path.fs_type,
+                format_size_with_unit(bootmgr_path.fs_free)
+            );
+
+            s2_cfg.set_bootmgr_cfg(BootMgrConfig::new(
+                bootmgr_path.device,
+                bootmgr_path.fs_type,
+                bootmgr_path.mountpoint,
+            ));
+        }
+
+        let boot_path = &mig_info.boot_path;
+
+        let mut boot_req_space = if !file_exists(path_append(&boot_path.path, MIG_KERNEL_NAME)) {
+            mig_info.kernel_file.size
+        } else {
+            0
+        };
+
+        boot_req_space += if !file_exists(path_append(&boot_path.path, MIG_INITRD_NAME)) {
+            mig_info.initrd_file.size
+        } else {
+            0
+        };
+
+        if let Some(ref dtb_file) = mig_info.dtb_file {
+            boot_req_space += if !file_exists(path_append(&boot_path.path, MIG_DTB_NAME)) {
+                dtb_file.size
+            } else {
+                0
+            };
+        } else {
+            error!("The device tree blob file required for u-boot is not defined.");
+            return Ok(false);
+        }
+
+        if mig_info.boot_path.fs_free < boot_req_space {
+            error!("The boot directory '{}' does not have enough space to store the migrate kernel, initramfs and dtb file. Required space is {}",
+                   boot_path.path.display(), format_size_with_unit(boot_req_space));
+            return Ok(false);
+        }
 
         Ok(false)
     }
 
     fn setup(
         &self,
-        cmds: &EnsuredCommands,
+        cmds: &EnsuredCmds,
         mig_info: &MigrateInfo,
         config: &Config,
         s2_cfg: &mut Stage2ConfigBuilder,
@@ -213,9 +263,6 @@ impl BootManager for UBootManager {
                 ));
             }
         };
-
-        // find the u-boot boot device
-        // this is where uEnv.txt has to go
 
         // **********************************************************************
         // ** copy new kernel & iniramfs
@@ -278,31 +325,16 @@ impl BootManager for UBootManager {
         };
 
         // **********************************************************************
-        // ** find relevant path for boot manager, either /boot or a separate
-        // ** boot manager partition
-        let bootmgr_path = if let Some(bootmgr_path) = self.get_bootmgr_path(cmds, mig_info)? {
-            let path = bootmgr_path.mountpoint.clone();
+        // ** bootmanager path will have been found in can_migrate
+        // ** retrieve from s2_cfg
 
-            info!(
-                "Found boot manager '{}', mounpoint: '{}', fs type: {}, free space: {}",
-                bootmgr_path.device.display(),
-                bootmgr_path.mountpoint.display(),
-                bootmgr_path.fs_type,
-                format_size_with_unit(bootmgr_path.fs_free)
-            );
-
-            s2_cfg.set_bootmgr_cfg(BootMgrConfig::new(
-                bootmgr_path.device,
-                bootmgr_path.fs_type,
-                bootmgr_path.mountpoint,
-            ));
-
-            path
+        let bootmgr_path = if let Some(bootmgr_cfg) = s2_cfg.get_bootmgr_cfg() {
+            PathBuf::from(bootmgr_cfg.get_device())
         } else {
             mig_info.root_path.path.clone()
         };
 
-        let uenv_path = path_append(bootmgr_path, UENV_FILE_NAME);
+        let uenv_path = path_append(&bootmgr_path, UENV_FILE_NAME);
 
         if file_exists(&uenv_path) {
             // **********************************************************************

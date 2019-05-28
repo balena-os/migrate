@@ -14,7 +14,7 @@ use crate::{
         Config, MigErrCtx, MigError, MigErrorKind,
     },
     defs::{BootType, BALENA_FILE_TAG},
-    linux_migrator::{boot_manager::BootManager, EnsuredCommands, MigrateInfo, CHMOD_CMD},
+    linux_migrator::{boot_manager::BootManager, EnsuredCmds, MigrateInfo, CHMOD_CMD},
 };
 
 const RPI_MIG_KERNEL_PATH: &str = "/boot/balena.zImage";
@@ -40,10 +40,10 @@ impl BootManager for RaspiBootManager {
 
     fn can_migrate(
         &self,
-        cmds: &mut EnsuredCommands,
-        mig_info: &MigrateInfo,
-        config: &Config,
-        s2_cfg: &mut Stage2ConfigBuilder,
+        _cmds: &mut EnsuredCmds,
+        _mig_info: &MigrateInfo,
+        _config: &Config,
+        _s2_cfg: &mut Stage2ConfigBuilder,
     ) -> Result<bool, MigError> {
         // TODO: calculate/ensure  required space on /boot /bootmgr
         Err(MigError::from(MigErrorKind::NotImpl))
@@ -51,7 +51,7 @@ impl BootManager for RaspiBootManager {
 
     fn setup(
         &self,
-        cmds: &EnsuredCommands,
+        cmds: &EnsuredCmds,
         mig_info: &MigrateInfo,
         config: &Config,
         s2_cfg: &mut Stage2ConfigBuilder,
@@ -232,7 +232,12 @@ impl BootManager for RaspiBootManager {
         Ok(())
     }
 
-    fn restore(&self, slug: &str, root_path: &Path, config: &Stage2Config) -> Result<(), MigError> {
+    fn restore(
+        &self,
+        _slug: &str,
+        _root_path: &Path,
+        _config: &Stage2Config,
+    ) -> Result<(), MigError> {
         Err(MigError::from(MigErrorKind::NotImpl))
     }
 }

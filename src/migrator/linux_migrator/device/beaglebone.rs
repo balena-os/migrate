@@ -11,7 +11,7 @@ use crate::{
     linux_migrator::{
         boot_manager::{from_boot_type, BootManager, UBootManager},
         device::Device,
-        EnsuredCommands, MigrateInfo,
+        EnsuredCmds, MigrateInfo,
     },
 };
 
@@ -24,7 +24,7 @@ const BB_MODEL_REGEX: &str = r#"^((\S+\s+)*\S+)\s+Beagle(Bone|Board)\s+(\S+)$"#;
 // TODO: check location of uEnv.txt or other files files to improve reliability
 
 pub(crate) fn is_bb(
-    cmds: &mut EnsuredCommands,
+    cmds: &mut EnsuredCmds,
     dev_info: &MigrateInfo,
     config: &Config,
     s2_cfg: &mut Stage2ConfigBuilder,
@@ -80,7 +80,7 @@ pub(crate) struct BeagleboneBlack {
 impl BeagleboneGreen {
     // this is used in stage1
     fn from_config(
-        cmds: &mut EnsuredCommands,
+        cmds: &mut EnsuredCmds,
         mig_info: &MigrateInfo,
         config: &Config,
         s2_cfg: &mut Stage2ConfigBuilder,
@@ -135,7 +135,7 @@ impl<'a> Device for BeagleboneGreen {
 
     fn setup(
         &self,
-        cmds: &EnsuredCommands,
+        cmds: &EnsuredCmds,
         dev_info: &MigrateInfo,
         config: &Config,
         s2_cfg: &mut Stage2ConfigBuilder,
@@ -156,16 +156,16 @@ pub(crate) struct BeagleboneGreen {
 impl BeagleboneBlack {
     // this is used in stage1
     fn from_config(
-        cmds: &mut EnsuredCommands,
-        dev_info: &MigrateInfo,
-        config: &Config,
-        s2_cfg: &mut Stage2ConfigBuilder,
+        _cmds: &mut EnsuredCmds,
+        mig_info: &MigrateInfo,
+        _config: &Config,
+        _s2_cfg: &mut Stage2ConfigBuilder,
     ) -> Result<BeagleboneBlack, MigError> {
-        let os_name = &dev_info.os_name;
+        let os_name = &mig_info.os_name;
 
         if let Some(_idx) = SUPPORTED_OSSES.iter().position(|&r| r == os_name) {
             Ok(BeagleboneBlack {
-                boot_manager: Box::new(UBootManager {}),
+                boot_manager: Box::new(UBootManager::new()),
             })
         } else {
             let message = format!(
@@ -200,7 +200,7 @@ impl<'a> Device for BeagleboneBlack {
 
     fn setup(
         &self,
-        cmds: &EnsuredCommands,
+        cmds: &EnsuredCmds,
         dev_info: &MigrateInfo,
         config: &Config,
         s2_cfg: &mut Stage2ConfigBuilder,
@@ -221,10 +221,10 @@ pub(crate) struct BeagleboardXM {
 impl BeagleboardXM {
     // this is used in stage1
     fn from_config(
-        cmds: &mut EnsuredCommands,
+        _cmds: &mut EnsuredCmds,
         dev_info: &MigrateInfo,
-        config: &Config,
-        s2_cfg: &mut Stage2ConfigBuilder,
+        _config: &Config,
+        _s2_cfg: &mut Stage2ConfigBuilder,
     ) -> Result<BeagleboardXM, MigError> {
         let os_name = &dev_info.os_name;
 
@@ -271,7 +271,7 @@ impl<'a> Device for BeagleboardXM {
 
     fn setup(
         &self,
-        cmds: &EnsuredCommands,
+        cmds: &EnsuredCmds,
         dev_info: &MigrateInfo,
         config: &Config,
         s2_cfg: &mut Stage2ConfigBuilder,

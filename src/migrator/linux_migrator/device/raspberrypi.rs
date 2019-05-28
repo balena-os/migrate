@@ -12,14 +12,14 @@ use crate::{
         boot_manager::{from_boot_type, BootManager, RaspiBootManager},
         device::Device,
         linux_common::restore_backups,
-        EnsuredCommands, MigrateInfo,
+        EnsuredCmds, MigrateInfo,
     },
 };
 
 const RPI_MODEL_REGEX: &str = r#"^Raspberry\s+Pi\s+(\S+)\s+Model\s+(.*)$"#;
 
 pub(crate) fn is_rpi(
-    cmds: &mut EnsuredCommands,
+    cmds: &mut EnsuredCmds,
     dev_info: &MigrateInfo,
     config: &Config,
     s2_cfg: &mut Stage2ConfigBuilder,
@@ -68,10 +68,10 @@ impl RaspberryPi3 {
         }
     }
     pub fn from_config(
-        cmds: &mut EnsuredCommands,
+        _cmds: &mut EnsuredCmds,
         dev_info: &MigrateInfo,
-        config: &Config,
-        s2_cfg: &mut Stage2ConfigBuilder,
+        _config: &Config,
+        _s2_cfg: &mut Stage2ConfigBuilder,
     ) -> Result<RaspberryPi3, MigError> {
         const SUPPORTED_OSSES: &'static [&'static str] = &["Raspbian GNU/Linux 9 (stretch)"];
 
@@ -108,7 +108,7 @@ impl<'a> Device for RaspberryPi3 {
 
     fn setup(
         &self,
-        cmds: &EnsuredCommands,
+        cmds: &EnsuredCmds,
         dev_info: &MigrateInfo,
         config: &Config,
         s2_cfg: &mut Stage2ConfigBuilder,

@@ -29,7 +29,7 @@ use crate::{
     linux_migrator::{
         device,
         linux_common::{get_mem_info, get_root_info},
-        EnsuredCommands, DD_CMD, GZIP_CMD, PARTPROBE_CMD, REBOOT_CMD,
+        EnsuredCmds, DD_CMD, GZIP_CMD, PARTPROBE_CMD, REBOOT_CMD,
     },
 };
 
@@ -316,7 +316,7 @@ impl Stage2 {
         // boot config restored can reboot
         self.recoverable_state = true;
 
-        let mut cmds = EnsuredCommands::new(MIG_REQUIRED_CMDS)?;
+        let cmds = EnsuredCmds::new(MIG_REQUIRED_CMDS)?;
 
         if !dir_exists(mig_tmp_dir)? {
             create_dir(mig_tmp_dir).context(MigErrCtx::from_remark(

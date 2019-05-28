@@ -3,8 +3,6 @@ use failure::ResultExt;
 use log::debug;
 use log::trace;
 use regex::Regex;
-use serde::{Deserialize, Serialize};
-use std::fmt::{self, Display, Formatter};
 use std::fs::{metadata, read_to_string, File};
 use std::io::{BufRead, BufReader};
 use std::path::{Path, PathBuf};

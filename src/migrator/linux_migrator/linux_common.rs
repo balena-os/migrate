@@ -13,7 +13,7 @@ use crate::{
         call, file_exists, parse_file, path_append, Config, MigErrCtx, MigError, MigErrorKind,
     },
     defs::{OSArch, DISK_BY_PARTUUID_PATH, DISK_BY_UUID_PATH, KERNEL_CMDLINE_PATH, SYS_UEFI_DIR},
-    linux_migrator::{EnsuredCommands, DF_CMD, MOKUTIL_CMD, UNAME_CMD},
+    linux_migrator::{EnsuredCmds, DF_CMD, MOKUTIL_CMD, UNAME_CMD},
 };
 
 use crate::common::dir_exists;
@@ -96,7 +96,7 @@ pub(crate) fn whereis(cmd: &str) -> Result<String, MigError> {
     }
 }
 
-pub(crate) fn get_os_arch(cmds: &EnsuredCommands) -> Result<OSArch, MigError> {
+pub(crate) fn get_os_arch(cmds: &EnsuredCmds) -> Result<OSArch, MigError> {
     trace!("get_os_arch: entered");
     let cmd_res =
         cmds.call(UNAME_CMD, &UNAME_ARGS_OS_ARCH, true)
@@ -368,7 +368,7 @@ pub(crate) fn get_os_release() -> Result<OSRelease, MigError> {
 */
 
 pub(crate) fn get_fs_space<P: AsRef<Path>>(
-    cmds: &EnsuredCommands,
+    cmds: &EnsuredCmds,
     path: P,
 ) -> Result<(u64, u64), MigError> {
     const SIZE_REGEX: &str = r#"^(\d+)K?$"#;

@@ -6,6 +6,89 @@ This project is based on the ideas from https://github.com/balena-io-playground/
 It is implemented in rust and aims to gather migration strategies for different hard and software platforms in one executable.
 
 
+## Setting up Migration in IMMEDIATE mode 
+
+A (working) sample configuration file:
+
+```yaml
+migrate:
+  ## select the migrate mode, currently PRETEND | IMMEDIATE
+  mode: IMMEDIATE
+  ## The working directory, files are expected / placed here
+  work_dir: '.'
+  ## migrate all wifis found in wpa_supplicant conn_mgr or NetworkManager files
+  # all_wifis: true
+  ## or migrate selected wifis 
+  wifis:
+   - QIFI
+  ## reboot automatically after given amount of seconds  
+  reboot: 5 
+  ## log settings
+  log:
+    ## log level for stage 2 one of error, warn, info, debug, trace
+    level: 'debug'
+    ## log to an external drive (can not be the drive that will be migrated)
+    ## if not set the log will be written to /resin-data or workdir   
+    drive: "/dev/sdb1"
+  ## The kernel to boot into for stage2 (a balena kernel, please)
+  kernel_path: "balena.zImage"
+  ## The initramfs to boot into for stage 2
+  initrd_path: "balena.initramfs.cpio.gz"
+  ## The device tree blob to use to boot into stage 2 (u-boot)
+  # dtb_path: "balena.dtb"
+  ## currently not supported
+  # force_slug: 'bad_ass_device'
+  ## backup settings
+  backup: 
+    ## a volume to create in balena
+    - volume: log-files
+      ## items inside the volume
+      items:
+      - source: '/var/log'
+        # target: the_logs
+        # filter: .*\.log 
+  ## require network manager configuration to be present (default true)      
+  require_nwmgr_config: false
+  ## A List of NetworkManager fles to copy to /system-connections  
+  nwmgr_files: 
+  #   - 'a file'
+  ## Fail mode, how to fail in stage2 One of "Reboot" | "RescueShell"
+  fail_mode: Reboot
+  ## use rust internal gzip instead of command
+  gzip_internal: true
+## Balena configuration
+balena:
+  ## The image file to use. Currently needs to be gzipped image
+  image: 'balena-cloud-support-multi-intel-nuc-2.31.2+rev1-dev-v9.11.1.img.gz'
+  ## The config.json to use
+  config: 'config.json'
+  ## app name, not currently used / checked
+  app_name: 'test' 
+  ## specify alt api settings for AGENT mode, not currently used
+  api: 
+    host: "api.balena-cloud.com"
+    port: 443
+    check: true
+  ## check vpn connectivity
+  check_vpn: true
+  ## vpn connectivity check timeout
+  check_timeout: 20
+debug:
+  ## skip root check  
+  fake_admin: false
+  ## boot into stage2 but stop and reboot before flashing  
+  no_flash: false
+  ## The following is strictly debug!
+  ## Don't flash to /root device, use this one instead
+  # force_flash_device: /dev/sdb
+  ## Don't flash but keep on going as if device was flashed, only makes sense 
+  ## in combination with 'force_flash_device'  
+  # skip_flash: false
+  
+```
+
+
+
 ## Windows Migration Strategies
 
 Migrating windows devices to Balena is a challenge, due to the absense of well documented interfaces (windows being closed source), the absense of common boot managers like grub and mechanisms like initramfs. The Linux migrator uses these mechanisms to manipulate / overwrite the root file system and install new a new OS.
@@ -101,3 +184,5 @@ type: PhysicalDrive
 - Try to programatically create a new partition and write a bootable linux image to it.
 - Try to use BCDEdit or other available tools/interfaces to make the partition boot.
 - Try to set up a minimal linux to do migration after being booted.
+
+ 

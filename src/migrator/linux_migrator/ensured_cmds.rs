@@ -23,12 +23,12 @@ pub const GZIP_CMD: &str = "gzip";
 pub const MKTEMP_CMD: &str = "mktemp";
 
 #[derive(Debug)]
-pub(crate) struct EnsuredCommands {
+pub(crate) struct EnsuredCmds {
     cmd_table: HashMap<String, String>,
 }
 
-impl EnsuredCommands {
-    pub fn new(cmds: &[&str]) -> Result<EnsuredCommands, MigError> {
+impl EnsuredCmds {
+    pub fn new(cmds: &[&str]) -> Result<EnsuredCmds, MigError> {
         let mut cmd_table: HashMap<String, String> = HashMap::new();
 
         for cmd in cmds {
@@ -43,7 +43,7 @@ impl EnsuredCommands {
                 ));
             }
         }
-        Ok(EnsuredCommands { cmd_table })
+        Ok(EnsuredCmds { cmd_table })
     }
 
     pub fn ensure_cmds(&mut self, cmds: &[&str]) -> Result<(), MigError> {
@@ -77,7 +77,7 @@ impl EnsuredCommands {
     }
 
     pub fn has<'a>(&'a self, cmd: &str) -> bool {
-        if let Some(cmd_path) = self.cmd_table.get(cmd) {
+        if let Some(_cmd_path) = self.cmd_table.get(cmd) {
             true
         } else {
             false

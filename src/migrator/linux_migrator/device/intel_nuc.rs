@@ -10,8 +10,8 @@ use crate::{
     linux_migrator::{
         boot_manager::{from_boot_type, BootManager, GrubBootManager},
         device::Device,
-        linux_common::{is_secure_boot, restore_backups},
-        EnsuredCommands, MigrateInfo,
+        linux_common::is_secure_boot,
+        EnsuredCmds, MigrateInfo,
     },
 };
 
@@ -21,7 +21,7 @@ pub(crate) struct IntelNuc {
 
 impl IntelNuc {
     pub fn from_config(
-        cmds: &mut EnsuredCommands,
+        cmds: &mut EnsuredCmds,
         mig_info: &MigrateInfo,
         config: &Config,
         s2_cfg: &mut Stage2ConfigBuilder,
@@ -106,7 +106,7 @@ impl<'a> Device for IntelNuc {
 
     fn setup(
         &self,
-        cmds: &EnsuredCommands,
+        cmds: &EnsuredCmds,
         dev_info: &MigrateInfo,
         config: &Config,
         s2_cfg: &mut Stage2ConfigBuilder,
