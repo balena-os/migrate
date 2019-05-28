@@ -177,7 +177,7 @@ impl BootManager for UBootManager {
         s2_cfg: &mut Stage2ConfigBuilder,
     ) -> Result<bool, MigError> {
         // TODO: calculate/ensure  required space on /boot /bootmgr
-        trace!("can_migrate: entered")
+        trace!("can_migrate: entered");
 
         // find the u-boot boot device
         // this is where uEnv.txt has to go
