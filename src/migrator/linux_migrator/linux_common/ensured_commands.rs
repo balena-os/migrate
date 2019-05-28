@@ -1,6 +1,6 @@
 use crate::{
     common::{call, CmdRes, MigError, MigErrorKind},
-    linux_common::whereis,
+    linux_migrator::linux_common::whereis,
 };
 use log::{error, trace};
 use std::collections::HashMap;
@@ -62,7 +62,7 @@ impl EnsuredCommands {
         Ok(())
     }
 
-    pub fn ensure_cmd(&mut self, cmd: &str) -> Result<String, MigError> {
+    pub fn ensure(&mut self, cmd: &str) -> Result<String, MigError> {
         if let Ok(cmd_path) = whereis(cmd) {
             self.cmd_table.insert(String::from(cmd), cmd_path.clone());
             Ok(cmd_path)
@@ -76,7 +76,7 @@ impl EnsuredCommands {
         }
     }
 
-    pub fn has_cmd<'a>(&'a self, cmd: &str) -> bool {
+    pub fn has<'a>(&'a self, cmd: &str) -> bool {
         if let Some(cmd_path) = self.cmd_table.get(cmd) {
             true
         } else {
@@ -84,7 +84,7 @@ impl EnsuredCommands {
         }
     }
 
-    pub fn get_cmd<'a>(&'a self, cmd: &str) -> Result<&'a str, MigError> {
+    pub fn get<'a>(&'a self, cmd: &str) -> Result<&'a str, MigError> {
         if let Some(cmd_path) = self.cmd_table.get(cmd) {
             Ok(cmd_path)
         } else {
@@ -95,12 +95,7 @@ impl EnsuredCommands {
         }
     }
 
-    pub fn call_cmd(
-        &self,
-        cmd: &str,
-        args: &[&str],
-        trim_stdout: bool,
-    ) -> Result<CmdRes, MigError> {
+    pub fn call(&self, cmd: &str, args: &[&str], trim_stdout: bool) -> Result<CmdRes, MigError> {
         trace!(
             "call_cmd: entered with cmd: '{}', args: {:?}, trim: {}",
             cmd,
@@ -108,6 +103,6 @@ impl EnsuredCommands {
             trim_stdout
         );
 
-        Ok(call(self.get_cmd(cmd)?, args, trim_stdout)?)
+        Ok(call(self.get(cmd)?, args, trim_stdout)?)
     }
 }

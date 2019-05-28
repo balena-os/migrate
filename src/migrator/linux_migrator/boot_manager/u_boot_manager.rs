@@ -8,20 +8,22 @@ use std::io::Write;
 use std::path::{Path, PathBuf};
 
 use crate::{
-    boot_manager::{BootManager, BootType},
     common::{
-        file_exists, format_size_with_unit, is_balena_file, path_append, Config, MigErrCtx,
-        MigError, MigErrorKind,
+        file_exists, format_size_with_unit, is_balena_file, path_append,
+        stage2_config::{BootMgrConfig, Stage2Config, Stage2ConfigBuilder},
+        Config, MigErrCtx, MigError, MigErrorKind,
     },
     defs::{
-        BALENA_FILE_TAG, MIG_DTB_NAME, MIG_INITRD_NAME, MIG_KERNEL_NAME, MLO_FILE_NAME, NIX_NONE,
-        ROOT_PATH, UBOOT_FILE_NAME, UENV_FILE_NAME,
+        BootType, BALENA_FILE_TAG, MIG_DTB_NAME, MIG_INITRD_NAME, MIG_KERNEL_NAME, MLO_FILE_NAME,
+        NIX_NONE, ROOT_PATH, UBOOT_FILE_NAME, UENV_FILE_NAME,
     },
-    linux_common::{
-        migrate_info::{path_info::PathInfo, MigrateInfo},
-        restore_backups, EnsuredCommands, CHMOD_CMD, MKTEMP_CMD,
+    linux_migrator::{
+        boot_manager::BootManager,
+        linux_common::{
+            migrate_info::{path_info::PathInfo, MigrateInfo},
+            restore_backups, EnsuredCommands, CHMOD_CMD, MKTEMP_CMD,
+        },
     },
-    stage2::stage2_config::{BootMgrConfig, Stage2Config, Stage2ConfigBuilder},
 };
 
 const UBOOT_DRIVE_REGEX: &str = r#"^/dev/mmcblk(\d+)p(\d+)$"#;
@@ -87,7 +89,7 @@ impl UBootManager {
                                     partition.name
                                 );
                                 if let None = tmp_mountpoint {
-                                    let cmd_res = cmds.call_cmd(
+                                    let cmd_res = cmds.call(
                                         MKTEMP_CMD,
                                         &["-d", "-p", &mig_info.work_path.path.to_string_lossy()],
                                         true,
@@ -235,7 +237,7 @@ impl BootManager for UBootManager {
             kernel_path.display()
         );
 
-        cmds.call_cmd(CHMOD_CMD, &["+x", &kernel_path.to_string_lossy()], false)?;
+        cmds.call(CHMOD_CMD, &["+x", &kernel_path.to_string_lossy()], false)?;
 
         let source_path = config.migrate.get_initrd_path();
         let initrd_path = path_append(&boot_path.path, MIG_INITRD_NAME);

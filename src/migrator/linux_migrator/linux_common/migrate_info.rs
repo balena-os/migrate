@@ -3,12 +3,12 @@ use std::path::PathBuf;
 
 use crate::{
     common::{
-        balena_cfg_json::BalenaCfgJson, format_size_with_unit, Config, FileInfo, FileType,
-        MigError, MigErrorKind, MigrateWifis, OSArch,
+        balena_cfg_json::BalenaCfgJson, format_size_with_unit, wifi_config::WifiConfig, Config,
+        FileInfo, FileType, MigError, MigErrorKind, MigrateWifis,
     },
-    defs::{BOOT_PATH, MEM_THRESHOLD, ROOT_PATH},
-    linux_common::{
-        ensured_commands::EnsuredCommands, get_mem_info, get_os_arch, get_os_name, WifiConfig,
+    defs::{OSArch, BOOT_PATH, MEM_THRESHOLD, ROOT_PATH},
+    linux_migrator::linux_common::{
+        ensured_commands::EnsuredCommands, get_mem_info, get_os_arch, get_os_name,
     },
 };
 

@@ -1,6 +1,9 @@
 use std::path::{Path, PathBuf};
 
-use crate::common::{FailMode, MigError, MigErrorKind};
+use crate::{
+    common::{MigError, MigErrorKind},
+    defs::FailMode,
+};
 
 use serde::Deserialize;
 

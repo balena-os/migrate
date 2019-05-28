@@ -11,13 +11,9 @@ use libc::getuid;
 use crate::{
     common::{
         call, file_exists, parse_file, path_append, Config, MigErrCtx, MigError, MigErrorKind,
-        OSArch,
     },
-    defs::{DISK_BY_PARTUUID_PATH, DISK_BY_UUID_PATH, KERNEL_CMDLINE_PATH, SYS_UEFI_DIR},
+    defs::{OSArch, DISK_BY_PARTUUID_PATH, DISK_BY_UUID_PATH, KERNEL_CMDLINE_PATH, SYS_UEFI_DIR},
 };
-
-pub(crate) mod wifi_config;
-pub(crate) use wifi_config::WifiConfig;
 
 pub(crate) mod migrate_info;
 
@@ -113,12 +109,12 @@ pub(crate) fn whereis(cmd: &str) -> Result<String, MigError> {
 
 pub(crate) fn get_os_arch(cmds: &EnsuredCommands) -> Result<OSArch, MigError> {
     trace!("get_os_arch: entered");
-    let cmd_res = cmds
-        .call_cmd(UNAME_CMD, &UNAME_ARGS_OS_ARCH, true)
-        .context(MigErrCtx::from_remark(
-            MigErrorKind::Upstream,
-            &format!("{}::get_os_arch: call {}", MODULE, UNAME_CMD),
-        ))?;
+    let cmd_res =
+        cmds.call(UNAME_CMD, &UNAME_ARGS_OS_ARCH, true)
+            .context(MigErrCtx::from_remark(
+                MigErrorKind::Upstream,
+                &format!("{}::get_os_arch: call {}", MODULE, UNAME_CMD),
+            ))?;
 
     if cmd_res.status.success() {
         if cmd_res.stdout.to_lowercase() == "x86_64" {
@@ -393,7 +389,7 @@ pub(crate) fn get_fs_space<P: AsRef<Path>>(
     let path_str = path.to_string_lossy();
     let args: Vec<&str> = vec!["--block-size=K", "--output=size,used", &path_str];
 
-    let cmd_res = cmds.call_cmd(DF_CMD, &args, true)?;
+    let cmd_res = cmds.call(DF_CMD, &args, true)?;
 
     if !cmd_res.status.success() || cmd_res.stdout.is_empty() {
         return Err(MigError::from_remark(

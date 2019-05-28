@@ -3,11 +3,16 @@ use regex::Regex;
 use std::path::Path;
 
 use crate::{
-    boot_manager::{from_boot_type, BootManager, BootType, UBootManager},
-    common::{Config, MigError, MigErrorKind},
-    device::{Device, DeviceType},
-    linux_common::{migrate_info::MigrateInfo, EnsuredCommands},
-    stage2::stage2_config::{Stage2Config, Stage2ConfigBuilder},
+    common::{
+        stage2_config::{Stage2Config, Stage2ConfigBuilder},
+        Config, MigError, MigErrorKind,
+    },
+    defs::{BootType, DeviceType},
+    linux_migrator::{
+        boot_manager::{from_boot_type, BootManager, UBootManager},
+        device::Device,
+        linux_common::{migrate_info::MigrateInfo, EnsuredCommands},
+    },
 };
 
 const SUPPORTED_OSSES: [&str; 2] = ["Ubuntu 18.04.2 LTS", "Ubuntu 14.04.1 LTS"];

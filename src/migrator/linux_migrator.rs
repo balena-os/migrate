@@ -11,13 +11,22 @@ use crate::{
         MigErrorKind, MigMode,
     },
     defs::{BACKUP_FILE, MIN_DISK_SIZE, SYSTEM_CONNECTIONS_DIR},
-    device::{self, Device},
-    linux_common::{
-        is_admin, migrate_info::MigrateInfo, EnsuredCommands, CHMOD_CMD, DF_CMD, FDISK_CMD,
-        FILE_CMD, LSBLK_CMD, MKTEMP_CMD, MOUNT_CMD, PARTED_CMD, REBOOT_CMD, UNAME_CMD,
-    },
-    stage2::stage2_config::Stage2ConfigBuilder,
 };
+
+pub(crate) mod device;
+pub(crate) use device::Device;
+
+pub(crate) mod boot_manager;
+
+pub(crate) mod stage2;
+
+pub(crate) mod linux_common;
+pub(crate) use linux_common::{
+    is_admin, migrate_info::MigrateInfo, EnsuredCommands, CHMOD_CMD, DF_CMD, FDISK_CMD, FILE_CMD,
+    LSBLK_CMD, MKTEMP_CMD, MOUNT_CMD, PARTED_CMD, REBOOT_CMD, UNAME_CMD,
+};
+
+use crate::common::stage2_config::{Stage2ConfigBuilder, Stage2LogConfig};
 
 const MODULE: &str = "migrator::linux";
 const REQUIRED_CMDS: &'static [&'static str] = &[
@@ -51,7 +60,16 @@ impl<'a> LinuxMigrator {
 
         info!("migrate mode: {:?}", config.migrate.get_mig_mode());
 
-        let mut cmds = EnsuredCommands::new(REQUIRED_CMDS)?;
+        let mut cmds = match EnsuredCommands::new(REQUIRED_CMDS) {
+            Ok(cmds) => cmds,
+            Err(why) => {
+                let message = format!("Failed to ensure required commands: {:?}", why);
+                error!("{}", message);
+                return Err(MigError::from(
+                    why.context(MigErrCtx::from_remark(MigErrorKind::Upstream, &message)),
+                ));
+            }
+        };
 
         // **********************************************************************
         // We need to be root to do this
@@ -61,18 +79,18 @@ impl<'a> LinuxMigrator {
             error!("please run this program as root");
             return Err(MigError::from_remark(
                 MigErrorKind::InvState,
-                &format!("{}::try_init: was run without admin privileges", MODULE),
+                "try_init: was run without admin privileges",
             ));
         }
 
         // **********************************************************************
         // Ensure some more vital commands
-        let parted_found = match cmds.ensure_cmd(PARTED_CMD) {
+        let parted_found = match cmds.ensure(PARTED_CMD) {
             Ok(_s) => true,
             Err(_why) => false,
         };
 
-        let fdisk_found = match cmds.ensure_cmd(FDISK_CMD) {
+        let fdisk_found = match cmds.ensure(FDISK_CMD) {
             Ok(_s) => true,
             Err(_why) => false,
         };
@@ -99,10 +117,11 @@ impl<'a> LinuxMigrator {
                 mig_info
             }
             Err(why) => {
-                return Err(MigError::from(why.context(MigErrCtx::from_remark(
-                    MigErrorKind::Upstream,
-                    "Failed to create MigrateInfo",
-                ))));
+                let message = format!("Failed to create MigrateInfo: {:?}", why);
+                error!("{}", message);
+                return Err(MigError::from(
+                    why.context(MigErrCtx::from_remark(MigErrorKind::Upstream, &message)),
+                ));
             }
         };
 
@@ -123,10 +142,11 @@ impl<'a> LinuxMigrator {
                 device
             }
             Err(why) => {
-                return Err(MigError::from(why.context(MigErrCtx::from_remark(
-                    MigErrorKind::Upstream,
-                    "Failed to create Device",
-                ))));
+                let message = format!("Failed to create Device: {:?}", why);
+                error!("{}", message);
+                return Err(MigError::from(
+                    why.context(MigErrCtx::from_remark(MigErrorKind::Upstream, &message)),
+                ));
             }
         };
 
@@ -277,6 +297,16 @@ impl<'a> LinuxMigrator {
         }
 
         self.stage2_config
+            .set_log_level(String::from(self.config.migrate.get_log_level()));
+
+        if let Some((ref device, ref fstype)) = self.mig_info.log_path {
+            self.stage2_config.set_log_to(Stage2LogConfig {
+                device: device.clone(),
+                fstype: fstype.clone(),
+            });
+        }
+
+        self.stage2_config
             .set_gzip_internal(self.config.migrate.is_gzip_internal());
 
         trace!("device setup");
@@ -299,7 +329,7 @@ impl<'a> LinuxMigrator {
             let delay = Duration::new(*delay, 0);
             thread::sleep(delay);
             println!("Rebooting now..");
-            self.cmds.call_cmd(REBOOT_CMD, &["-f"], false)?;
+            self.cmds.call(REBOOT_CMD, &["-f"], false)?;
         }
 
         trace!("done");

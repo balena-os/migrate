@@ -4,7 +4,7 @@ use std::path::Path;
 
 use crate::{
     common::{MigError, MigErrorKind},
-    linux_common::{ensured_commands::EnsuredCommands, FDISK_CMD, PARTED_CMD},
+    linux_migrator::linux_common::{ensured_commands::EnsuredCommands, FDISK_CMD, PARTED_CMD},
 };
 
 const DISK_LABEL_REGEX: &str = r#"^Disklabel type:\s*(\S+)$"#;
@@ -20,14 +20,14 @@ pub(crate) enum LabelType {
 
 impl LabelType {
     pub fn from_device<P: AsRef<Path>>(
-        cmds: & EnsuredCommands,
+        cmds: &EnsuredCommands,
         device_path: P,
     ) -> Result<LabelType, MigError> {
         let device_path = device_path.as_ref();
 
-        let disk_label_type = if cmds.has_cmd(PARTED_CMD) {
+        let disk_label_type = if cmds.has(PARTED_CMD) {
             // use parted
-            let cmd_res = cmds.call_cmd(
+            let cmd_res = cmds.call(
                 PARTED_CMD,
                 &["-m", &device_path.to_string_lossy(), "print"],
                 true,
@@ -70,9 +70,9 @@ impl LabelType {
             }
         } else {
             // use fdisk
-            if cmds.has_cmd(FDISK_CMD) {
+            if cmds.has(FDISK_CMD) {
                 let cmd_res =
-                    cmds.call_cmd(FDISK_CMD, &["-l", &device_path.to_string_lossy()], true)?;
+                    cmds.call(FDISK_CMD, &["-l", &device_path.to_string_lossy()], true)?;
 
                 if cmd_res.status.success() {
                     let disk_lbl_re = Regex::new(DISK_LABEL_REGEX).unwrap();
@@ -114,6 +114,7 @@ impl LabelType {
         match disk_label_type.as_ref() {
             "gpt" => Ok(LabelType::GPT),
             "dos" => Ok(LabelType::DOS),
+            "msdos" => Ok(LabelType::DOS),
             _ => Ok(LabelType::OTHER),
         }
     }

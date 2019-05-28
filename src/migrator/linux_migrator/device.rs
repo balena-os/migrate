@@ -5,11 +5,12 @@ use std::fs::read_to_string;
 use std::path::Path;
 
 use crate::{
-    boot_manager::BootType,
-    common::{Config, MigErrCtx, MigError, MigErrorKind, OSArch},
-    //linux::LinuxMigrator,
-    linux_common::{migrate_info::MigrateInfo, EnsuredCommands},
-    stage2::stage2_config::{Stage2Config, Stage2ConfigBuilder},
+    common::{
+        stage2_config::{Stage2Config, Stage2ConfigBuilder},
+        Config, MigErrCtx, MigError, MigErrorKind,
+    },
+    defs::{BootType, DeviceType, OSArch},
+    linux_migrator::linux_common::{migrate_info::MigrateInfo, EnsuredCommands},
 };
 
 mod beaglebone;
@@ -17,15 +18,6 @@ mod intel_nuc;
 mod raspberrypi;
 
 const DEVICE_TREE_MODEL: &str = "/proc/device-tree/model";
-
-#[derive(Debug, Deserialize, Serialize, Clone)]
-pub(crate) enum DeviceType {
-    BeagleboneGreen,
-    BeagleboneBlack,
-    BeagleboardXM,
-    IntelNuc,
-    RaspberryPi3,
-}
 
 pub(crate) trait Device {
     fn get_device_slug(&self) -> &'static str;

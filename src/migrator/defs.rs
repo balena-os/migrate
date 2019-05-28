@@ -1,3 +1,6 @@
+use serde::{Deserialize, Serialize};
+use std::fmt::{self, Display, Formatter};
+
 pub const BOOT_PATH: &str = "/boot";
 pub const EFI_PATH: &str = "/boot/efi";
 pub const ROOT_PATH: &str = "/";
@@ -62,3 +65,54 @@ pub const STAGE2_MEM_THRESHOLD: u64 = 32 * 1024 * 1024; // 64 MiB
 pub const MEM_THRESHOLD: u64 = 64 * 1024 * 1024; // 64 MiB
 
 pub const MIN_DISK_SIZE: u64 = 2 * 1024 * 1024 * 1024; // 2 GiB
+
+#[derive(Debug, Deserialize, Serialize, Clone)]
+pub(crate) enum BootType {
+    UBoot,
+    Raspi,
+    Efi,
+    Grub,
+}
+
+#[derive(Debug, Deserialize, Serialize, Clone)]
+pub(crate) enum DeviceType {
+    BeagleboneGreen,
+    BeagleboneBlack,
+    BeagleboardXM,
+    IntelNuc,
+    RaspberryPi3,
+}
+
+#[derive(Debug)]
+pub enum OSArch {
+    AMD64,
+    ARMHF,
+    I386,
+    /*
+        ARM64,
+        ARMEL,
+        MIPS,
+        MIPSEL,
+        Powerpc,
+        PPC64EL,
+        S390EX,
+    */
+}
+
+impl Display for OSArch {
+    fn fmt(&self, f: &mut Formatter) -> fmt::Result {
+        write!(f, "{:?}", self)
+    }
+}
+
+#[derive(Debug, Clone, Deserialize, Serialize, PartialEq)]
+pub(crate) enum FailMode {
+    Reboot,
+    RescueShell,
+}
+
+impl FailMode {
+    pub(crate) fn get_default() -> &'static FailMode {
+        &FailMode::Reboot
+    }
+}

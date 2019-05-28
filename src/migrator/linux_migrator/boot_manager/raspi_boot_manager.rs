@@ -8,11 +8,16 @@ use std::path::Path;
 use std::time::SystemTime;
 
 use crate::{
-    boot_manager::{BootManager, BootType},
-    common::{file_exists, is_balena_file, path_append, Config, MigErrCtx, MigError, MigErrorKind},
-    defs::BALENA_FILE_TAG,
-    linux_common::{migrate_info::MigrateInfo, EnsuredCommands, CHMOD_CMD},
-    stage2::stage2_config::{Stage2Config, Stage2ConfigBuilder},
+    common::{
+        file_exists, is_balena_file, path_append,
+        stage2_config::{Stage2Config, Stage2ConfigBuilder},
+        Config, MigErrCtx, MigError, MigErrorKind,
+    },
+    defs::{BootType, BALENA_FILE_TAG},
+    linux_migrator::{
+        boot_manager::BootManager,
+        linux_common::{migrate_info::MigrateInfo, EnsuredCommands, CHMOD_CMD},
+    },
 };
 
 const RPI_MIG_KERNEL_PATH: &str = "/boot/balena.zImage";
@@ -73,7 +78,7 @@ impl BootManager for RaspiBootManager {
             RPI_MIG_KERNEL_PATH
         );
 
-        cmds.call_cmd(CHMOD_CMD, &["+x", RPI_MIG_KERNEL_PATH], false)?;
+        cmds.call(CHMOD_CMD, &["+x", RPI_MIG_KERNEL_PATH], false)?;
 
         // **********************************************************************
         // ** copy new iniramfs

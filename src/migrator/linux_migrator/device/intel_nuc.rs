@@ -1,12 +1,19 @@
-use log::{error, info};
+use log::{error, info, trace};
 use std::path::Path;
 
 use crate::{
-    boot_manager::{from_boot_type, BootManager, BootType, GrubBootManager},
-    common::{Config, MigError, MigErrorKind},
-    device::{Device, DeviceType},
-    linux_common::{is_secure_boot, migrate_info::MigrateInfo, restore_backups, EnsuredCommands},
-    stage2::stage2_config::{Stage2Config, Stage2ConfigBuilder},
+    common::{
+        stage2_config::{Stage2Config, Stage2ConfigBuilder},
+        Config, MigError, MigErrorKind,
+    },
+    defs::{BootType, DeviceType},
+    linux_migrator::{
+        boot_manager::{from_boot_type, BootManager, GrubBootManager},
+        device::Device,
+        linux_common::{
+            is_secure_boot, migrate_info::MigrateInfo, restore_backups, EnsuredCommands,
+        },
+    },
 };
 
 pub(crate) struct IntelNuc {
@@ -105,7 +112,7 @@ impl<'a> Device for IntelNuc {
         config: &Config,
         s2_cfg: &mut Stage2ConfigBuilder,
     ) -> Result<(), MigError> {
-        dbg!("setup: entered");
+        trace!("setup: entered");
         self.boot_manager.setup(cmds, dev_info, config, s2_cfg)
     }
 

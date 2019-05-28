@@ -1,10 +1,12 @@
-use serde::{Deserialize, Serialize};
 use std::path::Path;
 
 use crate::{
-    common::{Config, MigError, MigErrorKind},
-    linux_common::{migrate_info::MigrateInfo, EnsuredCommands},
-    stage2::stage2_config::{Stage2Config, Stage2ConfigBuilder},
+    common::{
+        stage2_config::{Stage2Config, Stage2ConfigBuilder},
+        Config, MigError, MigErrorKind,
+    },
+    defs::BootType,
+    linux_migrator::linux_common::{migrate_info::MigrateInfo, EnsuredCommands},
 };
 
 pub(crate) mod u_boot_manager;
@@ -13,14 +15,6 @@ pub(crate) mod grub_boot_manager;
 pub(crate) use grub_boot_manager::GrubBootManager;
 pub(crate) mod raspi_boot_manager;
 pub(crate) use raspi_boot_manager::RaspiBootManager;
-
-#[derive(Debug, Deserialize, Serialize, Clone)]
-pub(crate) enum BootType {
-    UBoot,
-    Raspi,
-    Efi,
-    Grub,
-}
 
 pub(crate) fn from_boot_type(boot_type: &BootType) -> Box<BootManager> {
     match boot_type {

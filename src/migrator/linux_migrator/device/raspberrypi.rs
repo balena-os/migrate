@@ -3,11 +3,16 @@ use regex::Regex;
 use std::path::Path;
 
 use crate::{
-    boot_manager::{from_boot_type, BootManager, BootType, RaspiBootManager},
-    common::{Config, MigError, MigErrorKind},
-    device::{Device, DeviceType},
-    linux_common::{migrate_info::MigrateInfo, restore_backups, EnsuredCommands},
-    stage2::stage2_config::{Stage2Config, Stage2ConfigBuilder},
+    common::{
+        stage2_config::{Stage2Config, Stage2ConfigBuilder},
+        Config, MigError, MigErrorKind,
+    },
+    defs::{BootType, DeviceType},
+    linux_migrator::{
+        boot_manager::{from_boot_type, BootManager, RaspiBootManager},
+        device::Device,
+        linux_common::{migrate_info::MigrateInfo, restore_backups, EnsuredCommands},
+    },
 };
 
 const RPI_MODEL_REGEX: &str = r#"^Raspberry\s+Pi\s+(\S+)\s+Model\s+(.*)$"#;

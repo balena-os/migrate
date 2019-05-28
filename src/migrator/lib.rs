@@ -1,23 +1,18 @@
 use log::error;
+
 use mod_logger::Logger;
 // use std::path::Path;
 
-mod stage2;
-use stage2::Stage2;
 mod common;
 
 #[cfg(target_os = "windows")]
 mod mswin;
 
 #[cfg(target_os = "linux")]
-mod boot_manager;
-#[cfg(target_os = "linux")]
-mod device;
+mod linux_migrator;
 
 #[cfg(target_os = "linux")]
-mod linux_common;
-#[cfg(target_os = "linux")]
-mod linux_migrator;
+use linux_migrator::stage2::{self, Stage2};
 
 pub(crate) mod defs;
 

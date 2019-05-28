@@ -24,6 +24,10 @@ pub(crate) mod config;
 // pub(crate) mod config_helper;
 pub(crate) mod file_info;
 
+pub(crate) mod stage2_config;
+
+pub(crate) mod wifi_config;
+
 //pub mod logger;
 //pub(crate) use logger::Logger;
 
@@ -32,40 +36,6 @@ pub(crate) use self::file_info::{FileInfo, FileType};
 pub(crate) use self::mig_error::{MigErrCtx, MigError, MigErrorKind};
 
 const MODULE: &str = "migrator::common";
-
-#[derive(Debug)]
-pub enum OSArch {
-    AMD64,
-    ARMHF,
-    I386,
-    /*
-        ARM64,
-        ARMEL,
-        MIPS,
-        MIPSEL,
-        Powerpc,
-        PPC64EL,
-        S390EX,
-    */
-}
-
-impl Display for OSArch {
-    fn fmt(&self, f: &mut Formatter) -> fmt::Result {
-        write!(f, "{:?}", self)
-    }
-}
-
-#[derive(Debug, Clone, Deserialize, Serialize, PartialEq)]
-pub(crate) enum FailMode {
-    Reboot,
-    RescueShell,
-}
-
-impl FailMode {
-    pub(crate) fn get_default() -> &'static FailMode {
-        &FailMode::Reboot
-    }
-}
 
 #[derive(Debug)]
 pub(crate) struct CmdRes {

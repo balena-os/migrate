@@ -12,17 +12,15 @@ pub const EMPTY_BACKUPS: &[(String, String)] = &[];
 
 const MODULE: &str = "stage2::stage2:config";
 
-use crate::boot_manager::{from_boot_type, BootManager, BootType};
 use crate::{
-    common::{FailMode, MigErrCtx, MigError, MigErrorKind},
-    defs::STAGE2_CFG_FILE,
-    device::DeviceType,
+    common::{MigErrCtx, MigError, MigErrorKind},
+    defs::{BootType, DeviceType, FailMode, STAGE2_CFG_FILE},
 };
 
 #[derive(Debug, Deserialize, Serialize, Clone)]
 pub(crate) struct Stage2LogConfig {
-    device: PathBuf,
-    fstype: String,
+    pub device: PathBuf,
+    pub fstype: String,
 }
 
 #[derive(Debug, Deserialize, Serialize, Clone)]
@@ -149,8 +147,8 @@ impl<'a> Stage2Config {
         self.skip_flash
     }
 
-    pub fn get_bootmgr(&self) -> Box<BootManager> {
-        from_boot_type(&self.boot_type)
+    pub fn get_bootmgr(&'a self) -> &'a BootType {
+        &self.boot_type
     }
 
     pub fn get_flash_device(&'a self) -> &'a Path {
@@ -430,6 +428,10 @@ impl<'a> Stage2ConfigBuilder {
 
     pub fn set_device_type(&mut self, dev_type: &DeviceType) {
         self.device_type.set_ref(dev_type);
+    }
+
+    pub fn set_log_level(&mut self, val: String) {
+        self.log_level.set(val);
     }
 
     pub fn set_log_to(&mut self, val: Stage2LogConfig) {

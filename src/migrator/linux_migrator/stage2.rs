@@ -17,23 +17,23 @@ use std::time::{Duration, Instant};
 
 use crate::{
     common::{
-        dir_exists, file_exists, file_size, format_size_with_unit, path_append, FailMode,
-        MigErrCtx, MigError, MigErrorKind,
+        dir_exists, file_exists, file_size, format_size_with_unit, path_append,
+        stage2_config::Stage2Config, MigErrCtx, MigError, MigErrorKind,
     },
     defs::{
-        BACKUP_FILE, BALENA_BOOT_FSTYPE, BALENA_BOOT_PART, BALENA_DATA_FSTYPE, BALENA_DATA_PART,
-        BALENA_ROOTA_PART, BALENA_ROOTB_PART, BALENA_STATE_PART, BOOT_PATH, DISK_BY_LABEL_PATH,
-        NIX_NONE, STAGE2_CFG_FILE, STAGE2_MEM_THRESHOLD, SYSTEM_CONNECTIONS_DIR,
+        FailMode, BACKUP_FILE, BALENA_BOOT_FSTYPE, BALENA_BOOT_PART, BALENA_DATA_FSTYPE,
+        BALENA_DATA_PART, BALENA_ROOTA_PART, BALENA_ROOTB_PART, BALENA_STATE_PART, BOOT_PATH,
+        DISK_BY_LABEL_PATH, NIX_NONE, STAGE2_CFG_FILE, STAGE2_MEM_THRESHOLD,
+        SYSTEM_CONNECTIONS_DIR,
     },
-    device,
-    linux_common::{
-        ensured_commands::EnsuredCommands, get_mem_info, get_root_info, DD_CMD, GZIP_CMD,
-        PARTPROBE_CMD, REBOOT_CMD,
+    linux_migrator::{
+        device,
+        linux_common::{
+            ensured_commands::EnsuredCommands, get_mem_info, get_root_info, DD_CMD, GZIP_CMD,
+            PARTPROBE_CMD, REBOOT_CMD,
+        },
     },
 };
-
-pub(crate) mod stage2_config;
-pub(crate) use stage2_config::Stage2Config;
 
 // for starters just restore old boot config, only required command is mount
 
@@ -511,7 +511,7 @@ impl Stage2 {
                 ));
             }
 
-            if let Ok(ref dd_cmd) = cmds.get_cmd(DD_CMD) {
+            if let Ok(ref dd_cmd) = cmds.get(DD_CMD) {
                 debug!("dd found at: {}", dd_cmd);
 
                 let cmd_res_dd = if self.config.is_gzip_internal() {
@@ -605,7 +605,7 @@ impl Stage2 {
                             ));
                     }
                 } else {
-                    if let Ok(ref gzip_cmd) = cmds.get_cmd(GZIP_CMD) {
+                    if let Ok(ref gzip_cmd) = cmds.get(GZIP_CMD) {
                         debug!("gzip found at: {}", gzip_cmd);
                         let gzip_child = Command::new(gzip_cmd)
                             .args(&["-d", "-c", &image_path.to_string_lossy()])
@@ -669,7 +669,7 @@ impl Stage2 {
 
                 thread::sleep(Duration::new(PRE_PARTPROBE_WAIT_SECS, PARTPROBE_WAIT_NANOS));
 
-                cmds.call_cmd(PARTPROBE_CMD, &[&target_path.to_string_lossy()], true)?;
+                cmds.call(PARTPROBE_CMD, &[&target_path.to_string_lossy()], true)?;
 
                 thread::sleep(Duration::new(
                     POST_PARTPROBE_WAIT_SECS,

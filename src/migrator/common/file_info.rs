@@ -25,7 +25,7 @@ const DTB_FTYPE_REGEX: &str = r#"^(Device Tree Blob|data).*$"#;
 #[cfg(target_os = "linux")]
 use crate::common::{file_exists, MigErrCtx, MigError, MigErrorKind};
 #[cfg(target_os = "linux")]
-use crate::linux_common::{ensured_commands::EnsuredCommands, FILE_CMD};
+use crate::linux_migrator::linux_common::{ensured_commands::EnsuredCommands, FILE_CMD};
 
 const MODULE: &str = "balean_migrate::common::file_info";
 
@@ -127,7 +127,7 @@ impl FileInfo {
         let path_str = self.path.to_string_lossy();
         let args: Vec<&str> = vec!["-bz", &path_str];
 
-        let cmd_res = cmds.call_cmd(FILE_CMD, &args, true)?;
+        let cmd_res = cmds.call(FILE_CMD, &args, true)?;
         if !cmd_res.status.success() || cmd_res.stdout.is_empty() {
             return Err(MigError::from_remark(
                 MigErrorKind::InvParam,

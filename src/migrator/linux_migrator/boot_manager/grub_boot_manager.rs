@@ -6,20 +6,22 @@ use std::io::Write;
 use std::path::{Path, PathBuf};
 
 use crate::{
-    boot_manager::{BootManager, BootType},
     common::{
-        dir_exists, file_exists, format_size_with_unit, path_append, Config, MigErrCtx, MigError,
-        MigErrorKind,
+        dir_exists, file_exists, format_size_with_unit, path_append,
+        stage2_config::{Stage2Config, Stage2ConfigBuilder},
+        Config, MigErrCtx, MigError, MigErrorKind,
     },
     defs::{
-        BOOT_PATH, GRUB_CONFIG_DIR, GRUB_CONFIG_FILE, GRUB_MIN_VERSION, KERNEL_CMDLINE_PATH,
-        MIG_INITRD_NAME, MIG_KERNEL_NAME, ROOT_PATH,
+        BootType, BOOT_PATH, GRUB_CONFIG_DIR, GRUB_CONFIG_FILE, GRUB_MIN_VERSION,
+        KERNEL_CMDLINE_PATH, MIG_INITRD_NAME, MIG_KERNEL_NAME, ROOT_PATH,
     },
-    linux_common::{
-        migrate_info::{label_type::LabelType, MigrateInfo},
-        EnsuredCommands, CHMOD_CMD, GRUB_REBOOT_CMD, GRUB_UPDT_CMD,
+    linux_migrator::{
+        boot_manager::BootManager,
+        linux_common::{
+            migrate_info::{label_type::LabelType, MigrateInfo},
+            EnsuredCommands, CHMOD_CMD, GRUB_REBOOT_CMD, GRUB_UPDT_CMD,
+        },
     },
-    stage2::stage2_config::{Stage2Config, Stage2ConfigBuilder},
 };
 
 const GRUB_UPDT_VERSION_ARGS: [&str; 1] = ["--version"];
@@ -58,12 +60,12 @@ impl GrubBootManager {
     fn get_grub_version(cmds: &mut EnsuredCommands) -> Result<(String, String), MigError> {
         trace!("get_grub_version: entered");
 
-        let _dummy = cmds.ensure_cmd(GRUB_REBOOT_CMD)?;
+        let _dummy = cmds.ensure(GRUB_REBOOT_CMD)?;
 
-        let _dummy = cmds.ensure_cmd(GRUB_UPDT_CMD)?;
+        let _dummy = cmds.ensure(GRUB_UPDT_CMD)?;
 
         let cmd_res = cmds
-            .call_cmd(GRUB_UPDT_CMD, &GRUB_UPDT_VERSION_ARGS, true)
+            .call(GRUB_UPDT_CMD, &GRUB_UPDT_VERSION_ARGS, true)
             .context(MigErrCtx::from_remark(
                 MigErrorKind::Upstream,
                 &format!(
@@ -215,7 +217,7 @@ impl BootManager for GrubBootManager {
         let part_mod = format!("part_{}", part_type);
 
         info!(
-            "Boot partition type is '{}' is type '{}'",
+            "Boot partition type for '{}' is '{}'",
             boot_path.drive.display(),
             part_mod
         );
@@ -305,7 +307,7 @@ impl BootManager for GrubBootManager {
                 &format!("Failed to write to grub config file '{}'", GRUB_CONFIG_FILE),
             ))?;
 
-        let cmd_res = cmds.call_cmd(CHMOD_CMD, &["+x", GRUB_CONFIG_FILE], true)?;
+        let cmd_res = cmds.call(CHMOD_CMD, &["+x", GRUB_CONFIG_FILE], true)?;
         if !cmd_res.status.success() {
             return Err(MigError::from_remark(
                 MigErrorKind::ExecProcess,
@@ -335,7 +337,7 @@ impl BootManager for GrubBootManager {
             kernel_path.display()
         );
 
-        cmds.call_cmd(CHMOD_CMD, &["+x", &kernel_path.to_string_lossy()], false)?;
+        cmds.call(CHMOD_CMD, &["+x", &kernel_path.to_string_lossy()], false)?;
 
         let source_path = &mig_info.initrd_file.path;
         let initrd_path = path_append(&boot_path.path, MIG_INITRD_NAME);
@@ -347,14 +349,17 @@ impl BootManager for GrubBootManager {
                 initrd_path.display()
             ),
         ))?;
+
         info!(
             "initramfs kernel: '{}' -> '{}'",
             source_path.display(),
             initrd_path.display()
         );
 
+        info!("calling '{}'", GRUB_UPDT_CMD);
+
         let cmd_res = cmds
-            .call_cmd(GRUB_UPDT_CMD, &[], true)
+            .call(GRUB_UPDT_CMD, &[], true)
             .context(MigErrCtx::from_remark(
                 MigErrorKind::Upstream,
                 "Failed to set up boot configuration'",
@@ -367,8 +372,10 @@ impl BootManager for GrubBootManager {
             ));
         }
 
+        info!("calling '{}'", GRUB_REBOOT_CMD);
+
         let cmd_res = cmds
-            .call_cmd(GRUB_REBOOT_CMD, &["balena-migrate"], true)
+            .call(GRUB_REBOOT_CMD, &["balena-migrate"], true)
             .context(MigErrCtx::from_remark(
                 MigErrorKind::Upstream,
                 &format!(

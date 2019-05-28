@@ -267,7 +267,7 @@ impl<'a> Config {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::common::{config::migrate_config::MigrateWifis, FailMode};
+    use crate::{common::config::migrate_config::MigrateWifis, defs::FailMode};
 
     // TODO: update this to current config
 
