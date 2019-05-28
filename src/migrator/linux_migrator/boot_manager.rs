@@ -6,7 +6,7 @@ use crate::{
         Config, MigError, MigErrorKind,
     },
     defs::BootType,
-    linux_migrator::linux_common::{migrate_info::MigrateInfo, EnsuredCommands},
+    linux_migrator::{EnsuredCommands, MigrateInfo},
 };
 
 pub(crate) mod u_boot_manager;

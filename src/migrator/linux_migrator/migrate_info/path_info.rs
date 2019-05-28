@@ -6,8 +6,8 @@ use std::path::{Path, PathBuf};
 use crate::{
     common::{dir_exists, format_size_with_unit, MigErrCtx, MigError, MigErrorKind},
     defs::ROOT_PATH,
-    linux_migrator::linux_common::{
-        get_fs_space, get_root_info,
+    linux_migrator::{
+        linux_common::{get_fs_space, get_root_info},
         migrate_info::lsblk_info::{LsblkDevice, LsblkInfo, LsblkPartition},
         EnsuredCommands,
     },

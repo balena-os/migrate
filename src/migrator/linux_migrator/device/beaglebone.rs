@@ -11,7 +11,7 @@ use crate::{
     linux_migrator::{
         boot_manager::{from_boot_type, BootManager, UBootManager},
         device::Device,
-        linux_common::{migrate_info::MigrateInfo, EnsuredCommands},
+        EnsuredCommands, MigrateInfo,
     },
 };
 

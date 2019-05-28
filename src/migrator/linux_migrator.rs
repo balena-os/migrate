@@ -20,11 +20,18 @@ pub(crate) mod boot_manager;
 
 pub(crate) mod stage2;
 
-pub(crate) mod linux_common;
-pub(crate) use linux_common::{
-    is_admin, migrate_info::MigrateInfo, EnsuredCommands, CHMOD_CMD, DF_CMD, FDISK_CMD, FILE_CMD,
-    LSBLK_CMD, MKTEMP_CMD, MOUNT_CMD, PARTED_CMD, REBOOT_CMD, UNAME_CMD,
+pub(crate) mod ensured_commands;
+pub(crate) use ensured_commands::{
+    EnsuredCommands, CHMOD_CMD, DD_CMD, DF_CMD, FDISK_CMD, FILE_CMD, GRUB_REBOOT_CMD,
+    GRUB_UPDT_CMD, GZIP_CMD, LSBLK_CMD, MKTEMP_CMD, MOKUTIL_CMD, MOUNT_CMD, PARTED_CMD,
+    PARTPROBE_CMD, REBOOT_CMD, UNAME_CMD,
 };
+
+pub(crate) mod migrate_info;
+pub(crate) use migrate_info::MigrateInfo;
+
+pub(crate) mod linux_common;
+pub(crate) use linux_common::is_admin;
 
 use crate::common::stage2_config::{Stage2ConfigBuilder, Stage2LogConfig};
 

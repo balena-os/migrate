@@ -7,7 +7,7 @@ use std::path::{Path, PathBuf};
 
 use crate::{
     common::{MigErrCtx, MigError, MigErrorKind},
-    linux_migrator::linux_common::{ensured_commands::EnsuredCommands, LSBLK_CMD},
+    linux_migrator::{EnsuredCommands, LSBLK_CMD},
 };
 
 // const GPT_EFI_PART: &str = "C12A7328-F81F-11D2-BA4B-00A0C93EC93B";

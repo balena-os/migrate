@@ -28,10 +28,8 @@ use crate::{
     },
     linux_migrator::{
         device,
-        linux_common::{
-            ensured_commands::EnsuredCommands, get_mem_info, get_root_info, DD_CMD, GZIP_CMD,
-            PARTPROBE_CMD, REBOOT_CMD,
-        },
+        linux_common::{get_mem_info, get_root_info},
+        EnsuredCommands, DD_CMD, GZIP_CMD, PARTPROBE_CMD, REBOOT_CMD,
     },
 };
 

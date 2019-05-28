@@ -19,10 +19,9 @@ use crate::{
     },
     linux_migrator::{
         boot_manager::BootManager,
-        linux_common::{
-            migrate_info::{path_info::PathInfo, MigrateInfo},
-            restore_backups, EnsuredCommands, CHMOD_CMD, MKTEMP_CMD,
-        },
+        linux_common::restore_backups,
+        migrate_info::{path_info::PathInfo, MigrateInfo},
+        EnsuredCommands, CHMOD_CMD, MKTEMP_CMD,
     },
 };
 

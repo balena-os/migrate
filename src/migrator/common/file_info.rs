@@ -25,7 +25,7 @@ const DTB_FTYPE_REGEX: &str = r#"^(Device Tree Blob|data).*$"#;
 #[cfg(target_os = "linux")]
 use crate::common::{file_exists, MigErrCtx, MigError, MigErrorKind};
 #[cfg(target_os = "linux")]
-use crate::linux_migrator::linux_common::{ensured_commands::EnsuredCommands, FILE_CMD};
+use crate::linux_migrator::{EnsuredCommands, FILE_CMD};
 
 const MODULE: &str = "balean_migrate::common::file_info";
 

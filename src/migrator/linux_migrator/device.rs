@@ -10,7 +10,7 @@ use crate::{
         Config, MigErrCtx, MigError, MigErrorKind,
     },
     defs::{BootType, DeviceType, OSArch},
-    linux_migrator::linux_common::{migrate_info::MigrateInfo, EnsuredCommands},
+    linux_migrator::{EnsuredCommands, MigrateInfo},
 };
 
 mod beaglebone;

@@ -17,10 +17,8 @@ use crate::{
     },
     linux_migrator::{
         boot_manager::BootManager,
-        linux_common::{
-            migrate_info::{label_type::LabelType, MigrateInfo},
-            EnsuredCommands, CHMOD_CMD, GRUB_REBOOT_CMD, GRUB_UPDT_CMD,
-        },
+        migrate_info::{label_type::LabelType, MigrateInfo},
+        EnsuredCommands, CHMOD_CMD, GRUB_REBOOT_CMD, GRUB_UPDT_CMD,
     },
 };
 

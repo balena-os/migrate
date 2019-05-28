@@ -10,9 +10,8 @@ use crate::{
     linux_migrator::{
         boot_manager::{from_boot_type, BootManager, GrubBootManager},
         device::Device,
-        linux_common::{
-            is_secure_boot, migrate_info::MigrateInfo, restore_backups, EnsuredCommands,
-        },
+        linux_common::{is_secure_boot, restore_backups},
+        EnsuredCommands, MigrateInfo,
     },
 };
 

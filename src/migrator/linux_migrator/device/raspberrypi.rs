@@ -11,7 +11,8 @@ use crate::{
     linux_migrator::{
         boot_manager::{from_boot_type, BootManager, RaspiBootManager},
         device::Device,
-        linux_common::{migrate_info::MigrateInfo, restore_backups, EnsuredCommands},
+        linux_common::restore_backups,
+        EnsuredCommands, MigrateInfo,
     },
 };
 

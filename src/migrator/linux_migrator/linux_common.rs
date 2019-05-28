@@ -13,19 +13,8 @@ use crate::{
         call, file_exists, parse_file, path_append, Config, MigErrCtx, MigError, MigErrorKind,
     },
     defs::{OSArch, DISK_BY_PARTUUID_PATH, DISK_BY_UUID_PATH, KERNEL_CMDLINE_PATH, SYS_UEFI_DIR},
+    linux_migrator::{EnsuredCommands, DF_CMD, MOKUTIL_CMD, UNAME_CMD},
 };
-
-pub(crate) mod migrate_info;
-
-pub(crate) mod ensured_commands;
-pub(crate) use ensured_commands::{
-    EnsuredCommands, CHMOD_CMD, DD_CMD, DF_CMD, FDISK_CMD, FILE_CMD, GRUB_REBOOT_CMD,
-    GRUB_UPDT_CMD, GZIP_CMD, LSBLK_CMD, MKTEMP_CMD, MOKUTIL_CMD, MOUNT_CMD, PARTED_CMD,
-    PARTPROBE_CMD, REBOOT_CMD, UNAME_CMD,
-};
-
-//pub(crate) mod migrate_info;
-//pub(crate) use migrate_info::MigrateInfo;
 
 use crate::common::dir_exists;
 
@@ -113,7 +102,7 @@ pub(crate) fn get_os_arch(cmds: &EnsuredCommands) -> Result<OSArch, MigError> {
         cmds.call(UNAME_CMD, &UNAME_ARGS_OS_ARCH, true)
             .context(MigErrCtx::from_remark(
                 MigErrorKind::Upstream,
-                &format!("{}::get_os_arch: call {}", MODULE, UNAME_CMD),
+                &format!("get_os_arch: call {}", UNAME_CMD),
             ))?;
 
     if cmd_res.status.success() {
