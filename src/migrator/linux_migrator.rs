@@ -285,23 +285,15 @@ impl<'a> LinuxMigrator {
 
         // later
         self.stage2_config
-            .set_balena_image(PathBuf::from(self.config.balena.get_image_path()));
+            .set_balena_image(PathBuf::from(&self.mig_info.image_file.path));
         self.stage2_config
-            .set_balena_config(PathBuf::from(self.config.balena.get_config_path()));
+            .set_balena_config(PathBuf::from(self.mig_info.config_file.get_path()));
 
         self.stage2_config
             .set_work_dir(&self.mig_info.work_path.path);
 
         self.stage2_config
             .set_gzip_internal(self.config.migrate.is_gzip_internal());
-
-        if let Some(flash_device) = self.config.debug.get_force_flash_device() {
-            self.stage2_config
-                .set_flash_device(&PathBuf::from(flash_device));
-        } else {
-            self.stage2_config
-                .set_flash_device(&self.mig_info.root_path.device);
-        }
 
         self.stage2_config
             .set_log_level(String::from(self.config.migrate.get_log_level()));
