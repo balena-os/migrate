@@ -73,6 +73,7 @@ balena:
   check_vpn: true
   ## vpn connectivity check timeout
   check_timeout: 20
+## Debug settings  
 debug:
   ## skip root check  
   fake_admin: false
