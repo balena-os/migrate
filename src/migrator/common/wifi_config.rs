@@ -204,7 +204,7 @@ impl<'a> WifiConfig {
                                             wifis.push(wifi);
                                         }
                                     } else {
-                                        info!("ignoring wifi config for ssid: '{}'", ssid);
+                                        info!("ignoring wifi config for ssid: '{}'", wifi.get_ssid());
                                     }
                                 }
                             }
