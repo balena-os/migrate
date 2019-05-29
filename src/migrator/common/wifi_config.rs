@@ -1,16 +1,16 @@
 use failure::{Fail, ResultExt};
-use log::{debug, trace, warn, info};
+use lazy_static::lazy_static;
+use log::{debug, info, trace, warn};
 use regex::Regex;
-use std::fs::{read_dir, File, read_to_string};
+use std::fs::{read_dir, read_to_string, File};
 use std::io::{BufRead, BufReader, Write};
 use std::path::{Path, PathBuf};
-use lazy_static::{lazy_static};
 
 use crate::{
-    defs::{BALENA_FILE_TAG},
     common::{
         dir_exists, file_exists, is_balena_file, path_append, MigErrCtx, MigError, MigErrorKind,
     },
+    defs::BALENA_FILE_TAG,
 };
 
 const WPA_CONFIG_FILE: &str = "/etc/wpa_supplicant/wpa_supplicant.conf";
@@ -62,14 +62,12 @@ enum WpaState {
     Network,
 }
 
-
 #[derive(Debug, PartialEq, Clone)]
 enum NwMgrSection {
     Connection,
     Wifi,
-    Other
+    Other,
 }
-
 
 #[derive(Debug)]
 pub(crate) struct Params {
@@ -85,11 +83,10 @@ pub(crate) struct NwmgrFile {
     // TODO: prepare for static config
 }
 
-
 #[derive(Debug)]
 pub(crate) enum WifiConfig {
     Params(Params),
-    NwMgrFile(NwmgrFile)
+    NwMgrFile(NwmgrFile),
 }
 
 impl<'a> WifiConfig {
@@ -158,7 +155,7 @@ impl<'a> WifiConfig {
         }
 
         if !ssid.is_empty() {
-            Ok(Some(WifiConfig::Params( Params{ ssid, psk })))
+            Ok(Some(WifiConfig::Params(Params { ssid, psk })))
         } else {
             Ok(None)
         }
@@ -189,22 +186,27 @@ impl<'a> WifiConfig {
                                 if let Some(wifi) = WifiConfig::parse_conmgr_file(&settings_path)? {
                                     let mut valid = ssid_filter.len() == 0;
                                     if !valid {
-                                        if let Some(_pos) =
-                                            ssid_filter.iter().position(|r| r.as_str() == wifi.get_ssid())
+                                        if let Some(_pos) = ssid_filter
+                                            .iter()
+                                            .position(|r| r.as_str() == wifi.get_ssid())
                                         {
                                             valid = true;
                                         }
                                     }
                                     if valid {
-                                        if let Some(_pos) =
-                                            wifis.iter().position(|r| r.get_ssid() == wifi.get_ssid())
+                                        if let Some(_pos) = wifis
+                                            .iter()
+                                            .position(|r| r.get_ssid() == wifi.get_ssid())
                                         {
                                             debug!("Network '{}' is already contained in wifi list, skipping duplicate definition", wifi.get_ssid());
                                         } else {
                                             wifis.push(wifi);
                                         }
                                     } else {
-                                        info!("ignoring wifi config for ssid: '{}'", wifi.get_ssid());
+                                        info!(
+                                            "ignoring wifi config for ssid: '{}'",
+                                            wifi.get_ssid()
+                                        );
                                     }
                                 }
                             }
@@ -305,7 +307,8 @@ impl<'a> WifiConfig {
                                             {
                                                 debug!("Network '{}' is already contained in wifi list, skipping duplicate definition", ssid);
                                             } else {
-                                                wifis.push(WifiConfig::Params(Params { ssid, psk }));
+                                                wifis
+                                                    .push(WifiConfig::Params(Params { ssid, psk }));
                                             }
                                         } else {
                                             info!("ignoring wifi config for ssid: '{}'", ssid);
@@ -401,7 +404,6 @@ impl<'a> WifiConfig {
                 static ref NWMGR_PARAM_RE: Regex = Regex::new(NWMGR_PARAM_REGEX).unwrap();
             }
 
-
             for path in paths {
                 if let Ok(path) = path {
                     let dir_path = path.path();
@@ -411,11 +413,13 @@ impl<'a> WifiConfig {
                         let mut is_wifi = false;
                         let mut ssid: Option<String> = None;
 
-
                         for line in read_to_string(&dir_path)
-                            .context(MigErrCtx::from_remark(MigErrorKind::Upstream, &format!("failed to read file: '{}'", dir_path.display())))?
-                            .lines() {
-
+                            .context(MigErrCtx::from_remark(
+                                MigErrorKind::Upstream,
+                                &format!("failed to read file: '{}'", dir_path.display()),
+                            ))?
+                            .lines()
+                        {
                             trace!("processing line: '{}'", line);
                             if let Some(captures) = NWMGR_SECTION_RE.captures(line) {
                                 section = match captures.get(1).unwrap().as_str() {
@@ -440,7 +444,7 @@ impl<'a> WifiConfig {
                                                     break;
                                                 }
                                             }
-                                        },
+                                        }
                                         NwMgrSection::Wifi => {
                                             // TODO: look for ssid=
                                             if param == "ssid" {
@@ -450,8 +454,8 @@ impl<'a> WifiConfig {
                                                     break;
                                                 }
                                             }
-                                        },
-                                        NwMgrSection::Other => ()
+                                        }
+                                        NwMgrSection::Other => (),
                                     }
                                 }
                             }
@@ -460,18 +464,29 @@ impl<'a> WifiConfig {
                         if is_wifi {
                             if let Some(ssid) = ssid {
                                 if ssid_filter.is_empty() {
-                                    wifis.push(WifiConfig::NwMgrFile(NwmgrFile { ssid, file: dir_path }));
+                                    wifis.push(WifiConfig::NwMgrFile(NwmgrFile {
+                                        ssid,
+                                        file: dir_path,
+                                    }));
                                 } else {
-                                    if let Some(_pos) = ssid_filter.iter().position(|r| r.as_str() == ssid) {
-                                        wifis.push(WifiConfig::NwMgrFile(NwmgrFile { ssid, file: dir_path }));
+                                    if let Some(_pos) =
+                                        ssid_filter.iter().position(|r| r.as_str() == ssid)
+                                    {
+                                        wifis.push(WifiConfig::NwMgrFile(NwmgrFile {
+                                            ssid,
+                                            file: dir_path,
+                                        }));
                                     } else {
                                         info!("ignoring wifi config for ssid: '{}'", ssid);
                                     }
                                 }
                             } else {
-                                warn!("from_nwmgr: no ssid found in wifi config: '{}'", dir_path.display());
+                                warn!(
+                                    "from_nwmgr: no ssid found in wifi config: '{}'",
+                                    dir_path.display()
+                                );
                             }
-                        }  else {
+                        } else {
                             debug!("from_nwmgr: not a wifi config: '{}'", dir_path.display());
                         }
                     }
@@ -512,37 +527,40 @@ impl<'a> WifiConfig {
 
         let name = path.file_name().unwrap().to_string_lossy();
 
-        let mut content: String = String::new();
-
         lazy_static! {
             static ref NWMGR_SECTION_RE: Regex = Regex::new(NWMGR_SECTION_REGEX).unwrap();
             static ref NWMGR_ID_RE: Regex = Regex::new(NWMGR_ID_REGEX).unwrap();
         }
 
-        match self {
+        let content = match self {
             WifiConfig::Params(config) => {
-                content = NWMGR_CONTENT.replace("__SSID__", &config.ssid);
+                let mut content = NWMGR_CONTENT.replace("__SSID__", &config.ssid);
                 content = content.replace("__FILE_NAME__", &name);
 
                 if let Some(ref psk) = config.psk {
                     content.push_str(&NWMGR_CONTENT_PSK.replace("__PSK__", psk));
                 }
-            },
+                content
+            }
             WifiConfig::NwMgrFile(nwmgr_file) => {
                 let mut found = false;
                 let mut conn_section = false;
 
-                content = format!("{}\n", BALENA_FILE_TAG);
+                let mut content = format!("{}\n", BALENA_FILE_TAG);
 
                 // copy file to dest folder updating the id.
                 for line in read_to_string(&nwmgr_file.file)
-                    .context(MigErrCtx::from_remark(MigErrorKind::Upstream, &format!("Failed to read file '{}'", nwmgr_file.file.display())))?
-                    .lines() {
+                    .context(MigErrCtx::from_remark(
+                        MigErrorKind::Upstream,
+                        &format!("Failed to read file '{}'", nwmgr_file.file.display()),
+                    ))?
+                    .lines()
+                {
                     if let Some(captures) = NWMGR_SECTION_RE.captures(line) {
                         if captures.get(1).unwrap().as_str() == "connection" {
                             conn_section = true;
                             content += &format!("{}\n", line);
-                            if ! found {
+                            if !found {
                                 // add id once to connection section
                                 content += &format!("id={}\n", &name);
                                 found = true;
@@ -564,11 +582,15 @@ impl<'a> WifiConfig {
                 }
 
                 if !found {
-                    warn!("No [connection] section found in NetworkManager file: '{}', skipping file", nwmgr_file.file.display());
+                    warn!(
+                        "No [connection] section found in NetworkManager file: '{}', skipping file",
+                        nwmgr_file.file.display()
+                    );
                     return Ok(last_index);
                 }
-            },
-        }
+                content
+            }
+        };
 
         nwmgr_file
             .write_all(content.as_bytes())

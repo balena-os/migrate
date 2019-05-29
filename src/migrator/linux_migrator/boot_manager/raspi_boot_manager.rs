@@ -39,7 +39,7 @@ impl BootManager for RaspiBootManager {
     }
 
     fn can_migrate(
-        &self,
+        &mut self,
         _cmds: &mut EnsuredCmds,
         _mig_info: &MigrateInfo,
         _config: &Config,

@@ -106,7 +106,7 @@ impl BootManager for GrubBootManager {
     }
 
     fn can_migrate(
-        &self,
+        &mut self,
         cmds: &mut EnsuredCmds,
         mig_info: &MigrateInfo,
         _config: &Config,

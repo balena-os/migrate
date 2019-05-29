@@ -398,10 +398,6 @@ impl<'a> Stage2ConfigBuilder {
         self.boot_fstype.set_ref(val);
     }
 
-    pub fn get_bootmgr_cfg(&'a mut self) -> &'a Option<BootMgrConfig> {
-        self.bootmgr.get()
-    }
-
     pub fn set_bootmgr_cfg(&mut self, bootmgr_cfg: BootMgrConfig) {
         self.bootmgr.set(bootmgr_cfg);
     }

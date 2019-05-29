@@ -64,10 +64,10 @@ impl IntelNuc {
             return Err(MigError::from_remark(MigErrorKind::InvParam, &message));
         }
 
-        let boot_manager = GrubBootManager::new();
+        let mut boot_manager = GrubBootManager::new();
         if boot_manager.can_migrate(cmds, mig_info, config, s2_cfg)? {
             Ok(IntelNuc {
-                boot_manager: Box::new(GrubBootManager {}),
+                boot_manager: Box::new(boot_manager),
             })
         } else {
             let message = format!(

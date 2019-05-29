@@ -47,11 +47,13 @@ mmcargs=setenv bootargs console=tty0 console=${console} ${optargs} ${cape_disabl
 uenvcmd=run loadall; run mmcargs; echo debug: [${bootargs}] ... ; echo debug: [bootz ${loadaddr} ${rdaddr}:${rdsize} ${fdtaddr}] ... ; bootz ${loadaddr} ${rdaddr}:${rdsize} ${fdtaddr};
 "###;
 
-pub(crate) struct UBootManager;
+pub(crate) struct UBootManager {
+    bootmgr_path: Option<PathBuf>,
+}
 
 impl UBootManager {
     pub fn new() -> UBootManager {
-        UBootManager {}
+        UBootManager { bootmgr_path: None }
     }
 
     // Try to find a drive containing MLO, uEnv.txt or u-boot.bin, mount it if necessarry and return PathInfo if found
@@ -140,6 +142,7 @@ impl UBootManager {
                                 "get_uboot_mgr_path: found u-boot files on {}",
                                 partition.name
                             );
+
                             return Ok(Some(PathInfo::from_mounted(
                                 cmds, mountpoint, mountpoint, &root_dev, &partition,
                             )?));
@@ -170,7 +173,7 @@ impl BootManager for UBootManager {
     }
 
     fn can_migrate(
-        &self,
+        &mut self,
         cmds: &mut EnsuredCmds,
         mig_info: &MigrateInfo,
         _config: &Config,
@@ -190,6 +193,8 @@ impl BootManager for UBootManager {
                 bootmgr_path.fs_type,
                 format_size_with_unit(bootmgr_path.fs_free)
             );
+
+            self.bootmgr_path = Some(PathBuf::from(&bootmgr_path.mountpoint));
 
             s2_cfg.set_bootmgr_cfg(BootMgrConfig::new(
                 bootmgr_path.device,
@@ -329,8 +334,8 @@ impl BootManager for UBootManager {
         // ** bootmanager path will have been found in can_migrate
         // ** retrieve from s2_cfg
 
-        let bootmgr_path = if let Some(bootmgr_cfg) = s2_cfg.get_bootmgr_cfg() {
-            PathBuf::from(bootmgr_cfg.get_device())
+        let bootmgr_path = if let Some(ref bootmgr_path) = self.bootmgr_path {
+            bootmgr_path.clone()
         } else {
             mig_info.root_path.path.clone()
         };

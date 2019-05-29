@@ -88,7 +88,7 @@ impl BeagleboneGreen {
         let os_name = &mig_info.os_name;
 
         if let Some(_idx) = SUPPORTED_OSSES.iter().position(|&r| r == os_name) {
-            let boot_manager = UBootManager {};
+            let mut boot_manager = UBootManager::new();
 
             if boot_manager.can_migrate(cmds, mig_info, config, s2_cfg)? {
                 Ok(BeagleboneGreen {
@@ -164,7 +164,7 @@ impl BeagleboneBlack {
         let os_name = &mig_info.os_name;
 
         if let Some(_idx) = SUPPORTED_OSSES.iter().position(|&r| r == os_name) {
-            let boot_manager = UBootManager {};
+            let mut boot_manager = UBootManager::new();
 
             if boot_manager.can_migrate(cmds, mig_info, config, s2_cfg)? {
                 Ok(BeagleboneBlack {
@@ -240,7 +240,7 @@ impl BeagleboardXM {
         let os_name = &mig_info.os_name;
 
         if let Some(_idx) = SUPPORTED_OSSES.iter().position(|&r| r == os_name) {
-            let boot_manager = UBootManager {};
+            let mut boot_manager = UBootManager::new();
 
             if boot_manager.can_migrate(cmds, mig_info, config, s2_cfg)? {
                 Ok(BeagleboardXM {

@@ -18,17 +18,17 @@ pub(crate) use raspi_boot_manager::RaspiBootManager;
 
 pub(crate) fn from_boot_type(boot_type: &BootType) -> Box<BootManager> {
     match boot_type {
-        BootType::UBoot => Box::new(UBootManager),
-        BootType::Grub => Box::new(GrubBootManager),
-        BootType::Efi => Box::new(EfiBootManager),
-        BootType::Raspi => Box::new(RaspiBootManager),
+        BootType::UBoot => Box::new(UBootManager::new()),
+        BootType::Grub => Box::new(GrubBootManager::new()),
+        BootType::Efi => Box::new(EfiBootManager::new()),
+        BootType::Raspi => Box::new(RaspiBootManager::new()),
     }
 }
 
 pub(crate) trait BootManager {
     fn get_boot_type(&self) -> BootType;
     fn can_migrate(
-        &self,
+        &mut self,
         cmds: &mut EnsuredCmds,
         mig_info: &MigrateInfo,
         config: &Config,
@@ -58,7 +58,7 @@ impl BootManager for EfiBootManager {
     }
 
     fn can_migrate(
-        &self,
+        &mut self,
         _cmds: &mut EnsuredCmds,
         _dev_info: &MigrateInfo,
         _config: &Config,
