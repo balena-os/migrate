@@ -1,17 +1,24 @@
 use failure::{Fail, ResultExt};
 use log::{debug, trace, warn};
 use regex::Regex;
-use std::fs::{read_dir, File};
+use std::fs::{read_dir, File, read_to_string};
 use std::io::{BufRead, BufReader, Write};
-use std::path::Path;
+use std::path::{Path, PathBuf};
 
-use crate::common::{
-    dir_exists, file_exists, is_balena_file, path_append, MigErrCtx, MigError, MigErrorKind,
+use crate::{
+    defs::{BALENA_FILE_TAG},
+    common::{
+        dir_exists, file_exists, is_balena_file, path_append, MigErrCtx, MigError, MigErrorKind,
+    },
 };
 
 const WPA_CONFIG_FILE: &str = "/etc/wpa_supplicant/wpa_supplicant.conf";
 //const NWM_CONFIG_DIR: &str = "/etc/NetworkManager/system-connections/";
-const CONNMGR_CONFIG_DIR: &str = "/var/lib/connman/";
+const CONNMGR_CONFIG_DIR: &str = "/var/lib/connman";
+
+const NWMGR_CONFIG_DIR: &str = "/etc/NetworkManager/system-connections";
+
+const NWMGR_ID_REGEX: &str = r##"^\s*id\s*=.*"##;
 
 const SKIP_REGEX: &str = r##"^(\s*#.*|\s*)$"##;
 const WPA_NET_START_REGEX: &str = r#"^\s*network\s*=\s*\{\s*$"#;
@@ -51,11 +58,18 @@ enum WpaState {
     Network,
 }
 
+
 #[derive(Debug)]
-pub(crate) struct WifiConfig {
+pub(crate) struct WifiConfigParams {
     ssid: String,
     psk: Option<String>,
     // TODO: prepare for static config
+}
+
+#[derive(Debug)]
+pub(crate) enum WifiConfig {
+    Params(WifiConfigParams),
+    NwMgrFile(PathBuf)
 }
 
 impl<'a> WifiConfig {
@@ -120,7 +134,7 @@ impl<'a> WifiConfig {
         }
 
         if !ssid.is_empty() {
-            Ok(Some(WifiConfig { ssid, psk }))
+            Ok(Some(WifiConfig::Params( WifiConfigParams{ ssid, psk })))
         } else {
             Ok(None)
         }
@@ -344,6 +358,14 @@ impl<'a> WifiConfig {
         Ok(())
     }
 
+    fn from_nwmgr(wifis: &mut Vec<WifiConfig>, ssid_filter: &Vec<String>) -> Result<(), MigError> {
+        if dir_exists(NWMGR_CONFIG_DIR)? {
+
+        }
+
+        Err(MigError::from(MigErrorKind::NotImpl))
+    }
+
     pub(crate) fn create_nwmgr_file<P: AsRef<Path>>(
         &self,
         base_path: P,
@@ -374,11 +396,40 @@ impl<'a> WifiConfig {
 
         let name = path.file_name().unwrap().to_string_lossy();
 
-        let mut content = NWMGR_CONTENT.replace("__SSID__", &self.ssid);
-        content = content.replace("__FILE_NAME__", &name);
+        let mut content: String = String::new();
 
-        if let Some(ref psk) = self.psk {
-            content.push_str(&NWMGR_CONTENT_PSK.replace("__PSK__", psk));
+        let nwmgr_id_re = Regex::new(NWMGR_ID_REGEX).unwrap();
+
+        match self {
+            WifiConfig::Params(config) => {
+                content = NWMGR_CONTENT.replace("__SSID__", &config.ssid);
+                content = content.replace("__FILE_NAME__", &name);
+
+                if let Some(ref psk) = config.psk {
+                    content.push_str(&NWMGR_CONTENT_PSK.replace("__PSK__", psk));
+                }
+            },
+            WifiConfig::NwMgrFile(file) => {
+                let mut found = false;
+                for line in read_to_string(file)
+                    .context(MigErrCtx::from_remark(MigErrorKind::Upstream, &format!("Failed to read file '{}'", file.display())))?
+                    .lines() {
+                    if nwmgr_id_re.is_match(line) {
+                        content += &format!("id={}\n", &name);
+                        found = true;
+                    } else {
+                        content += &format!("{}\n", &line);
+                    }
+                }
+                if found {
+                    // add balena file tag only
+                    content = format!("{}\n", BALENA_FILE_TAG) + &content;
+                } else {
+                    // add balena file tag and id
+                    content += &format!("{}\nid={}\n", &name);
+                }
+
+            },
         }
 
         nwmgr_file
