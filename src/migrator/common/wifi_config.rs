@@ -4,6 +4,7 @@ use regex::Regex;
 use std::fs::{read_dir, File, read_to_string};
 use std::io::{BufRead, BufReader, Write};
 use std::path::{Path, PathBuf};
+use lazy_static::{lazy_static};
 
 use crate::{
     defs::{BALENA_FILE_TAG},
@@ -17,8 +18,10 @@ const WPA_CONFIG_FILE: &str = "/etc/wpa_supplicant/wpa_supplicant.conf";
 const CONNMGR_CONFIG_DIR: &str = "/var/lib/connman";
 
 const NWMGR_CONFIG_DIR: &str = "/etc/NetworkManager/system-connections";
-
 const NWMGR_SECTION_REGEX: &str = r##"^\s*\[([^\]]+)\]"##;
+
+// TODO: can there be a # in a parameter value ?
+const NWMGR_PARAM_REGEX: &str = r##"^\s*([^= #]+)\s*=\s*(\S.*)$"##;
 const NWMGR_ID_REGEX: &str = r##"^\s*id\s*=.*"##;
 
 const SKIP_REGEX: &str = r##"^(\s*#.*|\s*)$"##;
@@ -95,6 +98,7 @@ impl<'a> WifiConfig {
         let mut list: Vec<WifiConfig> = Vec::new();
         WifiConfig::from_wpa(&mut list, ssid_filter)?;
         WifiConfig::from_connman(&mut list, ssid_filter)?;
+        WifiConfig::from_nwmgr(&mut list, ssid_filter)?;
         Ok(list)
     }
 
@@ -238,11 +242,15 @@ impl<'a> WifiConfig {
 
         if file_exists(WPA_CONFIG_FILE) {
             debug!("WifiConfig::from_wpa: scanning '{}'", WPA_CONFIG_FILE);
-            let skip_re = Regex::new(SKIP_REGEX).unwrap();
-            let net_start_re = Regex::new(WPA_NET_START_REGEX).unwrap();
-            let net_end_re = Regex::new(WPA_NET_END_REGEX).unwrap();
-            let net_param1_re = Regex::new(WPA_NET_PARAM1_REGEX).unwrap();
-            let net_param2_re = Regex::new(WPA_NET_PARAM2_REGEX).unwrap();
+
+            lazy_static! {
+                static ref SKIP_RE: Regex = Regex::new(SKIP_REGEX).unwrap();
+                static ref NET_START_RE: Regex = Regex::new(WPA_NET_START_REGEX).unwrap();
+                static ref NET_END_RE: Regex = Regex::new(WPA_NET_END_REGEX).unwrap();
+                static ref NET_PARAM1_RE: Regex = Regex::new(WPA_NET_PARAM1_REGEX).unwrap();
+                static ref NET_PARAM2_RE: Regex = Regex::new(WPA_NET_PARAM2_REGEX).unwrap();
+            }
+
             let file = File::open(WPA_CONFIG_FILE).context(MigErrCtx::from_remark(
                 MigErrorKind::Upstream,
                 &format!("failed to open file {}", WPA_CONFIG_FILE),
@@ -260,7 +268,7 @@ impl<'a> WifiConfig {
 
                 match line {
                     Ok(line) => {
-                        if skip_re.is_match(&line) {
+                        if SKIP_RE.is_match(&line) {
                             debug!("skipping line: '{}'", line);
                             continue;
                         }
@@ -268,14 +276,14 @@ impl<'a> WifiConfig {
                         debug!("from_wpa: processing line '{}'", line);
                         match state {
                             WpaState::Init => {
-                                if net_start_re.is_match(&line) {
+                                if NET_START_RE.is_match(&line) {
                                     state = WpaState::Network;
                                 } else {
                                     debug!("unexpected line '{}' in state {:?} while parsing file '{}'", &line, state, WPA_CONFIG_FILE);
                                 }
                             }
                             WpaState::Network => {
-                                if net_end_re.is_match(&line) {
+                                if NET_END_RE.is_match(&line) {
                                     debug!("in state {:?} found end of network", state);
                                     if let Some(ssid) = ssid {
                                         // TODO: check if ssid is in filter list
@@ -310,7 +318,7 @@ impl<'a> WifiConfig {
                                     continue;
                                 }
 
-                                if let Some(captures) = net_param1_re.captures(&line) {
+                                if let Some(captures) = NET_PARAM1_RE.captures(&line) {
                                     let param = captures.get(1).unwrap().as_str();
                                     let value = captures.get(2).unwrap().as_str();
                                     debug!(
@@ -333,7 +341,7 @@ impl<'a> WifiConfig {
                                     continue;
                                 }
 
-                                if let Some(captures) = net_param2_re.captures(&line) {
+                                if let Some(captures) = NET_PARAM2_RE.captures(&line) {
                                     let param = captures.get(1).unwrap().as_str();
                                     let value = captures.get(2).unwrap().as_str();
                                     debug!(
@@ -385,7 +393,11 @@ impl<'a> WifiConfig {
                 &format!("Failed to list directory '{}'", NWMGR_CONFIG_DIR),
             ))?;
 
-            let nwmgr_section_re = Regex::new(NWMGR_SECTION_REGEX).unwrap();
+            lazy_static! {
+                static ref NWMGR_SECTION_RE: Regex = Regex::new(NWMGR_SECTION_REGEX).unwrap();
+                static ref NWMGR_PARAM_RE: Regex = Regex::new(NWMGR_PARAM_REGEX).unwrap();
+            }
+
 
             for path in paths {
                 if let Ok(path) = path {
@@ -393,37 +405,66 @@ impl<'a> WifiConfig {
                     if dir_path.is_file() {
                         debug!("got path '{}'", dir_path.display());
                         let mut section: NwMgrSection = NwMgrSection::Other;
+                        let mut is_wifi = false;
+                        let mut ssid: Option<String> = None;
+
 
                         for line in read_to_string(&dir_path)
                             .context(MigErrCtx::from_remark(MigErrorKind::Upstream, &format!("failed to read file: '{}'", dir_path.display())))?
                             .lines() {
 
-                            if let Some(captures) = nwmgr_section_re.captures(line) {
+                            if let Some(captures) = NWMGR_SECTION_RE.captures(line) {
                                 section = match captures.get(1).unwrap().as_str() {
                                     "connection" => NwMgrSection::Connection,
                                     "wifi" => NwMgrSection::Wifi,
                                     _ => NwMgrSection::Other,
                                 };
                             } else {
-                                match section {
-                                    NwMgrSection::Connection => {
-                                        // TODO: look for type=wifi
-                                        ()
-                                    },
-                                    NwMgrSection::Wifi => {
-                                        // TODO: look for ssid=
-                                        ()
-                                    },
-                                    NwMgrSection::Other => ()
+                                if let Some(captures) = NWMGR_SECTION_RE.captures(line) {
+                                    let param = captures.get(1).unwrap().as_str();
+                                    let value = captures.get(2).unwrap().as_str();
+                                    match section {
+                                        NwMgrSection::Connection => {
+                                            // TODO: lowercase this ?
+                                            if param == "type" && value == "wifi" {
+                                                is_wifi = true;
+                                                if let Some(ref _ssid) = ssid {
+                                                    break;
+                                                }
+                                            }
+                                        },
+                                        NwMgrSection::Wifi => {
+                                            // TODO: look for ssid=
+                                            if param == "ssid" {
+                                                ssid = Some(String::from(value));
+                                                if is_wifi {
+                                                    break;
+                                                }
+                                            }
+                                        },
+                                        NwMgrSection::Other => ()
+                                    }
                                 }
                             }
+                        }
+
+                        if is_wifi {
+                            if let Some(ssid) = ssid {
+                                if let Some(_pos) = ssid_filter.iter().position(|r| r.as_str() == ssid) {
+                                    wifis.push(WifiConfig::NwMgrFile(NwmgrFile{ssid, file: dir_path}));
+                                } else {
+                                    warn!("from_nwmgr: no ssid found in config: '{}'", dir_path.display());
+                                }
+                            }
+                        }  else {
+                            debug!("from_nwmgr: not a wifi config: '{}'", dir_path.display());
                         }
                     }
                 }
             }
         }
 
-        Err(MigError::from(MigErrorKind::NotImpl))
+        Ok(())
     }
 
     pub(crate) fn create_nwmgr_file<P: AsRef<Path>>(
@@ -458,8 +499,10 @@ impl<'a> WifiConfig {
 
         let mut content: String = String::new();
 
-        let nwmgr_section_re = Regex::new(NWMGR_SECTION_REGEX).unwrap();
-        let nwmgr_id_re = Regex::new(NWMGR_ID_REGEX).unwrap();
+        lazy_static! {
+            static ref NWMGR_SECTION_RE: Regex = Regex::new(NWMGR_SECTION_REGEX).unwrap();
+            static ref NWMGR_ID_RE: Regex = Regex::new(NWMGR_ID_REGEX).unwrap();
+        }
 
         match self {
             WifiConfig::Params(config) => {
@@ -480,7 +523,7 @@ impl<'a> WifiConfig {
                 for line in read_to_string(&nwmgr_file.file)
                     .context(MigErrCtx::from_remark(MigErrorKind::Upstream, &format!("Failed to read file '{}'", nwmgr_file.file.display())))?
                     .lines() {
-                    if let Some(captures) = nwmgr_section_re.captures(line) {
+                    if let Some(captures) = NWMGR_SECTION_RE.captures(line) {
                         if captures.get(1).unwrap().as_str() == "connection" {
                             conn_section = true;
                             content += &format!("{}\n", line);
@@ -493,7 +536,7 @@ impl<'a> WifiConfig {
                         }
                     }
 
-                    if nwmgr_id_re.is_match(line) {
+                    if NWMGR_ID_RE.is_match(line) {
                         if conn_section {
                             // uncomment id= lines in connection section
                             content += &format!("# {}\n", line);
