@@ -18,6 +18,7 @@ const CONNMGR_CONFIG_DIR: &str = "/var/lib/connman";
 
 const NWMGR_CONFIG_DIR: &str = "/etc/NetworkManager/system-connections";
 
+const NWMGR_SECTION_REGEX: &str = r##"^\s*\[([^\]]+)\]"##;
 const NWMGR_ID_REGEX: &str = r##"^\s*id\s*=.*"##;
 
 const SKIP_REGEX: &str = r##"^(\s*#.*|\s*)$"##;
@@ -59,17 +60,33 @@ enum WpaState {
 }
 
 
+#[derive(Debug, PartialEq, Clone)]
+enum NwMgrSection {
+    Connection,
+    Wifi,
+    Other
+}
+
+
 #[derive(Debug)]
-pub(crate) struct WifiConfigParams {
+pub(crate) struct Params {
     ssid: String,
     psk: Option<String>,
     // TODO: prepare for static config
 }
 
 #[derive(Debug)]
+pub(crate) struct NwmgrFile {
+    ssid: String,
+    file: PathBuf,
+    // TODO: prepare for static config
+}
+
+
+#[derive(Debug)]
 pub(crate) enum WifiConfig {
-    Params(WifiConfigParams),
-    NwMgrFile(PathBuf)
+    Params(Params),
+    NwMgrFile(NwmgrFile)
 }
 
 impl<'a> WifiConfig {
@@ -82,7 +99,10 @@ impl<'a> WifiConfig {
     }
 
     pub fn get_ssid(&'a self) -> &'a str {
-        &self.ssid
+        match self {
+            WifiConfig::NwMgrFile(file) => &file.ssid,
+            WifiConfig::Params(params) => &params.ssid,
+        }
     }
 
     fn parse_conmgr_file(file_path: &Path) -> Result<Option<WifiConfig>, MigError> {
@@ -134,7 +154,7 @@ impl<'a> WifiConfig {
         }
 
         if !ssid.is_empty() {
-            Ok(Some(WifiConfig::Params( WifiConfigParams{ ssid, psk })))
+            Ok(Some(WifiConfig::Params( Params{ ssid, psk })))
         } else {
             Ok(None)
         }
@@ -166,16 +186,16 @@ impl<'a> WifiConfig {
                                     let mut valid = ssid_filter.len() == 0;
                                     if !valid {
                                         if let Some(_pos) =
-                                            ssid_filter.iter().position(|r| r.as_str() == wifi.ssid)
+                                            ssid_filter.iter().position(|r| r.as_str() == wifi.get_ssid())
                                         {
                                             valid = true;
                                         }
                                     }
                                     if valid {
                                         if let Some(_pos) =
-                                            wifis.iter().position(|r| r.ssid == wifi.ssid)
+                                            wifis.iter().position(|r| r.get_ssid() == wifi.get_ssid())
                                         {
-                                            debug!("Network '{}' is already contained in wifi list, skipping duplicate definition", wifi.ssid);
+                                            debug!("Network '{}' is already contained in wifi list, skipping duplicate definition", wifi.get_ssid());
                                         } else {
                                             wifis.push(wifi);
                                         }
@@ -271,11 +291,11 @@ impl<'a> WifiConfig {
 
                                         if valid == true {
                                             if let Some(_pos) =
-                                                wifis.iter().position(|r| r.ssid == ssid)
+                                                wifis.iter().position(|r| r.get_ssid() == ssid)
                                             {
                                                 debug!("Network '{}' is already contained in wifi list, skipping duplicate definition", ssid);
                                             } else {
-                                                wifis.push(WifiConfig { ssid, psk });
+                                                wifis.push(WifiConfig::Params(Params { ssid, psk }));
                                             }
                                         } else {
                                             debug!("Network '{}' is not contained in filter: {:?}, not migrating", ssid, ssid_filter);
@@ -360,7 +380,47 @@ impl<'a> WifiConfig {
 
     fn from_nwmgr(wifis: &mut Vec<WifiConfig>, ssid_filter: &Vec<String>) -> Result<(), MigError> {
         if dir_exists(NWMGR_CONFIG_DIR)? {
+            let paths = read_dir(NWMGR_CONFIG_DIR).context(MigErrCtx::from_remark(
+                MigErrorKind::Upstream,
+                &format!("Failed to list directory '{}'", NWMGR_CONFIG_DIR),
+            ))?;
 
+            let nwmgr_section_re = Regex::new(NWMGR_SECTION_REGEX).unwrap();
+
+            for path in paths {
+                if let Ok(path) = path {
+                    let dir_path = path.path();
+                    if dir_path.is_file() {
+                        debug!("got path '{}'", dir_path.display());
+                        let mut section: NwMgrSection = NwMgrSection::Other;
+
+                        for line in read_to_string(&dir_path)
+                            .context(MigErrCtx::from_remark(MigErrorKind::Upstream, &format!("failed to read file: '{}'", dir_path.display())))?
+                            .lines() {
+
+                            if let Some(captures) = nwmgr_section_re.captures(line) {
+                                section = match captures.get(1).unwrap().as_str() {
+                                    "connection" => NwMgrSection::Connection,
+                                    "wifi" => NwMgrSection::Wifi,
+                                    _ => NwMgrSection::Other,
+                                };
+                            } else {
+                                match section {
+                                    NwMgrSection::Connection => {
+                                        // TODO: look for type=wifi
+                                        ()
+                                    },
+                                    NwMgrSection::Wifi => {
+                                        // TODO: look for ssid=
+                                        ()
+                                    },
+                                    NwMgrSection::Other => ()
+                                }
+                            }
+                        }
+                    }
+                }
+            }
         }
 
         Err(MigError::from(MigErrorKind::NotImpl))
@@ -398,6 +458,7 @@ impl<'a> WifiConfig {
 
         let mut content: String = String::new();
 
+        let nwmgr_section_re = Regex::new(NWMGR_SECTION_REGEX).unwrap();
         let nwmgr_id_re = Regex::new(NWMGR_ID_REGEX).unwrap();
 
         match self {
@@ -409,26 +470,45 @@ impl<'a> WifiConfig {
                     content.push_str(&NWMGR_CONTENT_PSK.replace("__PSK__", psk));
                 }
             },
-            WifiConfig::NwMgrFile(file) => {
+            WifiConfig::NwMgrFile(nwmgr_file) => {
                 let mut found = false;
-                for line in read_to_string(file)
-                    .context(MigErrCtx::from_remark(MigErrorKind::Upstream, &format!("Failed to read file '{}'", file.display())))?
+                let mut conn_section = false;
+
+                content = format!("{}\n", BALENA_FILE_TAG);
+
+                // copy file to dest folder updating the id.
+                for line in read_to_string(&nwmgr_file.file)
+                    .context(MigErrCtx::from_remark(MigErrorKind::Upstream, &format!("Failed to read file '{}'", nwmgr_file.file.display())))?
                     .lines() {
-                    if nwmgr_id_re.is_match(line) {
-                        content += &format!("id={}\n", &name);
-                        found = true;
-                    } else {
-                        content += &format!("{}\n", &line);
+                    if let Some(captures) = nwmgr_section_re.captures(line) {
+                        if captures.get(1).unwrap().as_str() == "connection" {
+                            conn_section = true;
+                            content += &format!("{}\n", line);
+                            if ! found {
+                                // add id once to connection section
+                                content += &format!("id={}\n", &name);
+                                found = true;
+                                continue;
+                            }
+                        }
                     }
-                }
-                if found {
-                    // add balena file tag only
-                    content = format!("{}\n", BALENA_FILE_TAG) + &content;
-                } else {
-                    // add balena file tag and id
-                    content += &format!("{}\nid={}\n", &name);
+
+                    if nwmgr_id_re.is_match(line) {
+                        if conn_section {
+                            // uncomment id= lines in connection section
+                            content += &format!("# {}\n", line);
+                            continue;
+                        }
+                    }
+
+                    // all not handled are cloned
+                    content += &format!("{}\n", &line);
                 }
 
+                if !found {
+                    warn!("No [connection] section found in NetworkManager file: '{}', skipping file", nwmgr_file.file.display());
+                    return Ok(last_index);
+                }
             },
         }
 
