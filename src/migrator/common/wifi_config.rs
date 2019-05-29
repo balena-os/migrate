@@ -1,5 +1,5 @@
 use failure::{Fail, ResultExt};
-use log::{debug, trace, warn};
+use log::{debug, trace, warn, info};
 use regex::Regex;
 use std::fs::{read_dir, File, read_to_string};
 use std::io::{BufRead, BufReader, Write};
@@ -387,6 +387,7 @@ impl<'a> WifiConfig {
     }
 
     fn from_nwmgr(wifis: &mut Vec<WifiConfig>, ssid_filter: &Vec<String>) -> Result<(), MigError> {
+        trace!("WifiConfig::from_nwmgr: entered with {:?}", ssid_filter);
         if dir_exists(NWMGR_CONFIG_DIR)? {
             let paths = read_dir(NWMGR_CONFIG_DIR).context(MigErrCtx::from_remark(
                 MigErrorKind::Upstream,
@@ -413,20 +414,25 @@ impl<'a> WifiConfig {
                             .context(MigErrCtx::from_remark(MigErrorKind::Upstream, &format!("failed to read file: '{}'", dir_path.display())))?
                             .lines() {
 
+                            trace!("processing line: '{}'", line);
                             if let Some(captures) = NWMGR_SECTION_RE.captures(line) {
                                 section = match captures.get(1).unwrap().as_str() {
                                     "connection" => NwMgrSection::Connection,
                                     "wifi" => NwMgrSection::Wifi,
                                     _ => NwMgrSection::Other,
                                 };
+
+                                debug!("got section: '{:?}'", section);
                             } else {
-                                if let Some(captures) = NWMGR_SECTION_RE.captures(line) {
+                                if let Some(captures) = NWMGR_PARAM_RE.captures(line) {
                                     let param = captures.get(1).unwrap().as_str();
                                     let value = captures.get(2).unwrap().as_str();
+                                    debug!("got param: '{}' : '{}'", param, value);
                                     match section {
                                         NwMgrSection::Connection => {
                                             // TODO: lowercase this ?
                                             if param == "type" && value == "wifi" {
+                                                debug!("Found wifi config");
                                                 is_wifi = true;
                                                 if let Some(ref _ssid) = ssid {
                                                     break;
@@ -436,6 +442,7 @@ impl<'a> WifiConfig {
                                         NwMgrSection::Wifi => {
                                             // TODO: look for ssid=
                                             if param == "ssid" {
+                                                debug!("Found ssid: '{}'", value);
                                                 ssid = Some(String::from(value));
                                                 if is_wifi {
                                                     break;
@@ -450,11 +457,17 @@ impl<'a> WifiConfig {
 
                         if is_wifi {
                             if let Some(ssid) = ssid {
-                                if let Some(_pos) = ssid_filter.iter().position(|r| r.as_str() == ssid) {
-                                    wifis.push(WifiConfig::NwMgrFile(NwmgrFile{ssid, file: dir_path}));
+                                if ssid_filter.is_empty() {
+                                    wifis.push(WifiConfig::NwMgrFile(NwmgrFile { ssid, file: dir_path }));
                                 } else {
-                                    warn!("from_nwmgr: no ssid found in config: '{}'", dir_path.display());
+                                    if let Some(_pos) = ssid_filter.iter().position(|r| r.as_str() == ssid) {
+                                        wifis.push(WifiConfig::NwMgrFile(NwmgrFile { ssid, file: dir_path }));
+                                    } else {
+                                        info!("ignoring wifi config for ssid: '{}'", ssid);
+                                    }
                                 }
+                            } else {
+                                warn!("from_nwmgr: no ssid found in wifi config: '{}'", dir_path.display());
                             }
                         }  else {
                             debug!("from_nwmgr: not a wifi config: '{}'", dir_path.display());

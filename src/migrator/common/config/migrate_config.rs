@@ -44,6 +44,7 @@ const DEFAULT_MIG_MODE: MigMode = MigMode::PRETEND;
 pub(crate) struct ItemConfig {
     pub source: String,
     pub target: Option<String>,
+    // TODO: filter.allow, filter.deny
     pub filter: Option<String>,
 }
 

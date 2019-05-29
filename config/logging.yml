@@ -1,11 +1,9 @@
-log_level: 'warn'
-log_dest: 'stderr'
+log_level: 'trace'
+log_dest: 'Stderr'
 # log_dest: 'stream'
 # log_stream: 'debug.log'
-modules: 
- - name: common::config
-   level: 'info'
-#  - name: 'common'
-#    level: 'trace'  
- - name: 'linux'
-   level: 'trace'  
+mod_level: 
+  'common::config::migrate': 'debug'
+  # 'common::wifi_config': 'trace'
+  'linux_migrator': 'trace' 
+  # 'linux_migrator::migrate_info': 'trace' 
