@@ -156,17 +156,28 @@ pub(crate) struct BeagleboneGreen {
 impl BeagleboneBlack {
     // this is used in stage1
     fn from_config(
-        _cmds: &mut EnsuredCmds,
+        cmds: &mut EnsuredCmds,
         mig_info: &MigrateInfo,
-        _config: &Config,
-        _s2_cfg: &mut Stage2ConfigBuilder,
+        config: &Config,
+        s2_cfg: &mut Stage2ConfigBuilder,
     ) -> Result<BeagleboneBlack, MigError> {
         let os_name = &mig_info.os_name;
 
         if let Some(_idx) = SUPPORTED_OSSES.iter().position(|&r| r == os_name) {
-            Ok(BeagleboneBlack {
-                boot_manager: Box::new(UBootManager::new()),
-            })
+            let boot_manager = UBootManager {};
+
+            if boot_manager.can_migrate(cmds, mig_info, config, s2_cfg)? {
+                Ok(BeagleboneBlack {
+                    boot_manager: Box::new(boot_manager),
+                })
+            } else {
+                let message = format!(
+                    "The boot manager '{:?}' is not able to set up your device",
+                    boot_manager.get_boot_type()
+                );
+                error!("{}", &message);
+                Err(MigError::from_remark(MigErrorKind::InvState, &message))
+            }
         } else {
             let message = format!(
                 "The OS '{}' is not supported for the device type BeagleboneBlack",
@@ -221,17 +232,28 @@ pub(crate) struct BeagleboardXM {
 impl BeagleboardXM {
     // this is used in stage1
     fn from_config(
-        _cmds: &mut EnsuredCmds,
-        dev_info: &MigrateInfo,
-        _config: &Config,
-        _s2_cfg: &mut Stage2ConfigBuilder,
+        cmds: &mut EnsuredCmds,
+        mig_info: &MigrateInfo,
+        config: &Config,
+        s2_cfg: &mut Stage2ConfigBuilder,
     ) -> Result<BeagleboardXM, MigError> {
-        let os_name = &dev_info.os_name;
+        let os_name = &mig_info.os_name;
 
         if let Some(_idx) = SUPPORTED_OSSES.iter().position(|&r| r == os_name) {
-            Ok(BeagleboardXM {
-                boot_manager: Box::new(UBootManager {}),
-            })
+            let boot_manager = UBootManager {};
+
+            if boot_manager.can_migrate(cmds, mig_info, config, s2_cfg)? {
+                Ok(BeagleboardXM {
+                    boot_manager: Box::new(boot_manager),
+                })
+            } else {
+                let message = format!(
+                    "The boot manager '{:?}' is not able to set up your device",
+                    boot_manager.get_boot_type()
+                );
+                error!("{}", &message);
+                Err(MigError::from_remark(MigErrorKind::InvState, &message))
+            }
         } else {
             let message = format!(
                 "The OS '{}' is not supported for the device type BeagleboardXM",
