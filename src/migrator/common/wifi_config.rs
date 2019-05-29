@@ -203,6 +203,8 @@ impl<'a> WifiConfig {
                                         } else {
                                             wifis.push(wifi);
                                         }
+                                    } else {
+                                        info!("ignoring wifi config for ssid: '{}'", ssid);
                                     }
                                 }
                             }
@@ -306,7 +308,7 @@ impl<'a> WifiConfig {
                                                 wifis.push(WifiConfig::Params(Params { ssid, psk }));
                                             }
                                         } else {
-                                            debug!("Network '{}' is not contained in filter: {:?}, not migrating", ssid, ssid_filter);
+                                            info!("ignoring wifi config for ssid: '{}'", ssid);
                                         }
                                     } else {
                                         warn!("empty network config encountered");
