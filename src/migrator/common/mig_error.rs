@@ -119,6 +119,16 @@ impl MigError {
             inner: Context::new(MigErrCtx::from_remark(kind, remark)),
         }
     }
+
+    pub fn displayed() -> MigError {
+        MigError::from(MigErrorKind::Displayed)
+    }
+
+    /*
+        pub fn upstream() -> MigError {
+
+        }
+    */
 }
 
 impl From<MigErrorKind> for MigError {

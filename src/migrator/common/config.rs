@@ -291,11 +291,11 @@ mod tests {
             Path::new("balena_x86_64.migrate.initramfs")
         );
         assert_eq!(config.migrate.get_fail_mode(), &FailMode::Reboot);
-/*        assert_eq!(
-            config.migrate.get_force_slug(),
-            Some(String::from("dummy_device"))
-        );
-*/
+        /*        assert_eq!(
+                    config.migrate.get_force_slug(),
+                    Some(String::from("dummy_device"))
+                );
+        */
         // TODO: more cecks on backup
         let bckup_vols = config.migrate.get_backup_volumes();
         assert_eq!(bckup_vols.len(), 3);

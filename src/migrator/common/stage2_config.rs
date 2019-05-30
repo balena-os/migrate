@@ -233,15 +233,15 @@ impl<T: Clone> Required<T> {
         self.data = Some(val.clone());
     }
 
-/*
-    fn is_set(&self) -> bool {
-        if let Some(ref _val) = self.data {
-            true
-        } else {
-            false
+    /*
+        fn is_set(&self) -> bool {
+            if let Some(ref _val) = self.data {
+                true
+            } else {
+                false
+            }
         }
-    }
-*/    
+    */
 }
 
 pub(crate) struct Optional<T> {
@@ -267,23 +267,23 @@ impl<T: Clone> Optional<T> {
         self.data = Some(val);
     }
 
-/*
-    fn set_ref(&mut self, val: &T) {
-        self.data = Some(val.clone());
-    }
-
-    fn set_empty(&mut self) {
-        self.data = None;
-    }
-
-    fn is_set(&self) -> bool {
-        if let Some(ref _val) = self.data {
-            true
-        } else {
-            false
+    /*
+        fn set_ref(&mut self, val: &T) {
+            self.data = Some(val.clone());
         }
-    }
-*/    
+
+        fn set_empty(&mut self) {
+            self.data = None;
+        }
+
+        fn is_set(&self) -> bool {
+            if let Some(ref _val) = self.data {
+                true
+            } else {
+                false
+            }
+        }
+    */
 }
 
 pub(crate) struct Stage2ConfigBuilder {
@@ -462,7 +462,7 @@ balena:
   config: config.json
 "##;
 
-#[test]
+    #[test]
     fn assert_test_config1() -> () {
         let _config = Stage2Config::from_str(TEST_CONFIG);
     }

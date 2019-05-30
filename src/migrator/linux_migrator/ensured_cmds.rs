@@ -28,12 +28,13 @@ pub(crate) struct EnsuredCmds {
 }
 
 impl EnsuredCmds {
-    pub fn new(cmds: &[&str]) -> Result<EnsuredCmds, MigError> {        
-        let mut ensured_cmds = EnsuredCmds { cmd_table: HashMap::new() };
+    pub fn new(cmds: &[&str]) -> Result<EnsuredCmds, MigError> {
+        let mut ensured_cmds = EnsuredCmds {
+            cmd_table: HashMap::new(),
+        };
         ensured_cmds.ensure_cmds(cmds)?;
         Ok(ensured_cmds)
     }
-
 
     pub fn ensure_cmds(&mut self, cmds: &[&str]) -> Result<(), MigError> {
         for cmd in cmds {

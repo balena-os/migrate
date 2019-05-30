@@ -48,6 +48,7 @@ pub(crate) struct MigrateInfo {
 }
 
 // TODO: /etc path just in case
+// TODO: sort out error reporting with Displayed
 
 impl MigrateInfo {
     pub(crate) fn new(config: &Config, cmds: &mut EnsuredCmds) -> Result<MigrateInfo, MigError> {
@@ -65,7 +66,7 @@ impl MigrateInfo {
             return Err(MigError::from_remark(
                 MigErrorKind::NotFound,
                 &format!(
-                    "the device for path '{}' could not be established",
+                    "The device for path '{}' could not be established",
                     ROOT_PATH
                 ),
             ));
@@ -127,16 +128,14 @@ impl MigrateInfo {
 
             let required_mem = file_info.size + APPROX_MEM_THRESHOLD;
             if get_mem_info()?.0 < required_mem {
-                let message = format!("We have not found sufficient memory to store the balena OS image in ram. at least {} of memory is required.", format_size_with_unit(required_mem));
-                error!("{}", message);
-                return Err(MigError::from_remark(MigErrorKind::InvParam, &message));
+                error!("We have not found sufficient memory to store the balena OS image in ram. at least {} of memory is required.", format_size_with_unit(required_mem));
+                return Err(MigError::from(MigErrorKind::Displayed));
             }
 
             file_info
         } else {
-            let message = String::from("The balena image has not been specified or cannot be accessed. Automatic download is not yet implemented, so you need to specify and supply all required files");
-            error!("{}", message);
-            return Err(MigError::from_remark(MigErrorKind::InvParam, &message));
+            error!("The balena image has not been specified or cannot be accessed. Automatic download is not yet implemented, so you need to specify and supply all required files");
+            return Err(MigError::displayed());
         };
 
         let config_file = if let Some(file_info) =
@@ -152,9 +151,8 @@ impl MigrateInfo {
 
             balena_cfg
         } else {
-            let message = String::from("The balena image has not been specified or cannot be accessed. Automatic download is not yet implemented, so you need to specify and supply all required files");
-            error!("{}", message);
-            return Err(MigError::from_remark(MigErrorKind::InvParam, &message));
+            error!("The balena image has not been specified or cannot be accessed. Automatic download is not yet implemented, so you need to specify and supply all required files");
+            return Err(MigError::displayed());
         };
 
         let kernel_file = if let Some(file_info) =
@@ -175,9 +173,8 @@ impl MigrateInfo {
             );
             file_info
         } else {
-            let message = String::from("The migrate kernel has not been specified or cannot be accessed. Automatic download is not yet implemented, so you need to specify and supply all required files");
-            error!("{}", message);
-            return Err(MigError::from_remark(MigErrorKind::InvParam, &message));
+            error!("The migrate kernel has not been specified or cannot be accessed. Automatic download is not yet implemented, so you need to specify and supply all required files");
+            return Err(MigError::displayed());
         };
 
         let initrd_file = if let Some(file_info) =
@@ -190,9 +187,8 @@ impl MigrateInfo {
             );
             file_info
         } else {
-            let message = String::from("The migrate initramfs has not been specified or cannot be accessed. Automatic download is not yet implemented, so you need to specify and supply all required files");
-            error!("{}", message);
-            return Err(MigError::from_remark(MigErrorKind::InvParam, &message));
+            error!("The migrate initramfs has not been specified or cannot be accessed. Automatic download is not yet implemented, so you need to specify and supply all required files");
+            return Err(MigError::displayed());
         };
 
         let dtb_file = if let Some(ref dtb_path) = config.migrate.get_dtb_path() {
@@ -204,9 +200,8 @@ impl MigrateInfo {
                 );
                 Some(file_info)
             } else {
-                let message = String::from("The migrate device tree blob has not been specified or cannot be accessed. Automatic download is not yet implemented, so you need to specify and supply all required files");
-                error!("{}", message);
-                return Err(MigError::from_remark(MigErrorKind::InvParam, &message));
+                error!("The migrate device tree blob has not been specified or cannot be accessed. Automatic download is not yet implemented, so you need to specify and supply all required files");
+                return Err(MigError::displayed());
             }
         } else {
             None
@@ -223,12 +218,11 @@ impl MigrateInfo {
                 );
                 nwmgr_files.push(file_info);
             } else {
-                let message = format!(
+                error!(
                     "The network manager config file '{}' could not be found",
                     file.display()
                 );
-                error!("{}", message);
-                return Err(MigError::from_remark(MigErrorKind::InvParam, &message));
+                return Err(MigError::displayed());
             }
         }
 
@@ -263,9 +257,8 @@ impl MigrateInfo {
 
         if nwmgr_files.is_empty() && wifis.is_empty() {
             if config.migrate.require_nwmgr_configs() {
-                let message = "No Network manager files were found, the device might not be able to come online";
-                error!("{}", message);
-                return Err(MigError::from_remark(MigErrorKind::InvParam, message));
+                error!("No Network manager files were found, the device might not be able to come online");
+                return Err(MigError::from(MigErrorKind::Displayed));
             }
         }
 

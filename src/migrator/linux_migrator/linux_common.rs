@@ -1,4 +1,4 @@
-use failure::{ResultExt};
+use failure::ResultExt;
 
 use lazy_static::lazy_static;
 use log::{debug, error, info, trace, warn};

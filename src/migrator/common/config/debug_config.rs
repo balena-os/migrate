@@ -28,6 +28,7 @@ impl<'a> DebugConfig {
         }
     }
 
+    #[cfg(debug_assertions)]
     pub fn is_fake_admin(&self) -> bool {
         if let Some(val) = self.fake_admin {
             val

@@ -5,7 +5,7 @@ use std::path::{Path, PathBuf};
 
 const MODULE: &str = "common::config::balena_config";
 
-use crate::defs::{DEFAULT_API_CHECK_TIMEOUT, };
+use crate::defs::DEFAULT_API_CHECK_TIMEOUT;
 
 /*
 #[derive(Debug, Deserialize)]
@@ -72,55 +72,55 @@ impl<'a> BalenaConfig {
         Ok(())
     }
 
-/*
-    pub fn get_app_name(&'a self) -> Option<&'a str> {
-        if let Some(ref val) = self.app_name {
-            Some(val)
-        } else {
-            None
-        }
-    }
-
-    pub fn get_api_host(&'a self) -> &'a str {
-        if let Some(ref api) = self.api {
-            if let Some(ref val) = api.host {
-                return val;
+    /*
+        pub fn get_app_name(&'a self) -> Option<&'a str> {
+            if let Some(ref val) = self.app_name {
+                Some(val)
+            } else {
+                None
             }
         }
 
-        return DEFAULT_API_HOST;
-    }
-
-    pub fn get_api_port(&self) -> u16 {
-        if let Some(ref api) = self.api {
-            if let Some(ref val) = api.port {
-                return *val;
+        pub fn get_api_host(&'a self) -> &'a str {
+            if let Some(ref api) = self.api {
+                if let Some(ref val) = api.host {
+                    return val;
+                }
             }
+
+            return DEFAULT_API_HOST;
         }
 
-        return DEFAULT_API_PORT;
-    }
-
-    pub fn is_api_check(&self) -> bool {
-        if let Some(ref api) = self.api {
-            if let Some(ref val) = api.check {
-                return *val;
+        pub fn get_api_port(&self) -> u16 {
+            if let Some(ref api) = self.api {
+                if let Some(ref val) = api.port {
+                    return *val;
+                }
             }
+
+            return DEFAULT_API_PORT;
         }
 
-        return true;
-    }
-
-    pub fn get_api_key(&self) -> Option<String> {
-        if let Some(ref api) = self.api {
-            if let Some(ref val) = api.key {
-                return Some(val.clone());
+        pub fn is_api_check(&self) -> bool {
+            if let Some(ref api) = self.api {
+                if let Some(ref val) = api.check {
+                    return *val;
+                }
             }
+
+            return true;
         }
 
-        return None;
-    }
-*/
+        pub fn get_api_key(&self) -> Option<String> {
+            if let Some(ref api) = self.api {
+                if let Some(ref val) = api.key {
+                    return Some(val.clone());
+                }
+            }
+
+            return None;
+        }
+    */
     pub fn is_check_vpn(&self) -> bool {
         if let Some(ref check_vpn) = self.check_vpn {
             *check_vpn

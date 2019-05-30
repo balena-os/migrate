@@ -195,7 +195,7 @@ impl<'a> MigrateConfig {
         }
     }
     */
-    
+
     pub fn get_fail_mode(&'a self) -> &'a FailMode {
         if let Some(ref val) = self.fail_mode {
             val
