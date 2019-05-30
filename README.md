@@ -1,12 +1,86 @@
 # migrate
+
 Migrate brownfield devices to Balena
 
-This project is based on the ideas from https://github.com/balena-io-playground/balena-migrate but focusses on the migration of windows devices for now.
+This project is based on the ideas from https://github.com/balena-io-playground/balena-migrate and aims to enable 
+migration of devices supported by Balena OS from Linux operating systems to Balena OS. 
+Work is in progress to allow migration of Windows devices to Balena OS.
 
-It is implemented in rust and aims to gather migration strategies for different hard and software platforms in one executable.
+The core functionality of the script based project in https://github.com/balena-io-playground/balena-migrate 
+has been redesigned and re-implemented in rust to provide a more reliable experience.
+
+## Strategy
+
+### Stage 1 - balena-migrate
+Balena migrate consists of a binary executable file that needs to be executed with root privileges on the device 
+that will be migrated. There are several command line parameters that can be set and the program will be looking 
+for a YAML configuration file - by default in ```./balena-migrate.yml```.
+
+Depending on the configuration ```balena-migrate``` will do one of the following depending on the ```mode``` setting:
+- PRETEND - check requirements for migration but apply no changes to the system. All required settings and files need to 
+be present and configured. 
+- IMMEDIATE - check requirements for migration and migrate the system immediately. All required settings and files need 
+to be present and configured. 
+- CONNECTED - check requirements for migration and try to retrieve missing files from the balena cloud. 
+Migrate immediately once all requirements are met. This mode is not implemented yet. 
+- AGENT - Connect to balena cloud and install ```balena-migrate``` as a service. 
+Migration can be configured and triggered from the balena dashboard. This mode is not implemented yet.
+
+In stage 1 ```balena-migrate``` tries to determine the running OS, device architecture and the exact device type. 
+Based on that information it decides if the device can be migrated.
+For a successful migration ```balena-migrate``` needs to be able to modify the boot setup and boot into a balena kernel 
+and initramfs. The files needed are device dependent - usualy a kernel image, an initramfs that contains stage2 
+of ```balena-migrate``` and possibly a device tree blob file. These files have to be provided or they an be downloaded 
+automatically in ```CONNECTED``` or ```AGENT``` mode. Currently the files are 'custom made' and cannot be downloaded.
+
+```balena-migrate``` also needs a balena OS image file which will be flashed to the device in stage 2 and currently 
+requires a config.json file to be provided. These files can be downloaded automatically if a valid application id, and 
+api key is provided. The functionality for automatic download is not yet provided in ```balena-migrate```. 
+
+If configured ```balena-migrate``` will scan the device for wifi configurations and attempt to migrate them to 
+NetworkManager connection files. ```balena-migrate``` can also be configured to create a backup that will automatically 
+be converted to volumes once balena-os is running on the device. 
+
+There is plenty of room for improvement here - currently scanning network configs is very basic and supports only wifi
+configurations.       
+
+Once all required files are found balena-migrate will set up the device to boot into the balena kernel and imageramfs, 
+write a configuration file for stage 2 in /etc/balena-stage2.yml and reboot the device.
+
+### Stage 2 - balena-stage2 
+
+The initramfs will attempt to start the balena-stage2 executable. 
+
+First steps in stage2 are to determine and mount the former root partition and read ```/etc/balena-stage2.yml```. 
+Before attempting to migrate stage2 will restore the original boot setup to allow the device to reboot into 
+its former setup if something goes wrong. To do this other partitions (/boot the boot manager partition) might be 
+re mounted. 
+
+The next step is to move all files required to initramfs. Typically this is the balena OS image, config.json, 
+network manager configurations and the backup.
+
+Once all files are safely copied to initramfs the mounted partitions are unmounted and the balena-os image is 
+flashed to the device. Beginning with this process the migration is not recoverable.
+
+If flashing was successful ```balena-stage2```  will attempt to mount the ```resin-boot``` and ```resin-data``` partitions 
+and copy config.json, ```system-connections``` files  and the backup. A log of stage2 will also be dumped 
+in ```resin-data/migrate.log```. 
+
+The device is the rebooted and should start balena-os. 
+  
+     
+
+## Requirements
+
+Balena migrate currently works on a small set of devices and linux flavors. Tested and working devices are:
+- x86_64 devices, tested mainly on VirtualBox using Ubuntu 14 / 16 / 18
+- Raspberry PI 3 using up to date Raspian
+- Beaglebone Green and Beagleboard XM using Debian 9 and Ubuntu 14 / 18
+    
+Further device-types and operating systems will be added along the way.    
 
 
-## Setting up Migration in IMMEDIATE mode 
+## Example - Setting up Migration in IMMEDIATE mode 
 
 A (working) sample configuration file:
 
