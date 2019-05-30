@@ -2,7 +2,7 @@ use crate::{
     common::{call, CmdRes, MigError, MigErrorKind},
     linux_migrator::linux_common::whereis,
 };
-use log::{error, trace};
+use log::{trace, warn};
 use std::collections::HashMap;
 
 pub const DF_CMD: &str = "df";
@@ -28,23 +28,12 @@ pub(crate) struct EnsuredCmds {
 }
 
 impl EnsuredCmds {
-    pub fn new(cmds: &[&str]) -> Result<EnsuredCmds, MigError> {
-        let mut cmd_table: HashMap<String, String> = HashMap::new();
-
-        for cmd in cmds {
-            if let Ok(cmd_path) = whereis(cmd) {
-                cmd_table.insert(String::from(*cmd), cmd_path.clone());
-            } else {
-                let message = format!("cannot find required command {}", cmd);
-                error!("{}", message);
-                return Err(MigError::from_remark(
-                    MigErrorKind::NotFound,
-                    &format!("{}", message),
-                ));
-            }
-        }
-        Ok(EnsuredCmds { cmd_table })
+    pub fn new(cmds: &[&str]) -> Result<EnsuredCmds, MigError> {        
+        let mut ensured_cmds = EnsuredCmds { cmd_table: HashMap::new() };
+        ensured_cmds.ensure_cmds(cmds)?;
+        Ok(ensured_cmds)
     }
+
 
     pub fn ensure_cmds(&mut self, cmds: &[&str]) -> Result<(), MigError> {
         for cmd in cmds {
@@ -52,7 +41,7 @@ impl EnsuredCmds {
                 self.cmd_table.insert(String::from(*cmd), cmd_path.clone());
             } else {
                 let message = format!("cannot find required command {}", cmd);
-                error!("{}", message);
+                warn!("{}", message);
                 return Err(MigError::from_remark(
                     MigErrorKind::NotFound,
                     &format!("{}", message),
@@ -67,12 +56,9 @@ impl EnsuredCmds {
             self.cmd_table.insert(String::from(cmd), cmd_path.clone());
             Ok(cmd_path)
         } else {
-            let message = format!("cannot find required command {}", cmd);
-            error!("{}", message);
-            Err(MigError::from_remark(
-                MigErrorKind::NotFound,
-                &format!("{}", message),
-            ))
+            let message = format!("cannot find command {}", cmd);
+            warn!("{}", message);
+            Err(MigError::from_remark(MigErrorKind::NotFound, &message))
         }
     }
 

@@ -31,7 +31,7 @@ pub(crate) mod wifi_config;
 
 pub(crate) use self::config::{Config, MigMode, MigrateWifis};
 pub(crate) use self::file_info::{FileInfo, FileType};
-pub(crate) use self::mig_error::{MigErrCtx, MigError, MigErrorKind};
+pub use self::mig_error::{MigErrCtx, MigError, MigErrorKind};
 
 const MODULE: &str = "migrator::common";
 

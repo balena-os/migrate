@@ -43,11 +43,14 @@ menuentry "balena-migrate" {
 }
 "##;
 
-pub(crate) struct GrubBootManager;
+pub(crate) struct GrubBootManager {
+    // valid is just used to enforce the use of new
+    _valid: bool,
+}
 
 impl GrubBootManager {
     pub fn new() -> GrubBootManager {
-        GrubBootManager {}
+        GrubBootManager { _valid: true }
     }
 
     /******************************************************************

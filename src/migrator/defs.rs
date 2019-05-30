@@ -2,7 +2,7 @@ use serde::{Deserialize, Serialize};
 use std::fmt::{self, Display, Formatter};
 
 pub const BOOT_PATH: &str = "/boot";
-pub const EFI_PATH: &str = "/boot/efi";
+// pub const EFI_PATH: &str = "/boot/efi";
 pub const ROOT_PATH: &str = "/";
 
 pub const MLO_FILE_NAME: &str = "MLO";
@@ -54,8 +54,8 @@ pub const BALENA_FILE_TAG: &str = "## created by balena-migrate";
 pub const BALENA_FILE_TAG_REGEX: &str = r###"^\s*## created by balena-migrate"###;
 
 // balena config defaults
-pub const DEFAULT_API_HOST: &str = "api.balena-cloud.com";
-pub const DEFAULT_API_PORT: u16 = 443;
+// pub const DEFAULT_API_HOST: &str = "api.balena-cloud.com";
+// pub const DEFAULT_API_PORT: u16 = 443;
 // check timeout used for API & VPN
 pub const DEFAULT_API_CHECK_TIMEOUT: u64 = 20;
 

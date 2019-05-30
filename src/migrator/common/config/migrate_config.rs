@@ -186,6 +186,7 @@ impl<'a> MigrateConfig {
         &self.reboot
     }
 
+    /*
     pub fn get_force_slug(&self) -> Option<String> {
         if let Some(ref val) = self.force_slug {
             Some(val.clone())
@@ -193,7 +194,8 @@ impl<'a> MigrateConfig {
             None
         }
     }
-
+    */
+    
     pub fn get_fail_mode(&'a self) -> &'a FailMode {
         if let Some(ref val) = self.fail_mode {
             val

@@ -3,7 +3,7 @@ use log::error;
 use mod_logger::Logger;
 // use std::path::Path;
 
-mod common;
+pub mod common;
 
 #[cfg(target_os = "windows")]
 mod mswin;

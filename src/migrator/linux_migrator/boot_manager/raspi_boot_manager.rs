@@ -25,11 +25,14 @@ const RPI_MIG_INITRD_NAME: &str = "balena.initramfs.cpio.gz";
 
 const RPI_CONFIG_TXT: &str = "config.txt";
 
-pub(crate) struct RaspiBootManager;
+pub(crate) struct RaspiBootManager {
+    // valid is just used to enforce the use of new
+    _valid: bool,
+}
 
 impl RaspiBootManager {
     pub fn new() -> RaspiBootManager {
-        RaspiBootManager {}
+        RaspiBootManager { _valid: true }
     }
 }
 
@@ -46,7 +49,8 @@ impl BootManager for RaspiBootManager {
         _s2_cfg: &mut Stage2ConfigBuilder,
     ) -> Result<bool, MigError> {
         // TODO: calculate/ensure  required space on /boot /bootmgr
-        Err(MigError::from(MigErrorKind::NotImpl))
+
+        Ok(true)
     }
 
     fn setup(

@@ -1,4 +1,4 @@
-use failure::{Fail, ResultExt};
+use failure::{ResultExt};
 
 use lazy_static::lazy_static;
 use log::{debug, error, info, trace, warn};
@@ -145,6 +145,7 @@ pub(crate) fn get_mem_info() -> Result<(u64, u64), MigError> {
     }
 }
 
+/*
 pub(crate) fn is_efi_boot() -> Result<bool, MigError> {
     trace!("is_efi_boot: entered");
     match std::fs::metadata(SYS_UEFI_DIR) {
@@ -158,6 +159,7 @@ pub(crate) fn is_efi_boot() -> Result<bool, MigError> {
         },
     }
 }
+*/
 
 /******************************************************************
  * Get OS name from /etc/os-release

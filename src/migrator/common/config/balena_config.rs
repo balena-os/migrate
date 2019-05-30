@@ -5,7 +5,7 @@ use std::path::{Path, PathBuf};
 
 const MODULE: &str = "common::config::balena_config";
 
-use crate::defs::{DEFAULT_API_CHECK_TIMEOUT, DEFAULT_API_HOST, DEFAULT_API_PORT};
+use crate::defs::{DEFAULT_API_CHECK_TIMEOUT, };
 
 /*
 #[derive(Debug, Deserialize)]
@@ -72,6 +72,7 @@ impl<'a> BalenaConfig {
         Ok(())
     }
 
+/*
     pub fn get_app_name(&'a self) -> Option<&'a str> {
         if let Some(ref val) = self.app_name {
             Some(val)
@@ -119,7 +120,7 @@ impl<'a> BalenaConfig {
 
         return None;
     }
-
+*/
     pub fn is_check_vpn(&self) -> bool {
         if let Some(ref check_vpn) = self.check_vpn {
             *check_vpn

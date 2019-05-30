@@ -41,6 +41,9 @@ pub enum MigErrorKind {
     MutAccess,
     #[fail(display = "No Match")]
     NoMatch,
+    // errors that have had teir messages displayed elsewhere
+    #[fail(display = "Displayed")]
+    Displayed,
 }
 
 pub struct MigErrCtx {

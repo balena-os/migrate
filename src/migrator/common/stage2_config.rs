@@ -147,9 +147,11 @@ impl<'a> Stage2Config {
         self.skip_flash
     }
 
+    /*
     pub fn get_bootmgr(&'a self) -> &'a BootType {
         &self.boot_type
     }
+    */
 
     pub fn get_flash_device(&'a self) -> &'a Path {
         self.flash_device.as_path()
@@ -189,10 +191,6 @@ impl<'a> Stage2Config {
 
     pub fn get_work_path(&'a self) -> &'a Path {
         &self.work_dir
-    }
-
-    pub fn set_fail_mode(&mut self, mode: &FailMode) {
-        self.fail_mode = mode.clone();
     }
 
     pub fn get_fail_mode(&'a self) -> &'a FailMode {
@@ -235,6 +233,7 @@ impl<T: Clone> Required<T> {
         self.data = Some(val.clone());
     }
 
+/*
     fn is_set(&self) -> bool {
         if let Some(ref _val) = self.data {
             true
@@ -242,6 +241,7 @@ impl<T: Clone> Required<T> {
             false
         }
     }
+*/    
 }
 
 pub(crate) struct Optional<T> {
@@ -267,6 +267,7 @@ impl<T: Clone> Optional<T> {
         self.data = Some(val);
     }
 
+/*
     fn set_ref(&mut self, val: &T) {
         self.data = Some(val.clone());
     }
@@ -282,6 +283,7 @@ impl<T: Clone> Optional<T> {
             false
         }
     }
+*/    
 }
 
 pub(crate) struct Stage2ConfigBuilder {
@@ -460,7 +462,8 @@ balena:
   config: config.json
 "##;
 
+#[test]
     fn assert_test_config1() -> () {
-        let config = Stage2Config::from_str(TEST_CONFIG);
+        let _config = Stage2Config::from_str(TEST_CONFIG);
     }
 }

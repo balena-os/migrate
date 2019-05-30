@@ -950,10 +950,11 @@ impl Stage2 {
         Ok(())
     }
 
+/*
     pub(crate) fn is_recoverable(&self) -> bool {
         self.recoverable_state
     }
-
+*/
     pub(crate) fn default_exit() -> Result<(), MigError> {
         trace!("default_exit: entered ");
         Stage2::exit(FailMode::get_default())

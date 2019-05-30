@@ -68,22 +68,27 @@ impl RaspberryPi3 {
         }
     }
     pub fn from_config(
-        _cmds: &mut EnsuredCmds,
-        dev_info: &MigrateInfo,
-        _config: &Config,
-        _s2_cfg: &mut Stage2ConfigBuilder,
+        cmds: &mut EnsuredCmds,
+        mig_info: &MigrateInfo,
+        config: &Config,
+        s2_cfg: &mut Stage2ConfigBuilder,
     ) -> Result<RaspberryPi3, MigError> {
         const SUPPORTED_OSSES: &'static [&'static str] = &["Raspbian GNU/Linux 9 (stretch)"];
 
-        let os_name = &dev_info.os_name;
+        let os_name = &mig_info.os_name;
 
-        if let None = SUPPORTED_OSSES.iter().position(|&r| r == os_name) {
+        if let Some(_n) = SUPPORTED_OSSES.iter().position(|&r| r == os_name) {
+            let mut boot_manager = RaspiBootManager::new();
+            if boot_manager.can_migrate(cmds, mig_info, config, s2_cfg)? {
+                Ok(RaspberryPi3::new())
+            } else {
+                Err(MigError::from(MigErrorKind::Displayed))
+            }
+        } else {
             let message = format!("The OS '{}' is not supported for RaspberryPi3", os_name,);
             error!("{}", message);
             return Err(MigError::from_remark(MigErrorKind::InvParam, &message));
         }
-
-        Ok(RaspberryPi3::new())
     }
 
     pub fn from_boot_type(boot_type: &BootType) -> RaspberryPi3 {

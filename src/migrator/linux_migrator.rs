@@ -83,10 +83,7 @@ impl<'a> LinuxMigrator {
 
         if !is_admin(&config)? {
             error!("please run this program as root");
-            return Err(MigError::from_remark(
-                MigErrorKind::InvState,
-                "try_init: was run without admin privileges",
-            ));
+            return Err(MigError::from(MigErrorKind::Displayed));
         }
 
         // **********************************************************************
@@ -123,11 +120,15 @@ impl<'a> LinuxMigrator {
                 mig_info
             }
             Err(why) => {
-                let message = format!("Failed to create MigrateInfo: {:?}", why);
-                error!("{}", message);
-                return Err(MigError::from(
-                    why.context(MigErrCtx::from_remark(MigErrorKind::Upstream, &message)),
-                ));
+                return match why.kind() {
+                    MigErrorKind::Displayed => Err(why),
+                    _ => {
+                        error!("Failed to create MigrateInfo: {:?}", why);
+                        Err(MigError::from(
+                            why.context(MigErrCtx::from(MigErrorKind::Displayed)),
+                        ))
+                    }
+                };
             }
         };
 
@@ -148,11 +149,15 @@ impl<'a> LinuxMigrator {
                 device
             }
             Err(why) => {
-                let message = format!("Failed to create Device: {:?}", why);
-                error!("{}", message);
-                return Err(MigError::from(
-                    why.context(MigErrCtx::from_remark(MigErrorKind::Upstream, &message)),
-                ));
+                return match why.kind() {
+                    MigErrorKind::Displayed => Err(why),
+                    _ => {
+                        error!("Failed to create Device: {:?}", why);
+                        Err(MigError::from(
+                            why.context(MigErrCtx::from(MigErrorKind::Displayed)),
+                        ))
+                    }
+                };
             }
         };
 
@@ -172,7 +177,7 @@ impl<'a> LinuxMigrator {
                 );
                 error!("{}", message);
                 return Err(MigError::from(
-                    why.context(MigErrCtx::from_remark(MigErrorKind::Upstream, &message)),
+                    why.context(MigErrCtx::from(MigErrorKind::Displayed)),
                 ));
             }
         }
@@ -195,13 +200,12 @@ impl<'a> LinuxMigrator {
         // Require a minimum disk device size for installation
 
         if flash_dev_size < MIN_DISK_SIZE {
-            let message = format!(
+            error!(
                 "The size of the install drive '{}' = {} is too small to install balenaOS",
                 flash_device.display(),
                 format_size_with_unit(flash_dev_size)
             );
-            error!("{}", &message);
-            return Err(MigError::from_remark(MigErrorKind::InvState, &message));
+            return Err(MigError::from(MigErrorKind::Displayed));
         }
 
         if let Some(force_flash_device) = config.debug.get_force_flash_device() {
