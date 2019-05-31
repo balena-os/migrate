@@ -1,8 +1,8 @@
 use std::rc::Rc;
 
-use crate::migrator::{
+use crate::{
     mswin::win_api::{query_dos_device, wmi_api::WmiAPI},
-    MigError,
+    common::{MigError, },
 };
 use log::debug;
 

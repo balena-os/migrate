@@ -2,9 +2,9 @@ use log::debug;
 use std::rc::Rc;
 // use log::{debug};
 use super::QueryRes;
-use crate::migrator::{
+use crate::{
     mswin::{win_api::wmi_api::WmiAPI, MSWMigrator},
-    MigError, MigErrorKind,
+    common::{MigError, MigErrorKind,},
 };
 use regex::Regex;
 

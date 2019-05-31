@@ -1,8 +1,9 @@
 use super::{LogicalDrive, QueryRes, NS_CVIM2};
-use crate::migrator::{
+use crate::{
     mswin::win_api::{query_dos_device, wmi_api::WmiAPI},
-    MigError, MigErrorKind,
+    common::{MigError, MigErrorKind,},
 };
+
 use log::debug;
 use std::rc::Rc;
 

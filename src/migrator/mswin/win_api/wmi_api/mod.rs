@@ -25,7 +25,7 @@ use winapi::{
 
 use super::com_api::ComAPI;
 use super::util::to_wide_cstring;
-use crate::migrator::{MigErrCtx, MigError, MigErrorKind};
+use crate::common::{MigErrCtx, MigError, MigErrorKind};
 
 type PMIWbemLocator = *mut IWbemLocator;
 type PMIWbemServices = *mut IWbemServices;

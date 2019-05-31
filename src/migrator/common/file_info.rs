@@ -1,4 +1,5 @@
 use failure::ResultExt;
+#[cfg(target_os = "linux")]
 use lazy_static::lazy_static;
 use log::{debug, error, trace};
 use regex::Regex;
@@ -22,12 +23,9 @@ const KERNEL_I386_FTYPE_REGEX: &str = r#"^Linux kernel i386 boot executable bzIm
 const TEXT_FTYPE_REGEX: &str = r#"^ASCII text.*$"#;
 const DTB_FTYPE_REGEX: &str = r#"^(Device Tree Blob|data).*$"#;
 
-#[cfg(target_os = "linux")]
 use crate::common::{file_exists, MigErrCtx, MigError, MigErrorKind};
 #[cfg(target_os = "linux")]
 use crate::linux::{EnsuredCmds, FILE_CMD};
-
-const MODULE: &str = "balean_migrate::common::file_info";
 
 #[derive(Debug)]
 pub(crate) enum FileType {
@@ -108,6 +106,7 @@ impl FileInfo {
         }))
     }
 
+    #[cfg(target_os = "linux")]
     pub fn expect_type(&self, cmds: &EnsuredCmds, ftype: &FileType) -> Result<(), MigError> {
         if !self.is_type(cmds, ftype)? {
             let message = format!(
@@ -132,8 +131,7 @@ impl FileInfo {
             return Err(MigError::from_remark(
                 MigErrorKind::InvParam,
                 &format!(
-                    "{}::new: failed determine type for file {}",
-                    MODULE,
+                    "new: failed determine type for file {}",
                     self.path.display()
                 ),
             ));
@@ -168,7 +166,22 @@ impl FileInfo {
     }
 
     #[cfg(target_os = "windows")]
-    pub fn is_type(ftype: FileType) -> Result<bool, MigError> {
+    pub fn expect_type(&self, ftype: &FileType) -> Result<(), MigError> {
+        if !self.is_type(ftype)? {
+            let message = format!(
+                "Could not determine expected file type '{}' for file '{}'",
+                ftype.get_descr(),
+                self.path.display()
+            );
+            error!("{}", message);
+            Err(MigError::from_remark(MigErrorKind::InvParam, &message))
+        } else {
+            Ok(())
+        }
+    }
+
+    #[cfg(target_os = "windows")]
+    pub fn is_type(&self, ftype: &FileType) -> Result<bool, MigError> {
         // think of something for windows
         Err(MigError::from(MigErrorKind::NotImpl))
     }

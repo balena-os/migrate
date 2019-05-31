@@ -6,7 +6,7 @@ use winapi::{
 };
 
 use super::iwbem_class_wr::{safe_to_i32_array, safe_to_str_array};
-use crate::migrator::{MigErrCtx, MigError, MigErrorKind};
+use crate::common::{MigErrCtx, MigError, MigErrorKind};
 
 const MODULE: &str = "mswin::win_api::wmi_api::variant";
 

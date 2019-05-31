@@ -7,7 +7,7 @@ use log::debug;
 use std::io::Error;
 
 use super::{IWbemClassWrapper, PMIEnumWbemClassObject};
-use crate::migrator::MigError;
+use crate::common::MigError;
 
 const MODULE: &str = "mswin::win_api::wmi_api::query_result_enum";
 
