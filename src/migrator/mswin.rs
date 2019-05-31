@@ -85,7 +85,7 @@ impl<'a> MSWMigrator {
     fn try_init(config: Config) -> Result<MSWMigrator, MigError> {
         trace!("MSWMigrator::try_int: entered");
 
-        let migrator = MSWMigrator {
+        let mut migrator = MSWMigrator {
             config,
             ps_info: PSInfo::try_init()?,
             os_info: None,
@@ -98,12 +98,68 @@ impl<'a> MSWMigrator {
         // note: fake admin is not honored in release mode
 
         if !migrator.is_admin()? {
-            error!("please run this program as root");
-            return Err(MigError::from_remark(
-                MigErrorKind::InvState,
-                &format!("{}::try_init: was run without admin privileges", MODULE),
-            ));
+            error!("Please run this program with adminstrator privileges");
+            return Err(MigError::displayed());
         }
+
+        migrator.os_info = Some(
+            match WmiUtils::get_os_info() {
+                Ok(os_info) => {
+                    info!(
+                        "OS Architecture is {}, OS Name is '{}', OS Release is '{}'",
+                        os_info.os_arch, os_info.os_name, os_info.os_release );
+                    debug!("Boot device: '{}'", os_info.boot_dev);    
+                    os_info 
+                    },
+                Err(why) => {
+                    error!("Failed to retrieve OS info: {:?}", why);
+                    return Err(MigError::displayed());
+                }    
+            });
+
+        let phys_drives = match WmiUtils::query_drives() {
+            Ok(phys_drives) => {
+                for drive in phys_drives {
+                    debug!("found drive id {}, device {}", drive.get_device_id(), drive.get_device());  
+                    let partitions = match drive.query_partitions() {
+                        Ok(partitions) => {
+                            for partition in partitions {
+                                if partition.is_boot_device() {
+                                    info!("Boot partition is: '{}' type: '{}' on drive '{}'", 
+                                    partition.get_device(), 
+                                    partition.get_ptype(),
+                                    drive.get_device_id());
+                                    let log_drive = match partition.query_logical_drive() {
+                                        Ok(log_drive) => {
+                                            if let Some(log_drive) = log_drive {
+                                                info!("Boot partition is mounted on: '{}' ", log_drive.get_name()) 
+                                            } else {
+                                                // TODO: mount it
+                                                debug!("Boot partition is not mounted",);
+                                            }
+                                        },
+                                        Err(why) => {
+                                            error!("Failed to query logical drive for partition {}: {:?}", partition.get_device(), why);
+                                            return Err(MigError::displayed());
+                                        }
+                                    };
+                                } else {
+                                    debug!("found partition: '{}'", partition.get_device());
+                                }
+                            }
+                        }, 
+                        Err(why) => {
+                            error!("Failed to query partitions for drive {}: {:?}", drive.get_device_id(), why);
+                            return Err(MigError::displayed());
+                        }
+                    };
+                }
+            }, 
+            Err(why) => {
+                error!("Failed to query drive info: {:?}", why);
+                return Err(MigError::displayed());
+            }    
+        };
 
         Ok(migrator)
     }

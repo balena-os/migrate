@@ -64,7 +64,7 @@ impl WmiUtils {
         }
     */
 
-    pub(crate) fn init_os_info() -> Result<WMIOSInfo, MigError> {
+    pub(crate) fn get_os_info() -> Result<WMIOSInfo, MigError> {
         let wmi_api = WmiAPI::get_api(NS_CVIM2)?;
         let wmi_res = wmi_api.raw_query(WMIQ_OS)?;
         let wmi_row = match wmi_res.get(0) {
