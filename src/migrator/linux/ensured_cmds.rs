@@ -1,6 +1,6 @@
 use crate::{
     common::{call, CmdRes, MigError, MigErrorKind},
-    linux_migrator::linux_common::whereis,
+    linux::linux_common::whereis,
 };
 use log::{trace, warn};
 use std::collections::HashMap;

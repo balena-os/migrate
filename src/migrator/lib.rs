@@ -9,10 +9,10 @@ pub mod common;
 mod mswin;
 
 #[cfg(target_os = "linux")]
-mod linux_migrator;
+mod linux;
 
 #[cfg(target_os = "linux")]
-use linux_migrator::stage2::Stage2;
+use linux::stage2::Stage2;
 
 pub(crate) mod defs;
 
@@ -31,7 +31,7 @@ pub fn migrate() -> Result<(), MigError> {
 
 #[cfg(target_os = "linux")]
 pub fn migrate() -> Result<(), MigError> {
-    Ok(linux_migrator::LinuxMigrator::migrate()?)
+    Ok(linux::LinuxMigrator::migrate()?)
 }
 
 #[cfg(target_os = "linux")]

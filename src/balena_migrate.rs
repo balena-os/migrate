@@ -5,9 +5,11 @@ fn main() {
     // TODO: display error
     if let Err(error) = migrate() {
         match error.kind() {
-            MigErrorKind::Displayed => (),
+            MigErrorKind::Displayed => {
+                println!("balena-migrate failed with an error, see messages above");
+            },
             _ => {
-                println!("got error from migrator: {}", error);
+                println!("balena-migrate failed with an error: {}", error);
             }
         }
     }

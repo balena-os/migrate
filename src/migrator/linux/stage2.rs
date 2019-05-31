@@ -26,7 +26,7 @@ use crate::{
         DISK_BY_LABEL_PATH, NIX_NONE, STAGE2_CFG_FILE, STAGE2_MEM_THRESHOLD,
         SYSTEM_CONNECTIONS_DIR,
     },
-    linux_migrator::{
+    linux::{
         device,
         linux_common::{get_mem_info, get_root_info},
         EnsuredCmds, DD_CMD, GZIP_CMD, PARTPROBE_CMD, REBOOT_CMD,
