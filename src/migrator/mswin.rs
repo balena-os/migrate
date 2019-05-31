@@ -7,12 +7,12 @@ pub(crate) mod wmi_utils;
 use log::{debug, error, info, trace, warn};
 // use std::collections::{HashMap};
 
-use std::time::Instant;
-
-use crate::migrator::{
-    common::{check_tcp_connect, config::MigMode},
-    Config, MigError, MigErrorKind, OSArch, OSRelease,
+use crate::{
+    common::{MigMode, Config, MigError, MigErrorKind, os_release::OSRelease,},
+    defs::{OSArch,  } ,
 };
+
+
 use wmi_utils::WMIOSInfo;
 pub use wmi_utils::{Partition, WmiUtils};
 //use crate::mswin::drive_info::PhysicalDriveInfo;
@@ -76,7 +76,7 @@ pub struct MSWMigrator {
 impl<'a> MSWMigrator {
     pub fn migrate() -> Result<(), MigError> {
         let migrator = MSWMigrator::try_init(Config::new()?)?;
-        match migrator.config.migrate.mode {
+        match migrator.config.migrate.get_mig_mode() {
             MigMode::IMMEDIATE => migrator.do_migrate(),
             MigMode::PRETEND => Ok(()),
             MigMode::AGENT => Err(MigError::from(MigErrorKind::NotImpl)),
@@ -126,7 +126,7 @@ impl<'a> MSWMigrator {
     #[cfg(debug_assertions)]
     fn is_admin(&self) -> Result<bool, MigError> {
         trace!("LinuxMigrator::is_admin: entered");
-        Ok(self.ps_info.is_admin()? || self.config.debug.fake_admin)
+        Ok(self.ps_info.is_admin()? || self.config.debug.is_fake_admin())
     }
 
     /*

@@ -1,4 +1,4 @@
-use crate::migrator::{MigErrCtx, MigError, MigErrorKind};
+use crate::common::{MigErrCtx, MigError, MigErrorKind};
 use failure::Fail;
 use failure::ResultExt;
 use log::warn;

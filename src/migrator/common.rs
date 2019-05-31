@@ -12,8 +12,8 @@ use crate::defs::BALENA_FILE_TAG_REGEX;
 
 pub(crate) mod mig_error;
 
-//pub(crate) mod os_release;
-//pub(crate) use os_release::OSRelease;
+#[cfg(target_os = "windows")]
+pub(crate) mod os_release;
 
 pub(crate) mod backup;
 

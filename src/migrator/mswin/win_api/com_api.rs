@@ -17,7 +17,7 @@ use winapi::{
     },
 };
 
-use crate::migrator::{MigErrCtx, MigError, MigErrorKind};
+use crate::common::{MigErrCtx, MigError, MigErrorKind};
 // use super::util::{check_hres};
 
 const MODULE: &str = "mswin::win_api::com_api";
