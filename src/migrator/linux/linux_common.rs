@@ -13,7 +13,7 @@ use crate::{
         call, file_exists, parse_file, path_append, Config, MigErrCtx, MigError, MigErrorKind,
     },
     defs::{OSArch, DISK_BY_PARTUUID_PATH, DISK_BY_UUID_PATH, KERNEL_CMDLINE_PATH, SYS_UEFI_DIR},
-    linux_migrator::{EnsuredCmds, DF_CMD, MOKUTIL_CMD, UNAME_CMD},
+    linux::{EnsuredCmds, DF_CMD, MOKUTIL_CMD, UNAME_CMD},
 };
 
 use crate::common::dir_exists;

@@ -7,7 +7,7 @@ use crate::{
         FileInfo, FileType, MigError, MigErrorKind, MigrateWifis,
     },
     defs::{OSArch, APPROX_MEM_THRESHOLD, BOOT_PATH, ROOT_PATH},
-    linux_migrator::{
+    linux::{
         linux_common::{get_mem_info, get_os_arch, get_os_name},
         EnsuredCmds,
     },

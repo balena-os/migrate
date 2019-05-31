@@ -15,7 +15,7 @@ use crate::{
         BootType, BOOT_PATH, GRUB_CONFIG_DIR, GRUB_CONFIG_FILE, GRUB_MIN_VERSION,
         KERNEL_CMDLINE_PATH, MIG_INITRD_NAME, MIG_KERNEL_NAME, ROOT_PATH,
     },
-    linux_migrator::{
+    linux::{
         boot_manager::BootManager,
         migrate_info::{label_type::LabelType, MigrateInfo},
         EnsuredCmds, CHMOD_CMD, GRUB_REBOOT_CMD, GRUB_UPDT_CMD,

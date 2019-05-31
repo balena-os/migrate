@@ -8,7 +8,7 @@ use crate::{
         Config, MigError, MigErrorKind,
     },
     defs::{BootType, DeviceType},
-    linux_migrator::{
+    linux::{
         boot_manager::{from_boot_type, BootManager, UBootManager},
         device::Device,
         EnsuredCmds, MigrateInfo,
