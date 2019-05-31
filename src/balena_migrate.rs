@@ -7,7 +7,7 @@ fn main() {
         match error.kind() {
             MigErrorKind::Displayed => {
                 println!("balena-migrate failed with an error, see messages above");
-            },
+            }
             _ => {
                 println!("balena-migrate failed with an error: {}", error);
             }

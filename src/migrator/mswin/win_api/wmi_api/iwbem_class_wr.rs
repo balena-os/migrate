@@ -19,8 +19,8 @@ use winapi::{
 };
 
 use crate::{
-    mswin::win_api::util::report_win_api_error, 
-    common::{MigErrCtx, MigError, MigErrorKind,},
+    common::{MigErrCtx, MigError, MigErrorKind},
+    mswin::win_api::util::report_win_api_error,
 };
 
 use super::variant::Variant;

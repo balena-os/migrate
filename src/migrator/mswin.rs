@@ -8,10 +8,9 @@ use log::{debug, error, info, trace, warn};
 // use std::collections::{HashMap};
 
 use crate::{
-    common::{MigMode, Config, MigError, MigErrorKind, os_release::OSRelease,},
-    defs::{OSArch,  } ,
+    common::{os_release::OSRelease, Config, MigError, MigErrorKind, MigMode},
+    defs::OSArch,
 };
-
 
 use wmi_utils::WMIOSInfo;
 pub use wmi_utils::{Partition, WmiUtils};

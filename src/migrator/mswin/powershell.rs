@@ -7,7 +7,7 @@ const PS_CMD_POSTFIX: &str = " | out-string -width 200";
 const PS_ARGS_FROM_STDIN: [&'static str; 3] = ["-NonInteractive", "-Command", "-"];
 //pub const POWERSHELL_GET_CMDLET_PARAMS: [&'static str; 7] =
 //    ["Get-Command", "-CommandType", "Cmdlet", "|" , "out-string", "-width", "200"];
-const PS_CMD_IS_ADMIN: &str = 
+const PS_CMD_IS_ADMIN: &str =
     "[bool](([System.Security.Principal.WindowsIdentity]::GetCurrent()).groups -match \"S-1-5-32-544\")";
 const PS_CMD_IS_SECURE_BOOT: &str = "Confirm-SecureBootUEFI";
 
@@ -155,7 +155,7 @@ impl PSInfo {
                 warn!("{}::get_ps_ver(): no output from command, assuming version 1.0", MODULE);
                 self.version = Some((1, 0));
                 return Ok(self.version.unwrap())
-            }        
+            }
             _ => return Err(MigError::from_remark(MigErrorKind::InvParam, &format!("{}::available(): unexpected number of ouput lines in powershell version output: {}", MODULE, output.stdout)))
         }
 

@@ -1,7 +1,7 @@
 use super::{LogicalDrive, QueryRes, NS_CVIM2};
 use crate::{
+    common::{MigError, MigErrorKind},
     mswin::win_api::{query_dos_device, wmi_api::WmiAPI},
-    common::{MigError, MigErrorKind,},
 };
 
 use log::debug;

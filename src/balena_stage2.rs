@@ -1,4 +1,3 @@
-
 #[cfg(target_os = "linux")]
 fn main() {
     use balena_migrate::stage2;

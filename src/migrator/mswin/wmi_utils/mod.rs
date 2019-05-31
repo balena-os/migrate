@@ -7,9 +7,9 @@ use std::collections::HashMap;
 use failure::ResultExt;
 
 use crate::{
+    common::{os_release::OSRelease, MigErrCtx, MigError, MigErrorKind},
+    defs::OSArch,
     mswin::win_api::wmi_api::{Variant, WmiAPI},
-    common::{MigErrCtx, MigError, MigErrorKind, os_release::OSRelease,},
-    defs::{OSArch,},
 };
 
 mod physical_drive;
