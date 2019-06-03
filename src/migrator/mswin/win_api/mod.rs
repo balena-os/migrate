@@ -100,7 +100,10 @@ pub fn query_dos_device(dev_name: Option<&str>) -> Result<Vec<String>, MigError>
     }
 }
 
-pub(crate) fn is_uefi_boot() -> Result<bool, MigError> {
+pub(crate) fn is_efi_boot() -> Result<bool, MigError> {
+    // TODO: only works on windows 10 and upwards
+    // TODO: alt - try to mount efi drive ?
+    
     let dummy: Vec<u16> = OsStr::new("").encode_wide().chain(once(0)).collect();
     let guid: Vec<u16> = OsStr::new("{00000000-0000-0000-0000-000000000000}")
         .encode_wide()
@@ -108,31 +111,31 @@ pub(crate) fn is_uefi_boot() -> Result<bool, MigError> {
         .collect();
     let res =
         unsafe { GetFirmwareEnvironmentVariableW(dummy.as_ptr(), guid.as_ptr(), null_mut(), 0) };
+
     if res != 0 {
         return Err(MigError::from_remark(
             MigErrorKind::InvParam,
-            &format!(
-                "{}::is_uefi_boot: no error where an error was expected",
-                MODULE
-            ),
+            "is_uefi_boot: received no error where an error was expected",
         ));
     }
+
     let os_err = Error::last_os_error();
 
     match os_err.raw_os_error() {
         Some(err) => {
+            // ERROR_INVALID_FUNCTION tells us that the function is not available / NON UEFI
             if err == ERROR_INVALID_FUNCTION as i32 {
                 Ok(false)
             } else {
-                debug!("{}::is_uefi_boot: error value: {}", MODULE, err);
+                // Other errors indicate UEFI system
+                debug!("is_uefi_boot: error value: {}", err);
                 Ok(true)
             }
         }
         None => Err(MigError::from_remark(
             MigErrorKind::InvParam,
             &format!(
-                "{}::is_uefi_boot: no error where an error was expeted",
-                MODULE
+                "is_uefi_boot: no error where an error was expected",
             ),
         )),
     }

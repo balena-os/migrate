@@ -1,4 +1,5 @@
 use std::path::{Path, PathBuf};
+use log::{error};
 
 use crate::{
     common::{MigError, MigErrorKind},
@@ -115,24 +116,18 @@ impl<'a> MigrateConfig {
             MigMode::AGENT => Err(MigError::from(MigErrorKind::NotImpl)),
             _ => {
                 if let None = self.work_dir {
-                    return Err(MigError::from_remark(
-                        MigErrorKind::InvParam,
-                        "A required parameter was not found: 'work_dir'",
-                    ));
+                    error!("A required parameter was not found: 'work_dir'");
+                    return Err(MigError::displayed());
                 }
 
                 if let None = self.kernel_path {
-                    return Err(MigError::from_remark(
-                        MigErrorKind::InvParam,
-                        "A required parameter was not found: 'kernel_file'",
-                    ));
+                    error!("A required parameter was not found: 'kernel_path'");
+                    return Err(MigError::displayed());                
                 }
 
                 if let None = self.initrd_path {
-                    return Err(MigError::from_remark(
-                        MigErrorKind::InvParam,
-                        "A required parameter was not found: 'initramfs_file'",
-                    ));
+                    error!("A required parameter was not found: 'initrd_path'");
+                    return Err(MigError::displayed());
                 }
 
                 Ok(())
@@ -224,6 +219,14 @@ impl<'a> MigrateConfig {
 
     pub fn set_work_dir(&mut self, work_dir: PathBuf) {
         self.work_dir = Some(work_dir);
+    }
+
+    pub fn has_work_dir(&self) -> bool {
+        if let Some(ref _dummy) = self.work_dir {
+            true
+        } else {
+            false
+        }
     }
 
     pub fn get_work_dir(&'a self) -> &'a Path {
