@@ -1,9 +1,12 @@
-pub(crate) mod powershell;
+mod powershell;
 //pub(crate) mod win_api;
 // pub mod drive_info;
-pub mod win_api;
+mod win_api;
+
+mod util;
+
 use win_api::{is_efi_boot};
-pub(crate) mod wmi_utils;
+mod wmi_utils;
 
 use log::{debug, error, info, trace, warn};
 // use std::collections::{HashMap};
@@ -137,6 +140,11 @@ impl<'a> MSWMigrator {
                                             } else {
                                                 // TODO: mount it
                                                 debug!("Boot partition is not mounted",);
+                                                if is_efi_boot() {
+                                                    info!("Device was booted in EFI mode, mounting EFI partition");
+
+                                                }
+
                                             }
                                         },
                                         Err(why) => {
@@ -163,7 +171,7 @@ impl<'a> MSWMigrator {
         };
 
         if is_efi_boot()? {
-            info!("Device was booted in EFI mode, mounting EFI partition");
+
 
             // call("mountvol", &[""])
         }
