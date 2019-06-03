@@ -73,12 +73,10 @@ impl Stage2 {
 
     pub fn try_init() -> Result<Stage2, MigError> {
         // TODO: wait a couple of seconds for more devices to show up ?
+        trace!("try_init: entered");
 
-        match Logger::initialise_v2(
-            Some(&INIT_LOG_LEVEL),
-            Some(&LogDestination::BufferStderr),
-            NO_STREAM,
-        ) {
+        Logger::set_default_level(&INIT_LOG_LEVEL);
+        match Logger::set_log_dest(&LogDestination::BufferStderr, NO_STREAM) {
             Ok(_s) => {
                 info!("Balena Migrate Stage 2 initializing");
             }
@@ -114,6 +112,7 @@ impl Stage2 {
 
         // TODO: add options to make this more reliable)
 
+        debug!("mounting root device '{}' on '{}' with fs type: {:?}", root_device.display(), root_fs_dir.display(), root_fs_type );
         mount(
             Some(&root_device),
             &root_fs_dir,
@@ -135,7 +134,10 @@ impl Stage2 {
             ),
         ))?;
 
+
         let stage2_cfg_file = path_append(&root_fs_dir, STAGE2_CFG_FILE);
+
+        debug!("looking for '{}'", stage2_cfg_file.display() );
 
         if !file_exists(&stage2_cfg_file) {
             let message = format!(
@@ -189,6 +191,7 @@ impl Stage2 {
         let boot_device = stage2_cfg.get_boot_device();
         let mut boot_mounted = false;
         if boot_device != root_device {
+            debug!("attempting to mount '{}' on '{}' with fstype: {}", boot_device.display() , boot_path.display(), stage2_cfg.get_boot_fstype());
             mount(
                 Some(boot_device),
                 &boot_path,
@@ -214,6 +217,7 @@ impl Stage2 {
             let device = bootmgr_cfg.get_device();
             if device != boot_device && device != root_device {
                 let mountpoint = path_append(&root_fs_dir, bootmgr_cfg.get_mountpoint());
+                debug!("attempting to mount '{}' on '{}' with fstype: {}", device.display() , mountpoint.display(), bootmgr_cfg.get_fstype());
                 mount(
                     Some(device),
                     &mountpoint,
@@ -246,15 +250,23 @@ impl Stage2 {
     pub fn migrate(&mut self) -> Result<(), MigError> {
         trace!("migrate: entered");
 
-        let mig_tmp_dir = Path::new(MIGRATE_TEMP_DIR);
-
         let device_type = self.config.get_device_type();
         let boot_type = self.config.get_boot_type();
 
+        // Recover device type and restore original boot configuration
+        let device = device::from_config(device_type, boot_type)?;
+        device.restore_boot(&self.root_fs_path, &self.config)?;
+
         info!("migrating {:?} boot type: {:?}", device_type, boot_type);
 
+        // boot config restored can reboot
+        self.recoverable_state = true;
+
+        let cmds = EnsuredCmds::new(MIG_REQUIRED_CMDS)?;
+
+
         // check if we have enough space to copy files to initramfs
-        match get_mem_info() {
+        let mig_tmp_dir = match get_mem_info() {
             Ok((mem_tot, mem_avail)) => {
                 info!(
                     "Memory available is {} of {}",
@@ -266,6 +278,7 @@ impl Stage2 {
                     &self.root_fs_path,
                     &self.config.get_balena_image(),
                 ))?;
+
                 required_size += file_size(path_append(
                     &self.root_fs_path,
                     &self.config.get_balena_config(),
@@ -296,7 +309,10 @@ impl Stage2 {
                     format_size_with_unit(required_size)
                 );
 
-                if mem_avail < required_size + STAGE2_MEM_THRESHOLD {
+                if mem_avail > required_size + STAGE2_MEM_THRESHOLD {
+                    Path::new(MIGRATE_TEMP_DIR)
+                } else {
+                    // TODO: create temporary storage on disk instead by resizing
                     error!("Not enough memory available for copying files");
                     return Err(MigError::from_remark(
                         MigErrorKind::InvState,
@@ -306,17 +322,11 @@ impl Stage2 {
             }
             Err(why) => {
                 warn!("Failed to retrieve mem info, error: {:?}", why);
+                return Err(MigError::displayed());
             }
-        }
+        };
 
-        let device = device::from_config(device_type, boot_type)?;
 
-        device.restore_boot(&self.root_fs_path, &self.config)?;
-
-        // boot config restored can reboot
-        self.recoverable_state = true;
-
-        let cmds = EnsuredCmds::new(MIG_REQUIRED_CMDS)?;
 
         if !dir_exists(mig_tmp_dir)? {
             create_dir(mig_tmp_dir).context(MigErrCtx::from_remark(
