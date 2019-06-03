@@ -162,10 +162,10 @@ impl<'a> MSWMigrator {
             }    
         };
 
-        if is_efi_boot() {
+        if is_efi_boot()? {
             info!("Device was booted in EFI mode, mounting EFI partition");
 
-            call("mountvol", &[""])
+            // call("mountvol", &[""])
         }
 
         Ok(migrator)
