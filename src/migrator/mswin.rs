@@ -2,13 +2,14 @@ pub(crate) mod powershell;
 //pub(crate) mod win_api;
 // pub mod drive_info;
 pub mod win_api;
+use win_api::{is_efi_boot};
 pub(crate) mod wmi_utils;
 
 use log::{debug, error, info, trace, warn};
 // use std::collections::{HashMap};
 
 use crate::{
-    common::{os_release::OSRelease, Config, MigError, MigErrorKind, MigMode},
+    common::{call, os_release::OSRelease, Config, MigError, MigErrorKind, MigMode},
     defs::OSArch,
 };
 
@@ -160,6 +161,12 @@ impl<'a> MSWMigrator {
                 return Err(MigError::displayed());
             }    
         };
+
+        if is_efi_boot() {
+            info!("Device was booted in EFI mode, mounting EFI partition");
+
+            call("mountvol", &[""])
+        }
 
         Ok(migrator)
     }

@@ -192,7 +192,7 @@ impl<'a> Config {
             return Err(MigError::displayed());
         }
 
-        info!(
+        debug!(
             "Using work_dir '{}'",
             config.migrate.get_work_dir().display()
         );
