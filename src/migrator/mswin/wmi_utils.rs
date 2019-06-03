@@ -12,13 +12,13 @@ use crate::{
     mswin::win_api::wmi_api::{Variant, WmiAPI},
 };
 
-mod physical_drive;
-pub use physical_drive::PhysicalDrive;
-mod logical_drive;
-pub use logical_drive::LogicalDrive;
+pub(crate) mod physical_drive;
+pub(crate) use physical_drive::PhysicalDrive;
+pub(crate) mod logical_drive;
+pub(crate) use logical_drive::LogicalDrive;
 
-mod partition;
-pub use partition::Partition;
+pub(crate) mod partition;
+pub(crate) use partition::Partition;
 
 // TODO: fix this
 //#![cfg(debug_assertions)]

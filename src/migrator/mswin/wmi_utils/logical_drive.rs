@@ -8,8 +8,11 @@ use crate::{
 };
 use regex::Regex;
 
+use crate::{ mswin::wmi_utils::NS_CVIM2 };
+
 const MODULE: &str = "mswin::wmi_utils::logical_drive";
 // const QUERY_ALL: &str = "SELECT Caption, Index, DeviceID, Size, MediaType, Status, BytesPerSector, Partitions, CompressionMethod FROM Win32_DiskDrive";
+const QUERY_BASE: &str = "SELECT Caption, DeviceID, Compressed, FileSystem, MediaType, Size, FreeSpace, VolumeDirty, Status FROM Win32_LogicalDisk";
 
 #[derive(Debug)]
 pub enum MediaType {
@@ -50,6 +53,45 @@ pub struct LogicalDrive {
 }
 
 impl<'a> LogicalDrive {
+    pub(crate) fn query_drive_letters() -> Result<Vec<String>, MigError> {
+        let mut result: Vec<String> = Vec::new();
+        for log_drive in LogicalDrive::query_all()? {
+            result.push(String::from(log_drive.get_name()));
+        }
+        Ok(result)
+    }
+
+    pub(crate) fn query_for_name(name: &str) -> Result<LogicalDrive, MigError> {
+        let query = format!("{} where Name='{}'", QUERY_BASE, name);
+        debug!(
+            "query_drive_for_name: performing WMI Query: '{}'",
+            query
+        );
+
+        let mut q_res = WmiAPI::get_api(NS_CVIM2)?.raw_query(&query)?;
+        if q_res.len() > 0 {
+            Ok(LogicalDrive::new(QueryRes::new(&q_res[0]))?)
+        } else {
+            Err(MigError::from_remark(MigErrorKind::NotFound, &format!("received an empty result lookin for logical dribe: '{}'", name)))
+        }
+    }
+
+    pub(crate) fn query_all() -> Result<Vec<LogicalDrive>, MigError> {
+        let query = QUERY_BASE;
+        debug!(
+            "query_all: performing WMI Query: '{}'",
+            query
+        );
+
+        let mut q_res = WmiAPI::get_api(NS_CVIM2)?.raw_query(query)?;
+        let mut result: Vec<LogicalDrive> = Vec::new();
+        for res in q_res {
+            let res_map = QueryRes::new(&res);
+            result.push(LogicalDrive::new(res_map)?);
+        }
+        Ok(result)
+    }
+
     pub(crate) fn new(res_map: QueryRes) -> Result<LogicalDrive, MigError> {
         debug!("{}::new: creating logical drive", MODULE);
 

@@ -14,10 +14,11 @@ use log::{debug, error, info, trace, warn};
 use crate::{
     common::{call, os_release::OSRelease, Config, MigError, MigErrorKind, MigMode},
     defs::OSArch,
+    mswin::util::mount_efi,
 };
 
 use wmi_utils::WMIOSInfo;
-pub use wmi_utils::{Partition, WmiUtils};
+pub(crate) use wmi_utils::{Partition, WmiUtils};
 //use crate::mswin::drive_info::PhysicalDriveInfo;
 
 use powershell::PSInfo;
@@ -133,18 +134,23 @@ impl<'a> MSWMigrator {
                                     partition.get_device(), 
                                     partition.get_ptype(),
                                     drive.get_device_id());
-                                    let log_drive = match partition.query_logical_drive() {
-                                        Ok(log_drive) => {
-                                            if let Some(log_drive) = log_drive {
-                                                info!("Boot partition is mounted on: '{}' ", log_drive.get_name()) 
+                                    let boot_drive = match partition.query_logical_drive() {
+                                        Ok(boot_drive) => {
+                                            if let Some(boot_drive) = boot_drive {
+                                                info!("Boot partition is mounted on: '{}' ", boot_drive.get_name());
+                                                boot_drive
                                             } else {
                                                 // TODO: mount it
                                                 debug!("Boot partition is not mounted",);
-                                                if is_efi_boot() {
-                                                    info!("Device was booted in EFI mode, mounting EFI partition");
-
+                                                if is_efi_boot()? {
+                                                    info!("Device was booted in EFI mode, attempting to mount the EFI partition");
+                                                    let efi_drive = mount_efi()?;
+                                                    info!("The EFI partition was mounted on '{}'", efi_drive.get_name());
+                                                    efi_drive
+                                                } else {
+                                                    error!("Failed to mount EFI partition for device");
+                                                    return Err(MigError::displayed());
                                                 }
-
                                             }
                                         },
                                         Err(why) => {
