@@ -1,6 +1,6 @@
 use log::error;
 
-use mod_logger::Logger;
+use mod_logger::{Logger, Level};
 // use std::path::Path;
 
 pub mod common;
@@ -61,7 +61,7 @@ pub fn stage2() -> Result<(), MigError> {
 }
 
 pub fn test() -> Result<(), MigError> {
-    Logger::initialise(Some("trace")).unwrap();
+    Logger::set_default_level(&Level::Trace);
     /*    ensure_cmds(&[LSBLK_CMD, FDISK_CMD], &[])?;
         linux_common::migrate_info::DiskInfo::new(BootType::GRUB, &Path::new("."), None)?;
     */
