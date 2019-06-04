@@ -1,10 +1,7 @@
-use log::{error, trace, };
-use failure::{Fail};
+use failure::Fail;
+use log::{error, trace};
 
-use crate::{
-    common::{ Config, MigError, MigErrorKind, MigErrCtx, MigMode},
-};
-
+use crate::common::{Config, MigErrCtx, MigError, MigErrorKind, MigMode};
 
 mod powershell;
 //pub(crate) mod win_api;
@@ -18,17 +15,16 @@ mod wmi_utils;
 mod migrate_info;
 use migrate_info::MigrateInfo;
 
-
 use powershell::PSInfo;
 
 pub struct MSWMigrator {
     config: Config,
-    mig_info: MigrateInfo, 
-/*    ps_info: PSInfo,
-    os_info: Option<WMIOSInfo>,
-    efi_boot: Option<bool>,
-    sysinfo: SysInfo,
-*/
+    mig_info: MigrateInfo,
+    /*    ps_info: PSInfo,
+        os_info: Option<WMIOSInfo>,
+        efi_boot: Option<bool>,
+        sysinfo: SysInfo,
+    */
 }
 
 impl<'a> MSWMigrator {
@@ -70,10 +66,7 @@ impl<'a> MSWMigrator {
             }
         };
 
-        Ok(MSWMigrator {
-            config,
-            mig_info,
-        })
+        Ok(MSWMigrator { config, mig_info })
     }
 
     fn do_migrate(&self) -> Result<(), MigError> {

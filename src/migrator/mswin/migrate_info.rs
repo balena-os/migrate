@@ -1,25 +1,40 @@
-use log::{info, debug, error};
 use crate::{
-    defs::{OSArch},
-    common::{MigError, MigErrorKind, os_release::OSRelease, Config},
+    common::{os_release::OSRelease, Config, MigError, MigErrorKind},
+    defs::OSArch,
     mswin::{
-        wmi_utils::{WmiUtils, LogicalDrive, PhysicalDrive},
-        win_api::{is_efi_boot},
-        util::{mount_efi},
-        powershell::{PSInfo},
+        powershell::PSInfo,
+        util::mount_efi,
+        win_api::is_efi_boot,
+        wmi_utils::{LogicalDrive, PhysicalDrive, Volume, WmiUtils},
     },
-
 };
+use log::{debug, error, info};
 
 pub(crate) struct MigrateInfo {
     pub os_name: String,
     pub os_arch: OSArch,
     pub os_release: OSRelease,
-    pub boot_drive: Option<LogicalDrive>, 
+    pub boot_drive: Option<LogicalDrive>,
 }
 
 impl MigrateInfo {
     pub fn new(_config: &Config, _ps_info: &mut PSInfo) -> Result<MigrateInfo, MigError> {
+        let efi_boot = match is_efi_boot() {
+            Ok(efi_boot) => {
+                if efi_boot {
+                    info!("The system is booted in EFI mode");
+                    efi_boot
+                } else {
+                    error!("The system is booted in non EFI mode. Currently only EFI systems are supported on Windows");
+                    return Err(MigError::displayed());
+                }
+            }
+            Err(why) => {
+                error!("Failed to determine EFI mode: {:?}", why);
+                return Err(MigError::displayed());
+            }
+        };
+
         let os_info = match WmiUtils::get_os_info() {
             Ok(os_info) => {
                 info!(
@@ -35,23 +50,46 @@ impl MigrateInfo {
             }
         };
 
-        let efi_boot = match is_efi_boot() {
-            Ok(efi_boot) => {
-                if efi_boot {
-                    info!("The system is booted in EFI mode");
-                    efi_boot
+        let efi_vol = match MigrateInfo::get_efi_vol() {
+            Ok(efi_vol) => {
+                if !efi_vol.get_drive_letter().is_empty() {
+                    info!("Found System/EFI volume on '{}', mounted on '{}'", efi_vol.get_device(), efi_vol.get_drive_letter());
+                    efi_vol
                 } else {
-                    error!("The system is booted in non EFI mode. Currently only EFI systems are supported on Windows");
-                    return Err(MigError::displayed());
+                    // attempt to mount it
+                    info!("Found System/EFI volume on '{}', attempting to mount it", efi_vol.get_device());
+                    match mount_efi() {
+                        Ok(dl) => {
+                            info!("The System/EFI Volume was mounted on '{}'", dl.get_name());
+                            efi_vol
+                        },
+                        Err(why) => {
+                            error!("Failed to mount EFI volume: {:?}", why);
+                            return Err(MigError::displayed());
+                        }
+                    }
                 }
             },
             Err(why) => {
-                error!("Failed to determine EFI mode: {:?}", why);
+               error!("Failed to query EFI volume: {:?}", why);
                 return Err(MigError::displayed());
             }
         };
 
-        let mut boot_drive: Option<LogicalDrive> = None;
+        let mut boot_vol = match Volume::query_boot_volumes() {
+            Ok(volumes) => {
+                if volumes.len() == 1 {
+                    volumes[0].clone()
+                } else {
+                        error!("Encountered an unexpected number of boot volumes: {}", volumes.len());
+                        return Err(MigError::displayed());
+                }            },
+            Err(why) => {
+                error!("Failed to query boot volume: {:?}", why);
+                return Err(MigError::displayed());
+            }
+        };
+
         let mut install_drive: Option<PhysicalDrive> = None;
 
         // Detect relevant drives
@@ -73,7 +111,7 @@ impl MigrateInfo {
                     let _partitions = match drive.query_partitions() {
                         Ok(partitions) => {
                             for partition in partitions {
-                                if partition.is_boot_device() {
+                                if partition.get_device() == boot_vol.get_device() {
                                     info!(
                                         "Boot partition is: '{}' type: '{}' on drive '{}'",
                                         partition.get_device(),
@@ -82,44 +120,10 @@ impl MigrateInfo {
                                     );
 
                                     install_drive = Some(drive.clone());
-
-                                    boot_drive = match partition.query_logical_drive() {
-                                        Ok(boot_drive) => {
-                                            if let Some(boot_drive) = boot_drive {
-                                                info!(
-                                                    "Boot partition is mounted on: '{}' ",
-                                                    boot_drive.get_name()
-                                                );
-                                                Some(boot_drive)
-                                            } else {
-                                                // TODO: mount it
-                                                debug!("Boot partition is not mounted",);
-                                                if efi_boot {
-                                                    info!("Device was booted in EFI mode, attempting to mount the EFI partition");
-                                                    let efi_drive = mount_efi()?;
-                                                    info!(
-                                                        "The EFI partition was mounted on '{}'",
-                                                        efi_drive.get_name()
-                                                    );
-                                                    Some(efi_drive)
-                                                } else {
-                                                    error!(
-                                                        "Failed to mount EFI partition for device"
-                                                    );
-                                                    return Err(MigError::displayed());
-                                                }
-                                            }
-                                        }
-                                        Err(why) => {
-                                            error!("Failed to query logical drive for partition {}: {:?}", partition.get_device(), why);
-                                            return Err(MigError::displayed());
-                                        }
-                                    };
-                                } else {
-                                    debug!("found partition: '{}'", partition.get_device());
+                                    break;
                                 }
                             }
-                        }
+                        },
                         Err(why) => {
                             error!(
                                 "Failed to query partitions for drive {}: {:?}",
@@ -137,14 +141,33 @@ impl MigrateInfo {
             }
         }
 
-
-
-        Ok(MigrateInfo{
+        Ok(MigrateInfo {
             os_name: os_info.os_name,
             os_arch: os_info.os_arch,
             os_release: os_info.os_release,
             boot_drive: None,
         })
     }
-}
 
+    fn get_efi_vol() -> Result<Volume, MigError> {
+        let volumes = Volume::query_system_volumes()?;
+        if volumes.len() == 1 {
+            debug!("Found system Volume: {:?}", volumes[0]);
+            Ok(volumes[0].clone())
+        } else {
+            Err(MigError::from_remark(MigErrorKind::InvParam, &format!("Encountered an unexpected number of system volumes: {}", volumes.len())))
+        }
+    }
+
+    fn get_efi_info(efi_vol: &Volume) -> Result<Volume, MigError> {
+
+        let volumes = Volume::query_system_volumes()?;
+        if volumes.len() == 1 {
+            debug!("Found system Volume: {:?}", volumes[0]);
+            Ok(volumes[0].clone())
+        } else {
+            Err(MigError::from_remark(MigErrorKind::InvParam, &format!("Encountered an unexpected number of system volumes: {}", volumes.len())))
+        }
+    }
+
+}

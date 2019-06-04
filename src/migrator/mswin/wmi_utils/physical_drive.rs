@@ -9,7 +9,7 @@ use super::{Partition, QueryRes, NS_CVIM2};
 const MODULE: &str = "mswin::wmi_utils::physical_drive";
 const QUERY_ALL: &str = "SELECT Caption, Index, DeviceID, Size, MediaType, Status, BytesPerSector, Partitions, CompressionMethod, InterfaceType FROM Win32_DiskDrive";
 
-#[derive(Debug,Clone)]
+#[derive(Debug, Clone)]
 pub(crate) struct PhysicalDrive {
     name: String,
     device_id: String,

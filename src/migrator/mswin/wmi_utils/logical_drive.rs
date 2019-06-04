@@ -4,11 +4,7 @@ use std::rc::Rc;
 use super::QueryRes;
 use crate::{
     common::{MigError, MigErrorKind},
-    mswin::{
-        win_api::wmi_api::WmiAPI,
-        powershell::{PSInfo},
-    },
-
+    mswin::{powershell::PSInfo, win_api::wmi_api::WmiAPI},
 };
 use regex::Regex;
 
@@ -57,15 +53,15 @@ pub(crate) struct LogicalDrive {
 }
 
 impl<'a> LogicalDrive {
-/*    
-    pub(crate) fn query_drive_letters() -> Result<Vec<String>, MigError> {
-        let mut result: Vec<String> = Vec::new();
-        for log_drive in LogicalDrive::query_all()? {
-            result.push(String::from(log_drive.get_name()));
+    /*
+        pub(crate) fn query_drive_letters() -> Result<Vec<String>, MigError> {
+            let mut result: Vec<String> = Vec::new();
+            for log_drive in LogicalDrive::query_all()? {
+                result.push(String::from(log_drive.get_name()));
+            }
+            Ok(result)
         }
-        Ok(result)
-    }
-*/
+    */
 
     pub(crate) fn query_for_name(name: &str) -> Result<LogicalDrive, MigError> {
         let query = format!("{} where Name='{}'", QUERY_BASE, name);
@@ -159,7 +155,7 @@ impl<'a> LogicalDrive {
         self.dirty
     }
 
-    pub fn get_supported_sizes(&self, ps_info: &mut PSInfo ) -> Result<(u64, u64), MigError> {
+    pub fn get_supported_sizes(&self, ps_info: &mut PSInfo) -> Result<(u64, u64), MigError> {
         let regex = Regex::new("^([a-zA-Z]):$").unwrap();
         if let Some(cap) = regex.captures(&self.device_id) {
             Ok(ps_info.get_drive_supported_size(cap.get(1).unwrap().as_str())?)

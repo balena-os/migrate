@@ -12,6 +12,8 @@ use crate::{
     mswin::win_api::wmi_api::{Variant, WmiAPI},
 };
 
+pub(crate) mod volume;
+pub(crate) use volume::Volume;
 pub(crate) mod physical_drive;
 pub(crate) use physical_drive::PhysicalDrive;
 pub(crate) mod logical_drive;
@@ -73,8 +75,8 @@ impl WmiUtils {
                 return Err(MigError::from_remark(
                     MigErrorKind::NotFound,
                     &format!(
-                        "{}::init_sys_info: no rows in result from wmi query: '{}'",
-                        MODULE, WMIQ_OS
+                        "init_sys_info: no rows in result from wmi query: '{}'",
+                        WMIQ_OS
                     ),
                 ));
             }
@@ -87,10 +89,7 @@ impl WmiUtils {
             _ => {
                 return Err(MigError::from_remark(
                     MigErrorKind::InvParam,
-                    &format!(
-                        "{}::init_os_info: invalid result type for 'BootDevice'",
-                        MODULE
-                    ),
+                    "init_os_info: invalid result type for 'BootDevice'",
                 ));
             }
         };
@@ -100,10 +99,7 @@ impl WmiUtils {
             _ => {
                 return Err(MigError::from_remark(
                     MigErrorKind::InvParam,
-                    &format!(
-                        "{}::init_os_info: invalid result type for 'Caption'",
-                        MODULE
-                    ),
+                    "init_os_info: invalid result type for 'Caption'",
                 ));
             }
         };
@@ -113,10 +109,7 @@ impl WmiUtils {
             _ => {
                 return Err(MigError::from_remark(
                     MigErrorKind::InvParam,
-                    &format!(
-                        "{}::init_os_info: invalid result type for 'Version'",
-                        MODULE
-                    ),
+                    "init_os_info: invalid result type for 'Version'",
                 ));
             }
         };
@@ -131,8 +124,8 @@ impl WmiUtils {
                     return Err(MigError::from_remark(
                         MigErrorKind::InvParam,
                         &format!(
-                            "{}::init_os_info: invalid result string for 'OSArchitecture': {}",
-                            MODULE, s
+                            "init_os_info: invalid result string for 'OSArchitecture': {}",
+                            s
                         ),
                     ));
                 }
@@ -140,10 +133,7 @@ impl WmiUtils {
             _ => {
                 return Err(MigError::from_remark(
                     MigErrorKind::InvParam,
-                    &format!(
-                        "{}::init_os_info: invalid result type for 'OSArchitecture'",
-                        MODULE
-                    ),
+                    "init_os_info: invalid result type for 'OSArchitecture'",
                 ));
             }
         };
@@ -152,17 +142,14 @@ impl WmiUtils {
             Variant::STRING(s) => s.parse::<u64>().context(MigErrCtx::from_remark(
                 MigErrorKind::InvParam,
                 &format!(
-                    "{}::init_sys_info: failed to parse TotalVisibleMemorySize from  '{}'",
-                    MODULE, s
+                    "init_sys_info: failed to parse TotalVisibleMemorySize from  '{}'",
+                    s
                 ),
             ))?,
             _ => {
                 return Err(MigError::from_remark(
                     MigErrorKind::InvParam,
-                    &format!(
-                        "{}::init_os_info: invalid result type for 'TotalVisibleMemorySize'",
-                        MODULE
-                    ),
+                    "init_os_info: invalid result type for 'TotalVisibleMemorySize'",
                 ));
             }
         } as u64;
@@ -171,17 +158,14 @@ impl WmiUtils {
             Variant::STRING(s) => s.parse::<u64>().context(MigErrCtx::from_remark(
                 MigErrorKind::InvParam,
                 &format!(
-                    "{}::init_sys_info: failed to parse 'FreePhysicalMemory' from  '{}'",
-                    MODULE, s
+                    "init_sys_info: failed to parse 'FreePhysicalMemory' from  '{}'",
+                    s
                 ),
             ))?,
             _ => {
                 return Err(MigError::from_remark(
                     MigErrorKind::InvParam,
-                    &format!(
-                        "{}::init_os_info: invalid result type for 'FreePhysicalMemory'",
-                        MODULE
-                    ),
+                    "init_os_info: invalid result type for 'FreePhysicalMemory'",
                 ));
             }
         };
@@ -223,9 +207,12 @@ impl WmiUtils {
         }
     */
 
+
+
+
     pub fn query_drives() -> Result<Vec<PhysicalDrive>, MigError> {
         let query = PhysicalDrive::get_query_all();
-        debug!("{}::get_drives: performing WMI Query: '{}'", MODULE, query);
+        debug!("query_drives: performing WMI Query: '{}'", query);
         let q_res = WmiAPI::get_api(NS_CVIM2)?.raw_query(query)?;
         let mut result: Vec<PhysicalDrive> = Vec::new();
         for res in q_res {
@@ -253,14 +240,14 @@ impl WmiUtils {
 
     pub fn get_drive(disk_index: u64) -> Result<PhysicalDrive, MigError> {
         let query = PhysicalDrive::get_query_by_index(disk_index);
-        debug!("{}::get_drives: performing WMI Query: '{}'", MODULE, query);
+        debug!("get_drive: performing WMI Query: '{}'", query);
         let mut q_res = WmiAPI::get_api(NS_CVIM2)?.raw_query(&query)?;
         match q_res.len() {
             0 => Err(MigError::from_remark(
                 MigErrorKind::NotFound,
                 &format!(
-                    "{}::get_disk_info: the query returned an empty result set: '{}'",
-                    MODULE, query
+                    "get_drive: the query returned an empty result set: '{}'",
+                    query
                 ),
             )),
             1 => {
@@ -271,8 +258,7 @@ impl WmiUtils {
             _ => Err(MigError::from_remark(
                 MigErrorKind::InvParam,
                 &format!(
-                    "{}::get_drive_info: invalid result cout for query, expected 1, got  {}",
-                    MODULE,
+                    "get_drive_info: invalid result cout for query, expected 1, got  {}",
                     q_res.len()
                 ),
             )),
@@ -287,22 +273,21 @@ impl WmiUtils {
             0 => Err(MigError::from_remark(
                 MigErrorKind::NotFound,
                 &format!(
-                    "{}::get_disk_info: the query returned an empty result set: '{}'",
-                    MODULE, query
+                    "get_disk_info: the query returned an empty result set: '{}'",
+                    query
                 ),
             )),
             1 => {
                 let res_map = q_res.pop().unwrap();
                 for (key, value) in res_map.iter().enumerate() {
-                    info!("{}::test_get_drive: {} -> {:?}", MODULE, key, value);
+                    info!("test_get_drive: {} -> {:?}", key, value);
                 }
                 Ok(())
             }
             _ => Err(MigError::from_remark(
                 MigErrorKind::InvParam,
                 &format!(
-                    "{}::get_drive_info: invalid result cout for query, expected 1, got  {}",
-                    MODULE,
+                    "get_drive_info: invalid result cout for query, expected 1, got  {}",
                     q_res.len()
                 ),
             )),
@@ -359,15 +344,15 @@ impl<'a> QueryRes<'a> {
                 Variant::STRING(val) => Ok(val.as_ref()),
                 Variant::NULL() => Ok(EMPTY_STR),
                 _ => {
-                    Err(MigError::from_remark(MigErrorKind::InvParam,&format!("{}::get_string_property: unexpected variant type, not STRING for key: '{}', value: {:?}", MODULE, prop_name, variant)))
+                    Err(MigError::from_remark(MigErrorKind::InvParam,&format!("get_string_property: unexpected variant type, not STRING for key: '{}', value: {:?}", prop_name, variant)))
                 }
             }
         } else {
             Err(MigError::from_remark(
                 MigErrorKind::NotFound,
                 &format!(
-                    "{}::get_string_property: value not found for key: '{}",
-                    MODULE, prop_name
+                    "get_string_property: value not found for key: '{}",
+                    prop_name
                 ),
             ))
         }
@@ -383,10 +368,7 @@ impl<'a> QueryRes<'a> {
         } else {
             Err(MigError::from_remark(
                 MigErrorKind::NotFound,
-                &format!(
-                    "{}::get_bool_property: value not found for key: '{}",
-                    MODULE, prop_name
-                ),
+                &format!("get_bool_property: value not found for key: '{}", prop_name),
             ))
         }
     }
@@ -396,39 +378,49 @@ impl<'a> QueryRes<'a> {
             if let Variant::I32(val) = variant {
                 Ok(*val)
             } else {
-                Err(MigError::from_remark(MigErrorKind::InvParam,&format!("{}::get_int_property: unexpected variant type, not I32 for key: '{}' value: {:?}", MODULE, prop_name, variant)))
+                Err(MigError::from_remark(MigErrorKind::InvParam,&format!("get_int_property: unexpected variant type, not I32 for key: '{}' value: {:?}", prop_name, variant)))
             }
         } else {
             Err(MigError::from_remark(
                 MigErrorKind::NotFound,
-                &format!(
-                    "{}::get_int_property: value not found for key: '{}",
-                    MODULE, prop_name
-                ),
+                &format!("get_int_property: value not found for key: '{}", prop_name),
             ))
         }
     }
 
     fn get_uint_property(&self, prop_name: &str) -> Result<u64, MigError> {
         if let Some(ref variant) = self.q_result.get(prop_name) {
-            if let Variant::STRING(val) = variant {
-                Ok((*val).parse::<u64>().context(MigErrCtx::from_remark(
-                    MigErrorKind::InvParam,
-                    &format!(
-                        "{}::get_uint_property: failed tp parse value from string '{}'",
-                        MODULE, val
-                    ),
-                ))?)
-            } else {
-                Err(MigError::from_remark(MigErrorKind::InvParam,&format!("{}::get_uint_property: unexpected variant type, not STRING for key: '{}', value: {:?}", MODULE, prop_name, variant)))
+            match variant {
+                Variant::STRING(val) => {
+                    Ok((*val).parse::<u64>().context(MigErrCtx::from_remark(
+                        MigErrorKind::InvParam,
+                        &format!(
+                            "get_uint_property: failed tp parse value from string '{}'",
+                            val
+                        ),
+                    ))?)
+                },
+                Variant::I32(val) => {
+                    if *val < 0 {
+                        Err(MigError::from_remark(
+                            MigErrorKind::InvParam,
+                            &format!("get_uint_property: Found negative value: '{}' value: {}",
+                                     prop_name, val)))
+                    } else {
+                        Ok(*val as u64)
+                    }
+                },
+                _ => {
+                    Err(MigError::from_remark(
+                        MigErrorKind::InvParam,
+                        &format!("get_uint_property: unexpected variant type, not U32 or STRING for key: '{}' value: {:?}",
+                                 prop_name, variant)))
+                }
             }
         } else {
             Err(MigError::from_remark(
                 MigErrorKind::NotFound,
-                &format!(
-                    "{}::get_uint_property: value not found for key: '{}",
-                    MODULE, prop_name
-                ),
+                &format!("get_uint_property: value not found for key: '{}", prop_name),
             ))
         }
     }

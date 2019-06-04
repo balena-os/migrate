@@ -26,10 +26,8 @@ pub mod wmi_api;
 
 use util::{clip, to_string, to_string_list};
 
-const MODULE: &str = "mswin::win_api";
-
 fn get_volumes() -> Result<Vec<String>, MigError> {
-    debug!("{}::get_volumes: entered", MODULE);
+    debug!("get_volumes: entered",);
     const BUFFER_SIZE: usize = 2048;
     let mut buffer: [u16; BUFFER_SIZE] = [0; BUFFER_SIZE];
     let mut vol_list: Vec<String> = Vec::new();
@@ -55,7 +53,7 @@ fn get_volumes() -> Result<Vec<String>, MigError> {
 }
 
 pub fn query_dos_device(dev_name: Option<&str>) -> Result<Vec<String>, MigError> {
-    debug!("{}::query_dos_device: entered with {:?}", MODULE, dev_name);
+    debug!("query_dos_device: entered with {:?}", dev_name);
     match dev_name {
         Some(s) => {
             const BUFFER_SIZE: usize = 8192;
@@ -65,13 +63,13 @@ pub fn query_dos_device(dev_name: Option<&str>) -> Result<Vec<String>, MigError>
                 QueryDosDeviceW(dev_path.as_ptr(), buffer.as_mut_ptr(), BUFFER_SIZE as u32)
             };
             if num_tchar > 0 {
-                debug!("{}::query_dos_device: success", MODULE);
+                debug!("query_dos_device: success",);
                 Ok(to_string_list(&buffer)?)
             } else {
                 let os_err = Error::last_os_error();
                 warn!(
-                    "{}::query_dos_device: returned {}, last os error: {:?} ",
-                    MODULE, num_tchar, os_err
+                    "query_dos_device: returned {}, last os error: {:?} ",
+                    num_tchar, os_err
                 );
                 return Err(MigError::from(
                     os_err.context(MigErrCtx::from(MigErrorKind::WinApi)),
@@ -84,13 +82,13 @@ pub fn query_dos_device(dev_name: Option<&str>) -> Result<Vec<String>, MigError>
             let num_tchar =
                 unsafe { QueryDosDeviceW(null_mut(), buffer.as_mut_ptr(), BUFFER_SIZE as u32) };
             if num_tchar > 0 {
-                debug!("{}::query_dos_device: success", MODULE);
+                debug!("query_dos_device: success",);
                 Ok(to_string_list(&buffer)?)
             } else {
                 let os_err = Error::last_os_error();
                 warn!(
-                    "{}::query_dos_device: returned {}, last os error: {:?} ",
-                    MODULE, num_tchar, os_err
+                    "query_dos_device: returned {}, last os error: {:?} ",
+                    num_tchar, os_err
                 );
                 return Err(MigError::from(
                     os_err.context(MigErrCtx::from(MigErrorKind::WinApi)),

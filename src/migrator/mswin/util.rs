@@ -1,6 +1,6 @@
 use crate::{
     common::{call, MigError, MigErrorKind},
-    mswin::wmi_utils::{WmiUtils, LogicalDrive}
+    mswin::wmi_utils::{LogicalDrive, WmiUtils},
 };
 
 const DRIVE_LETTERS: &[&str] = &[
@@ -38,5 +38,3 @@ pub(crate) fn mount_efi() -> Result<LogicalDrive, MigError> {
         ));
     }
 }
-
-
