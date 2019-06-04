@@ -7,9 +7,9 @@ use log::debug;
 use super::{Partition, QueryRes, NS_CVIM2};
 
 const MODULE: &str = "mswin::wmi_utils::physical_drive";
-const QUERY_ALL: &str = "SELECT Caption, Index, DeviceID, Size, MediaType, Status, BytesPerSector, Partitions, CompressionMethod FROM Win32_DiskDrive";
+const QUERY_ALL: &str = "SELECT Caption, Index, DeviceID, Size, MediaType, Status, BytesPerSector, Partitions, CompressionMethod, InterfaceType FROM Win32_DiskDrive";
 
-#[derive(Debug)]
+#[derive(Debug,Clone)]
 pub(crate) struct PhysicalDrive {
     name: String,
     device_id: String,
@@ -21,6 +21,7 @@ pub(crate) struct PhysicalDrive {
     compression_method: String,
     disk_index: u64,
     device: String,
+    interface_type: String,
 }
 
 impl<'a> PhysicalDrive {
@@ -43,6 +44,7 @@ impl<'a> PhysicalDrive {
             bytes_per_sector: res_map.get_int_property("BytesPerSector")?,
             partitions: res_map.get_int_property("Partitions")?,
             compression_method: String::from(res_map.get_string_property("CompressionMethod")?),
+            interface_type: String::from(res_map.get_string_property("InterfaceType")?),
             disk_index,
             device: String::from(
                 query_dos_device(Some(&format!("PhysicalDrive{}", disk_index)))?

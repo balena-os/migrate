@@ -3,7 +3,7 @@ use crate::{
     defs::{OSArch},
     common::{MigError, MigErrorKind, os_release::OSRelease, Config},
     mswin::{
-        wmi_utils::{WmiUtils, LogicalDrive},
+        wmi_utils::{WmiUtils, LogicalDrive, PhysicalDrive},
         win_api::{is_efi_boot},
         util::{mount_efi},
         powershell::{PSInfo},
@@ -52,8 +52,16 @@ impl MigrateInfo {
         };
 
         let mut boot_drive: Option<LogicalDrive> = None;
+        let mut install_drive: Option<PhysicalDrive> = None;
 
-        let _phys_drives = match WmiUtils::query_drives() {
+        // Detect relevant drives
+        // Detect boot partition and the drive it is on -> install drive
+        // Attempt to guess linux names for drives partitions
+        // -> InterfaceType SSI -> /dev/sda
+        // -> InterfaceType IDE -> /dev/hda
+        // -> InterfaceType ??SDCard?? -> /dev/mcblk
+
+        match WmiUtils::query_drives() {
             Ok(phys_drives) => {
                 for drive in phys_drives {
                     debug!(
@@ -72,6 +80,8 @@ impl MigrateInfo {
                                         partition.get_ptype(),
                                         drive.get_device_id()
                                     );
+
+                                    install_drive = Some(drive.clone());
 
                                     boot_drive = match partition.query_logical_drive() {
                                         Ok(boot_drive) => {
@@ -125,7 +135,7 @@ impl MigrateInfo {
                 error!("Failed to query drive info: {:?}", why);
                 return Err(MigError::displayed());
             }
-        };
+        }
 
 
 
