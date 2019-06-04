@@ -103,7 +103,7 @@ pub fn query_dos_device(dev_name: Option<&str>) -> Result<Vec<String>, MigError>
 pub(crate) fn is_efi_boot() -> Result<bool, MigError> {
     // TODO: only works on windows 10 and upwards
     // TODO: alt - try to mount efi drive ?
-    
+
     let dummy: Vec<u16> = OsStr::new("").encode_wide().chain(once(0)).collect();
     let guid: Vec<u16> = OsStr::new("{00000000-0000-0000-0000-000000000000}")
         .encode_wide()
@@ -134,9 +134,7 @@ pub(crate) fn is_efi_boot() -> Result<bool, MigError> {
         }
         None => Err(MigError::from_remark(
             MigErrorKind::InvParam,
-            &format!(
-                "is_uefi_boot: no error where an error was expected",
-            ),
+            &format!("is_uefi_boot: no error where an error was expected",),
         )),
     }
 }

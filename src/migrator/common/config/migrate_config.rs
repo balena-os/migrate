@@ -1,5 +1,5 @@
+use log::error;
 use std::path::{Path, PathBuf};
-use log::{error};
 
 use crate::{
     common::{MigError, MigErrorKind},
@@ -122,7 +122,7 @@ impl<'a> MigrateConfig {
 
                 if let None = self.kernel_path {
                     error!("A required parameter was not found: 'kernel_path'");
-                    return Err(MigError::displayed());                
+                    return Err(MigError::displayed());
                 }
 
                 if let None = self.initrd_path {

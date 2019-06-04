@@ -112,7 +112,12 @@ impl Stage2 {
 
         // TODO: add options to make this more reliable)
 
-        debug!("mounting root device '{}' on '{}' with fs type: {:?}", root_device.display(), root_fs_dir.display(), root_fs_type );
+        debug!(
+            "mounting root device '{}' on '{}' with fs type: {:?}",
+            root_device.display(),
+            root_fs_dir.display(),
+            root_fs_type
+        );
         mount(
             Some(&root_device),
             &root_fs_dir,
@@ -134,10 +139,9 @@ impl Stage2 {
             ),
         ))?;
 
-
         let stage2_cfg_file = path_append(&root_fs_dir, STAGE2_CFG_FILE);
 
-        debug!("looking for '{}'", stage2_cfg_file.display() );
+        debug!("looking for '{}'", stage2_cfg_file.display());
 
         if !file_exists(&stage2_cfg_file) {
             let message = format!(
@@ -191,7 +195,12 @@ impl Stage2 {
         let boot_device = stage2_cfg.get_boot_device();
         let mut boot_mounted = false;
         if boot_device != root_device {
-            debug!("attempting to mount '{}' on '{}' with fstype: {}", boot_device.display() , boot_path.display(), stage2_cfg.get_boot_fstype());
+            debug!(
+                "attempting to mount '{}' on '{}' with fstype: {}",
+                boot_device.display(),
+                boot_path.display(),
+                stage2_cfg.get_boot_fstype()
+            );
             mount(
                 Some(boot_device),
                 &boot_path,
@@ -217,7 +226,12 @@ impl Stage2 {
             let device = bootmgr_cfg.get_device();
             if device != boot_device && device != root_device {
                 let mountpoint = path_append(&root_fs_dir, bootmgr_cfg.get_mountpoint());
-                debug!("attempting to mount '{}' on '{}' with fstype: {}", device.display() , mountpoint.display(), bootmgr_cfg.get_fstype());
+                debug!(
+                    "attempting to mount '{}' on '{}' with fstype: {}",
+                    device.display(),
+                    mountpoint.display(),
+                    bootmgr_cfg.get_fstype()
+                );
                 mount(
                     Some(device),
                     &mountpoint,
@@ -263,7 +277,6 @@ impl Stage2 {
         self.recoverable_state = true;
 
         let cmds = EnsuredCmds::new(MIG_REQUIRED_CMDS)?;
-
 
         // check if we have enough space to copy files to initramfs
         let mig_tmp_dir = match get_mem_info() {
@@ -325,8 +338,6 @@ impl Stage2 {
                 return Err(MigError::displayed());
             }
         };
-
-
 
         if !dir_exists(mig_tmp_dir)? {
             create_dir(mig_tmp_dir).context(MigErrCtx::from_remark(

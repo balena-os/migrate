@@ -5,7 +5,7 @@ mod win_api;
 
 mod util;
 
-use win_api::{is_efi_boot};
+use win_api::is_efi_boot;
 mod wmi_utils;
 
 use log::{debug, error, info, trace, warn};
@@ -107,37 +107,46 @@ impl<'a> MSWMigrator {
             return Err(MigError::displayed());
         }
 
-        migrator.os_info = Some(
-            match WmiUtils::get_os_info() {
-                Ok(os_info) => {
-                    info!(
-                        "OS Architecture is {}, OS Name is '{}', OS Release is '{}'",
-                        os_info.os_arch, os_info.os_name, os_info.os_release );
-                    debug!("Boot device: '{}'", os_info.boot_dev);    
-                    os_info 
-                    },
-                Err(why) => {
-                    error!("Failed to retrieve OS info: {:?}", why);
-                    return Err(MigError::displayed());
-                }    
-            });
+        migrator.os_info = Some(match WmiUtils::get_os_info() {
+            Ok(os_info) => {
+                info!(
+                    "OS Architecture is {}, OS Name is '{}', OS Release is '{}'",
+                    os_info.os_arch, os_info.os_name, os_info.os_release
+                );
+                debug!("Boot device: '{}'", os_info.boot_dev);
+                os_info
+            }
+            Err(why) => {
+                error!("Failed to retrieve OS info: {:?}", why);
+                return Err(MigError::displayed());
+            }
+        });
 
         let phys_drives = match WmiUtils::query_drives() {
             Ok(phys_drives) => {
                 for drive in phys_drives {
-                    debug!("found drive id {}, device {}", drive.get_device_id(), drive.get_device());  
+                    debug!(
+                        "found drive id {}, device {}",
+                        drive.get_device_id(),
+                        drive.get_device()
+                    );
                     let partitions = match drive.query_partitions() {
                         Ok(partitions) => {
                             for partition in partitions {
                                 if partition.is_boot_device() {
-                                    info!("Boot partition is: '{}' type: '{}' on drive '{}'", 
-                                    partition.get_device(), 
-                                    partition.get_ptype(),
-                                    drive.get_device_id());
+                                    info!(
+                                        "Boot partition is: '{}' type: '{}' on drive '{}'",
+                                        partition.get_device(),
+                                        partition.get_ptype(),
+                                        drive.get_device_id()
+                                    );
                                     let boot_drive = match partition.query_logical_drive() {
                                         Ok(boot_drive) => {
                                             if let Some(boot_drive) = boot_drive {
-                                                info!("Boot partition is mounted on: '{}' ", boot_drive.get_name());
+                                                info!(
+                                                    "Boot partition is mounted on: '{}' ",
+                                                    boot_drive.get_name()
+                                                );
                                                 boot_drive
                                             } else {
                                                 // TODO: mount it
@@ -145,14 +154,19 @@ impl<'a> MSWMigrator {
                                                 if is_efi_boot()? {
                                                     info!("Device was booted in EFI mode, attempting to mount the EFI partition");
                                                     let efi_drive = mount_efi()?;
-                                                    info!("The EFI partition was mounted on '{}'", efi_drive.get_name());
+                                                    info!(
+                                                        "The EFI partition was mounted on '{}'",
+                                                        efi_drive.get_name()
+                                                    );
                                                     efi_drive
                                                 } else {
-                                                    error!("Failed to mount EFI partition for device");
+                                                    error!(
+                                                        "Failed to mount EFI partition for device"
+                                                    );
                                                     return Err(MigError::displayed());
                                                 }
                                             }
-                                        },
+                                        }
                                         Err(why) => {
                                             error!("Failed to query logical drive for partition {}: {:?}", partition.get_device(), why);
                                             return Err(MigError::displayed());
@@ -162,22 +176,25 @@ impl<'a> MSWMigrator {
                                     debug!("found partition: '{}'", partition.get_device());
                                 }
                             }
-                        }, 
+                        }
                         Err(why) => {
-                            error!("Failed to query partitions for drive {}: {:?}", drive.get_device_id(), why);
+                            error!(
+                                "Failed to query partitions for drive {}: {:?}",
+                                drive.get_device_id(),
+                                why
+                            );
                             return Err(MigError::displayed());
                         }
                     };
                 }
-            }, 
+            }
             Err(why) => {
                 error!("Failed to query drive info: {:?}", why);
                 return Err(MigError::displayed());
-            }    
+            }
         };
 
         if is_efi_boot()? {
-
 
             // call("mountvol", &[""])
         }

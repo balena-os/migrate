@@ -1,5 +1,5 @@
 use failure::ResultExt;
-use log::{debug, info, Level, error};
+use log::{debug, error, info, Level};
 use mod_logger::Logger;
 use serde::Deserialize;
 use serde_yaml;
@@ -136,19 +136,18 @@ impl<'a> Config {
 
         // establish a valid config path
         let config_path = {
-            let config_path = 
-                if arg_matches.is_present("config") {
-                    if let Some(cfg) = arg_matches.value_of("config") {
-                        PathBuf::from(cfg)
-                    } else {
-                        return Err(MigError::from_remark(
-                            MigErrorKind::InvParam,
-                            "invalid command line parameter 'config': no value given",
-                        ));
-                    }
+            let config_path = if arg_matches.is_present("config") {
+                if let Some(cfg) = arg_matches.value_of("config") {
+                    PathBuf::from(cfg)
                 } else {
-                    PathBuf::from(DEFAULT_MIGRATE_CONFIG)
-                };
+                    return Err(MigError::from_remark(
+                        MigErrorKind::InvParam,
+                        "invalid command line parameter 'config': no value given",
+                    ));
+                }
+            } else {
+                PathBuf::from(DEFAULT_MIGRATE_CONFIG)
+            };
 
             if config_path.is_absolute() {
                 Some(config_path)
@@ -169,11 +168,13 @@ impl<'a> Config {
             if file_exists(&config_path) {
                 let mut config = Config::from_file(&config_path)?;
                 // use config path as workdir if nothing other was defined
-                if ! config.migrate.has_work_dir() {
+                if !config.migrate.has_work_dir() {
                     if let None = work_dir {
-                        config.migrate.set_work_dir(config_path.parent().unwrap().to_path_buf());
+                        config
+                            .migrate
+                            .set_work_dir(config_path.parent().unwrap().to_path_buf());
                     }
-                }                
+                }
                 config
             } else {
                 Config::default()
@@ -185,9 +186,9 @@ impl<'a> Config {
         if let Some(work_dir) = work_dir {
             // if work_dir was set in command line it overrides
             config.migrate.set_work_dir(work_dir);
-        } 
-        
-        if ! config.migrate.has_work_dir() {
+        }
+
+        if !config.migrate.has_work_dir() {
             error!("no workdir specified and no configuration found");
             return Err(MigError::displayed());
         }
