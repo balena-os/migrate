@@ -1,6 +1,6 @@
 use crate::{
     common::{call, MigError, MigErrorKind},
-    mswin::wmi_utils::logical_drive::LogicalDrive,
+    mswin::wmi_utils::{WmiUtils, LogicalDrive}
 };
 
 const DRIVE_LETTERS: &[&str] = &[
@@ -8,8 +8,8 @@ const DRIVE_LETTERS: &[&str] = &[
     "t:", "U:", "V:", "W:", "X:", "Y:", "Z:",
 ];
 
-pub fn mount_efi() -> Result<LogicalDrive, MigError> {
-    let drive_letters = LogicalDrive::query_drive_letters()?;
+pub(crate) fn mount_efi() -> Result<LogicalDrive, MigError> {
+    let drive_letters = WmiUtils::query_drive_letters()?;
     let mut mount_path: Option<&str> = None;
     for letter in DRIVE_LETTERS {
         if let None = drive_letters
@@ -38,3 +38,5 @@ pub fn mount_efi() -> Result<LogicalDrive, MigError> {
         ));
     }
 }
+
+

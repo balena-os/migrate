@@ -4,7 +4,11 @@ use std::rc::Rc;
 use super::QueryRes;
 use crate::{
     common::{MigError, MigErrorKind},
-    mswin::{win_api::wmi_api::WmiAPI, MSWMigrator},
+    mswin::{
+        win_api::wmi_api::WmiAPI,
+        powershell::{PSInfo},
+    },
+
 };
 use regex::Regex;
 
@@ -15,7 +19,7 @@ const MODULE: &str = "mswin::wmi_utils::logical_drive";
 const QUERY_BASE: &str = "SELECT Caption, DeviceID, Compressed, FileSystem, MediaType, Size, FreeSpace, VolumeDirty, Status FROM Win32_LogicalDisk";
 
 #[derive(Debug)]
-pub enum MediaType {
+pub(crate) enum MediaType {
     UNKNOWN,
     FIXED_MEDIA,
     REMOVABLE_MEDIA,
@@ -40,7 +44,7 @@ impl MediaType {
 }
 
 #[derive(Debug)]
-pub struct LogicalDrive {
+pub(crate) struct LogicalDrive {
     name: String,
     device_id: String,
     status: String,
@@ -53,6 +57,7 @@ pub struct LogicalDrive {
 }
 
 impl<'a> LogicalDrive {
+/*    
     pub(crate) fn query_drive_letters() -> Result<Vec<String>, MigError> {
         let mut result: Vec<String> = Vec::new();
         for log_drive in LogicalDrive::query_all()? {
@@ -60,6 +65,7 @@ impl<'a> LogicalDrive {
         }
         Ok(result)
     }
+*/
 
     pub(crate) fn query_for_name(name: &str) -> Result<LogicalDrive, MigError> {
         let query = format!("{} where Name='{}'", QUERY_BASE, name);
@@ -153,12 +159,10 @@ impl<'a> LogicalDrive {
         self.dirty
     }
 
-    pub fn get_supported_sizes(&self, migrator: &mut MSWMigrator) -> Result<(u64, u64), MigError> {
+    pub fn get_supported_sizes(&self, ps_info: &mut PSInfo ) -> Result<(u64, u64), MigError> {
         let regex = Regex::new("^([a-zA-Z]):$").unwrap();
         if let Some(cap) = regex.captures(&self.device_id) {
-            Ok(migrator
-                .get_ps_info()
-                .get_drive_supported_size(cap.get(1).unwrap().as_str())?)
+            Ok(ps_info.get_drive_supported_size(cap.get(1).unwrap().as_str())?)
         } else {
             Err(MigError::from_remark(
                 MigErrorKind::InvParam,

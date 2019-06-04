@@ -10,7 +10,7 @@ use std::rc::Rc;
 const MODULE: &str = "mswin::wmi_utils::partition";
 
 #[derive(Debug)]
-pub struct Partition {
+pub(crate) struct Partition {
     name: String,
     device_id: String,
     bootable: bool,

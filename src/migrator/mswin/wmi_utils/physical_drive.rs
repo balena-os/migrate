@@ -10,7 +10,7 @@ const MODULE: &str = "mswin::wmi_utils::physical_drive";
 const QUERY_ALL: &str = "SELECT Caption, Index, DeviceID, Size, MediaType, Status, BytesPerSector, Partitions, CompressionMethod FROM Win32_DiskDrive";
 
 #[derive(Debug)]
-pub struct PhysicalDrive {
+pub(crate) struct PhysicalDrive {
     name: String,
     device_id: String,
     size: u64,

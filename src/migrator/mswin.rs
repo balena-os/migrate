@@ -1,3 +1,11 @@
+use log::{error, trace, };
+use failure::{Fail};
+
+use crate::{
+    common::{ Config, MigError, MigErrorKind, MigErrCtx, MigMode},
+};
+
+
 mod powershell;
 //pub(crate) mod win_api;
 // pub mod drive_info;
@@ -5,76 +13,22 @@ mod win_api;
 
 mod util;
 
-use win_api::is_efi_boot;
 mod wmi_utils;
 
-use log::{debug, error, info, trace, warn};
-// use std::collections::{HashMap};
+mod migrate_info;
+use migrate_info::MigrateInfo;
 
-use crate::{
-    common::{call, os_release::OSRelease, Config, MigError, MigErrorKind, MigMode},
-    defs::OSArch,
-    mswin::util::mount_efi,
-};
-
-use wmi_utils::WMIOSInfo;
-pub(crate) use wmi_utils::{Partition, WmiUtils};
-//use crate::mswin::drive_info::PhysicalDriveInfo;
 
 use powershell::PSInfo;
 
-const MODULE: &str = "migrator::mswin";
-
-struct SysInfo {
-    os_name: Option<String>,
-    os_release: Option<OSRelease>,
-    os_arch: Option<OSArch>,
-    efi_boot: Option<bool>,
-    secure_boot: Option<bool>,
-    /*
-        migrate_info: Option<DiskInfo>,
-        image_info: Option<FileInfo>,
-        kernel_info: Option<FileInfo>,
-        initrd_info: Option<FileInfo>,
-        device_slug: Option<String>,
-    */
-}
-
-impl SysInfo {
-    pub fn default() -> SysInfo {
-        SysInfo {
-            os_name: None,
-            os_release: None,
-            os_arch: None,
-            efi_boot: None,
-            secure_boot: None,
-            /*
-                        migrate_info: None,
-                        image_info: None,
-                        kernel_info: None,
-                        initrd_info: None,
-                        device_slug: None,
-            */
-        }
-    }
-
-    pub fn is_efi_boot(&self) -> bool {
-        if let Some(efi_boot) = self.efi_boot {
-            efi_boot
-        } else {
-            false
-        }
-    }
-}
-
-// const MODULE: &str = "mswin";
-
 pub struct MSWMigrator {
     config: Config,
-    ps_info: PSInfo,
+    mig_info: MigrateInfo, 
+/*    ps_info: PSInfo,
     os_info: Option<WMIOSInfo>,
-    uefi_boot: Option<bool>,
+    efi_boot: Option<bool>,
     sysinfo: SysInfo,
+*/
 }
 
 impl<'a> MSWMigrator {
@@ -90,136 +44,40 @@ impl<'a> MSWMigrator {
     fn try_init(config: Config) -> Result<MSWMigrator, MigError> {
         trace!("MSWMigrator::try_int: entered");
 
-        let mut migrator = MSWMigrator {
-            config,
-            ps_info: PSInfo::try_init()?,
-            os_info: None,
-            uefi_boot: None,
-            sysinfo: SysInfo::default(),
-        };
+        let mut ps_info = PSInfo::try_init()?;
 
         // **********************************************************************
         // We need to be root to do this
         // note: fake admin is not honored in release mode
 
-        if !migrator.is_admin()? {
+        if !ps_info.is_admin()? {
             error!("Please run this program with adminstrator privileges");
             return Err(MigError::displayed());
         }
 
-        migrator.os_info = Some(match WmiUtils::get_os_info() {
-            Ok(os_info) => {
-                info!(
-                    "OS Architecture is {}, OS Name is '{}', OS Release is '{}'",
-                    os_info.os_arch, os_info.os_name, os_info.os_release
-                );
-                debug!("Boot device: '{}'", os_info.boot_dev);
-                os_info
-            }
+        let mig_info = match MigrateInfo::new(&config, &mut ps_info) {
+            Ok(mig_info) => mig_info,
             Err(why) => {
-                error!("Failed to retrieve OS info: {:?}", why);
-                return Err(MigError::displayed());
-            }
-        });
-
-        let phys_drives = match WmiUtils::query_drives() {
-            Ok(phys_drives) => {
-                for drive in phys_drives {
-                    debug!(
-                        "found drive id {}, device {}",
-                        drive.get_device_id(),
-                        drive.get_device()
-                    );
-                    let partitions = match drive.query_partitions() {
-                        Ok(partitions) => {
-                            for partition in partitions {
-                                if partition.is_boot_device() {
-                                    info!(
-                                        "Boot partition is: '{}' type: '{}' on drive '{}'",
-                                        partition.get_device(),
-                                        partition.get_ptype(),
-                                        drive.get_device_id()
-                                    );
-                                    let boot_drive = match partition.query_logical_drive() {
-                                        Ok(boot_drive) => {
-                                            if let Some(boot_drive) = boot_drive {
-                                                info!(
-                                                    "Boot partition is mounted on: '{}' ",
-                                                    boot_drive.get_name()
-                                                );
-                                                boot_drive
-                                            } else {
-                                                // TODO: mount it
-                                                debug!("Boot partition is not mounted",);
-                                                if is_efi_boot()? {
-                                                    info!("Device was booted in EFI mode, attempting to mount the EFI partition");
-                                                    let efi_drive = mount_efi()?;
-                                                    info!(
-                                                        "The EFI partition was mounted on '{}'",
-                                                        efi_drive.get_name()
-                                                    );
-                                                    efi_drive
-                                                } else {
-                                                    error!(
-                                                        "Failed to mount EFI partition for device"
-                                                    );
-                                                    return Err(MigError::displayed());
-                                                }
-                                            }
-                                        }
-                                        Err(why) => {
-                                            error!("Failed to query logical drive for partition {}: {:?}", partition.get_device(), why);
-                                            return Err(MigError::displayed());
-                                        }
-                                    };
-                                } else {
-                                    debug!("found partition: '{}'", partition.get_device());
-                                }
-                            }
-                        }
-                        Err(why) => {
-                            error!(
-                                "Failed to query partitions for drive {}: {:?}",
-                                drive.get_device_id(),
-                                why
-                            );
-                            return Err(MigError::displayed());
-                        }
-                    };
-                }
-            }
-            Err(why) => {
-                error!("Failed to query drive info: {:?}", why);
-                return Err(MigError::displayed());
+                return match why.kind() {
+                    MigErrorKind::Displayed => Err(why),
+                    _ => {
+                        error!("Failed to create MigrateInfo: {:?}", why);
+                        Err(MigError::from(
+                            why.context(MigErrCtx::from(MigErrorKind::Displayed)),
+                        ))
+                    }
+                };
             }
         };
 
-        if is_efi_boot()? {
-
-            // call("mountvol", &[""])
-        }
-
-        Ok(migrator)
+        Ok(MSWMigrator {
+            config,
+            mig_info,
+        })
     }
 
     fn do_migrate(&self) -> Result<(), MigError> {
         Err(MigError::from(MigErrorKind::NotImpl))
-    }
-
-    fn get_ps_info(&'a mut self) -> &'a mut PSInfo {
-        &mut self.ps_info
-    }
-
-    #[cfg(not(debug_assertions))]
-    fn is_admin(&self) -> Result<bool, MigError> {
-        trace!("LinuxMigrator::is_admin: entered");
-        Ok(self.ps_info.is_admin()?)
-    }
-
-    #[cfg(debug_assertions)]
-    fn is_admin(&self) -> Result<bool, MigError> {
-        trace!("LinuxMigrator::is_admin: entered");
-        Ok(self.ps_info.is_admin()? || self.config.debug.is_fake_admin())
     }
 
     /*

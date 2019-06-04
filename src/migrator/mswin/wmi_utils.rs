@@ -28,10 +28,10 @@ pub(crate) use partition::Partition;
 const MODULE: &str = "mswin::wmi_utils";
 
 const EMPTY_STR: &str = "";
-pub const NS_CVIM2: &str = "ROOT\\CIMV2";
-pub const NS_MSW_STORAGE: &str = r"ROOT\Microsoft\Windows\Storage";
+pub(crate) const NS_CVIM2: &str = "ROOT\\CIMV2";
+const NS_MSW_STORAGE: &str = r"ROOT\Microsoft\Windows\Storage";
 
-pub const WMIQ_OS: &str = "SELECT Caption,Version,OSArchitecture, BootDevice, TotalVisibleMemorySize,FreePhysicalMemory FROM Win32_OperatingSystem";
+pub(crate) const WMIQ_OS: &str = "SELECT Caption,Version,OSArchitecture, BootDevice, TotalVisibleMemorySize,FreePhysicalMemory FROM Win32_OperatingSystem";
 // pub const WMIQ_CSProd: &str = "SELECT * FROM Win32_ComputerSystemProduct";
 // pub const WMIQ_BOOT_CONFIG: &str = "SELECT * FROM Win32_SystemBootConfiguration";
 // pub const WMIQ_Disk: &str = "SELECT * FROM Win32_DiskDrive";
@@ -50,7 +50,7 @@ pub(crate) struct WMIOSInfo {
 }
 
 // TODO: make WmiAPI an Rc to make it shareble with dependant objects ?
-pub struct WmiUtils {}
+pub(crate) struct WmiUtils {}
 
 impl WmiUtils {
     /*    pub fn new(namespace:  &str) -> Result<WmiUtils, MigError> {
@@ -64,7 +64,7 @@ impl WmiUtils {
         }
     */
 
-    pub(crate) fn get_os_info() -> Result<WMIOSInfo, MigError> {
+    pub fn get_os_info() -> Result<WMIOSInfo, MigError> {
         let wmi_api = WmiAPI::get_api(NS_CVIM2)?;
         let wmi_res = wmi_api.raw_query(WMIQ_OS)?;
         let wmi_row = match wmi_res.get(0) {
