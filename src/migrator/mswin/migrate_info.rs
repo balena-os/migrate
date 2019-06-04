@@ -8,7 +8,7 @@ use crate::{
         wmi_utils::{LogicalDrive, PhysicalDrive, Volume, WmiUtils},
     },
 };
-use log::{debug, error, info};
+use log::{debug, error, info, trace};
 
 pub(crate) struct EfiDriveInfo{
     pub efi_vol: Volume,
@@ -79,16 +79,16 @@ impl MigrateInfo {
     }
 
     fn get_efi_drive_info() -> Result<EfiDriveInfo, MigError> {
+        trace!("get_efi_drive_info: entered");
         // get the system/EFI volume
         let volumes = Volume::query_system_volumes()?;
         let efi_vol =
             if volumes.len() == 1 {
-                debug!("Found System Volume: {:?}", volumes[0]);
+                debug!("Found System/EFI Volume: {:?}", volumes[0]);
                 volumes[0].clone()
             } else {
                 return Err(MigError::from_remark(MigErrorKind::InvParam, &format!("Encountered an unexpected number of system volumes: {}", volumes.len())));
             };
-
 
         let volumes = Volume::query_boot_volumes()?;
         let boot_vol =
@@ -103,20 +103,22 @@ impl MigrateInfo {
         let mut boot_mount: Option<LogicalDrive> = None;
         let mut efi_mount: Option<LogicalDrive> = None;
 
+        // get boot drive letter from boot volume flag
+        // get efi drive from boot partition flag
+        // mount efi drive if boot flagged partition is not mounted
+        // ensure EFI partition
 
+        /*
         match PhysicalDrive::query_all() {
             Ok(phys_drives) => {
                 for drive in phys_drives {
-                    debug!(
-                        "found drive id {}, device {}",
-                        drive.get_device_id(),
-                        drive.get_device()
-                    );
-
+                    debug!("found drive id {}, ", drive.get_device_id(), );
                     match drive.query_partitions() {
                         Ok(partitions) => {
                             for partition in partitions {
                                 let part_dev = partition.get_device();
+                                info!("Looking at partition: name: '{}' dev_id: '{}', device: {}, ", partition.get_name(), partition.get_device_id(), part_dev);
+
                                 if part_dev == boot_vol.get_device() {
                                     info!(
                                         "Boot partition is: '{}' type: '{}' on drive '{}'",
@@ -191,7 +193,7 @@ impl MigrateInfo {
                 return Err(MigError::displayed());
             }
         }
-
+*/
         Ok(EfiDriveInfo{
             efi_vol,
             efi_mount:

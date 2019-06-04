@@ -21,7 +21,7 @@ pub(crate) struct Partition {
     disk_index: u64,
     partition_index: u64,
     start_offset: u64,
-    device: String,
+    //device: String,
 }
 
 impl<'a> Partition {
@@ -31,7 +31,7 @@ impl<'a> Partition {
         Ok(Partition {
             name: String::from(res_map.get_string_property("Caption")?),
             device_id: String::from(res_map.get_string_property("DeviceID")?),
-            device: String::from(
+/*            device: String::from(
                 query_dos_device(Some(&format!(
                     "Harddisk{}Partition{}",
                     disk_index,
@@ -40,7 +40,7 @@ impl<'a> Partition {
                 .get(0)
                 .unwrap()
                 .as_ref(),
-            ),
+            ), */
             bootable: res_map.get_bool_property("Bootable")?,
             size: res_map.get_uint_property("Size")?,
             number_of_blocks: res_map.get_uint_property("NumberOfBlocks")?,
@@ -169,8 +169,9 @@ impl<'a> Partition {
     pub fn get_device_id(&'a self) -> &'a str {
         &self.device_id
     }
-
+/*
     pub fn get_device(&'a self) -> &'a str {
         &self.device
     }
+*/
 }
