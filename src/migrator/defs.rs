@@ -83,7 +83,7 @@ pub(crate) enum DeviceType {
     RaspberryPi3,
 }
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub enum OSArch {
     AMD64,
     ARMHF,

@@ -132,20 +132,11 @@ impl MigrateInfo {
                                         info!("Found boot drive on partition '{}' , drive: '{}' path: '{}'", partition.get_device_id(), drive.get_device_id(), logical_drive.get_name());
 
                                         boot_path = Some(PathInfo{
-                                            volume: boot_vol,
+                                            volume: boot_vol.clone(),
                                             drive: drive.clone(),
                                             partition: partition.clone(),
                                             mount: logical_drive,
                                         });
-
-                                        // stop when done
-                                        if efi_boot {
-                                            if let Some(_dummy) = efi_path {
-                                                break;
-                                            }
-                                        } else {
-                                            break;
-                                        }
                                     }
                                 }
 
@@ -164,8 +155,8 @@ impl MigrateInfo {
                                                 },
                                                 Err(why) => {
                                                     error!(
-                                                        "Failed to retrieve logical drive for efi partition {}",
-                                                        partition.get_device_id(),
+                                                        "Failed to retrieve logical drive for efi partition {}: {:?}",
+                                                        partition.get_device_id(), why
                                                     );
                                                     return Err(MigError::displayed());
                                                 }
@@ -176,21 +167,16 @@ impl MigrateInfo {
                                         if dir_exists(path_append(efi_mnt.get_name(), "EFI"))? {
                                             // good enough for now
                                             info!("Found System/EFI drive on partition '{}' , drive: '{}', path: '{}'",
-                                                  efi_part.get_device_id(),
+                                                  partition.get_device_id(),
                                                   drive.get_device_id(),
-                                                  efi_mnr.get_name());
+                                                  efi_mnt.get_name());
 
                                             efi_path = Some(PathInfo{
                                                 drive: drive.clone(),
                                                 partition: partition.clone(),
                                                 mount: efi_mnt,
-                                                volume: efi_vol
+                                                volume: efi_vol.clone(),
                                             });
-
-                                            // stop when done
-                                            if let Some(_dummy) = boot_path {
-                                                break;
-                                            }
                                         }
                                     }
                                 }

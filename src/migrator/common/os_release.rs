@@ -7,7 +7,7 @@ use crate::common::{MigErrCtx, MigError, MigErrorKind};
 
 const OS_RELEASE_RE: &str = r"^(\d+)\.(\d+)\.(\d+)(-.*)?$";
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct OSRelease(u32, u32, u32);
 
 impl OSRelease {
