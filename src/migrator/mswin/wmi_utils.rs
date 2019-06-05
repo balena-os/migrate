@@ -1,6 +1,6 @@
 // extern crate wmi;
 
-use log::{debug, info};
+use log::{info};
 use std::collections::HashMap;
 // use std::rc::Rc;
 

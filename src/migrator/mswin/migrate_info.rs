@@ -15,7 +15,7 @@ pub(crate) struct EfiDriveInfo{
     pub efi_mount: LogicalDrive,
     pub boot_vol: Volume,
     pub boot_mount: LogicalDrive,
-    pub drive: Physicaldrive,
+    pub drive: PhysicalDrive,
 }
 
 
@@ -74,18 +74,8 @@ impl MigrateInfo {
             os_name: os_info.os_name,
             os_arch: os_info.os_arch,
             os_release: os_info.os_release,
-            drive_info: EfiDriveInfo,
+            drive_info: efi_drive_info,
         })
-    }
-
-    fn get_efi_vol() -> Result<Volume, MigError> {
-        let volumes = Volume::query_system_volumes()?;
-        if volumes.len() == 1 {
-            debug!("Found system Volume: {:?}", volumes[0]);
-            Ok(volumes[0].clone())
-        } else {
-            Err(MigError::from_remark(MigErrorKind::InvParam, &format!("Encountered an unexpected number of system volumes: {}", volumes.len())))
-        }
     }
 
     fn get_efi_drive_info() -> Result<EfiDriveInfo, MigError> {
@@ -104,7 +94,7 @@ impl MigrateInfo {
         let boot_vol =
             if volumes.len() == 1 {
                 debug!("Found Boot Volume: {:?}", volumes[0]);
-                Ok(volumes[0].clone())
+                volumes[0].clone()
             } else {
                 return Err(MigError::from_remark(MigErrorKind::InvParam, &format!("Encountered an unexpected number of Boot volumes: {}", volumes.len())))
             };
@@ -138,7 +128,7 @@ impl MigrateInfo {
                                     match partition.query_logical_drive()? {
                                         Some(log_drive) => {
                                             info!("Boot partition is: mounted on '{}'",log_drive.get_name());
-                                            boot_mount = log_drive.clone();
+                                            boot_mount = Some(log_drive.clone());
                                         },
                                         None => {
                                             error!(
@@ -163,14 +153,14 @@ impl MigrateInfo {
                                     match partition.query_logical_drive()? {
                                         Some(log_drive) => {
                                             info!("System/EFI partition is: mounted on '{}'",log_drive.get_name());
-                                            efi_mount = log_drive.clone();
+                                            efi_mount = Some(log_drive.clone());
                                         },
                                         None => {
                                             info!("Attempting to mount System/EFI partition");
                                             match mount_efi() {
                                                 Ok(log_drive) => {
-                                                    info!("System/EFI partition {} is mounted on '{}'",log_drive.get_name());
-                                                    efi_mount = log_drive.clone();
+                                                    info!("System/EFI partition {} is mounted on '{}'",part_dev, log_drive.get_name());
+                                                    efi_mount = Some(log_drive.clone());
                                                 },
                                                 Err(why) => {
                                                     error!(

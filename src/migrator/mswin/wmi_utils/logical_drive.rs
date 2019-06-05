@@ -14,7 +14,7 @@ const MODULE: &str = "mswin::wmi_utils::logical_drive";
 // const QUERY_ALL: &str = "SELECT Caption, Index, DeviceID, Size, MediaType, Status, BytesPerSector, Partitions, CompressionMethod FROM Win32_DiskDrive";
 const QUERY_BASE: &str = "SELECT Caption, DeviceID, Compressed, FileSystem, MediaType, Size, FreeSpace, VolumeDirty, Status FROM Win32_LogicalDisk";
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub(crate) enum MediaType {
     UNKNOWN,
     FIXED_MEDIA,
@@ -39,7 +39,7 @@ impl MediaType {
     }
 }
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub(crate) struct LogicalDrive {
     name: String,
     device_id: String,
