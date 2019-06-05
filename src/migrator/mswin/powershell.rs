@@ -92,6 +92,7 @@ impl PSInfo {
 
     pub fn is_admin(&self) -> Result<bool, MigError> {
         let output = call_from_stdin(PS_CMD_IS_ADMIN, true)?;
+        debug!("is_admin: call_from_stdin res {:?}", output);
         if !output.ps_ok {
             return Err(ps_failed_stdin(&output, &PS_CMD_IS_ADMIN, "is_admin"));
         }
@@ -365,8 +366,8 @@ impl PSInfo {
 
 fn call_from_stdin(cmd_str: &str, trim_stdout: bool) -> Result<PSRes, MigError> {
     debug!(
-        "{}::call_from_stdin(): called with {:?} < '{}'  trim_stdout: {}",
-        MODULE, PS_ARGS_FROM_STDIN, cmd_str, trim_stdout
+        "call_from_stdin()!!: called with {:?} < '{}'  trim_stdout: {}",
+        PS_ARGS_FROM_STDIN, cmd_str, trim_stdout
     );
     let mut command = Command::new(POWERSHELL)
         .args(&PS_ARGS_FROM_STDIN)
@@ -383,9 +384,13 @@ fn call_from_stdin(cmd_str: &str, trim_stdout: bool) -> Result<PSRes, MigError> 
         ))?;
     // TODO: make sure we write the right thing (utf8/wide)
 
-    let mut full_cmd = String::from(PS_CMD_PREFIX);
+    
+
+    let mut full_cmd = String::from(PS_CMD_PREFIX);    
     full_cmd.push_str(cmd_str);
     full_cmd.push_str(PS_CMD_POSTFIX);
+
+   
     if let Some(ref mut stdin) = command.stdin {
         stdin
             .write(full_cmd.as_bytes())
@@ -397,6 +402,7 @@ fn call_from_stdin(cmd_str: &str, trim_stdout: bool) -> Result<PSRes, MigError> 
         panic!("{}::call_from_stdin: no stdin found for process", MODULE);
     }
 
+    
     let output = command
         .wait_with_output()
         .context(MigErrCtx::from(MigErrorKind::ExecProcess))?;

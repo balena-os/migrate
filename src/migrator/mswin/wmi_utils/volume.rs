@@ -6,7 +6,7 @@ use log::debug;
 
 use super::{Partition, QueryRes, NS_CVIM2};
 
-const QUERY_ALL: &str = "SELECT DeviceID, BlockSize, BootVolume, Capacity, FileSystem, FreeSpace, \
+const QUERY_ALL: &str = "SELECT Name, DeviceID, BlockSize, BootVolume, Capacity, FileSystem, FreeSpace, \
 SystemVolume, MaximumFileNameLength, PageFilePresent, Label, DriveType, DriveLetter \
 FROM Win32_Volume";
 
@@ -38,7 +38,8 @@ impl DriveType {
 
 #[derive(Debug, Clone)]
 pub(crate) struct Volume {
-    device_id: String,
+    name: String,
+    device_id: String,    
     label: String,
     drive_letter: String,
     file_system: String,
@@ -105,6 +106,7 @@ impl<'a> Volume {
         let device = query_dos_device(Some(handle))?.get(0).unwrap().clone();
 
         Ok(Volume {
+            name: String::from(res_map.get_string_property("Name")?),
             device_id,
             device,
             label: String::from(res_map.get_string_property("Label")?),
@@ -127,6 +129,10 @@ impl<'a> Volume {
 
     pub fn is_system(&self) -> bool {
         self.system_volume
+    }
+
+    pub fn get_name(&'a self) -> &'a str {
+        &self.name
     }
 
     pub fn get_device_id(&'a self) -> &'a str {

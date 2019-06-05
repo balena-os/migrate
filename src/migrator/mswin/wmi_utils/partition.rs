@@ -1,15 +1,14 @@
 use super::{LogicalDrive, QueryRes, NS_CVIM2};
 use crate::{
     common::{MigError, MigErrorKind},
-    mswin::win_api::{query_dos_device, wmi_api::WmiAPI},
+    mswin::win_api::{wmi_api::WmiAPI},
 };
 
 use log::debug;
-use std::rc::Rc;
 
 const MODULE: &str = "mswin::wmi_utils::partition";
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub(crate) struct Partition {
     name: String,
     device_id: String,
@@ -21,7 +20,6 @@ pub(crate) struct Partition {
     disk_index: u64,
     partition_index: u64,
     start_offset: u64,
-    //device: String,
 }
 
 impl<'a> Partition {
@@ -63,7 +61,7 @@ impl<'a> Partition {
             Ok(Partition {
                 name: String::from(res_map.get_string_property("Caption")?),
                 device_id: String::from(res_map.get_string_property("DeviceID")?),
-                device: String::from(
+/*                device: String::from(
                     query_dos_device(Some(&format!(
                         "Harddisk{}Partition{}",
                         disk_index,
@@ -72,7 +70,7 @@ impl<'a> Partition {
                     .get(0)
                     .unwrap()
                     .as_ref(),
-                ),
+                ), */
                 bootable: res_map.get_bool_property("Bootable")?,
                 size: res_map.get_uint_property("Size")?,
                 number_of_blocks: res_map.get_uint_property("NumberOfBlocks")?,

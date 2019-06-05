@@ -38,10 +38,11 @@ impl<'a> MSWMigrator {
     }
 
     fn try_init(config: Config) -> Result<MSWMigrator, MigError> {
-        trace!("MSWMigrator::try_int: entered");
+        trace!("try_int: entered");
 
         let mut ps_info = PSInfo::try_init()?;
 
+        trace!("PSInfo initialised");
         // **********************************************************************
         // We need to be root to do this
         // note: fake admin is not honored in release mode
@@ -65,6 +66,7 @@ impl<'a> MSWMigrator {
                 };
             }
         };
+        
 
         Ok(MSWMigrator { config, mig_info })
     }
