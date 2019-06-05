@@ -1,5 +1,5 @@
 use crate::{
-    common::{MigError,MigErrorKind},
+    common::{MigError, MigErrorKind},
     mswin::win_api::{query_dos_device, wmi_api::WmiAPI},
 };
 use log::debug;
@@ -38,7 +38,7 @@ impl<'a> PhysicalDrive {
     }
 
     pub fn by_index(disk_index: u64) -> Result<PhysicalDrive, MigError> {
-        let query = format!("{} WHERE Index={}",QUERY_ALL, disk_index);
+        let query = format!("{} WHERE Index={}", QUERY_ALL, disk_index);
         debug!("get_drive: performing WMI Query: '{}'", query);
         let mut q_res = WmiAPI::get_api(NS_CVIM2)?.raw_query(&query)?;
         match q_res.len() {
@@ -63,8 +63,6 @@ impl<'a> PhysicalDrive {
             )),
         }
     }
-
-
 
     fn new(res_map: QueryRes) -> Result<PhysicalDrive, MigError> {
         let disk_index = res_map.get_int_property("Index")? as u64;

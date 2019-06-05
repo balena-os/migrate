@@ -6,9 +6,10 @@ use log::debug;
 
 use super::{Partition, QueryRes, NS_CVIM2};
 
-const QUERY_ALL: &str = "SELECT Name, DeviceID, BlockSize, BootVolume, Capacity, FileSystem, FreeSpace, \
-SystemVolume, MaximumFileNameLength, PageFilePresent, Label, DriveType, DriveLetter \
-FROM Win32_Volume";
+const QUERY_ALL: &str =
+    "SELECT Name, DeviceID, BlockSize, BootVolume, Capacity, FileSystem, FreeSpace, \
+     SystemVolume, MaximumFileNameLength, PageFilePresent, Label, DriveType, DriveLetter \
+     FROM Win32_Volume";
 
 #[derive(Debug, Clone)]
 pub(crate) enum DriveType {
@@ -18,7 +19,7 @@ pub(crate) enum DriveType {
     LocalDisk,
     NetworkDrive,
     CompactDisk,
-    RamDisk
+    RamDisk,
 }
 
 impl DriveType {
@@ -39,7 +40,7 @@ impl DriveType {
 #[derive(Debug, Clone)]
 pub(crate) struct Volume {
     name: String,
-    device_id: String,    
+    device_id: String,
     label: String,
     drive_letter: String,
     file_system: String,
@@ -54,12 +55,11 @@ pub(crate) struct Volume {
     drive_type: DriveType,
 }
 
-
 impl<'a> Volume {
-/*    pub fn get_query_all() -> &'static str {
-        QUERY_ALL
-    }
-*/
+    /*    pub fn get_query_all() -> &'static str {
+            QUERY_ALL
+        }
+    */
 
     pub fn query_all() -> Result<Vec<Volume>, MigError> {
         let query = QUERY_ALL;
@@ -146,7 +146,6 @@ impl<'a> Volume {
     pub fn get_drive_letter(&'a self) -> &'a str {
         &self.drive_letter
     }
-
 }
 
 /*

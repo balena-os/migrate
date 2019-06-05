@@ -66,7 +66,6 @@ impl<'a> MSWMigrator {
                 };
             }
         };
-        
 
         Ok(MSWMigrator { config, mig_info })
     }

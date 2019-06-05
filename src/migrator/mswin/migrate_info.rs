@@ -1,30 +1,25 @@
 use crate::{
-    common::{path_append, dir_exists, os_release::OSRelease, Config, MigError, MigErrorKind},
+    common::{dir_exists, os_release::OSRelease, path_append, Config, MigError, MigErrorKind},
     defs::OSArch,
     mswin::{
         powershell::PSInfo,
         util::mount_efi,
         win_api::is_efi_boot,
-        wmi_utils::{LogicalDrive, PhysicalDrive, Volume, Partition, WmiUtils},
+        wmi_utils::{LogicalDrive, Partition, PhysicalDrive, Volume, WmiUtils},
     },
 };
 use log::{debug, error, info, trace};
 
-#[derive(Debug,Clone)]
-pub(crate) struct PathInfo {
-    pub volume: Volume,
-    pub partition: Partition,
-    pub drive: PhysicalDrive,
-    pub mount: LogicalDrive,
-}
+pub(crate) mod path_info;
+use path_info::PathInfo;
 
-#[derive(Debug,Clone)]
-pub(crate) struct DriveInfo{
+#[derive(Debug, Clone)]
+pub(crate) struct DriveInfo {
     pub boot_path: Option<PathInfo>,
     pub efi_path: Option<PathInfo>,
 }
 
-#[derive(Debug,Clone)]
+#[derive(Debug, Clone)]
 pub(crate) struct MigrateInfo {
     pub os_name: String,
     pub os_arch: OSArch,
@@ -53,7 +48,7 @@ impl MigrateInfo {
         };
 
         debug!("get_os_info():");
-        
+
         let os_info = match WmiUtils::get_os_info() {
             Ok(os_info) => {
                 info!(
@@ -69,7 +64,6 @@ impl MigrateInfo {
             }
         };
 
-
         // TODO: efi_boot is always true / only supported variant for now
         let efi_drive_info = MigrateInfo::get_drive_info(efi_boot)?;
 
@@ -79,7 +73,6 @@ impl MigrateInfo {
         // -> InterfaceType SSI -> /dev/sda
         // -> InterfaceType IDE -> /dev/hda
         // -> InterfaceType ??SDCard?? -> /dev/mcblk
-
 
         Ok(MigrateInfo {
             os_name: os_info.os_name,
@@ -93,23 +86,40 @@ impl MigrateInfo {
         trace!("get_efi_drive_info: entered");
         // get the system/EFI volume
         let volumes = Volume::query_system_volumes()?;
-        let efi_vol =
-            if volumes.len() == 1 {
-                debug!("Found System/EFI Volume: '{}' dev_id: '{}'", volumes[0].get_name(), volumes[0].get_device_id());
-                volumes[0].clone()
-            } else {
-                return Err(MigError::from_remark(MigErrorKind::InvParam, &format!("Encountered an unexpected number of system volumes: {}", volumes.len())));
-            };
+        let efi_vol = if volumes.len() == 1 {
+            debug!(
+                "Found System/EFI Volume: '{}' dev_id: '{}'",
+                volumes[0].get_name(),
+                volumes[0].get_device_id()
+            );
+            volumes[0].clone()
+        } else {
+            return Err(MigError::from_remark(
+                MigErrorKind::InvParam,
+                &format!(
+                    "Encountered an unexpected number of system volumes: {}",
+                    volumes.len()
+                ),
+            ));
+        };
 
         let volumes = Volume::query_boot_volumes()?;
-        let boot_vol =
-            if volumes.len() == 1 {
-                debug!("Found Boot Volume: '{}' dev_id: '{}'", volumes[0].get_name(), volumes[0].get_device_id());
-                volumes[0].clone()
-            } else {
-                return Err(MigError::from_remark(MigErrorKind::InvParam, &format!("Encountered an unexpected number of Boot volumes: {}", volumes.len())))
-            };
-
+        let boot_vol = if volumes.len() == 1 {
+            debug!(
+                "Found Boot Volume: '{}' dev_id: '{}'",
+                volumes[0].get_name(),
+                volumes[0].get_device_id()
+            );
+            volumes[0].clone()
+        } else {
+            return Err(MigError::from_remark(
+                MigErrorKind::InvParam,
+                &format!(
+                    "Encountered an unexpected number of Boot volumes: {}",
+                    volumes.len()
+                ),
+            ));
+        };
 
         let mut boot_path: Option<PathInfo> = None;
         let mut efi_path: Option<PathInfo> = None;
@@ -122,48 +132,64 @@ impl MigrateInfo {
         match PhysicalDrive::query_all() {
             Ok(phys_drives) => {
                 for drive in phys_drives {
-                    debug!("found drive id {}, ", drive.get_device_id(), );
+                    debug!("found drive id {}, ", drive.get_device_id(),);
                     match drive.query_partitions() {
                         Ok(partitions) => {
-                            for partition in partitions {                                
-                                debug!("Looking at partition: name: '{}' dev_id: '{}'", partition.get_name(), partition.get_device_id());
+                            for partition in partitions {
+                                debug!(
+                                    "Looking at partition: name: '{}' dev_id: '{}'",
+                                    partition.get_name(),
+                                    partition.get_device_id()
+                                );
                                 if let Some(logical_drive) = partition.query_logical_drive()? {
                                     if logical_drive.get_name() == boot_vol.get_drive_letter() {
                                         info!("Found boot drive on partition '{}' , drive: '{}' path: '{}'", partition.get_device_id(), drive.get_device_id(), logical_drive.get_name());
 
-                                        boot_path = Some(PathInfo{
-                                            volume: boot_vol.clone(),
-                                            drive: drive.clone(),
-                                            partition: partition.clone(),
-                                            mount: logical_drive,
-                                        });
+                                        boot_path = Some(PathInfo::new(
+                                            &boot_vol,
+                                            &drive,
+                                            &partition,
+                                            &logical_drive,
+                                        )?);
                                     }
                                 }
 
                                 if partition.is_boot_device() {
-                                    info!("Found potential System/EFI drive on partition '{}' , drive: '{}'", partition.get_device_id(), drive.get_device_id());            
-                                    let efi_mnt=
-                                        if let Some(logical_drive) = partition.query_logical_drive()? {
-                                            info!("System/EFI drive is mounted on  '{}'", logical_drive.get_name());
-                                            logical_drive
-                                        } else {
-                                            info!("Attempting to mount System/EFI drive");
-                                            match mount_efi() {
-                                                Ok(logical_drive) => {
-                                                    info!("System/EFI drive was mounted on  '{}'", logical_drive.get_name());
-                                                    logical_drive
-                                                },
-                                                Err(why) => {
-                                                    error!(
+                                    info!("Found potential System/EFI drive on partition '{}' , drive: '{}'", partition.get_device_id(), drive.get_device_id());
+                                    let efi_mnt = if let Some(logical_drive) =
+                                        partition.query_logical_drive()?
+                                    {
+                                        info!(
+                                            "System/EFI drive is mounted on  '{}'",
+                                            logical_drive.get_name()
+                                        );
+                                        logical_drive
+                                    } else {
+                                        info!("Attempting to mount System/EFI drive");
+                                        match mount_efi() {
+                                            Ok(logical_drive) => {
+                                                info!(
+                                                    "System/EFI drive was mounted on  '{}'",
+                                                    logical_drive.get_name()
+                                                );
+                                                logical_drive
+                                            }
+                                            Err(why) => {
+                                                error!(
                                                         "Failed to retrieve logical drive for efi partition {}: {:?}",
                                                         partition.get_device_id(), why
                                                     );
-                                                    return Err(MigError::displayed());
-                                                }
+                                                return Err(MigError::displayed());
                                             }
-                                        };
+                                        }
+                                    };
 
-                                    if efi_boot && efi_mnt.get_file_system().to_ascii_uppercase().starts_with("FAT") {
+                                    if efi_boot
+                                        && efi_mnt
+                                            .get_file_system()
+                                            .to_ascii_uppercase()
+                                            .starts_with("FAT")
+                                    {
                                         if dir_exists(path_append(efi_mnt.get_name(), "EFI"))? {
                                             // good enough for now
                                             info!("Found System/EFI drive on partition '{}' , drive: '{}', path: '{}'",
@@ -171,17 +197,14 @@ impl MigrateInfo {
                                                   drive.get_device_id(),
                                                   efi_mnt.get_name());
 
-                                            efi_path = Some(PathInfo{
-                                                drive: drive.clone(),
-                                                partition: partition.clone(),
-                                                mount: efi_mnt,
-                                                volume: efi_vol.clone(),
-                                            });
+                                            efi_path = Some(PathInfo::new(
+                                                &efi_vol, &drive, &partition, &efi_mnt,
+                                            )?);
                                         }
                                     }
                                 }
                             }
-                        },
+                        }
                         Err(why) => {
                             error!(
                                 "Failed to query partitions for drive {}: {:?}",
@@ -199,10 +222,9 @@ impl MigrateInfo {
             }
         }
 
-        Ok(DriveInfo{
+        Ok(DriveInfo {
             boot_path,
             efi_path,
         })
     }
-
 }

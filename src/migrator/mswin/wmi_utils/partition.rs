@@ -1,7 +1,7 @@
 use super::{LogicalDrive, QueryRes, NS_CVIM2};
 use crate::{
     common::{MigError, MigErrorKind},
-    mswin::win_api::{wmi_api::WmiAPI},
+    mswin::win_api::wmi_api::WmiAPI,
 };
 
 use log::debug;
@@ -29,7 +29,7 @@ impl<'a> Partition {
         Ok(Partition {
             name: String::from(res_map.get_string_property("Caption")?),
             device_id: String::from(res_map.get_string_property("DeviceID")?),
-/*            device: String::from(
+            /*            device: String::from(
                 query_dos_device(Some(&format!(
                     "Harddisk{}Partition{}",
                     disk_index,
@@ -61,7 +61,7 @@ impl<'a> Partition {
             Ok(Partition {
                 name: String::from(res_map.get_string_property("Caption")?),
                 device_id: String::from(res_map.get_string_property("DeviceID")?),
-/*                device: String::from(
+                /*                device: String::from(
                     query_dos_device(Some(&format!(
                         "Harddisk{}Partition{}",
                         disk_index,
@@ -167,9 +167,9 @@ impl<'a> Partition {
     pub fn get_device_id(&'a self) -> &'a str {
         &self.device_id
     }
-/*
-    pub fn get_device(&'a self) -> &'a str {
-        &self.device
-    }
-*/
+    /*
+        pub fn get_device(&'a self) -> &'a str {
+            &self.device
+        }
+    */
 }

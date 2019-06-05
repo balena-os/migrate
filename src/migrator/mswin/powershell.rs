@@ -384,13 +384,10 @@ fn call_from_stdin(cmd_str: &str, trim_stdout: bool) -> Result<PSRes, MigError> 
         ))?;
     // TODO: make sure we write the right thing (utf8/wide)
 
-    
-
-    let mut full_cmd = String::from(PS_CMD_PREFIX);    
+    let mut full_cmd = String::from(PS_CMD_PREFIX);
     full_cmd.push_str(cmd_str);
     full_cmd.push_str(PS_CMD_POSTFIX);
 
-   
     if let Some(ref mut stdin) = command.stdin {
         stdin
             .write(full_cmd.as_bytes())
@@ -402,7 +399,6 @@ fn call_from_stdin(cmd_str: &str, trim_stdout: bool) -> Result<PSRes, MigError> 
         panic!("{}::call_from_stdin: no stdin found for process", MODULE);
     }
 
-    
     let output = command
         .wait_with_output()
         .context(MigErrCtx::from(MigErrorKind::ExecProcess))?;

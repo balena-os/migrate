@@ -1,6 +1,6 @@
 // extern crate wmi;
 
-use log::{info};
+use log::info;
 use std::collections::HashMap;
 // use std::rc::Rc;
 
@@ -207,10 +207,6 @@ impl WmiUtils {
         }
     */
 
-
-
-
-
     pub fn query_drive_letters() -> Result<Vec<String>, MigError> {
         const QUERY: &str = "SELECT DeviceID FROM Win32_LogicalDisk";
         let q_res = WmiAPI::get_api(NS_CVIM2)?.raw_query(QUERY)?;
@@ -226,7 +222,6 @@ impl WmiUtils {
         result.sort();
         Ok(result)
     }
-
 
     pub fn test_get_drive(disk_index: u64) -> Result<(), MigError> {
         let query = format!("SELECT * FROM MSFT_Disk WHERE Number={}", disk_index);
