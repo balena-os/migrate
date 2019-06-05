@@ -74,6 +74,32 @@ pub(crate) enum BootType {
     Grub,
 }
 
+#[derive(Debug,Clone)]
+pub(crate) enum FileSystem {
+    Ext2,
+    Ext3,
+    Ext4,
+    VFat,
+    Hpfs,
+    Other
+}
+
+impl FileSystem {
+    pub fn from_str(val: &str) -> FileSystem {
+        match val.to_ascii_uppercase().as_ref() {
+            "EXT2" => FileSystem::Ext2,
+            "EXT3" => FileSystem::Ext3,
+            "EXT4" => FileSystem::Ext4,
+            "FAT" => FileSystem::VFat,
+            "FAT32" => FileSystem::VFat,
+            "FAT16" => FileSystem::VFat,
+            "HPFS" => FileSystem::Hpfs,
+            _ => FileSystem::Other
+        }
+    }
+}
+
+
 #[derive(Debug, Deserialize, Serialize, Clone)]
 pub(crate) enum DeviceType {
     BeagleboneGreen,

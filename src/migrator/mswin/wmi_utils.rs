@@ -41,7 +41,7 @@ pub(crate) const WMIQ_OS: &str = "SELECT Caption,Version,OSArchitecture, BootDev
 // pub const WMIQ_Partition: &str = "SELECT * FROM Win32_DiskPartition";
 // pub const WMIQ_Partition: &str = "SELECT Caption,Bootable,Size,NumberOfBlocks,Type,BootPartition,DiskIndex,Index FROM Win32_DiskPartition";
 
-#[derive(Debug)]
+#[derive(Debug,Clone)]
 pub(crate) struct WMIOSInfo {
     pub os_name: String,
     pub os_release: OSRelease,
@@ -50,6 +50,7 @@ pub(crate) struct WMIOSInfo {
     pub mem_avail: u64,
     pub boot_dev: String,
 }
+
 
 // TODO: make WmiAPI an Rc to make it shareble with dependant objects ?
 pub(crate) struct WmiUtils {}

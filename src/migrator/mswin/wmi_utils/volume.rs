@@ -1,4 +1,5 @@
 use crate::{
+    defs::{FileSystem},
     common::MigError,
     mswin::win_api::{query_dos_device, wmi_api::WmiAPI},
 };
@@ -43,7 +44,7 @@ pub(crate) struct Volume {
     device_id: String,
     label: String,
     drive_letter: String,
-    file_system: String,
+    file_system: FileSystem,
     device: String,
     boot_volume: bool,
     system_volume: bool,
@@ -110,7 +111,7 @@ impl<'a> Volume {
             device_id,
             device,
             label: String::from(res_map.get_string_property("Label")?),
-            file_system: String::from(res_map.get_string_property("FileSystem")?),
+            file_system: FileSystem::from_str(res_map.get_string_property("FileSystem")?),
             drive_letter: String::from(res_map.get_string_property("DriveLetter")?),
             boot_volume: res_map.get_bool_property("BootVolume")?,
             system_volume: res_map.get_bool_property("SystemVolume")?,
@@ -133,6 +134,10 @@ impl<'a> Volume {
 
     pub fn get_name(&'a self) -> &'a str {
         &self.name
+    }
+
+    pub fn get_file_system(&'a self) -> &'a FileSystem {
+        &self.file_system
     }
 
     pub fn get_device_id(&'a self) -> &'a str {

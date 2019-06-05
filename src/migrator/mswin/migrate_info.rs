@@ -1,6 +1,6 @@
 use crate::{
     common::{dir_exists, os_release::OSRelease, path_append, Config, MigError, MigErrorKind},
-    defs::OSArch,
+    defs::{OSArch, FileSystem,},
     mswin::{
         powershell::PSInfo,
         util::mount_efi,
@@ -8,7 +8,7 @@ use crate::{
         wmi_utils::{LogicalDrive, Partition, PhysicalDrive, Volume, WmiUtils},
     },
 };
-use log::{debug, error, info, trace};
+use log::{debug, error, info, trace, warn};
 
 pub(crate) mod path_info;
 use path_info::PathInfo;
@@ -141,24 +141,44 @@ impl MigrateInfo {
                                     partition.get_name(),
                                     partition.get_device_id()
                                 );
-                                if let Some(logical_drive) = partition.query_logical_drive()? {
-                                    if logical_drive.get_name() == boot_vol.get_drive_letter() {
-                                        info!("Found boot drive on partition '{}' , drive: '{}' path: '{}'", partition.get_device_id(), drive.get_device_id(), logical_drive.get_name());
 
-                                        boot_path = Some(PathInfo::new(
-                                            &boot_vol,
-                                            &drive,
-                                            &partition,
-                                            &logical_drive,
-                                        )?);
+                                if let None = boot_path {
+                                    if let Some(logical_drive) = partition.query_logical_drive()? {
+                                        // TODO: find a better way to match
+                                        // matching boot drive via drive letter does not seem very reliable
+                                        if logical_drive.get_name() == boot_vol.get_drive_letter() {
+                                            info!("Found boot drive on partition '{}' , drive: '{}' path: '{}'", partition.get_device_id(), drive.get_device_id(), logical_drive.get_name());
+
+                                            boot_path = Some(PathInfo::new(
+                                                &boot_vol,
+                                                &drive,
+                                                &partition,
+                                                &logical_drive,
+                                            )?);
+                                        }
                                     }
                                 }
 
                                 if partition.is_boot_device() {
+                                    // TODO: make this match secure.
+                                    // This match is incomplete. There is no guarantee that the device mounted as
+                                    // efi partition is the same device that efi_vol points to
+                                    // Match is possible via drive letter but that does not seem to get updated in volume
+                                    // when EFI drive is mounted
+
                                     info!("Found potential System/EFI drive on partition '{}' , drive: '{}'", partition.get_device_id(), drive.get_device_id());
                                     let efi_mnt = if let Some(logical_drive) =
                                         partition.query_logical_drive()?
                                     {
+                                        let efi_dl = efi_vol.get_drive_letter().to_ascii_uppercase();
+                                        if !efi_dl.is_empty() {
+                                            if logical_drive.get_name().to_ascii_uppercase() != efi_dl {
+                                                warn!("Failed to match efi volume '{}' with boot partition '{}'", efi_vol.get_device_id(), partition.get_device_id());
+                                                // next partition
+                                                continue;
+                                            }
+                                        }
+
                                         info!(
                                             "System/EFI drive is mounted on  '{}'",
                                             logical_drive.get_name()
@@ -184,22 +204,20 @@ impl MigrateInfo {
                                         }
                                     };
 
-                                    if efi_boot
-                                        && efi_mnt
-                                            .get_file_system()
-                                            .to_ascii_uppercase()
-                                            .starts_with("FAT")
-                                    {
-                                        if dir_exists(path_append(efi_mnt.get_name(), "EFI"))? {
-                                            // good enough for now
-                                            info!("Found System/EFI drive on partition '{}' , drive: '{}', path: '{}'",
-                                                  partition.get_device_id(),
-                                                  drive.get_device_id(),
-                                                  efi_mnt.get_name());
+                                    if efi_boot {
+                                        if let FileSystem::VFat = efi_mnt.get_file_system()
+                                        {
+                                            if dir_exists(path_append(efi_mnt.get_name(), "EFI"))? {
+                                                // good enough for now
+                                                info!("Found System/EFI drive on partition '{}' , drive: '{}', path: '{}'",
+                                                      partition.get_device_id(),
+                                                      drive.get_device_id(),
+                                                      efi_mnt.get_name());
 
-                                            efi_path = Some(PathInfo::new(
-                                                &efi_vol, &drive, &partition, &efi_mnt,
-                                            )?);
+                                                efi_path = Some(PathInfo::new(
+                                                    &efi_vol, &drive, &partition, &efi_mnt,
+                                                )?);
+                                            }
                                         }
                                     }
                                 }

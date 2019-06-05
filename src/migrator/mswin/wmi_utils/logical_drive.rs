@@ -3,6 +3,7 @@ use std::rc::Rc;
 // use log::{debug};
 use super::QueryRes;
 use crate::{
+    defs::{FileSystem},
     common::{MigError, MigErrorKind},
     mswin::{powershell::PSInfo, win_api::wmi_api::WmiAPI},
 };
@@ -45,7 +46,7 @@ pub(crate) struct LogicalDrive {
     device_id: String,
     status: String,
     media_type: MediaType,
-    file_system: String,
+    file_system: FileSystem,
     size: u64,
     free_space: u64,
     compressed: bool,
@@ -111,7 +112,7 @@ impl<'a> LogicalDrive {
             device_id: String::from(res_map.get_string_property("DeviceID")?),
             status: String::from(res_map.get_string_property("Status")?),
             media_type: MediaType::from_int(res_map.get_int_property("MediaType")?),
-            file_system: String::from(res_map.get_string_property("FileSystem")?),
+            file_system: FileSystem::from_str(res_map.get_string_property("FileSystem")?),
             size: res_map.get_uint_property("Size")?,
             free_space: res_map.get_uint_property("FreeSpace")?,
             compressed: res_map.get_bool_property("Compressed")?,
@@ -135,7 +136,7 @@ impl<'a> LogicalDrive {
         self.free_space
     }
 
-    pub fn get_file_system(&'a self) -> &'a str {
+    pub fn get_file_system(&'a self) -> &'a FileSystem {
         &self.file_system
     }
 
