@@ -210,17 +210,6 @@ impl WmiUtils {
 
 
 
-    pub fn query_drives() -> Result<Vec<PhysicalDrive>, MigError> {
-        let query = PhysicalDrive::get_query_all();
-        debug!("query_drives: performing WMI Query: '{}'", query);
-        let q_res = WmiAPI::get_api(NS_CVIM2)?.raw_query(query)?;
-        let mut result: Vec<PhysicalDrive> = Vec::new();
-        for res in q_res {
-            let res_map = QueryRes::new(&res);
-            result.push(PhysicalDrive::new(res_map)?);
-        }
-        Ok(result)
-    }
 
     pub fn query_drive_letters() -> Result<Vec<String>, MigError> {
         const QUERY: &str = "SELECT DeviceID FROM Win32_LogicalDisk";
@@ -238,32 +227,6 @@ impl WmiUtils {
         Ok(result)
     }
 
-    pub fn get_drive(disk_index: u64) -> Result<PhysicalDrive, MigError> {
-        let query = PhysicalDrive::get_query_by_index(disk_index);
-        debug!("get_drive: performing WMI Query: '{}'", query);
-        let mut q_res = WmiAPI::get_api(NS_CVIM2)?.raw_query(&query)?;
-        match q_res.len() {
-            0 => Err(MigError::from_remark(
-                MigErrorKind::NotFound,
-                &format!(
-                    "get_drive: the query returned an empty result set: '{}'",
-                    query
-                ),
-            )),
-            1 => {
-                let res = q_res.pop().unwrap();
-                let res_map = QueryRes::new(&res);
-                Ok(PhysicalDrive::new(res_map)?)
-            }
-            _ => Err(MigError::from_remark(
-                MigErrorKind::InvParam,
-                &format!(
-                    "get_drive_info: invalid result cout for query, expected 1, got  {}",
-                    q_res.len()
-                ),
-            )),
-        }
-    }
 
     pub fn test_get_drive(disk_index: u64) -> Result<(), MigError> {
         let query = format!("SELECT * FROM MSFT_Disk WHERE Number={}", disk_index);
