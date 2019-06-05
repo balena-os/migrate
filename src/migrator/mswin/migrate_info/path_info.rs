@@ -1,17 +1,18 @@
+use std::path::{PathBuf};
 use crate::{
-    common::{dir_exists, os_release::OSRelease, path_append, Config, MigError, MigErrorKind},
-    defs::OSArch,
+    common::{ MigError, MigErrorKind},
     mswin::{
-        powershell::PSInfo,
-        util::mount_efi,
-        win_api::is_efi_boot,
-        wmi_utils::{LogicalDrive, Partition, PhysicalDrive, Volume, WmiUtils},
+        wmi_utils::{LogicalDrive, Partition, PhysicalDrive, Volume, physical_drive::DriveType},
     },
 };
-use log::{debug, error, info, trace};
+//use log::{debug, error, info, trace};
+
+
+const DRIVE_SUFFIX: &[char] = &['a', 'b' , 'c', 'd', 'e']; 
 
 #[derive(Debug, Clone)]
 pub(crate) struct PathInfo {
+    linux_drive: PathBuf,
     volume: Volume,
     partition: Partition,
     drive: PhysicalDrive,
@@ -24,13 +25,30 @@ impl PathInfo {
         drive: &PhysicalDrive,
         partition: &Partition,
         mount: &LogicalDrive,
-    ) -> Resul<PathInfo, MigError> {
+    ) -> Result<PathInfo, MigError> {
+
+        // TODO: is this likely to work with anything other than the first drive
+        // TODO: propper implementation of linux device names 
+        let linux_drive = PathBuf::from(
+            match drive.get_drive_type() {
+                DriveType::Scsi => {
+                    &format!("/dev/sd{}", DRIVE_SUFFIX[drive.get_index()])
+                },
+                DriveType::Ide => {
+                    &format!("/dev/hd{}", DRIVE_SUFFIX[drive.get_index()])
+                },
+                DriveType::Other => {
+                    return Err(MigError::from_remark(MigErrorKind::NotImpl, &format!("Cannot derive linux drive name from drive type {:?}", drive.get_drive_type())));
+                },
+        });
+
         // TODO: extract information rather than copy
         Ok(PathInfo {
+            linux_drive,
             volume: volume.clone(),
             partition: partition.clone(),
             drive: drive.clone(),
-            mount: moun.clone(),
+            mount: mount.clone(),
         })
     }
 }

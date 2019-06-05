@@ -10,6 +10,23 @@ const MODULE: &str = "mswin::wmi_utils::physical_drive";
 const QUERY_ALL: &str = "SELECT Caption, Index, DeviceID, Size, MediaType, Status, BytesPerSector, Partitions, CompressionMethod, InterfaceType FROM Win32_DiskDrive";
 
 #[derive(Debug, Clone)]
+pub(crate) enum DriveType {
+    Scsi,
+    Ide,
+    Other,  // TODO: find out what that looks like & define it
+}
+
+impl DriveType {
+    pub fn from_str(val: &str) -> DriveType {
+        match val.to_uppercase().as_ref() {
+            "SCSI" => DriveType::Scsi,
+            "IDE" => DriveType::Ide,
+            _ => DriveType::Other,
+        }
+    }
+}
+
+#[derive(Debug, Clone)]
 pub(crate) struct PhysicalDrive {
     name: String,
     device_id: String,
@@ -19,9 +36,9 @@ pub(crate) struct PhysicalDrive {
     bytes_per_sector: i32,
     partitions: i32,
     compression_method: String,
-    disk_index: u64,
+    disk_index: usize,
     device: String,
-    interface_type: String,
+    drive_type: DriveType,
 }
 
 impl<'a> PhysicalDrive {
@@ -37,7 +54,7 @@ impl<'a> PhysicalDrive {
         Ok(result)
     }
 
-    pub fn by_index(disk_index: u64) -> Result<PhysicalDrive, MigError> {
+    pub fn by_index(disk_index: usize) -> Result<PhysicalDrive, MigError> {
         let query = format!("{} WHERE Index={}", QUERY_ALL, disk_index);
         debug!("get_drive: performing WMI Query: '{}'", query);
         let mut q_res = WmiAPI::get_api(NS_CVIM2)?.raw_query(&query)?;
@@ -65,7 +82,7 @@ impl<'a> PhysicalDrive {
     }
 
     fn new(res_map: QueryRes) -> Result<PhysicalDrive, MigError> {
-        let disk_index = res_map.get_int_property("Index")? as u64;
+        let disk_index = res_map.get_int_property("Index")? as usize;
         Ok(PhysicalDrive {
             name: String::from(res_map.get_string_property("Caption")?),
             device_id: String::from(res_map.get_string_property("DeviceID")?),
@@ -75,7 +92,7 @@ impl<'a> PhysicalDrive {
             bytes_per_sector: res_map.get_int_property("BytesPerSector")?,
             partitions: res_map.get_int_property("Partitions")?,
             compression_method: String::from(res_map.get_string_property("CompressionMethod")?),
-            interface_type: String::from(res_map.get_string_property("InterfaceType")?),
+            drive_type: DriveType::from_str(res_map.get_string_property("InterfaceType")?),
             disk_index,
             device: String::from(
                 query_dos_device(Some(&format!("PhysicalDrive{}", disk_index)))?
@@ -110,7 +127,7 @@ impl<'a> PhysicalDrive {
         &self.device
     }
 
-    pub fn get_index(&self) -> u64 {
+    pub fn get_index(&self) -> usize {
         self.disk_index
     }
 
@@ -140,5 +157,9 @@ impl<'a> PhysicalDrive {
 
     pub fn get_wmi_name(&'a self) -> &'a str {
         &self.name
+    }
+
+    pub fn get_drive_type(&'a self) -> &'a DriveType {
+        &self.drive_type
     }
 }

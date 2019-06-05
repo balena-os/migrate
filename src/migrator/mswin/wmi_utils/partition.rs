@@ -17,13 +17,13 @@ pub(crate) struct Partition {
     number_of_blocks: u64,
     ptype: String,
     boot_partition: bool,
-    disk_index: u64,
+    disk_index: usize,
     partition_index: u64,
     start_offset: u64,
 }
 
 impl<'a> Partition {
-    pub(crate) fn new(disk_index: u64, res_map: QueryRes) -> Result<Partition, MigError> {
+    pub(crate) fn new(disk_index: usize, res_map: QueryRes) -> Result<Partition, MigError> {
         let partition_index = res_map.get_int_property("Index")? as u64;
 
         Ok(Partition {
@@ -55,7 +55,7 @@ impl<'a> Partition {
         let query = &format!("ASSOCIATORS OF {{Win32_DiskPartition.DeviceID='{}'}} WHERE AssocClass = Win32_DiskDriveToDiskPartition", device_id);
         let mut q_res = WmiAPI::get_api(NS_CVIM2)?.raw_query(query)?;
         if q_res.len() == 1 {
-            let disk_index = QueryRes::new(&q_res[0]).get_int_property("Index")? as u64;
+            let disk_index = QueryRes::new(&q_res[0]).get_int_property("Index")? as usize;
             let partition_index = res_map.get_int_property("Index")? as u64;
 
             Ok(Partition {
@@ -128,7 +128,7 @@ impl<'a> Partition {
         }
     }
 
-    pub fn get_hd_index(&self) -> u64 {
+    pub fn get_hd_index(&self) -> usize {
         self.disk_index
     }
 
