@@ -1,5 +1,5 @@
 use crate::{
-    common::{dir_exists, os_release::OSRelease, path_append, Config, MigError, MigErrorKind},
+    common::{dir_exists, os_release::OSRelease, path_append, Config, MigError, MigErrorKind, MigErrCtx},
     defs::{OSArch, FileSystem,},
     mswin::{
         powershell::PSInfo,
@@ -65,7 +65,8 @@ impl MigrateInfo {
         };
 
         // TODO: efi_boot is always true / only supported variant for now
-        let efi_drive_info = MigrateInfo::get_drive_info(efi_boot)?;
+        let drive_info = MigrateInfo::get_drive_info(efi_boot)?;
+        debug!("DriveInfo: {:?}", drive_info);
 
         // Detect relevant drives
         // Detect boot partition and the drive it is on -> install drive
@@ -73,6 +74,88 @@ impl MigrateInfo {
         // -> InterfaceType SSI -> /dev/sda
         // -> InterfaceType IDE -> /dev/hda
         // -> InterfaceType ??SDCard?? -> /dev/mcblk
+
+
+
+
+        let work_dir = &work_path.path;
+        info!("Working directory is '{}'", work_dir.display());
+
+        let image_file = if let Some(file_info) =
+        FileInfo::new(&config.balena.get_image_path(), &work_dir)?
+        {
+            file_info.expect_type(&cmds, &FileType::OSImage)?;
+            info!(
+                "The balena OS image looks ok: '{}'",
+                file_info.path.display()
+            );
+
+            let required_mem = file_info.size + APPROX_MEM_THRESHOLD;
+            if get_mem_info()?.0 < required_mem {
+                error!("We have not found sufficient memory to store the balena OS image in ram. at least {} of memory is required.", format_size_with_unit(required_mem));
+                return Err(MigError::from(MigErrorKind::Displayed));
+            }
+
+            file_info
+        } else {
+            error!("The balena image has not been specified or cannot be accessed. Automatic download is not yet implemented, so you need to specify and supply all required files");
+            return Err(MigError::displayed());
+        };
+
+        let config_file = if let Some(file_info) =
+        FileInfo::new(&config.balena.get_config_path(), &work_dir)?
+        {
+            file_info.expect_type(&cmds, &FileType::Json)?;
+
+            let balena_cfg = BalenaCfgJson::new(file_info)?;
+            info!(
+                "The balena config file looks ok: '{}'",
+                balena_cfg.get_path().display()
+            );
+
+            balena_cfg
+        } else {
+            error!("The balena image has not been specified or cannot be accessed. Automatic download is not yet implemented, so you need to specify and supply all required files");
+            return Err(MigError::displayed());
+        };
+
+        let kernel_file = if let Some(file_info) =
+        FileInfo::new(config.migrate.get_kernel_path(), work_dir)?
+        {
+            file_info.expect_type(
+                &cmds,
+                match os_arch {
+                    OSArch::AMD64 => &FileType::KernelAMD64,
+                    OSArch::ARMHF => &FileType::KernelARMHF,
+                    OSArch::I386 => &FileType::KernelI386,
+                },
+            )?;
+
+            info!(
+                "The balena migrate kernel looks ok: '{}'",
+                file_info.path.display()
+            );
+            file_info
+        } else {
+            error!("The migrate kernel has not been specified or cannot be accessed. Automatic download is not yet implemented, so you need to specify and supply all required files");
+            return Err(MigError::displayed());
+        };
+
+        let initrd_file = if let Some(file_info) =
+        FileInfo::new(config.migrate.get_initrd_path(), work_dir)?
+        {
+            file_info.expect_type(&cmds, &FileType::InitRD)?;
+            info!(
+                "The balena migrate initramfs looks ok: '{}'",
+                file_info.path.display()
+            );
+            file_info
+        } else {
+            error!("The migrate initramfs has not been specified or cannot be accessed. Automatic download is not yet implemented, so you need to specify and supply all required files");
+            return Err(MigError::displayed());
+        };
+
+
 
         Ok(MigrateInfo {
             os_name: os_info.os_name,
@@ -82,9 +165,18 @@ impl MigrateInfo {
         })
     }
 
-    fn get_drive_info(efi_boot: bool) -> Result<DriveInfo, MigError> {
+    fn get_drive_info(efi_boot: bool, config: &Config) -> Result<DriveInfo, MigError> {
         trace!("get_efi_drive_info: entered");
         // get the system/EFI volume
+
+        let work_dir = config.migrate.get_work_dir()
+            .canonicalize()
+            .context(MigErrCtx::from_remark(
+                MigErrorKind::Upstream,
+                &format!("failed to canonicalize path '{}'", config.migrate.get_work_dir())))?;
+
+        debug!("got workpath: '{}'", work_dir); 
+
         let volumes = Volume::query_system_volumes()?;
         let efi_vol = if volumes.len() == 1 {
             debug!(
