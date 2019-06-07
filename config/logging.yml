@@ -6,9 +6,9 @@ mod_level:
   'common' : 'info'
   'common::wifi_config' : 'warn'
   'mswin' : 'info'
+  'mswin::migrate_info' : 'debug'
   'linux' : 'info'
   # 'linux::migrate_info' : 'debug'
-
   # 'common::config::migrate': 'debug'
   # 'mswin::win_api' : 'info'
   # 'mswin::win_api::wmi_api' : 'info'

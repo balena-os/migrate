@@ -1,5 +1,5 @@
 use failure::{ResultExt};
-use std::path::{PathBuf};
+use std::path::{PathBuf, Path};
 
 use crate::{
     common::{dir_exists, os_release::OSRelease, path_append, Config, MigError, MigErrorKind, MigErrCtx},
@@ -18,8 +18,9 @@ use path_info::PathInfo;
 
 #[derive(Debug, Clone)]
 pub(crate) struct DriveInfo {
-    pub boot_path: Option<PathInfo>,
+    pub boot_path: PathInfo,
     pub efi_path: Option<PathInfo>,
+    pub work_path: PathInfo,
 }
 
 #[derive(Debug, Clone)]
@@ -71,20 +72,12 @@ impl MigrateInfo {
         let drive_info = MigrateInfo::get_drive_info(efi_boot, &config)?;
         debug!("DriveInfo: {:?}", drive_info);
 
-        // Detect relevant drives
-        // Detect boot partition and the drive it is on -> install drive
-        // Attempt to guess linux names for drives partitions
-        // -> InterfaceType SSI -> /dev/sda
-        // -> InterfaceType IDE -> /dev/hda
-        // -> InterfaceType ??SDCard?? -> /dev/mcblk
 
 
-
-/*
-        let work_dir = &work_path.path;
+        let work_dir = drive_info.work_path.get_path();
         info!("Working directory is '{}'", work_dir.display());
 
-
+/*
         let image_file = if let Some(file_info) =
         FileInfo::new(&config.balena.get_image_path(), &work_dir)?
         {
@@ -171,19 +164,19 @@ impl MigrateInfo {
 
     fn get_drive_info(efi_boot: bool, config: &Config) -> Result<DriveInfo, MigError> {
         trace!("get_efi_drive_info: entered");
-        // get the system/EFI volume
+        // Detect relevant drives
+        // Detect boot partition and the drive it is on -> install drive
+        // Attempt to guess linux names for drives partitions
+        // -> InterfaceType SSI -> /dev/sda
+        // -> InterfaceType IDE -> /dev/hda
+        // -> InterfaceType ??SDCard?? -> /dev/mcblk
+
 
         let work_dir = config.migrate.get_work_dir()
             .canonicalize()
             .context(MigErrCtx::from_remark(
                 MigErrorKind::Upstream,
                 &format!("failed to canonicalize path '{}'", config.migrate.get_work_dir().display())))?;
-
-        let work_dir = if work_dir.starts_with(r#"//?/"#)  {
-            PathBuf::from(work_dir.strip_prefix(r#"//?/"#).unwrap())
-        } else {
-            work_dir
-        };
 
         debug!("got work directory: '{}'", work_dir.display()); 
 
@@ -227,6 +220,9 @@ impl MigrateInfo {
         let mut efi_path: Option<PathInfo> = None;
         let mut work_path: Option<PathInfo> = None;
         let mut wp_match = 0;
+        let wp_comp = String::from(work_dir.to_string_lossy().trim_start_matches(r#"\\?\"#));
+        debug!("wp_comp = '{}'", wp_comp);
+
 
         // get boot drive letter from boot volume flag
         // get efi drive from boot partition flag
@@ -249,34 +245,48 @@ impl MigrateInfo {
                                 let logical_drive = partition.query_logical_drive()?;
 
                                 if let None = boot_path {
-                                    if let Some(logical_drive) =  logical_drive {
+                                    if let Some(ref logical_drive) =  logical_drive {
                                         // TODO: find a better way to match
                                         // matching boot drive via drive letter does not seem very reliable
                                         if logical_drive.get_name() == boot_vol.get_drive_letter() {
-                                            info!("Found boot drive on partition '{}' , drive: '{}' path: '{}'", partition.get_device_id(), drive.get_device_id(), logical_drive.get_name());
-
-                                            boot_path = Some(PathInfo::new(
+                                            let path = PathInfo::new(
+                                                &Path::new(logical_drive.get_name()),
                                                 &boot_vol,
                                                 &drive,
                                                 &partition,
-                                                &logical_drive,
-                                            )?);
+                                                logical_drive,
+                                            )?;
+
+                                            info!("Found boot drive on drive: '{}', on partition {}, path: '{}', linux:'{}'",                                                 
+                                                drive.get_device_id(), 
+                                                partition.get_part_index(), 
+                                                logical_drive.get_name(),
+                                                path.get_linux_part().display());
+
+                                            boot_path = Some(path);
                                         }
                                     }
                                 }
 
 
-                                if let Some(logical_drive) =  logical_drive {
-                                    if work_dir.starts_with(logical_drive.get_name()) {
+                                if let Some(ref logical_drive) =  logical_drive {
+                                    debug!("compare: '{}' to '{}'", wp_comp, logical_drive.get_name());
+                                    if wp_comp.starts_with(logical_drive.get_name()) {                                        
                                         if wp_match < logical_drive.get_name().len() {
-                                            info!("Found work dir on partition '{}' , drive: '{}' path: '{}'", partition.get_device_id(), drive.get_device_id(), logical_drive.get_name());
-                                            // TODO: find a volume too or make it Option
-                                            work_path = Some(PathInfo::new(
+                                            let path = PathInfo::new(
+                                                &work_dir,
                                                 &boot_vol,
                                                 &drive,
                                                 &partition,
-                                                &logical_drive,
-                                            )?);
+                                                logical_drive,
+                                            )?;
+                                            info!("Found work dir on drive: '{}', partition {}, path: '{}', linux: '{}'", 
+                                                drive.get_device_id(), 
+                                                partition.get_part_index(), 
+                                                logical_drive.get_name(),
+                                                path.get_linux_part().display());
+                                            // TODO: find a volume too or make it Option
+                                            work_path = Some(path);
                                         }
                                     }
 
@@ -290,8 +300,10 @@ impl MigrateInfo {
                                     // Match is possible via drive letter but that does not seem to get updated in volume
                                     // when EFI drive is mounted
 
-                                    info!("Found potential System/EFI drive on partition '{}' , drive: '{}'", partition.get_device_id(), drive.get_device_id());
-                                    let efi_mnt = if let Some(logical_drive) = logical_drive
+                                    info!("Found potential System/EFI drive on drive: '{}', partition {}",                                     
+                                        drive.get_device_id(),
+                                        partition.get_device_id());
+                                    let efi_mnt = if let Some(ref logical_drive) = logical_drive
                                     {
                                         let efi_dl = efi_vol.get_drive_letter().to_ascii_uppercase();
                                         if !efi_dl.is_empty() {
@@ -306,7 +318,7 @@ impl MigrateInfo {
                                             "System/EFI drive is mounted on  '{}'",
                                             logical_drive.get_name()
                                         );
-                                        logical_drive
+                                        logical_drive.clone()
                                     } else {
                                         info!("Attempting to mount System/EFI drive");
                                         match mount_efi() {
@@ -332,14 +344,17 @@ impl MigrateInfo {
                                         {
                                             if dir_exists(path_append(efi_mnt.get_name(), "EFI"))? {
                                                 // good enough for now
-                                                info!("Found System/EFI drive on partition '{}' , drive: '{}', path: '{}'",
-                                                      partition.get_device_id(),
+                                                let path = PathInfo::new(
+                                                    &Path::new(efi_mnt.get_name()), &efi_vol, &drive, &partition, &efi_mnt,
+                                                )?;
+                                                
+                                                info!("Found System/EFI drive on drive: '{}', partition: {}, path: '{}', linux: '{}'",
                                                       drive.get_device_id(),
-                                                      efi_mnt.get_name());
+                                                      partition.get_part_index(),
+                                                      efi_mnt.get_name(),
+                                                      path.get_linux_part().display());
 
-                                                efi_path = Some(PathInfo::new(
-                                                    &efi_vol, &drive, &partition, &efi_mnt,
-                                                )?);
+                                                efi_path = Some(path);
                                             }
                                         }
                                     }
@@ -363,9 +378,26 @@ impl MigrateInfo {
             }
         }
 
-        Ok(DriveInfo {
-            boot_path,
-            efi_path,
-        })
+        if let Some(boot_path) = boot_path {
+            if let Some(work_path) = work_path {
+                if efi_boot {
+                    if let None = efi_path {
+                        error!("Failed to establish location of System/EFI directory",);
+                        return Err(MigError::displayed());
+                    }
+                }
+                Ok(DriveInfo {
+                    boot_path,
+                    efi_path,
+                    work_path,
+                })
+            } else {
+                error!("Failed to establish location of work directory '{}'", work_dir.display());
+                return Err(MigError::displayed());
+            }
+        } else {
+            error!("Failed to establish location of boot directory",);
+            return Err(MigError::displayed());
+        }
     }
 }
