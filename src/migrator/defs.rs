@@ -80,7 +80,7 @@ pub(crate) enum FileSystem {
     Ext3,
     Ext4,
     VFat,
-    Hpfs,
+    Ntfs,
     Other
 }
 
@@ -93,7 +93,7 @@ impl FileSystem {
             "FAT" => FileSystem::VFat,
             "FAT32" => FileSystem::VFat,
             "FAT16" => FileSystem::VFat,
-            "HPFS" => FileSystem::Hpfs,
+            "NTFS" => FileSystem::Ntfs,
             _ => FileSystem::Other
         }
     }
