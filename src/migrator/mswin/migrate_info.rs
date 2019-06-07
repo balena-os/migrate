@@ -1,3 +1,6 @@
+use failure::{ResultExt};
+use std::path::{PathBuf};
+
 use crate::{
     common::{dir_exists, os_release::OSRelease, path_append, Config, MigError, MigErrorKind, MigErrCtx},
     defs::{OSArch, FileSystem,},
@@ -28,7 +31,7 @@ pub(crate) struct MigrateInfo {
 }
 
 impl MigrateInfo {
-    pub fn new(_config: &Config, _ps_info: &mut PSInfo) -> Result<MigrateInfo, MigError> {
+    pub fn new(config: &Config, _ps_info: &mut PSInfo) -> Result<MigrateInfo, MigError> {
         trace!("new: entered");
 
         let efi_boot = match is_efi_boot() {
@@ -65,7 +68,7 @@ impl MigrateInfo {
         };
 
         // TODO: efi_boot is always true / only supported variant for now
-        let drive_info = MigrateInfo::get_drive_info(efi_boot)?;
+        let drive_info = MigrateInfo::get_drive_info(efi_boot, &config)?;
         debug!("DriveInfo: {:?}", drive_info);
 
         // Detect relevant drives
@@ -77,9 +80,10 @@ impl MigrateInfo {
 
 
 
-
+/*
         let work_dir = &work_path.path;
         info!("Working directory is '{}'", work_dir.display());
+
 
         let image_file = if let Some(file_info) =
         FileInfo::new(&config.balena.get_image_path(), &work_dir)?
@@ -154,14 +158,14 @@ impl MigrateInfo {
             error!("The migrate initramfs has not been specified or cannot be accessed. Automatic download is not yet implemented, so you need to specify and supply all required files");
             return Err(MigError::displayed());
         };
-
+*/
 
 
         Ok(MigrateInfo {
             os_name: os_info.os_name,
             os_arch: os_info.os_arch,
             os_release: os_info.os_release,
-            drive_info: efi_drive_info,
+            drive_info,
         })
     }
 
@@ -173,9 +177,15 @@ impl MigrateInfo {
             .canonicalize()
             .context(MigErrCtx::from_remark(
                 MigErrorKind::Upstream,
-                &format!("failed to canonicalize path '{}'", config.migrate.get_work_dir())))?;
+                &format!("failed to canonicalize path '{}'", config.migrate.get_work_dir().display())))?;
 
-        debug!("got workpath: '{}'", work_dir); 
+        let work_dir = if work_dir.starts_with(r#"//?/"#)  {
+            PathBuf::from(work_dir.strip_prefix(r#"//?/"#).unwrap())
+        } else {
+            work_dir
+        };
+
+        debug!("got work directory: '{}'", work_dir.display()); 
 
         let volumes = Volume::query_system_volumes()?;
         let efi_vol = if volumes.len() == 1 {
@@ -207,7 +217,7 @@ impl MigrateInfo {
             return Err(MigError::from_remark(
                 MigErrorKind::InvParam,
                 &format!(
-                    "Encountered an unexpected number of Boot volumes: {}",
+                    "Encountered an unexpected number ocf Boot volumes: {}",
                     volumes.len()
                 ),
             ));
@@ -215,6 +225,8 @@ impl MigrateInfo {
 
         let mut boot_path: Option<PathInfo> = None;
         let mut efi_path: Option<PathInfo> = None;
+        let mut work_path: Option<PathInfo> = None;
+        let mut wp_match = 0;
 
         // get boot drive letter from boot volume flag
         // get efi drive from boot partition flag
@@ -234,8 +246,10 @@ impl MigrateInfo {
                                     partition.get_device_id()
                                 );
 
+                                let logical_drive = partition.query_logical_drive()?;
+
                                 if let None = boot_path {
-                                    if let Some(logical_drive) = partition.query_logical_drive()? {
+                                    if let Some(logical_drive) =  logical_drive {
                                         // TODO: find a better way to match
                                         // matching boot drive via drive letter does not seem very reliable
                                         if logical_drive.get_name() == boot_vol.get_drive_letter() {
@@ -251,6 +265,24 @@ impl MigrateInfo {
                                     }
                                 }
 
+
+                                if let Some(logical_drive) =  logical_drive {
+                                    if work_dir.starts_with(logical_drive.get_name()) {
+                                        if wp_match < logical_drive.get_name().len() {
+                                            info!("Found work dir on partition '{}' , drive: '{}' path: '{}'", partition.get_device_id(), drive.get_device_id(), logical_drive.get_name());
+                                            // TODO: find a volume too or make it Option
+                                            work_path = Some(PathInfo::new(
+                                                &boot_vol,
+                                                &drive,
+                                                &partition,
+                                                &logical_drive,
+                                            )?);
+                                        }
+                                    }
+
+                                    
+                                }
+
                                 if partition.is_boot_device() {
                                     // TODO: make this match secure.
                                     // This match is incomplete. There is no guarantee that the device mounted as
@@ -259,8 +291,7 @@ impl MigrateInfo {
                                     // when EFI drive is mounted
 
                                     info!("Found potential System/EFI drive on partition '{}' , drive: '{}'", partition.get_device_id(), drive.get_device_id());
-                                    let efi_mnt = if let Some(logical_drive) =
-                                        partition.query_logical_drive()?
+                                    let efi_mnt = if let Some(logical_drive) = logical_drive
                                     {
                                         let efi_dl = efi_vol.get_drive_letter().to_ascii_uppercase();
                                         if !efi_dl.is_empty() {
