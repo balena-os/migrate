@@ -45,7 +45,7 @@ pub(crate) struct Volume {
     label: String,
     drive_letter: String,
     file_system: FileSystem,
-    device: String,
+    // device: String,
     boot_volume: bool,
     system_volume: bool,
     page_file_present: bool,
@@ -104,12 +104,12 @@ impl<'a> Volume {
             .trim_start_matches(r#"\\?\"#)
             .trim_end_matches(r#"\"#);
         debug!("'{}' -> handle: '{}'", device_id, handle);
-        let device = query_dos_device(Some(handle))?.get(0).unwrap().clone();
+        // let device = query_dos_device(Some(handle))?.get(0).unwrap().clone();
 
         Ok(Volume {
             name: String::from(res_map.get_string_property("Name")?),
             device_id,
-            device,
+            // device,
             label: String::from(res_map.get_string_property("Label")?),
             file_system: FileSystem::from_str(res_map.get_string_property("FileSystem")?),
             drive_letter: String::from(res_map.get_string_property("DriveLetter")?),
@@ -144,9 +144,9 @@ impl<'a> Volume {
         &self.device_id
     }
 
-    pub fn get_device(&'a self) -> &'a str {
+    /* pub fn get_device(&'a self) -> &'a str {
         &self.device
-    }
+    }*/
 
     pub fn get_drive_letter(&'a self) -> &'a str {
         &self.drive_letter
