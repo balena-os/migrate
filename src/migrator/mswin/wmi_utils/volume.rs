@@ -123,11 +123,14 @@ impl<'a> Volume {
 
     pub(crate) fn new(res_map: QueryRes) -> Result<Volume, MigError> {
         let device_id = String::from(res_map.get_string_property("DeviceID")?);
+
+        /*
         let handle = device_id
             .trim_start_matches(r#"\\?\"#)
             .trim_end_matches(r#"\"#);
         debug!("'{}' -> handle: '{}'", device_id, handle);
         // let device = query_dos_device(Some(handle))?.get(0).unwrap().clone();
+        */
 
         Ok(Volume {
             name: String::from(res_map.get_string_property("Name")?),

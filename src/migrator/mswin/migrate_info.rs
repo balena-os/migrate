@@ -216,6 +216,8 @@ impl MigrateInfo {
             ));
         };
 
+
+
         let mut boot_path: Option<PathInfo> = None;
         let mut efi_path: Option<PathInfo> = None;
         let mut work_path: Option<PathInfo> = None;
