@@ -31,9 +31,9 @@ impl<'a>  MountPoint {
         MountPoint::from_query(QUERY_ALL)
     }
 
-    pub fn query_by_volume(volume: &Volume) -> Result<Option<&Path>, MigError> {
+    pub fn query_directory_by_volume(volume: &Volume) -> Result<Option<PathBuf>, MigError> {
         let query = format!("SELECT Directory FROM Win32_MountPoint where Volume='Win32_Volume.DeviceID=\"{}\"'", volume.get_device_id().replace(r#"\"#, r#"\\"#));
-        debug!("query_by_volume: query: '{}'");
+        debug!("query_directory_by_volume: query: '{}'", query);
         let q_res = WmiAPI::get_api(NS_CVIM2)?.raw_query(&query)?;
         if q_res.len() != 1 {
             if q_res.len() == 0 {
@@ -47,8 +47,8 @@ impl<'a>  MountPoint {
             let parts: Vec<&str> = res_str.split("=").collect();
             if parts.len() == 2 {
                 let directory = parts[1].trim_matches('"').replace(r#"\\"#, r#"\"#);
-                debug!("got mountpoint directory: '{}'", directory);
-                Ok(Some(&Path::new(directory)))
+                debug!("got mountpoint directory: '{}'", directory);    
+                Ok(Some(PathBuf::from(&directory)))
             } else {
                 Err(MigError::from_remark(MigErrorKind::InvParam, &format!("Failed to extract Directory from '{}'", res_str)))
             }
