@@ -199,24 +199,34 @@ impl MigrateInfo {
         };
 
         let volumes = Volume::query_boot_volumes()?;
-        let boot_vol = if volumes.len() == 1 {
-            debug!(
-                "Found Boot Volume: '{}' dev_id: '{}'",
-                volumes[0].get_name(),
-                volumes[0].get_device_id()
-            );
-            volumes[0].clone()
-        } else {
-            return Err(MigError::from_remark(
-                MigErrorKind::InvParam,
-                &format!(
-                    "Encountered an unexpected number ocf Boot volumes: {}",
-                    volumes.len()
-                ),
-            ));
-        };
-
-
+        let (boot_vol, boot_dir) = 
+            if volumes.len() == 1 {
+                debug!(
+                    "Found Boot Volume: '{}' dev_id: '{}'",
+                    volumes[0].get_name(),
+                    volumes[0].get_device_id()
+                );
+                let vol = &volumes[0];
+                if let Some(directory) = MountPoint::query_directory_by_volume(&vol)? {
+                    (vol,directory)
+                } else {
+                    return Err(MigError::from_remark(
+                        MigErrorKind::InvParam,
+                        &format!(
+                            "Could not retrieve mountpoint for boot volume: {}",
+                            vol.get_device_id()
+                        ),
+                    ));
+                }
+            } else {
+                return Err(MigError::from_remark(
+                    MigErrorKind::InvParam,
+                    &format!(
+                        "Encountered an unexpected number ocf Boot volumes: {}",
+                        volumes.len()
+                    ),
+                ));
+            };
 
         let mut boot_path: Option<PathInfo> = None;
         let mut efi_path: Option<PathInfo> = None;

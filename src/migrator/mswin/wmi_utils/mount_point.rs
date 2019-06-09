@@ -1,5 +1,8 @@
+
 use log::debug;
 use std::path::{PathBuf, Path};
+use lazy_static::{lazy_static};
+
 
 // use log::{debug};
 use super::QueryRes;
@@ -28,34 +31,17 @@ pub(crate) struct MountPoint {
 
 impl<'a>  MountPoint {
     pub fn query_all() -> Result<Vec<MountPoint>, MigError> {
-        MountPoint::from_query(QUERY_ALL)
+        Ok(MountPoint::from_query(QUERY_ALL)?)
     }
 
-    pub fn query_by_volume(volume: &Volume) -> Result<Option<&Path>, MigError> {
-
-
-
-        let query = format!("SELECT Directory FROM Win32_MountPoint where Volume='Win32_Volume.DeviceID=\"{}\"'", volume.get_device_id().replace(r#"\"#, r#"\\"#));
-        debug!("query_by_volume: query: '{}'");
-        let q_res = WmiAPI::get_api(NS_CVIM2)?.raw_query(&query)?;
-        if q_res.len() != 1 {
-            if q_res.len() == 0 {
-                Ok(None)
-            } else {
-                Err(MigError::from_remark(MigErrorKind::InvParam, &format!("Unexpected result count for query: '{}' : {}", query, q_res.len())))
-            }
-        } else {
-            let res_map = QueryRes::new(&q_res[0]);
-            let res_str = res_map.get_string_property("Directory")?;
-            let parts: Vec<&str> = res_str.split("=").collect();
-            if parts.len() == 2 {
-                let directory = parts[1].trim_matches('"').replace(r#"\\"#, r#"\"#);
-                debug!("got mountpoint directory: '{}'", directory);
-                Ok(Some(&Path::new(directory)))
-            } else {
-                Err(MigError::from_remark(MigErrorKind::InvParam, &format!("Failed to extract Directory from '{}'", res_str)))
+    pub fn query_directory_by_volume(volume: &Volume) -> Result<Option<PathBuf>, MigError> {
+        let vol_id = volume.get_device_id();
+        for mount_point in MountPoint::query_all()? {
+            if mount_point.volume.get_device_id() == vol_id {
+                return Ok(Some(mount_point.directory))
             }
         }
+        OK(None)
     }
 
 
