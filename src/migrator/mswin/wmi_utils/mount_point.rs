@@ -41,7 +41,7 @@ impl<'a>  MountPoint {
                 return Ok(Some(mount_point.directory))
             }
         }
-        OK(None)
+        Ok(None)
     }
 
 
