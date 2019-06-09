@@ -85,6 +85,18 @@ impl<'a> Volume {
         }
     }
 
+    pub fn query_by_device_id(device_id: &str) -> Result<Volume, MigError> {
+        let query = format!("{} WHERE DeviceID={}", QUERY_ALL, device_id);
+        debug!("query_volumes: performing WMI Query: '{}'", query);
+        let q_res = WmiAPI::get_api(NS_CVIM2)?.raw_query(&query)?;
+        if q_res.len() == 1 {
+            Ok(Volume::new(QueryRes::new(&q_res[0]))?)
+        } else {
+            Err(MigError::from_remark(MigErrorKind::InvParam, &format!("Invalid result count: {}", q_res.len())))
+        }
+    }
+
+
     pub fn query_system_volumes() -> Result<Vec<Volume>, MigError> {
         let query = format!("{} WHERE SystemVolume=True", QUERY_ALL);
         debug!("query_volumes: performing WMI Query: '{}'", query);

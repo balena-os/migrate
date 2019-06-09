@@ -8,7 +8,7 @@ use crate::{
         powershell::PSInfo,
         util::mount_efi,
         win_api::is_efi_boot,
-        wmi_utils::{LogicalDrive, Partition, PhysicalDrive, Volume, WmiUtils},
+        wmi_utils::{LogicalDrive, Partition, PhysicalDrive, Volume, MountPoint, WmiUtils},
     },
 };
 use log::{debug, error, info, trace, warn};
@@ -229,6 +229,9 @@ impl MigrateInfo {
         // mount efi drive if boot flagged partition is not mounted
         // ensure EFI partition
 
+        // Test
+        MountPoint::query_all()?;
+
         match PhysicalDrive::query_all() {
             Ok(phys_drives) => {
                 for drive in phys_drives {
@@ -273,7 +276,7 @@ impl MigrateInfo {
                                     debug!("compare: '{}' to '{}'", wp_comp, logical_drive.get_name());
                                     if wp_comp.starts_with(logical_drive.get_name()) {
 
-                                        Volume::query_by_drive_letter()
+                                        // Volume::query_by_drive_letter()
                                         if wp_match < logical_drive.get_name().len() {
                                             let path = PathInfo::new(
                                                 &work_dir,

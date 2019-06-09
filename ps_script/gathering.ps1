@@ -26,4 +26,5 @@
     # $query = "ASSOCIATORS OF {Win32_DiskPartition.DeviceID='Disk #0, Partition #0'} WHERE AssocClass = Win32_DiskDriveToDiskPartition"
     
     $query = "select * from Win32_Volume"
-    [System.Threading.Thread]::CurrentThread.CurrentCulture = 'en-US';Get-WmiObject -Query $query;
+    # [System.Threading.Thread]::CurrentThread.CurrentCulture = 'en-US';Get-WmiObject -Query $query;
+    Get-WmiObject -class Win32_Volume
