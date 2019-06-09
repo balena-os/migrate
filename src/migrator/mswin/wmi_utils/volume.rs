@@ -1,6 +1,6 @@
 use crate::{
     defs::{FileSystem},
-    common::MigError,
+    common::{MigError, MigErrorKind,},
     mswin::win_api::{query_dos_device, wmi_api::WmiAPI},
 };
 use log::debug;
@@ -72,6 +72,17 @@ impl<'a> Volume {
             result.push(Volume::new(res_map)?);
         }
         Ok(result)
+    }
+
+    pub fn query_by_drive_letter(dl: &str) -> Result<Volume, MigError> {
+        let query = format!("{} WHERE DriveLetter={}", QUERY_ALL, dl);
+        debug!("query_volumes: performing WMI Query: '{}'", query);
+        let q_res = WmiAPI::get_api(NS_CVIM2)?.raw_query(&query)?;
+        if q_res.len() == 1 {
+            Ok(Volume::new(QueryRes::new(&q_res[0]))?)
+        } else {
+            Err(MigError::from_remark(MigErrorKind::InvParam, &format!("Invalid result count: {}", q_res.len())))
+        }
     }
 
     pub fn query_system_volumes() -> Result<Vec<Volume>, MigError> {

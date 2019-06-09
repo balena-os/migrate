@@ -52,6 +52,7 @@ impl<'a> Partition {
 
     fn from_query(res_map: &QueryRes) -> Result<Partition, MigError> {
         let device_id = res_map.get_string_property("DeviceID")?;
+        // Get DiskIndex from Win32_DiskDriveToDiskPartition
         let query = &format!("ASSOCIATORS OF {{Win32_DiskPartition.DeviceID='{}'}} WHERE AssocClass = Win32_DiskDriveToDiskPartition", device_id);
         let mut q_res = WmiAPI::get_api(NS_CVIM2)?.raw_query(query)?;
         if q_res.len() == 1 {

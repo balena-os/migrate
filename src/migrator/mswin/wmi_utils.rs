@@ -19,6 +19,9 @@ pub(crate) use physical_drive::PhysicalDrive;
 pub(crate) mod logical_drive;
 pub(crate) use logical_drive::LogicalDrive;
 
+pub(crate) mod mount_point;
+pub(crate) use mount_point::MountPoint;
+
 pub(crate) mod partition;
 pub(crate) use partition::Partition;
 

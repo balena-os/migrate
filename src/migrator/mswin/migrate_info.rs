@@ -271,7 +271,9 @@ impl MigrateInfo {
 
                                 if let Some(ref logical_drive) =  logical_drive {
                                     debug!("compare: '{}' to '{}'", wp_comp, logical_drive.get_name());
-                                    if wp_comp.starts_with(logical_drive.get_name()) {                                        
+                                    if wp_comp.starts_with(logical_drive.get_name()) {
+
+                                        Volume::query_by_drive_letter()
                                         if wp_match < logical_drive.get_name().len() {
                                             let path = PathInfo::new(
                                                 &work_dir,
