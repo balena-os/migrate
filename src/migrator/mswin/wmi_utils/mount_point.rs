@@ -32,6 +32,9 @@ impl<'a>  MountPoint {
     }
 
     pub fn query_by_volume(volume: &Volume) -> Result<Option<&Path>, MigError> {
+
+
+
         let query = format!("SELECT Directory FROM Win32_MountPoint where Volume='Win32_Volume.DeviceID=\"{}\"'", volume.get_device_id().replace(r#"\"#, r#"\\"#));
         debug!("query_by_volume: query: '{}'");
         let q_res = WmiAPI::get_api(NS_CVIM2)?.raw_query(&query)?;
