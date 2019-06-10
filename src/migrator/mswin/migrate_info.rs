@@ -2,8 +2,9 @@ use failure::{ResultExt};
 use std::path::{PathBuf, Path};
 
 use crate::{
-    common::{dir_exists, os_release::OSRelease, path_append, Config, MigError, MigErrorKind, MigErrCtx},
-    defs::{OSArch, FileSystem,},
+    common::{dir_exists, os_release::OSRelease, path_append, Config, MigError, MigErrorKind, MigErrCtx,
+             FileInfo, FileType, format_size_with_unit, balena_cfg_json::BalenaCfgJson },
+    defs::{OSArch, FileSystem, APPROX_MEM_THRESHOLD},
     mswin::{
         powershell::PSInfo,
         util::mount_efi,
@@ -29,6 +30,10 @@ pub(crate) struct MigrateInfo {
     pub os_arch: OSArch,
     pub os_release: OSRelease,
     pub drive_info: DriveInfo,
+    pub image_file: FileInfo,
+    pub config_file: BalenaCfgJson,
+    pub kernel_file: FileInfo,
+    pub initrd_file: FileInfo,
 }
 
 impl MigrateInfo {
@@ -77,18 +82,19 @@ impl MigrateInfo {
         let work_dir = drive_info.work_path.get_path();
         info!("Working directory is '{}'", work_dir.display());
 
-/*
+
         let image_file = if let Some(file_info) =
         FileInfo::new(&config.balena.get_image_path(), &work_dir)?
         {
-            file_info.expect_type(&cmds, &FileType::OSImage)?;
+            file_info.expect_type(&FileType::OSImage)?;
             info!(
                 "The balena OS image looks ok: '{}'",
                 file_info.path.display()
             );
 
             let required_mem = file_info.size + APPROX_MEM_THRESHOLD;
-            if get_mem_info()?.0 < required_mem {
+            if os_info.mem_tot < required_mem {
+                debug!("mem_tot: {}", format_size_with_unit(os_info.mem_tot));
                 error!("We have not found sufficient memory to store the balena OS image in ram. at least {} of memory is required.", format_size_with_unit(required_mem));
                 return Err(MigError::from(MigErrorKind::Displayed));
             }
@@ -102,7 +108,7 @@ impl MigrateInfo {
         let config_file = if let Some(file_info) =
         FileInfo::new(&config.balena.get_config_path(), &work_dir)?
         {
-            file_info.expect_type(&cmds, &FileType::Json)?;
+            file_info.expect_type(&FileType::Json)?;
 
             let balena_cfg = BalenaCfgJson::new(file_info)?;
             info!(
@@ -120,8 +126,7 @@ impl MigrateInfo {
         FileInfo::new(config.migrate.get_kernel_path(), work_dir)?
         {
             file_info.expect_type(
-                &cmds,
-                match os_arch {
+                match os_info.os_arch {
                     OSArch::AMD64 => &FileType::KernelAMD64,
                     OSArch::ARMHF => &FileType::KernelARMHF,
                     OSArch::I386 => &FileType::KernelI386,
@@ -141,7 +146,7 @@ impl MigrateInfo {
         let initrd_file = if let Some(file_info) =
         FileInfo::new(config.migrate.get_initrd_path(), work_dir)?
         {
-            file_info.expect_type(&cmds, &FileType::InitRD)?;
+            file_info.expect_type( &FileType::InitRD)?;
             info!(
                 "The balena migrate initramfs looks ok: '{}'",
                 file_info.path.display()
@@ -151,7 +156,6 @@ impl MigrateInfo {
             error!("The migrate initramfs has not been specified or cannot be accessed. Automatic download is not yet implemented, so you need to specify and supply all required files");
             return Err(MigError::displayed());
         };
-*/
 
 
         Ok(MigrateInfo {
@@ -159,6 +163,10 @@ impl MigrateInfo {
             os_arch: os_info.os_arch,
             os_release: os_info.os_release,
             drive_info,
+            image_file,
+            config_file,
+            kernel_file,
+            initrd_file
         })
     }
 
@@ -288,35 +296,34 @@ impl MigrateInfo {
                                         }
                                     }
 
-                                    if let None = work_path {
-                                        debug!("compare: '{}' to '{}' res: {}", wp_comp, curr_path.display(), wp_comp.starts_with(&curr_path_str));
-                                        if wp_comp.starts_with(&curr_path_str) {
 
-                                            // Volume::query_by_drive_letter()
-                                            if wp_match < curr_path_str.len() {
-                                                for mount_point in &mount_points {
-                                                    if mount_point.is_directory(&curr_path) {
-                                                        let path = PathInfo::new(
-                                                            &work_dir,
-                                                            mount_point.get_volume(),
-                                                            &drive,
-                                                            &partition,
-                                                            logical_drive,
-                                                        )?;
+                                    debug!("compare: '{}' to '{}' res: {}", wp_comp, curr_path.display(), wp_comp.starts_with(&curr_path_str));
+                                    if wp_comp.starts_with(&curr_path_str) {
+                                        // Volume::query_by_drive_letter()
+                                        if wp_match < curr_path_str.len() {
+                                            for mount_point in &mount_points {
+                                                if mount_point.is_directory(&curr_path) {
+                                                    let path = PathInfo::new(
+                                                        &work_dir,
+                                                        mount_point.get_volume(),
+                                                        &drive,
+                                                        &partition,
+                                                        logical_drive,
+                                                    )?;
 
-                                                        info!("Found work dir on drive: '{}', partition {}, path: '{}', linux: '{}'",
-                                                              drive.get_device_id(),
-                                                              partition.get_part_index(),
-                                                              curr_path_str,
-                                                              path.get_linux_part().display());
-                                                        // TODO: find a volume too or make it Option
-                                                        work_path = Some(path);
-                                                        break;
-                                                    }
+                                                    info!("Found work dir on drive: '{}', partition {}, path: '{}', linux: '{}'",
+                                                          drive.get_device_id(),
+                                                          partition.get_part_index(),
+                                                          curr_path_str,
+                                                          path.get_linux_part().display());
+                                                    // TODO: find a volume too or make it Option
+                                                    work_path = Some(path);
+                                                    break;
                                                 }
                                             }
                                         }
                                     }
+
                                 }
 
                                 if partition.is_boot_device() {

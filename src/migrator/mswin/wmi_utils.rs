@@ -149,7 +149,7 @@ impl WmiUtils {
                     "init_sys_info: failed to parse TotalVisibleMemorySize from  '{}'",
                     s
                 ),
-            ))?,
+            ))? * 1024,
             _ => {
                 return Err(MigError::from_remark(
                     MigErrorKind::InvParam,
@@ -165,7 +165,7 @@ impl WmiUtils {
                     "init_sys_info: failed to parse 'FreePhysicalMemory' from  '{}'",
                     s
                 ),
-            ))?,
+            ))? * 1024,
             _ => {
                 return Err(MigError::from_remark(
                     MigErrorKind::InvParam,

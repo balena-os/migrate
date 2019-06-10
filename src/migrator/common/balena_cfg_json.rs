@@ -7,7 +7,7 @@ use std::path::PathBuf;
 
 use super::{check_tcp_connect, Config, FileInfo, MigErrCtx, MigError, MigErrorKind};
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub(crate) struct BalenaCfgJson {
     doc: Value,
     file: FileInfo,

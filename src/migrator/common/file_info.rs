@@ -27,7 +27,7 @@ use crate::common::{file_exists, MigErrCtx, MigError, MigErrorKind};
 #[cfg(target_os = "linux")]
 use crate::linux::{EnsuredCmds, FILE_CMD};
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub(crate) enum FileType {
     OSImage,
     KernelAMD64,
@@ -54,7 +54,7 @@ impl FileType {
     }
 }
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub(crate) struct FileInfo {
     pub path: PathBuf,
     pub size: u64,
@@ -183,7 +183,7 @@ impl FileInfo {
 
     #[cfg(target_os = "windows")]
     pub fn is_type(&self, ftype: &FileType) -> Result<bool, MigError> {
-        // think of something for windows
-        Err(MigError::from(MigErrorKind::NotImpl))
+        // TODO: think of something for windows
+        Ok(true)
     }
 }
