@@ -257,13 +257,22 @@ impl MigrateInfo {
                                     partition.get_device_id()
                                 );
 
-                                if let Some(ref logical_drive) =  partition.query_logical_drive()? {
+                                let logical_drive = partition.query_logical_drive()?;
+                                if let Some(ref logical_drive) = logical_drive {                                    
+                                    let mut curr_path_str = String::from(logical_drive.get_name());
+                                    if curr_path_str.ends_with(':') {
+                                        curr_path_str.push('\\');
+                                    }
+                                    let curr_path = Path::new(&curr_path_str);
+
+                                    debug!("got logical drive '{}' for partition '{}'", curr_path.display(), partition.get_name());
                                     if let None = boot_path {
+                                        debug!("checking '{}' for boot path: '{}'", curr_path.display(), boot_dir.display());
                                         // check if it is the boot path
                                         // TODO: find a better way to match
-                                        if logical_drive.get_name() == boot_dir {
+                                        if curr_path == boot_dir {
                                             let path = PathInfo::new(
-                                                &Path::new(logical_drive.get_name()),
+                                                &curr_path,
                                                 &boot_vol,
                                                 &drive,
                                                 &partition,
@@ -272,7 +281,7 @@ impl MigrateInfo {
                                             info!("Found boot drive on drive: '{}', on partition {}, path: '{}', linux:'{}'",
                                                 drive.get_device_id(),
                                                 partition.get_part_index(),
-                                                logical_drive.get_name(),
+                                                &curr_path_str,
                                                 path.get_linux_part().display());
 
                                             boot_path = Some(path);
@@ -280,12 +289,13 @@ impl MigrateInfo {
                                     }
 
                                     if let None = work_path {
-                                        debug!("compare: '{}' to '{}'", wp_comp, logical_drive.get_name());
-                                        if wp_comp.starts_with(logical_drive.get_name()) {
+                                        debug!("compare: '{}' to '{}' res: {}", wp_comp, curr_path.display(), wp_comp.starts_with(&curr_path_str));
+                                        if wp_comp.starts_with(&curr_path_str) {
+
                                             // Volume::query_by_drive_letter()
-                                            if wp_match < logical_drive.get_name().len() {
-                                                for mount_point in mount_points {
-                                                    if mount_points.is_directory(Path::new(logical_drive.get_name()) {
+                                            if wp_match < curr_path_str.len() {
+                                                for mount_point in &mount_points {
+                                                    if mount_point.is_directory(&curr_path) {
                                                         let path = PathInfo::new(
                                                             &work_dir,
                                                             mount_point.get_volume(),
@@ -297,13 +307,12 @@ impl MigrateInfo {
                                                         info!("Found work dir on drive: '{}', partition {}, path: '{}', linux: '{}'",
                                                               drive.get_device_id(),
                                                               partition.get_part_index(),
-                                                              logical_drive.get_name(),
+                                                              curr_path_str,
                                                               path.get_linux_part().display());
                                                         // TODO: find a volume too or make it Option
                                                         work_path = Some(path);
                                                         break;
                                                     }
-
                                                 }
                                             }
                                         }
@@ -321,6 +330,7 @@ impl MigrateInfo {
                                     info!("Found potential System/EFI drive on drive: '{}', partition {}",                                     
                                         drive.get_device_id(),
                                         partition.get_device_id());
+                                
                                     let efi_mnt = if let Some(ref logical_drive) = logical_drive
                                     {
                                         let efi_dl = efi_vol.get_drive_letter().to_ascii_uppercase();
@@ -377,7 +387,7 @@ impl MigrateInfo {
                                     }
                                 }
                             }
-                        }
+                        },
                         Err(why) => {
                             error!(
                                 "Failed to query partitions for drive {}: {:?}",
@@ -388,7 +398,7 @@ impl MigrateInfo {
                         }
                     }
                 }
-            }
+            },
             Err(why) => {
                 error!("Failed to query drive info: {:?}", why);
                 return Err(MigError::displayed());
