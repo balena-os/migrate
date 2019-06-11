@@ -320,12 +320,43 @@ impl<'a> QueryRes<'a> {
         }
     }
 
+    fn get_bool_property_with_def(&self, prop_name: &str, default: bool) -> Result<bool, MigError> {
+        if let Some(ref variant) = self.q_result.get(prop_name) {
+            match variant {
+                Variant::BOOL(val) => {
+                    Ok(*val)
+                }, 
+                Variant::STRING(val) => {                
+                    Ok(val.eq_ignore_ascii_case("true"))
+                },
+                Variant::NULL() => {               
+                    Ok(default)
+                }
+                _=> {
+                    Err(MigError::from_remark(MigErrorKind::InvParam,&format!("{}::get_bool_property: unexpected variant type, not BOOL for key: '{}' value: {:?}", MODULE, prop_name, variant)))
+                }
+            }
+        } else {
+            Err(MigError::from_remark(
+                MigErrorKind::NotFound,
+                &format!("get_bool_property: value not found for key: '{}", prop_name),
+            ))
+        }
+
+    }
+
     fn get_bool_property(&self, prop_name: &str) -> Result<bool, MigError> {
         if let Some(ref variant) = self.q_result.get(prop_name) {
-            if let Variant::BOOL(val) = variant {
-                Ok(*val)
-            } else {
-                Err(MigError::from_remark(MigErrorKind::InvParam,&format!("{}::get_bool_property: unexpected variant type, not OOL for key: '{}' value: {:?}", MODULE, prop_name, variant)))
+            match variant {
+                Variant::BOOL(val) => {
+                    Ok(*val)
+                }, 
+                Variant::STRING(val) => {                
+                    Ok(val.eq_ignore_ascii_case("true"))
+                },
+                _ => {                
+                    Err(MigError::from_remark(MigErrorKind::InvParam,&format!("{}::get_bool_property: unexpected variant type, not BOOL for key: '{}' value: {:?}", MODULE, prop_name, variant)))
+                }
             }
         } else {
             Err(MigError::from_remark(
@@ -350,17 +381,17 @@ impl<'a> QueryRes<'a> {
         }
     }
 
-    fn get_uint_property(&self, prop_name: &str) -> Result<u64, MigError> {
+    fn get_optional_uint_property(&self, prop_name: &str) -> Result<Option<u64>, MigError> {
         if let Some(ref variant) = self.q_result.get(prop_name) {
             match variant {
                 Variant::STRING(val) => {
-                    Ok((*val).parse::<u64>().context(MigErrCtx::from_remark(
+                    Ok(Some((*val).parse::<u64>().context(MigErrCtx::from_remark(
                         MigErrorKind::InvParam,
                         &format!(
                             "get_uint_property: failed tp parse value from string '{}'",
                             val
                         ),
-                    ))?)
+                    ))?))
                 },
                 Variant::I32(val) => {
                     if *val < 0 {
@@ -369,8 +400,11 @@ impl<'a> QueryRes<'a> {
                             &format!("get_uint_property: Found negative value: '{}' value: {}",
                                      prop_name, val)))
                     } else {
-                        Ok(*val as u64)
+                        Ok(Some(*val as u64))
                     }
+                },
+                Variant::NULL() => {
+                    Ok(None)
                 },
                 _ => {
                     Err(MigError::from_remark(
@@ -384,6 +418,16 @@ impl<'a> QueryRes<'a> {
                 MigErrorKind::NotFound,
                 &format!("get_uint_property: value not found for key: '{}", prop_name),
             ))
+        }        
+    }
+
+    fn get_uint_property(&self, prop_name: &str) -> Result<u64, MigError> {
+        if let Some(val) = self.get_optional_uint_property(prop_name)? {
+            Ok(val)
+        } else {
+            Err(MigError::from_remark(
+                    MigErrorKind::InvParam,
+                    &format!("get_uint_property: unexpected variant type, not U32 or STRING for key: '{}'",prop_name)))
         }
     }
 }
