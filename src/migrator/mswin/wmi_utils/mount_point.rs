@@ -44,7 +44,6 @@ impl<'a>  MountPoint {
         Ok(None)
     }
 
-
     fn from_query(query: &str) -> Result<Vec<MountPoint>, MigError> {
         let q_res = WmiAPI::get_api(NS_CVIM2)?.raw_query(query)?;
         let mut result: Vec<MountPoint> = Vec::new();
@@ -83,6 +82,10 @@ impl<'a>  MountPoint {
         }
 
         Ok(result)
+    }
+
+    pub fn is_directory(&self, directory: &Path) -> bool {
+        directory == self.directory
     }
 
     pub fn get_directory(&'a self) -> &'a Path {

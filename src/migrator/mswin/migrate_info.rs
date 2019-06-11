@@ -242,7 +242,7 @@ impl MigrateInfo {
         // ensure EFI partition
 
         // Test
-        MountPoint::query_all()?;
+        let mount_points = MountPoint::query_all()?;
 
         match PhysicalDrive::query_all() {
             Ok(phys_drives) => {
@@ -257,13 +257,11 @@ impl MigrateInfo {
                                     partition.get_device_id()
                                 );
 
-                                let logical_drive = partition.query_logical_drive()?;
-
-                                if let None = boot_path {
-                                    if let Some(ref logical_drive) =  logical_drive {
+                                if let Some(ref logical_drive) =  partition.query_logical_drive()? {
+                                    if let None = boot_path {
+                                        // check if it is the boot path
                                         // TODO: find a better way to match
-                                        // matching boot drive via drive letter does not seem very reliable
-                                        if logical_drive.get_name() == boot_vol.get_drive_letter() {
+                                        if logical_drive.get_name() == boot_dir {
                                             let path = PathInfo::new(
                                                 &Path::new(logical_drive.get_name()),
                                                 &boot_vol,
@@ -271,43 +269,45 @@ impl MigrateInfo {
                                                 &partition,
                                                 logical_drive,
                                             )?;
-
-                                            info!("Found boot drive on drive: '{}', on partition {}, path: '{}', linux:'{}'",                                                 
-                                                drive.get_device_id(), 
-                                                partition.get_part_index(), 
+                                            info!("Found boot drive on drive: '{}', on partition {}, path: '{}', linux:'{}'",
+                                                drive.get_device_id(),
+                                                partition.get_part_index(),
                                                 logical_drive.get_name(),
                                                 path.get_linux_part().display());
 
                                             boot_path = Some(path);
                                         }
                                     }
-                                }
 
+                                    if let None = work_path {
+                                        debug!("compare: '{}' to '{}'", wp_comp, logical_drive.get_name());
+                                        if wp_comp.starts_with(logical_drive.get_name()) {
+                                            // Volume::query_by_drive_letter()
+                                            if wp_match < logical_drive.get_name().len() {
+                                                for mount_point in mount_points {
+                                                    if mount_points.is_directory(Path::new(logical_drive.get_name()) {
+                                                        let path = PathInfo::new(
+                                                            &work_dir,
+                                                            mount_point.get_volume(),
+                                                            &drive,
+                                                            &partition,
+                                                            logical_drive,
+                                                        )?;
 
-                                if let Some(ref logical_drive) =  logical_drive {
-                                    debug!("compare: '{}' to '{}'", wp_comp, logical_drive.get_name());
-                                    if wp_comp.starts_with(logical_drive.get_name()) {
+                                                        info!("Found work dir on drive: '{}', partition {}, path: '{}', linux: '{}'",
+                                                              drive.get_device_id(),
+                                                              partition.get_part_index(),
+                                                              logical_drive.get_name(),
+                                                              path.get_linux_part().display());
+                                                        // TODO: find a volume too or make it Option
+                                                        work_path = Some(path);
+                                                        break;
+                                                    }
 
-                                        // Volume::query_by_drive_letter()
-                                        if wp_match < logical_drive.get_name().len() {
-                                            let path = PathInfo::new(
-                                                &work_dir,
-                                                &boot_vol,
-                                                &drive,
-                                                &partition,
-                                                logical_drive,
-                                            )?;
-                                            info!("Found work dir on drive: '{}', partition {}, path: '{}', linux: '{}'", 
-                                                drive.get_device_id(), 
-                                                partition.get_part_index(), 
-                                                logical_drive.get_name(),
-                                                path.get_linux_part().display());
-                                            // TODO: find a volume too or make it Option
-                                            work_path = Some(path);
+                                                }
+                                            }
                                         }
                                     }
-
-                                    
                                 }
 
                                 if partition.is_boot_device() {
@@ -316,6 +316,7 @@ impl MigrateInfo {
                                     // efi partition is the same device that efi_vol points to
                                     // Match is possible via drive letter but that does not seem to get updated in volume
                                     // when EFI drive is mounted
+                                    // Mountpoints also appear to not be updated by mountvol /S
 
                                     info!("Found potential System/EFI drive on drive: '{}', partition {}",                                     
                                         drive.get_device_id(),
@@ -330,7 +331,6 @@ impl MigrateInfo {
                                                 continue;
                                             }
                                         }
-
                                         info!(
                                             "System/EFI drive is mounted on  '{}'",
                                             logical_drive.get_name()
