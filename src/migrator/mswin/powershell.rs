@@ -11,6 +11,8 @@ const PS_CMD_IS_ADMIN: &str =
     "[bool](([System.Security.Principal.WindowsIdentity]::GetCurrent()).groups -match \"S-1-5-32-544\")";
 const PS_CMD_IS_SECURE_BOOT: &str = "Confirm-SecureBootUEFI";
 
+const PS_CMD_REBOOT: &str = "Restart-Conputer";
+
 const PS_ARGS_VERSION_PARAMS: [&'static str; 1] = ["$PSVersionTable.PSVersion"];
 
 use crate::common::{MigErrCtx, MigError, MigErrorKind};
@@ -97,6 +99,16 @@ impl PSInfo {
             return Err(ps_failed_stdin(&output, &PS_CMD_IS_ADMIN, "is_admin"));
         }
         Ok(output.stdout.to_lowercase() == "true")
+    }
+
+    pub fn reboot(&self) -> Result<bool, MigError> {
+        let output = call_from_stdin(PS_CMD_REBOOT, true)?;
+        debug!("reboot: call_from_stdin res {:?}", output);
+        if !output.ps_ok {
+            return Err(ps_failed_stdin(&output, &PS_CMD_REBOOT, "reboot"));
+        }
+        // not expected to return
+        Ok(false)
     }
 
     pub fn is_secure_boot(&self) -> Result<bool, MigError> {

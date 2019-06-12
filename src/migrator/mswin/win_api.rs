@@ -11,9 +11,8 @@ use winapi::shared::winerror::ERROR_INVALID_FUNCTION;
 use winapi::um::{
     fileapi::{ FindFirstVolumeW, FindNextVolumeW, FindVolumeClose, QueryDosDeviceW},
     handleapi::INVALID_HANDLE_VALUE,
-    winbase::{GetFirmwareEnvironmentVariableW,},
-    winuser::{ExitWindowsEx,EWX_REBOOT, EWX_FORCEIFHUNG },
-    reason::{SHTDN_REASON_MAJOR_OPERATINGSYSTEM},
+    winbase::{GetFirmwareEnvironmentVariableW,},    
+    //winreg::{InitiateSystemShutdownW, },    
 };
 
 use crate::common::{MigErrCtx, MigError, MigErrorKind};
@@ -166,8 +165,26 @@ pub fn enumerate_volumes() -> Result<i32, MigError> {
     Ok(0)
 }
 
-pub fn reboot() -> bool {
-    unsafe {
-        ExitWindowsEx(EWX_REBOOT | EWX_FORCEIFHUNG, SHTDN_REASON_MAJOR_OPERATINGSYSTEM) != 0
+/*
+pub fn reboot(message: &str, timeout: i32) -> bool {
+    let message: Vec<u16> = OsStr::new(message).encode_wide().chain(once(0)).collect();
+
+    let res = unsafe {          
+        InitiateSystemShutdownW(
+            null_mut(),
+            message, 
+            timeout, 
+            true, // force apps closed
+            true, // reboot after shutdown
+        )        
+    };
+
+    if res == 0 {
+        let os_err = Error::last_os_error();
+        warn!( "InitiateSystemShutdownExW: returned 0 , last os error: {:?} ", os_err);
+        false
+    } else {
+        true
     }
 }
+*/

@@ -418,7 +418,7 @@ impl MigrateInfo {
 
         if let Some(boot_path) = boot_path {
             if let Some(work_path) = work_path {
-                if efi_boot {
+                if let BootType::MSWEfi = boot_type {
                     if let None = efi_path {
                         error!("Failed to establish location of System/EFI directory",);
                         return Err(MigError::displayed());

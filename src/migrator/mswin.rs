@@ -1,5 +1,7 @@
 use failure::Fail;
 use log::{error, trace};
+use std::time::{Duration};
+use std::thread;
 
 use crate::common::{Config, MigErrCtx, MigError, MigErrorKind, MigMode};
 
@@ -20,7 +22,8 @@ use powershell::PSInfo;
 pub struct MSWMigrator {
     config: Config,
     mig_info: MigrateInfo,
-    /*    ps_info: PSInfo,
+    ps_info: PSInfo,
+    /*    
         os_info: Option<WMIOSInfo>,
         efi_boot: Option<bool>,
         sysinfo: SysInfo,
@@ -68,13 +71,27 @@ impl<'a> MSWMigrator {
         };
 
 
-        Ok(MSWMigrator { config, mig_info })
+        Ok(MSWMigrator { ps_info, config, mig_info })
     }
 
     fn do_migrate(&self) -> Result<(), MigError> {
 
 
-        Err(MigError::from(MigErrorKind::NotImpl))
+        
+        if let Some(delay) = self.config.migrate.get_reboot() {
+            let message = format!("Migration stage 1 was successfull, rebooting system in {} seconds",
+                *delay
+            );
+            println!("{}", &message);
+            
+            let delay = Duration::new(*delay, 0);
+            thread::sleep(delay);
+            println!("Rebooting now..");            
+
+            self.ps_info.reboot();
+        }
+
+        Ok(())
     }
 
     /*
