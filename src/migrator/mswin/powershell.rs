@@ -11,7 +11,7 @@ const PS_CMD_IS_ADMIN: &str =
     "[bool](([System.Security.Principal.WindowsIdentity]::GetCurrent()).groups -match \"S-1-5-32-544\")";
 const PS_CMD_IS_SECURE_BOOT: &str = "Confirm-SecureBootUEFI";
 
-const PS_CMD_REBOOT: &str = "Restart-Conputer";
+const PS_CMD_REBOOT: &str = "Restart-Computer";
 
 const PS_ARGS_VERSION_PARAMS: [&'static str; 1] = ["$PSVersionTable.PSVersion"];
 

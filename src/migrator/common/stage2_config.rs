@@ -354,22 +354,26 @@ impl<'a> Stage2ConfigBuilder {
         Ok(result)
     }
 
-    pub fn write_stage2_cfg(&self) -> Result<(), MigError> {
+
+    pub fn write_stage2_cfg(&self,) -> Result<(), MigError> {
+        self.write_stage2_cfg_to(&Path::new(STAGE2_CFG_FILE))
+    }
+    pub fn write_stage2_cfg_to(&self,file: &Path) -> Result<(), MigError> {        
         // TODO: check first
 
         let mut cfg_str = String::from("# Balena Migrate Stage2 Config\n");
         cfg_str.push_str(&self.build()?.to_str()?);
-        File::create(STAGE2_CFG_FILE)
+        File::create(file)
             .context(MigErrCtx::from_remark(
                 MigErrorKind::Upstream,
-                &format!("Failed to open file for writing: {}'", STAGE2_CFG_FILE),
+                &format!("Failed to open file for writing: {}'", file.display()),
             ))?
             .write_all(cfg_str.as_bytes())
             .context(MigErrCtx::from_remark(
                 MigErrorKind::Upstream,
-                &format!("Failed to write to config file: {}'", STAGE2_CFG_FILE),
+                &format!("Failed to write to config file: {}'", file.display()),
             ))?;
-        info!("Wrote stage2 config to '{}'", STAGE2_CFG_FILE);
+        info!("Wrote stage2 config to '{}'", file.display());
         Ok(())
     }
 

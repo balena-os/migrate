@@ -106,4 +106,13 @@ impl<'a> PathInfo {
     pub fn get_linux_part(&'a self) -> &'a Path {
         &self.linux_part
     }
+
+    pub fn get_linux_drive(&'a self) -> &'a Path {
+        &self.linux_drive
+    }
+
+    pub fn get_linux_fstype(&self) -> &'static str {
+        self.file_system.to_linux_str()
+    }
+
 }

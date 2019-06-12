@@ -39,19 +39,25 @@ pub(crate) struct MigrateInfo {
 }
 
 impl MigrateInfo {
-    pub fn new(config: &Config, _ps_info: &mut PSInfo) -> Result<MigrateInfo, MigError> {
+    pub fn new(config: &Config, ps_info: &mut PSInfo) -> Result<MigrateInfo, MigError> {
         trace!("new: entered");
 
         let boot_type = match is_efi_boot() {
             Ok(efi_boot) => {
                 if efi_boot {
                     info!("The system is booted in EFI mode");
+                    if ps_info.is_secure_boot()? {
+                        error!("This device is using secure boot. We can not currently migrate a device in secure boot mode");
+                        return Err(MigError::displayed());
+                    }
+
                     BootType::MSWEfi
                 } else {
                     // BootType::MSWBootMgr
                     error!("The system is booted in non EFI mode. Currently only EFI systems are supported on Windows");
                     return Err(MigError::displayed());
                 }
+
             }
             Err(why) => {
                 error!("Failed to determine EFI mode: {:?}", why);
