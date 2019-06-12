@@ -72,6 +72,8 @@ pub(crate) enum BootType {
     Raspi,
     Efi,
     Grub,
+    MSWEfi,
+    MSWBootMgr,
 }
 
 #[derive(Debug,Clone)]

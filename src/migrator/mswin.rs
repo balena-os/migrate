@@ -72,6 +72,8 @@ impl<'a> MSWMigrator {
     }
 
     fn do_migrate(&self) -> Result<(), MigError> {
+
+
         Err(MigError::from(MigErrorKind::NotImpl))
     }
 

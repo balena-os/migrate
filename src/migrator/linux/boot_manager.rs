@@ -20,8 +20,10 @@ pub(crate) fn from_boot_type(boot_type: &BootType) -> Box<BootManager> {
     match boot_type {
         BootType::UBoot => Box::new(UBootManager::new()),
         BootType::Grub => Box::new(GrubBootManager::new()),
-        BootType::Efi => Box::new(EfiBootManager::new()),
+        BootType::Efi => Box::new(EfiBootManager::new(false)),
+        BootType::MSWEfi => Box::new(EfiBootManager::new(true)),
         BootType::Raspi => Box::new(RaspiBootManager::new()),
+        BootType::MSWBootMgr => panic!("BootType::MSWBootMgr is not implemented"),
     }
 }
 
@@ -44,11 +46,13 @@ pub(crate) trait BootManager {
     fn restore(&self, slug: &str, root_path: &Path, config: &Stage2Config) -> Result<(), MigError>;
 }
 
-pub(crate) struct EfiBootManager;
+pub(crate) struct EfiBootManager{
+    msw_device: bool,
+}
 
 impl EfiBootManager {
-    pub fn new() -> EfiBootManager {
-        EfiBootManager {}
+    pub fn new(msw_device: bool) -> EfiBootManager {
+        EfiBootManager { msw_device }
     }
 }
 

@@ -8,9 +8,13 @@ use std::os::windows::prelude::*;
 use std::ptr::null_mut;
 
 use winapi::shared::winerror::ERROR_INVALID_FUNCTION;
-use winapi::um::fileapi::{FindFirstVolumeW, FindNextVolumeW, FindVolumeClose, QueryDosDeviceW};
-use winapi::um::handleapi::INVALID_HANDLE_VALUE;
-use winapi::um::winbase::GetFirmwareEnvironmentVariableW;
+use winapi::um::{
+    fileapi::{ FindFirstVolumeW, FindNextVolumeW, FindVolumeClose, QueryDosDeviceW},
+    handleapi::INVALID_HANDLE_VALUE,
+    winbase::{GetFirmwareEnvironmentVariableW,},
+    winuser::{ExitWindowsEx,EWX_REBOOT, EWX_FORCEIFHUNG },
+    reason::{SHTDN_REASON_MAJOR_OPERATINGSYSTEM},
+};
 
 use crate::common::{MigErrCtx, MigError, MigErrorKind};
 
@@ -160,4 +164,10 @@ pub fn enumerate_volumes() -> Result<i32, MigError> {
     }
 
     Ok(0)
+}
+
+pub fn reboot() -> bool {
+    unsafe {
+        ExitWindowsEx(EWX_REBOOT | EWX_FORCEIFHUNG, SHTDN_REASON_MAJOR_OPERATINGSYSTEM) != 0
+    }
 }
