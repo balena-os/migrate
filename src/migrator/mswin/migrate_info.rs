@@ -6,6 +6,7 @@ use crate::{
              FileInfo, FileType, format_size_with_unit, balena_cfg_json::BalenaCfgJson },
     defs::{OSArch, APPROX_MEM_THRESHOLD},    
     mswin::{
+        boot_manager::{BootManager, EfiBootManager},
         msw_defs::{ FileSystem, },
         powershell::PSInfo,
         util::mount_efi,
@@ -28,7 +29,7 @@ pub(crate) struct DriveInfo {
 
 #[derive(Debug, Clone)]
 pub(crate) struct MigrateInfo {
-    pub boot_type: BootType,
+    pub efi_boot: bool,
     pub os_name: String,
     pub os_arch: OSArch,
     pub os_release: OSRelease,
@@ -43,7 +44,7 @@ impl MigrateInfo {
     pub fn new(config: &Config, ps_info: &mut PSInfo) -> Result<MigrateInfo, MigError> {
         trace!("new: entered");
 
-        let boot_type = match is_efi_boot() {
+        let efi_boot = match is_efi_boot() {
             Ok(efi_boot) => {
                 if efi_boot {
                     info!("The system is booted in EFI mode");
@@ -52,7 +53,7 @@ impl MigrateInfo {
                         return Err(MigError::displayed());
                     }
 
-                    BootType::MSWEfi
+                    true
                 } else {
                     // BootType::MSWBootMgr
                     error!("The system is booted in non EFI mode. Currently only EFI systems are supported on Windows");
@@ -84,7 +85,7 @@ impl MigrateInfo {
         };
 
         // TODO: efi_boot is always true / only supported variant for now
-        let drive_info = MigrateInfo::get_drive_info(&boot_type, &config)?;
+        let drive_info = MigrateInfo::get_drive_info(efi_boot, &config)?;
         debug!("DriveInfo: {:?}", drive_info);
 
 
@@ -169,7 +170,7 @@ impl MigrateInfo {
 
 
         Ok(MigrateInfo {
-            boot_type,
+            efi_boot,
             os_name: os_info.os_name,
             os_arch: os_info.os_arch,
             os_release: os_info.os_release,
@@ -181,7 +182,7 @@ impl MigrateInfo {
         })
     }
 
-    fn get_drive_info(boot_type: &BootType, config: &Config) -> Result<DriveInfo, MigError> {
+    fn get_drive_info(efi_boot: bool, config: &Config) -> Result<DriveInfo, MigError> {
         trace!("get_efi_drive_info: entered");
         // Detect relevant drives
         // Detect boot partition and the drive it is on -> install drive
@@ -384,7 +385,7 @@ impl MigrateInfo {
                                         }
                                     };
 
-                                    if let BootType::MSWEfi = boot_type {
+                                    if efi_boot {
                                         if let FileSystem::VFat = efi_mnt.get_file_system()
                                         {
                                             if dir_exists(path_append(efi_mnt.get_name(), "EFI"))? {
@@ -425,7 +426,7 @@ impl MigrateInfo {
 
         if let Some(boot_path) = boot_path {
             if let Some(work_path) = work_path {
-                if let BootType::MSWEfi = boot_type {
+                if efi_boot {
                     if let None = efi_path {
                         error!("Failed to establish location of System/EFI directory",);
                         return Err(MigError::displayed());

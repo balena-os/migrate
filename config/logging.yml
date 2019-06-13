@@ -7,6 +7,7 @@ mod_level:
   'common::wifi_config' : 'warn'
   'mswin' : 'info'
   'mswin::migrate_info' : 'debug'
+  'mswin::boot_manager' : 'debug'
   # 'mswin::wmi_utils::mount_point' : 'debug'
   'mswin::wmi_utils::volume' : 'debug'
   'linux' : 'info'

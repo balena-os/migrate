@@ -8,9 +8,6 @@ pub const UBOOT_FILE_NAME: &str = "u-boot.img";
 
 pub const KERNEL_CMDLINE_PATH: &str = "/proc/cmdline";
 
-pub const MIG_KERNEL_NAME: &str = "balena-migrate.zImage";
-pub const MIG_INITRD_NAME: &str = "balena-migrate.initrd";
-pub const MIG_DTB_NAME: &str = "balena-migrate.dtb";
 
 pub const GRUB_CONFIG_DIR: &str = "/etc/grub.d";
 pub const GRUB_CONFIG_FILE: &str = "/etc/grub.d/43_balena-migrate";

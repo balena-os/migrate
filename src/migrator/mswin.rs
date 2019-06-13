@@ -1,13 +1,15 @@
 use failure::{Fail, ResultExt};
-use log::{error, trace};
+use log::{error, trace, info};
 use std::time::{Duration};
 use std::thread;
 use std::path::{PathBuf};
 use std::fs::{create_dir_all};
 
+
 use crate::{
     defs::{DeviceType, OSArch, STAGE2_CFG_FILE},    
-    common::{Config, MigErrCtx, MigError, MigErrorKind, MigMode, stage2_config::{Stage2ConfigBuilder}, path_append, dir_exists}, };
+    common::{Config, MigErrCtx, MigError, MigErrorKind, MigMode, stage2_config::{Stage2ConfigBuilder}, path_append, dir_exists},     
+    };
 
 
 pub(crate) mod msw_defs;
@@ -27,7 +29,7 @@ mod migrate_info;
 use migrate_info::MigrateInfo;
 
 mod boot_manager;
-use boot_manager::{EfiBootManager};
+use boot_manager::{BootManager, EfiBootManager};
 
 
 pub struct MSWMigrator {
@@ -35,6 +37,7 @@ pub struct MSWMigrator {
     mig_info: MigrateInfo,
     ps_info: PSInfo,
     stage2_config: Stage2ConfigBuilder,
+    boot_manager: Box<BootManager>,
     /*    
         os_info: Option<WMIOSInfo>,
         efi_boot: Option<bool>,
@@ -90,11 +93,23 @@ impl<'a> MSWMigrator {
                     return Err(MigError::displayed());
             },
         }
+
+        let mut boot_manager = if mig_info.efi_boot {
+            Box::new(EfiBootManager::new())
+        } else {
+            panic!("no choices for non efi boot manager");
+        };
+        
+        if !boot_manager.can_migrate(&mig_info, &config, &mut stage2_config)? {
+            error!("Cannot migrate this device.");
+            return Err(MigError::displayed());
+        }
         
         stage2_config.set_flash_device(&PathBuf::from(mig_info.drive_info.boot_path.get_linux_drive()));
-        stage2_config.set_boot_type(&mig_info.boot_type);
 
-        Ok(MSWMigrator { ps_info, config, mig_info, stage2_config})
+        stage2_config.set_boot_type(&boot_manager.get_boot_type());
+
+        Ok(MSWMigrator { ps_info, config, mig_info, stage2_config, boot_manager})
     }
 
     fn do_migrate(&mut self) -> Result<(), MigError> {
@@ -165,6 +180,14 @@ impl<'a> MSWMigrator {
             create_dir_all(&stage2_cfg_dir).context(MigErrCtx::from_remark(MigErrorKind::Upstream, &format!("Fauíled to create directory '{}'", stage2_cfg_dir.display())))?;
         } 
         self.stage2_config.write_stage2_cfg_to(&stage2_cfg_path)?;
+
+        match self.boot_manager.setup(&self.mig_info, &self.config, &mut self.stage2_config) {
+            Ok(_s) => info!("The system is set up to boot into the migration environment"),
+            Err(why) => { 
+                error!("Failed to set up the boot configuration for the migration environment: {:?}", why);
+                return Err(MigError::displayed());
+            }
+        }
       
         if let Some(delay) = self.config.migrate.get_reboot() {
             let message = format!("Migration stage 1 was successfull, rebooting system in {} seconds",
