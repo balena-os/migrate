@@ -44,7 +44,7 @@ pub(crate) const WMIQ_OS: &str = "SELECT Caption,Version,OSArchitecture, BootDev
 // pub const WMIQ_Partition: &str = "SELECT * FROM Win32_DiskPartition";
 // pub const WMIQ_Partition: &str = "SELECT Caption,Bootable,Size,NumberOfBlocks,Type,BootPartition,DiskIndex,Index FROM Win32_DiskPartition";
 
-#[derive(Debug,Clone)]
+#[derive(Debug, Clone)]
 pub(crate) struct WMIOSInfo {
     pub os_name: String,
     pub os_release: OSRelease,
@@ -53,7 +53,6 @@ pub(crate) struct WMIOSInfo {
     pub mem_avail: u64,
     pub boot_dev: String,
 }
-
 
 // TODO: make WmiAPI an Rc to make it shareble with dependant objects ?
 pub(crate) struct WmiUtils {}
@@ -143,13 +142,15 @@ impl WmiUtils {
         };
 
         let mem_tot = match wmi_row.get("TotalVisibleMemorySize").unwrap_or(&empty) {
-            Variant::STRING(s) => s.parse::<u64>().context(MigErrCtx::from_remark(
-                MigErrorKind::InvParam,
-                &format!(
-                    "init_sys_info: failed to parse TotalVisibleMemorySize from  '{}'",
-                    s
-                ),
-            ))? * 1024,
+            Variant::STRING(s) => {
+                s.parse::<u64>().context(MigErrCtx::from_remark(
+                    MigErrorKind::InvParam,
+                    &format!(
+                        "init_sys_info: failed to parse TotalVisibleMemorySize from  '{}'",
+                        s
+                    ),
+                ))? * 1024
+            }
             _ => {
                 return Err(MigError::from_remark(
                     MigErrorKind::InvParam,
@@ -159,13 +160,15 @@ impl WmiUtils {
         } as u64;
 
         let mem_avail = match wmi_row.get("FreePhysicalMemory").unwrap_or(&empty) {
-            Variant::STRING(s) => s.parse::<u64>().context(MigErrCtx::from_remark(
-                MigErrorKind::InvParam,
-                &format!(
-                    "init_sys_info: failed to parse 'FreePhysicalMemory' from  '{}'",
-                    s
-                ),
-            ))? * 1024,
+            Variant::STRING(s) => {
+                s.parse::<u64>().context(MigErrCtx::from_remark(
+                    MigErrorKind::InvParam,
+                    &format!(
+                        "init_sys_info: failed to parse 'FreePhysicalMemory' from  '{}'",
+                        s
+                    ),
+                ))? * 1024
+            }
             _ => {
                 return Err(MigError::from_remark(
                     MigErrorKind::InvParam,
@@ -342,7 +345,6 @@ impl<'a> QueryRes<'a> {
                 &format!("get_bool_property: value not found for key: '{}", prop_name),
             ))
         }
-
     }
 
     fn get_bool_property(&self, prop_name: &str) -> Result<bool, MigError> {
@@ -418,7 +420,7 @@ impl<'a> QueryRes<'a> {
                 MigErrorKind::NotFound,
                 &format!("get_uint_property: value not found for key: '{}", prop_name),
             ))
-        }        
+        }
     }
 
     fn get_uint_property(&self, prop_name: &str) -> Result<u64, MigError> {
@@ -426,8 +428,12 @@ impl<'a> QueryRes<'a> {
             Ok(val)
         } else {
             Err(MigError::from_remark(
-                    MigErrorKind::InvParam,
-                    &format!("get_uint_property: unexpected variant type, not U32 or STRING for key: '{}'",prop_name)))
+                MigErrorKind::InvParam,
+                &format!(
+                    "get_uint_property: unexpected variant type, not U32 or STRING for key: '{}'",
+                    prop_name
+                ),
+            ))
         }
     }
 }

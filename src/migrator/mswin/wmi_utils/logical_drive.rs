@@ -3,11 +3,8 @@ use std::rc::Rc;
 // use log::{debug};
 use super::QueryRes;
 use crate::{
-    
     common::{MigError, MigErrorKind},
-    mswin::{
-        msw_defs::{FileSystem},
-        powershell::PSInfo, win_api::wmi_api::WmiAPI},
+    mswin::{msw_defs::FileSystem, powershell::PSInfo, win_api::wmi_api::WmiAPI},
 };
 use regex::Regex;
 

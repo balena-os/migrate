@@ -13,7 +13,7 @@ const QUERY_ALL: &str = "SELECT Caption, Index, DeviceID, Size, MediaType, Statu
 pub(crate) enum DriveType {
     Scsi,
     Ide,
-    Other,  // TODO: find out what that looks like & define it
+    Other, // TODO: find out what that looks like & define it
 }
 
 impl DriveType {

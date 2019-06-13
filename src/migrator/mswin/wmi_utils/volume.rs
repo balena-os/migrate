@@ -1,9 +1,6 @@
-use crate::{    
-    common::{MigError, MigErrorKind,},
-    mswin::{
-        msw_defs::{FileSystem},
-        win_api::{wmi_api::WmiAPI},
-    }
+use crate::{
+    common::{MigError, MigErrorKind},
+    mswin::{msw_defs::FileSystem, win_api::wmi_api::WmiAPI},
 };
 use log::debug;
 
@@ -83,7 +80,10 @@ impl<'a> Volume {
         if q_res.len() == 1 {
             Ok(Volume::new(QueryRes::new(&q_res[0]))?)
         } else {
-            Err(MigError::from_remark(MigErrorKind::InvParam, &format!("Invalid result count: {}", q_res.len())))
+            Err(MigError::from_remark(
+                MigErrorKind::InvParam,
+                &format!("Invalid result count: {}", q_res.len()),
+            ))
         }
     }
 
@@ -94,10 +94,12 @@ impl<'a> Volume {
         if q_res.len() == 1 {
             Ok(Volume::new(QueryRes::new(&q_res[0]))?)
         } else {
-            Err(MigError::from_remark(MigErrorKind::InvParam, &format!("Invalid result count: {}", q_res.len())))
+            Err(MigError::from_remark(
+                MigErrorKind::InvParam,
+                &format!("Invalid result count: {}", q_res.len()),
+            ))
         }
     }
-
 
     pub fn query_system_volumes() -> Result<Vec<Volume>, MigError> {
         let query = format!("{} WHERE SystemVolume=True", QUERY_ALL);

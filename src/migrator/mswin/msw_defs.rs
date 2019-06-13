@@ -1,15 +1,13 @@
 pub const EFI_MS_BOOTMGR: &str = r#"\EFI\Microsoft\Boot\bootmgfw.efi"#;
 
-
-
-#[derive(Debug,Clone)]
+#[derive(Debug, Clone)]
 pub(crate) enum FileSystem {
     Ext2,
     Ext3,
     Ext4,
     VFat,
     Ntfs,
-    Other
+    Other,
 }
 
 impl FileSystem {
@@ -22,7 +20,7 @@ impl FileSystem {
             "FAT32" => FileSystem::VFat,
             "FAT16" => FileSystem::VFat,
             "NTFS" => FileSystem::Ntfs,
-            _ => FileSystem::Other
+            _ => FileSystem::Other,
         }
     }
 

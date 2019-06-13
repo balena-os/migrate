@@ -9,10 +9,10 @@ use std::ptr::null_mut;
 
 use winapi::shared::winerror::ERROR_INVALID_FUNCTION;
 use winapi::um::{
-    fileapi::{ FindFirstVolumeW, FindNextVolumeW, FindVolumeClose, QueryDosDeviceW},
+    fileapi::{FindFirstVolumeW, FindNextVolumeW, FindVolumeClose, QueryDosDeviceW},
     handleapi::INVALID_HANDLE_VALUE,
-    winbase::{GetFirmwareEnvironmentVariableW,},    
-    //winreg::{InitiateSystemShutdownW, },    
+    winbase::GetFirmwareEnvironmentVariableW,
+    //winreg::{InitiateSystemShutdownW, },
 };
 
 use crate::common::{MigErrCtx, MigError, MigErrorKind};
@@ -169,14 +169,14 @@ pub fn enumerate_volumes() -> Result<i32, MigError> {
 pub fn reboot(message: &str, timeout: i32) -> bool {
     let message: Vec<u16> = OsStr::new(message).encode_wide().chain(once(0)).collect();
 
-    let res = unsafe {          
+    let res = unsafe {
         InitiateSystemShutdownW(
             null_mut(),
-            message, 
-            timeout, 
+            message,
+            timeout,
             true, // force apps closed
             true, // reboot after shutdown
-        )        
+        )
     };
 
     if res == 0 {

@@ -11,12 +11,13 @@ use crate::{
         stage2_config::{Stage2Config, Stage2ConfigBuilder},
         Config, MigErrCtx, MigError, MigErrorKind,
     },
-    defs::{
-        BootType,MIG_INITRD_NAME, MIG_KERNEL_NAME,
-    },
+    defs::{BootType, MIG_INITRD_NAME, MIG_KERNEL_NAME},
     linux::{
-        linux_defs::{BOOT_PATH, GRUB_CONFIG_DIR, GRUB_CONFIG_FILE, GRUB_MIN_VERSION, KERNEL_CMDLINE_PATH, ROOT_PATH,},
         boot_manager::BootManager,
+        linux_defs::{
+            BOOT_PATH, GRUB_CONFIG_DIR, GRUB_CONFIG_FILE, GRUB_MIN_VERSION, KERNEL_CMDLINE_PATH,
+            ROOT_PATH,
+        },
         migrate_info::{label_type::LabelType, MigrateInfo},
         EnsuredCmds, CHMOD_CMD, GRUB_REBOOT_CMD, GRUB_UPDT_CMD,
     },

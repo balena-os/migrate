@@ -8,13 +8,11 @@ pub const UBOOT_FILE_NAME: &str = "u-boot.img";
 
 pub const KERNEL_CMDLINE_PATH: &str = "/proc/cmdline";
 
-
 pub const GRUB_CONFIG_DIR: &str = "/etc/grub.d";
 pub const GRUB_CONFIG_FILE: &str = "/etc/grub.d/43_balena-migrate";
 pub const GRUB_MIN_VERSION: &str = "2";
 
 pub const SYS_UEFI_DIR: &str = "/sys/firmware/efi";
-
 
 pub const NIX_NONE: Option<&'static [u8]> = None;
 

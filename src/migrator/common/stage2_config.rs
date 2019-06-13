@@ -354,12 +354,11 @@ impl<'a> Stage2ConfigBuilder {
         Ok(result)
     }
 
-
-    pub fn write_stage2_cfg(&self,) -> Result<(), MigError> {
+    pub fn write_stage2_cfg(&self) -> Result<(), MigError> {
         self.write_stage2_cfg_to(&Path::new(STAGE2_CFG_FILE))
     }
-    
-    pub fn write_stage2_cfg_to(&self,file: &Path) -> Result<(), MigError> {        
+
+    pub fn write_stage2_cfg_to(&self, file: &Path) -> Result<(), MigError> {
         // TODO: check first
 
         let mut cfg_str = String::from("# Balena Migrate Stage2 Config\n");

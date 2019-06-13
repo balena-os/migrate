@@ -7,7 +7,6 @@ pub const STAGE2_CFG_FILE: &str = "/etc/balena-stage2.yml";
 // where do network manager connection profiles live
 pub const SYSTEM_CONNECTIONS_DIR: &str = "system-connections";
 
-
 // Default migrate config name
 pub const DEFAULT_MIGRATE_CONFIG: &str = "balena-migrate.yml";
 
@@ -22,7 +21,6 @@ pub const EFI_BOOT_DIR: &str = r#"\EFI\Boot"#;
 pub const EFI_BCKUP_DIR: &str = r#"\efi_backup"#;
 pub const EFI_STARTUP_FILE: &str = "startup.nsh";
 
-
 // tag files with this to determine they are written by balena-migrate
 // and can be overwritten
 pub const BALENA_FILE_TAG: &str = "## created by balena-migrate";
@@ -35,7 +33,6 @@ pub const BALENA_FILE_TAG_REGEX: &str = r###"^\s*## created by balena-migrate"##
 pub const DEFAULT_API_CHECK_TIMEOUT: u64 = 20;
 
 pub const BACKUP_FILE: &str = "backup.tgz";
-
 
 pub const APPROX_MEM_THRESHOLD: u64 = 64 * 1024 * 1024; // 64 MiB
 
@@ -50,8 +47,6 @@ pub(crate) enum BootType {
     MSWEfi,
     MSWBootMgr,
 }
-
-
 
 #[derive(Debug, Deserialize, Serialize, Clone)]
 pub(crate) enum DeviceType {

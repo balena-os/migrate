@@ -1,35 +1,27 @@
-
+use lazy_static::lazy_static;
 use log::debug;
-use std::path::{PathBuf, Path};
-use lazy_static::{lazy_static};
-
+use std::path::{Path, PathBuf};
 
 // use log::{debug};
 use super::QueryRes;
-use crate::{    
+use crate::{
     common::{MigError, MigErrorKind},
-    mswin::{
-        msw_defs::{FileSystem},
-        win_api::wmi_api::WmiAPI,
-        wmi_utils::volume::Volume,
-    },
+    mswin::{msw_defs::FileSystem, win_api::wmi_api::WmiAPI, wmi_utils::volume::Volume},
 };
 
 use crate::mswin::wmi_utils::NS_CVIM2;
 
-
 const QUERY_ALL: &str = "SELECT Directory,Volume FROM Win32_MountPoint";
 
-const QUERY_VOL2DIR: &str = r#"SELECT Directory FROM Win32_MountPoint where Volume='Win32_Volume.DeviceID=""'"#;
-
+const QUERY_VOL2DIR: &str =
+    r#"SELECT Directory FROM Win32_MountPoint where Volume='Win32_Volume.DeviceID=""'"#;
 
 pub(crate) struct MountPoint {
     directory: PathBuf,
-    volume: Volume
+    volume: Volume,
 }
 
-
-impl<'a>  MountPoint {
+impl<'a> MountPoint {
     pub fn query_all() -> Result<Vec<MountPoint>, MigError> {
         Ok(MountPoint::from_query(QUERY_ALL)?)
     }
@@ -38,7 +30,7 @@ impl<'a>  MountPoint {
         let vol_id = volume.get_device_id();
         for mount_point in MountPoint::query_all()? {
             if mount_point.volume.get_device_id() == vol_id {
-                return Ok(Some(mount_point.directory))
+                return Ok(Some(mount_point.directory));
             }
         }
         Ok(None)
@@ -56,28 +48,34 @@ impl<'a>  MountPoint {
 
             let res_str = res_map.get_string_property("Directory")?;
             debug!("res_str Directory: '{}'", res_str);
-            let parts: Vec<&str> = res_str.split("=").collect();            
+            let parts: Vec<&str> = res_str.split("=").collect();
             let directory = if parts.len() == 2 {
                 parts[1].trim_matches('"').replace(r#"\\"#, r#"\"#)
             } else {
-                return Err(MigError::from_remark(MigErrorKind::InvParam, &format!("Failed to extract Directory from '{}'", res_str)));
+                return Err(MigError::from_remark(
+                    MigErrorKind::InvParam,
+                    &format!("Failed to extract Directory from '{}'", res_str),
+                ));
             };
             debug!("got mountpoint directory: '{}'", directory);
-            
+
             let res_str = res_map.get_string_property("Volume")?;
             debug!("res_str Volume: '{}'", res_str);
             let parts: Vec<&str> = res_str.split("=").collect();
             let volume = if parts.len() == 2 {
                 parts[1] // .trim_matches('"').replace(r#"\\"#, r#"\"#)
             } else {
-                return Err(MigError::from_remark(MigErrorKind::InvParam, &format!("Failed to extract Volume from '{}'", res_str)));
+                return Err(MigError::from_remark(
+                    MigErrorKind::InvParam,
+                    &format!("Failed to extract Volume from '{}'", res_str),
+                ));
             };
 
             debug!("got mountpoint volume: '{}'", volume);
 
             result.push(MountPoint {
                 directory: PathBuf::from(directory),
-                volume: Volume::query_by_device_id(&volume)?
+                volume: Volume::query_by_device_id(&volume)?,
             });
         }
 
@@ -95,5 +93,4 @@ impl<'a>  MountPoint {
     pub fn get_volume(&'a self) -> &'a Volume {
         &self.volume
     }
-
 }

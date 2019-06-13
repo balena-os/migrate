@@ -1,24 +1,26 @@
-use failure::{ResultExt};
-use std::path::{PathBuf, Path};
+use failure::ResultExt;
+use std::path::{Path, PathBuf};
 
 use crate::{
-    common::{dir_exists, os_release::OSRelease, path_append, Config, MigError, MigErrorKind, MigErrCtx,
-             FileInfo, FileType, format_size_with_unit, balena_cfg_json::BalenaCfgJson },
-    defs::{OSArch, APPROX_MEM_THRESHOLD},    
+    common::{
+        balena_cfg_json::BalenaCfgJson, dir_exists, format_size_with_unit, os_release::OSRelease,
+        path_append, Config, FileInfo, FileType, MigErrCtx, MigError, MigErrorKind,
+    },
+    defs::{OSArch, APPROX_MEM_THRESHOLD},
     mswin::{
         boot_manager::{BootManager, EfiBootManager},
-        msw_defs::{ FileSystem, },
+        msw_defs::FileSystem,
         powershell::PSInfo,
         util::mount_efi,
         win_api::is_efi_boot,
-        wmi_utils::{LogicalDrive, Partition, PhysicalDrive, Volume, MountPoint, WmiUtils},
+        wmi_utils::{LogicalDrive, MountPoint, Partition, PhysicalDrive, Volume, WmiUtils},
     },
 };
 use log::{debug, error, info, trace, warn};
 
 pub(crate) mod path_info;
-use path_info::PathInfo;
 use crate::defs::BootType;
+use path_info::PathInfo;
 
 #[derive(Debug, Clone)]
 pub(crate) struct DriveInfo {
@@ -59,7 +61,6 @@ impl MigrateInfo {
                     error!("The system is booted in non EFI mode. Currently only EFI systems are supported on Windows");
                     return Err(MigError::displayed());
                 }
-
             }
             Err(why) => {
                 error!("Failed to determine EFI mode: {:?}", why);
@@ -88,14 +89,11 @@ impl MigrateInfo {
         let drive_info = MigrateInfo::get_drive_info(efi_boot, &config)?;
         debug!("DriveInfo: {:?}", drive_info);
 
-
-
         let work_dir = drive_info.work_path.get_path();
         info!("Working directory is '{}'", work_dir.display());
 
-
         let image_file = if let Some(file_info) =
-        FileInfo::new(&config.balena.get_image_path(), &work_dir)?
+            FileInfo::new(&config.balena.get_image_path(), &work_dir)?
         {
             file_info.expect_type(&FileType::OSImage)?;
             info!(
@@ -117,7 +115,7 @@ impl MigrateInfo {
         };
 
         let config_file = if let Some(file_info) =
-        FileInfo::new(&config.balena.get_config_path(), &work_dir)?
+            FileInfo::new(&config.balena.get_config_path(), &work_dir)?
         {
             file_info.expect_type(&FileType::Json)?;
 
@@ -134,15 +132,13 @@ impl MigrateInfo {
         };
 
         let kernel_file = if let Some(file_info) =
-        FileInfo::new(config.migrate.get_kernel_path(), work_dir)?
+            FileInfo::new(config.migrate.get_kernel_path(), work_dir)?
         {
-            file_info.expect_type(
-                match os_info.os_arch {
-                    OSArch::AMD64 => &FileType::KernelAMD64,
-                    OSArch::ARMHF => &FileType::KernelARMHF,
-                    OSArch::I386 => &FileType::KernelI386,
-                },
-            )?;
+            file_info.expect_type(match os_info.os_arch {
+                OSArch::AMD64 => &FileType::KernelAMD64,
+                OSArch::ARMHF => &FileType::KernelARMHF,
+                OSArch::I386 => &FileType::KernelI386,
+            })?;
 
             info!(
                 "The balena migrate kernel looks ok: '{}'",
@@ -155,9 +151,9 @@ impl MigrateInfo {
         };
 
         let initrd_file = if let Some(file_info) =
-        FileInfo::new(config.migrate.get_initrd_path(), work_dir)?
+            FileInfo::new(config.migrate.get_initrd_path(), work_dir)?
         {
-            file_info.expect_type( &FileType::InitRD)?;
+            file_info.expect_type(&FileType::InitRD)?;
             info!(
                 "The balena migrate initramfs looks ok: '{}'",
                 file_info.path.display()
@@ -168,7 +164,6 @@ impl MigrateInfo {
             return Err(MigError::displayed());
         };
 
-
         Ok(MigrateInfo {
             efi_boot,
             os_name: os_info.os_name,
@@ -178,7 +173,7 @@ impl MigrateInfo {
             image_file,
             config_file,
             kernel_file,
-            initrd_file
+            initrd_file,
         })
     }
 
@@ -191,14 +186,20 @@ impl MigrateInfo {
         // -> InterfaceType IDE -> /dev/hda
         // -> InterfaceType ??SDCard?? -> /dev/mcblk
 
+        let work_dir =
+            config
+                .migrate
+                .get_work_dir()
+                .canonicalize()
+                .context(MigErrCtx::from_remark(
+                    MigErrorKind::Upstream,
+                    &format!(
+                        "failed to canonicalize path '{}'",
+                        config.migrate.get_work_dir().display()
+                    ),
+                ))?;
 
-        let work_dir = config.migrate.get_work_dir()
-            .canonicalize()
-            .context(MigErrCtx::from_remark(
-                MigErrorKind::Upstream,
-                &format!("failed to canonicalize path '{}'", config.migrate.get_work_dir().display())))?;
-
-        debug!("got work directory: '{}'", work_dir.display()); 
+        debug!("got work directory: '{}'", work_dir.display());
 
         let volumes = Volume::query_system_volumes()?;
         let efi_vol = if volumes.len() == 1 {
@@ -219,34 +220,33 @@ impl MigrateInfo {
         };
 
         let volumes = Volume::query_boot_volumes()?;
-        let (boot_vol, boot_dir) = 
-            if volumes.len() == 1 {
-                debug!(
-                    "Found Boot Volume: '{}' dev_id: '{}'",
-                    volumes[0].get_name(),
-                    volumes[0].get_device_id()
-                );
-                let vol = &volumes[0];
-                if let Some(directory) = MountPoint::query_directory_by_volume(&vol)? {
-                    (vol,directory)
-                } else {
-                    return Err(MigError::from_remark(
-                        MigErrorKind::InvParam,
-                        &format!(
-                            "Could not retrieve mountpoint for boot volume: {}",
-                            vol.get_device_id()
-                        ),
-                    ));
-                }
+        let (boot_vol, boot_dir) = if volumes.len() == 1 {
+            debug!(
+                "Found Boot Volume: '{}' dev_id: '{}'",
+                volumes[0].get_name(),
+                volumes[0].get_device_id()
+            );
+            let vol = &volumes[0];
+            if let Some(directory) = MountPoint::query_directory_by_volume(&vol)? {
+                (vol, directory)
             } else {
                 return Err(MigError::from_remark(
                     MigErrorKind::InvParam,
                     &format!(
-                        "Encountered an unexpected number ocf Boot volumes: {}",
-                        volumes.len()
+                        "Could not retrieve mountpoint for boot volume: {}",
+                        vol.get_device_id()
                     ),
                 ));
-            };
+            }
+        } else {
+            return Err(MigError::from_remark(
+                MigErrorKind::InvParam,
+                &format!(
+                    "Encountered an unexpected number ocf Boot volumes: {}",
+                    volumes.len()
+                ),
+            ));
+        };
 
         let mut boot_path: Option<PathInfo> = None;
         let mut efi_path: Option<PathInfo> = None;
@@ -254,7 +254,6 @@ impl MigrateInfo {
         let mut wp_match = 0;
         let wp_comp = String::from(work_dir.to_string_lossy().trim_start_matches(r#"\\?\"#));
         debug!("wp_comp = '{}'", wp_comp);
-
 
         // get boot drive letter from boot volume flag
         // get efi drive from boot partition flag
@@ -278,16 +277,24 @@ impl MigrateInfo {
                                 );
 
                                 let logical_drive = partition.query_logical_drive()?;
-                                if let Some(ref logical_drive) = logical_drive {                                    
+                                if let Some(ref logical_drive) = logical_drive {
                                     let mut curr_path_str = String::from(logical_drive.get_name());
                                     if curr_path_str.ends_with(':') {
                                         curr_path_str.push('\\');
                                     }
                                     let curr_path = Path::new(&curr_path_str);
 
-                                    debug!("got logical drive '{}' for partition '{}'", curr_path.display(), partition.get_name());
+                                    debug!(
+                                        "got logical drive '{}' for partition '{}'",
+                                        curr_path.display(),
+                                        partition.get_name()
+                                    );
                                     if let None = boot_path {
-                                        debug!("checking '{}' for boot path: '{}'", curr_path.display(), boot_dir.display());
+                                        debug!(
+                                            "checking '{}' for boot path: '{}'",
+                                            curr_path.display(),
+                                            boot_dir.display()
+                                        );
                                         // check if it is the boot path
                                         // TODO: find a better way to match
                                         if curr_path == boot_dir {
@@ -308,8 +315,12 @@ impl MigrateInfo {
                                         }
                                     }
 
-
-                                    debug!("compare: '{}' to '{}' res: {}", wp_comp, curr_path.display(), wp_comp.starts_with(&curr_path_str));
+                                    debug!(
+                                        "compare: '{}' to '{}' res: {}",
+                                        wp_comp,
+                                        curr_path.display(),
+                                        wp_comp.starts_with(&curr_path_str)
+                                    );
                                     if wp_comp.starts_with(&curr_path_str) {
                                         // Volume::query_by_drive_letter()
                                         if wp_match < curr_path_str.len() {
@@ -335,7 +346,6 @@ impl MigrateInfo {
                                             }
                                         }
                                     }
-
                                 }
 
                                 if partition.is_boot_device() {
@@ -349,12 +359,14 @@ impl MigrateInfo {
                                     info!("Found potential System/EFI drive on drive: '{}', partition {}",                                     
                                         drive.get_device_id(),
                                         partition.get_device_id());
-                                
-                                    let efi_mnt = if let Some(ref logical_drive) = logical_drive
-                                    {
-                                        let efi_dl = efi_vol.get_drive_letter().to_ascii_uppercase();
+
+                                    let efi_mnt = if let Some(ref logical_drive) = logical_drive {
+                                        let efi_dl =
+                                            efi_vol.get_drive_letter().to_ascii_uppercase();
                                         if !efi_dl.is_empty() {
-                                            if logical_drive.get_name().to_ascii_uppercase() != efi_dl {
+                                            if logical_drive.get_name().to_ascii_uppercase()
+                                                != efi_dl
+                                            {
                                                 warn!("Failed to match efi volume '{}' with boot partition '{}'", efi_vol.get_device_id(), partition.get_device_id());
                                                 // next partition
                                                 continue;
@@ -386,14 +398,17 @@ impl MigrateInfo {
                                     };
 
                                     if efi_boot {
-                                        if let FileSystem::VFat = efi_mnt.get_file_system()
-                                        {
+                                        if let FileSystem::VFat = efi_mnt.get_file_system() {
                                             if dir_exists(path_append(efi_mnt.get_name(), "EFI"))? {
                                                 // good enough for now
                                                 let path = PathInfo::new(
-                                                    &Path::new(efi_mnt.get_name()), &efi_vol, &drive, &partition, &efi_mnt,
+                                                    &Path::new(efi_mnt.get_name()),
+                                                    &efi_vol,
+                                                    &drive,
+                                                    &partition,
+                                                    &efi_mnt,
                                                 )?;
-                                                
+
                                                 info!("Found System/EFI drive on drive: '{}', partition: {}, path: '{}', linux: '{}'",
                                                       drive.get_device_id(),
                                                       partition.get_part_index(),
@@ -406,7 +421,7 @@ impl MigrateInfo {
                                     }
                                 }
                             }
-                        },
+                        }
                         Err(why) => {
                             error!(
                                 "Failed to query partitions for drive {}: {:?}",
@@ -417,7 +432,7 @@ impl MigrateInfo {
                         }
                     }
                 }
-            },
+            }
             Err(why) => {
                 error!("Failed to query drive info: {:?}", why);
                 return Err(MigError::displayed());
@@ -438,7 +453,10 @@ impl MigrateInfo {
                     work_path,
                 })
             } else {
-                error!("Failed to establish location of work directory '{}'", work_dir.display());
+                error!(
+                    "Failed to establish location of work directory '{}'",
+                    work_dir.display()
+                );
                 return Err(MigError::displayed());
             }
         } else {

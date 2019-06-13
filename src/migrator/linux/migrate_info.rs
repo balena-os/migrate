@@ -6,10 +6,10 @@ use crate::{
         balena_cfg_json::BalenaCfgJson, format_size_with_unit, wifi_config::WifiConfig, Config,
         FileInfo, FileType, MigError, MigErrorKind, MigrateWifis,
     },
-    defs::{OSArch, APPROX_MEM_THRESHOLD, },
+    defs::{OSArch, APPROX_MEM_THRESHOLD},
     linux::{
-        linux_defs::{BOOT_PATH, ROOT_PATH},
         linux_common::{get_mem_info, get_os_arch, get_os_name},
+        linux_defs::{BOOT_PATH, ROOT_PATH},
         EnsuredCmds,
     },
 };

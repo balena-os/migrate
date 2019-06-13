@@ -46,7 +46,7 @@ pub(crate) trait BootManager {
     fn restore(&self, slug: &str, root_path: &Path, config: &Stage2Config) -> Result<(), MigError>;
 }
 
-pub(crate) struct EfiBootManager{
+pub(crate) struct EfiBootManager {
     msw_device: bool,
 }
 
