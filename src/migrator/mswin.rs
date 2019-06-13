@@ -10,7 +10,7 @@ use crate::{
     common::{Config, MigErrCtx, MigError, MigErrorKind, MigMode, stage2_config::{Stage2ConfigBuilder}, path_append, dir_exists}, };
 
 
-mod defs;
+pub(crate) mod msw_defs;
 // use defs::{STAGE2_CFG_FILE, STAGE2_CFG_DIR};
 
 mod powershell;

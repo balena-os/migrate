@@ -13,12 +13,16 @@ use crate::{
     defs::{BACKUP_FILE, MIN_DISK_SIZE, SYSTEM_CONNECTIONS_DIR},
 };
 
+
+pub(crate) mod linux_defs;
+
 pub(crate) mod device;
 pub(crate) use device::Device;
 
 pub(crate) mod boot_manager;
 
 pub(crate) mod stage2;
+
 
 pub(crate) mod ensured_cmds;
 pub(crate) use ensured_cmds::{
