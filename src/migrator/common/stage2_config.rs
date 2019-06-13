@@ -358,6 +358,7 @@ impl<'a> Stage2ConfigBuilder {
     pub fn write_stage2_cfg(&self,) -> Result<(), MigError> {
         self.write_stage2_cfg_to(&Path::new(STAGE2_CFG_FILE))
     }
+    
     pub fn write_stage2_cfg_to(&self,file: &Path) -> Result<(), MigError> {        
         // TODO: check first
 

@@ -6,10 +6,10 @@ use lazy_static::{lazy_static};
 
 // use log::{debug};
 use super::QueryRes;
-use crate::{
-    defs::{FileSystem},
+use crate::{    
     common::{MigError, MigErrorKind},
     mswin::{
+        msw_defs::{FileSystem},
         win_api::wmi_api::WmiAPI,
         wmi_utils::volume::Volume,
     },

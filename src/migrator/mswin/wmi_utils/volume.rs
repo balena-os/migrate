@@ -1,11 +1,13 @@
-use crate::{
-    defs::{FileSystem},
+use crate::{    
     common::{MigError, MigErrorKind,},
-    mswin::win_api::{query_dos_device, wmi_api::WmiAPI},
+    mswin::{
+        msw_defs::{FileSystem},
+        win_api::{wmi_api::WmiAPI},
+    }
 };
 use log::debug;
 
-use super::{Partition, QueryRes, NS_CVIM2};
+use super::{QueryRes, NS_CVIM2};
 
 const QUERY_ALL: &str =
     "SELECT Name, DeviceID, BlockSize, BootVolume, Capacity, FileSystem, FreeSpace, \

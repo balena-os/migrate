@@ -4,9 +4,9 @@ use std::path::{PathBuf, Path};
 use crate::{
     common::{dir_exists, os_release::OSRelease, path_append, Config, MigError, MigErrorKind, MigErrCtx,
              FileInfo, FileType, format_size_with_unit, balena_cfg_json::BalenaCfgJson },
-    defs::{OSArch, APPROX_MEM_THRESHOLD},
-    msw_defs::{ FileSystem, },
+    defs::{OSArch, APPROX_MEM_THRESHOLD},    
     mswin::{
+        msw_defs::{ FileSystem, },
         powershell::PSInfo,
         util::mount_efi,
         win_api::is_efi_boot,

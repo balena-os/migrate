@@ -3,10 +3,10 @@ use regex::{Regex};
 use lazy_static::{lazy_static};
 use log::{warn};
 
-use crate::{
-    defs::{FileSystem},
+use crate::{    
     common::{ MigError, MigErrorKind},
     mswin::{
+        msw_defs::{FileSystem},
         wmi_utils::{LogicalDrive, Partition, PhysicalDrive, Volume, physical_drive::DriveType},
     },
 };
