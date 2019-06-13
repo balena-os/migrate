@@ -69,6 +69,7 @@ pub(crate) struct Stage2 {
     root_fs_path: PathBuf,
 }
 
+
 impl Stage2 {
     // try to mount former root device and /boot if it is on a separate partition and
     // load the stage2 config
@@ -111,6 +112,20 @@ impl Stage2 {
         } else {
             warn!("root mount directory {} exists", &root_fs_dir.display());
         }
+
+
+        let (root_device, root_fs_dir) =
+            if !file_exists(&root_device) {
+                warn!("root device {} does not exist", &root_device.display());
+                match Stage2::find_config(&root_fs_dir,  &root_fs_type) {
+                    Some(result) => result,
+                    None => {
+                        return Err(MigError::from_remark(MigErrorKind::NotFound,"find for roofs"));
+                    },
+                }
+            } else {
+                (root_device, root_fs_dir)
+            };
 
         // TODO: add options to make this more reliable)
 
@@ -1068,5 +1083,57 @@ impl Stage2 {
         } else {
             info!("Set up logger to log to '{}'", log_file.display());
         }
+    }
+
+    fn find_config(root_mount: &PathBuf, root_fs_type: &Option<String>) -> Option<(PathBuf, PathBuf)> {
+
+        let devices = match read_dir("/dev/") {
+            Ok(devices) => devices,
+            Err(_why) => { return None; },
+        };
+
+        let fstypes: Vec<&str> = if let Some(fstype) = root_fs_type {
+            vec![fstype]
+        } else {
+            vec!["ext4", "vfat", "ntfs", "ext2","ext3"]
+        };
+
+        let config_path = path_append(&root_mount, STAGE2_CFG_FILE);
+
+        for device in devices {
+            if let Ok(device) = device {
+                if let Ok(ref file_type) = device.file_type() {
+                    if file_type.is_file() {
+                        let file_name = String::from(device.file_name().to_string_lossy());
+                        debug!("Looking at '{}' -> '{}'", device.path().display(), file_name);
+                        if file_name.starts_with("sd") ||
+                            file_name.starts_with("hd") ||
+                            file_name.starts_with("mmcblk") ||
+                            file_name.starts_with("nvme") {
+                            debug!("Trying to mount '{}'", device.path().display());
+                            for fstype in &fstypes {
+                                debug!("Attempting to mount '{}' with '{}'", device.path().display(), fstype);
+                                if let Ok(_s) = mount(
+                                    Some(&device.path()),
+                                    root_mount.as_path(),
+                                    Some(fstype.as_bytes()),
+                                    MsFlags::empty(),
+                                    NIX_NONE,
+                                ) {
+                                    debug!("'{}' mounted ok with '{}' looking for ", device.path().display(), config_path.display() );
+                                    if file_exists(&config_path) {
+                                        return Some((PathBuf::from(device.path()), root_mount.clone()));
+                                    } else {
+                                        let _res = umount(&device.path());
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        }
+
+        None
     }
 }
