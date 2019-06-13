@@ -12,8 +12,10 @@ use crate::{
     common::{
         call, file_exists, parse_file, path_append, Config, MigErrCtx, MigError, MigErrorKind,
     },
-    defs::{OSArch, DISK_BY_PARTUUID_PATH, DISK_BY_UUID_PATH, KERNEL_CMDLINE_PATH, SYS_UEFI_DIR},
-    linux::{EnsuredCmds, DF_CMD, MOKUTIL_CMD, UNAME_CMD},
+    defs::{OSArch, },
+    linux::{
+        linux_defs::{DISK_BY_PARTUUID_PATH, DISK_BY_UUID_PATH, KERNEL_CMDLINE_PATH, SYS_UEFI_DIR},
+        EnsuredCmds, DF_CMD, MOKUTIL_CMD, UNAME_CMD},
 };
 
 use crate::common::dir_exists;

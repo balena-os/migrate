@@ -21,12 +21,14 @@ use crate::{
         stage2_config::Stage2Config, MigErrCtx, MigError, MigErrorKind,
     },
     defs::{
-        FailMode, BACKUP_FILE, BALENA_BOOT_FSTYPE, BALENA_BOOT_PART, BALENA_DATA_FSTYPE,
-        BALENA_DATA_PART, BALENA_ROOTA_PART, BALENA_ROOTB_PART, BALENA_STATE_PART, BOOT_PATH,
-        DISK_BY_LABEL_PATH, NIX_NONE, STAGE2_CFG_FILE, STAGE2_MEM_THRESHOLD,
+        FailMode, BACKUP_FILE,
+        STAGE2_CFG_FILE,
         SYSTEM_CONNECTIONS_DIR,
     },
     linux::{
+        linux_defs::{BALENA_BOOT_FSTYPE, BALENA_BOOT_PART, BALENA_DATA_FSTYPE,BALENA_DATA_PART,
+                     BALENA_ROOTA_PART, BALENA_ROOTB_PART, BALENA_STATE_PART, BOOT_PATH,
+                     DISK_BY_LABEL_PATH, NIX_NONE, STAGE2_MEM_THRESHOLD,},
         device,
         linux_common::{get_mem_info, get_root_info},
         EnsuredCmds, DD_CMD, GZIP_CMD, PARTPROBE_CMD, REBOOT_CMD,

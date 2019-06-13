@@ -14,7 +14,8 @@ use crate::{
         Config, MigErrCtx, MigError, MigErrorKind,
     },
     defs::{BootType, BALENA_FILE_TAG},
-    linux::{boot_manager::BootManager, EnsuredCmds, MigrateInfo, CHMOD_CMD},
+    linux::{
+        boot_manager::BootManager, EnsuredCmds, MigrateInfo, CHMOD_CMD},
 };
 
 const RPI_MIG_KERNEL_PATH: &str = "/boot/balena.zImage";

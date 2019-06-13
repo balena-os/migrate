@@ -14,10 +14,11 @@ use crate::{
         Config, MigErrCtx, MigError, MigErrorKind,
     },
     defs::{
-        BootType, BALENA_FILE_TAG, MIG_DTB_NAME, MIG_INITRD_NAME, MIG_KERNEL_NAME, MLO_FILE_NAME,
-        NIX_NONE, ROOT_PATH, UBOOT_FILE_NAME, UENV_FILE_NAME,
+        BootType, BALENA_FILE_TAG,
     },
     linux::{
+        linux_defs::{MIG_DTB_NAME, MIG_INITRD_NAME, MIG_KERNEL_NAME, MLO_FILE_NAME,
+                     NIX_NONE, ROOT_PATH, UBOOT_FILE_NAME, UENV_FILE_NAME},
         boot_manager::BootManager,
         linux_common::restore_backups,
         migrate_info::{path_info::PathInfo, MigrateInfo},
