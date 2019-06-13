@@ -14,6 +14,7 @@ pub(crate) mod msw_defs;
 // use defs::{STAGE2_CFG_FILE, STAGE2_CFG_DIR};
 
 mod powershell;
+use powershell::PSInfo;
 //pub(crate) mod win_api;
 // pub mod drive_info;
 mod win_api;
@@ -25,7 +26,9 @@ mod wmi_utils;
 mod migrate_info;
 use migrate_info::MigrateInfo;
 
-use powershell::PSInfo;
+mod boot_manager;
+use boot_manager::{EfiBootManager};
+
 
 pub struct MSWMigrator {
     config: Config,
