@@ -39,7 +39,8 @@ use crate::{
 
 const REBOOT_DELAY: u64 = 3;
 
-const INIT_LOG_LEVEL: Level = Level::Info;
+// TODO: set this to Info once mature
+const INIT_LOG_LEVEL: Level = Level::Trace;
 const ROOTFS_DIR: &str = "/tmp_root";
 const LOG_MOUNT_DIR: &str = "/migrate_log";
 const LOG_FILE_NAME: &str = "migrate.log";
@@ -67,7 +68,7 @@ pub(crate) struct Stage2 {
     root_fs_path: PathBuf,
 }
 
-impl Stage2 {
+impl<'a> Stage2 {
     // try to mount former root device and /boot if it is on a separate partition and
     // load the stage2 config
 
@@ -110,10 +111,51 @@ impl Stage2 {
             warn!("root mount directory {} exists", &root_fs_dir.display());
         }
 
-        let (root_device, root_fs_dir) = if !file_exists(&root_device) {
+
+        let stage2_cfg_file = path_append(&root_fs_dir, STAGE2_CFG_FILE);
+
+        if file_exists(&root_device) {
+            debug!(
+                "mounting root device '{}' on '{}' with fs type: {:?}",
+                root_device.display(),
+                root_fs_dir.display(),
+                root_fs_type
+            );
+            mount(
+                Some(&root_device),
+                &root_fs_dir,
+                if let Some(ref fs_type) = root_fs_type {
+                    Some(fs_type.as_bytes())
+                } else {
+                    NIX_NONE
+                },
+                MsFlags::empty(),
+                NIX_NONE,
+            )
+                .context(MigErrCtx::from_remark(
+                    MigErrorKind::Upstream,
+                    &format!(
+                        "Failed to mount previous root device '{}' to '{}' with type: {:?}",
+                        &root_device.display(),
+                        &root_fs_dir.display(),
+                        root_fs_type
+                    ),
+                ))?;
+
+            debug!("looking for '{}'", stage2_cfg_file.display());
+
+            if !file_exists(&stage2_cfg_file) {
+                let message = format!(
+                    "failed to locate stage2 config in {}",
+                    stage2_cfg_file.display()
+                );
+                error!("{}", &message);
+                return Err(MigError::from_remark(MigErrorKind::InvState, &message));
+            }
+        } else {
             warn!("root device {} does not exist", &root_device.display());
-            match Stage2::find_config(&root_fs_dir, &root_fs_type) {
-                Some(result) => result,
+            match Stage2::find_config(&stage2_cfg_file, &root_fs_dir, &root_fs_type) {
+                Some(_result) => (),
                 None => {
                     return Err(MigError::from_remark(
                         MigErrorKind::NotFound,
@@ -121,51 +163,9 @@ impl Stage2 {
                     ));
                 }
             }
-        } else {
-            (root_device, root_fs_dir)
-        };
+        }
 
         // TODO: add options to make this more reliable)
-
-        debug!(
-            "mounting root device '{}' on '{}' with fs type: {:?}",
-            root_device.display(),
-            root_fs_dir.display(),
-            root_fs_type
-        );
-        mount(
-            Some(&root_device),
-            &root_fs_dir,
-            if let Some(ref fs_type) = root_fs_type {
-                Some(fs_type.as_bytes())
-            } else {
-                NIX_NONE
-            },
-            MsFlags::empty(),
-            NIX_NONE,
-        )
-        .context(MigErrCtx::from_remark(
-            MigErrorKind::Upstream,
-            &format!(
-                "Failed to mount previous root device '{}' to '{}' with type: {:?}",
-                &root_device.display(),
-                &root_fs_dir.display(),
-                root_fs_type
-            ),
-        ))?;
-
-        let stage2_cfg_file = path_append(&root_fs_dir, STAGE2_CFG_FILE);
-
-        debug!("looking for '{}'", stage2_cfg_file.display());
-
-        if !file_exists(&stage2_cfg_file) {
-            let message = format!(
-                "failed to locate stage2 config in {}",
-                stage2_cfg_file.display()
-            );
-            error!("{}", &message);
-            return Err(MigError::from_remark(MigErrorKind::InvState, &message));
-        }
 
         let stage2_cfg = Stage2Config::from_config(&stage2_cfg_file)?;
 
@@ -1084,9 +1084,10 @@ impl Stage2 {
     }
 
     fn find_config(
+        config_path: &'a PathBuf,
         root_mount: &PathBuf,
         root_fs_type: &Option<String>,
-    ) -> Option<(PathBuf, PathBuf)> {
+    ) -> Option<&'a     PathBuf> {
         let devices = match read_dir("/dev/") {
             Ok(devices) => devices,
             Err(_why) => {
@@ -1099,8 +1100,6 @@ impl Stage2 {
         } else {
             vec!["ext4", "vfat", "ntfs", "ext2", "ext3"]
         };
-
-        let config_path = path_append(&root_mount, STAGE2_CFG_FILE);
 
         for device in devices {
             if let Ok(device) = device {
@@ -1136,11 +1135,8 @@ impl Stage2 {
                                         device.path().display(),
                                         config_path.display()
                                     );
-                                    if file_exists(&config_path) {
-                                        return Some((
-                                            PathBuf::from(device.path()),
-                                            root_mount.clone(),
-                                        ));
+                                    if file_exists(config_path) {
+                                        return Some(config_path);
                                     } else {
                                         let _res = umount(&device.path());
                                     }

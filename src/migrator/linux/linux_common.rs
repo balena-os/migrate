@@ -292,15 +292,18 @@ pub(crate) fn get_root_info() -> Result<(PathBuf, Option<String>), MigError> {
         Regex::new(ROOT_DEVICE_REGEX).unwrap().captures(&cmd_line)
     {
         let root_dev = captures.get(1).unwrap().as_str();
+        debug!("Got root device string: '{}'", root_dev);
 
         if let Some(uuid_part) =
             if let Some(captures) = Regex::new(ROOT_PARTUUID_REGEX).unwrap().captures(root_dev) {
+                debug!("Got root device PARTUUID: {:?}", captures.get(1));
                 Some(path_append(
                     DISK_BY_PARTUUID_PATH,
                     captures.get(1).unwrap().as_str(),
                 ))
             } else {
                 if let Some(captures) = Regex::new(ROOT_UUID_REGEX).unwrap().captures(root_dev) {
+                    debug!("Got root device UUID: {:?}", captures.get(1));
                     Some(path_append(
                         DISK_BY_UUID_PATH,
                         captures.get(1).unwrap().as_str(),
@@ -310,6 +313,7 @@ pub(crate) fn get_root_info() -> Result<(PathBuf, Option<String>), MigError> {
                 }
             }
         {
+            debug!("trying device path: '{}'", uuid_part.display());
             if file_exists(&uuid_part) {
                 path_append(
                     uuid_part.parent().unwrap(),
@@ -337,9 +341,11 @@ pub(crate) fn get_root_info() -> Result<(PathBuf, Option<String>), MigError> {
                 ));
             }
         } else {
+            debug!("Got plain root device '{}'", root_dev);
             PathBuf::from(root_dev)
         }
     } else {
+        warn!("Got no root was found in kernel command line '{}'", cmd_line);
         return Err(MigError::from_remark(
             MigErrorKind::NotFound,
             &format!(
@@ -348,6 +354,8 @@ pub(crate) fn get_root_info() -> Result<(PathBuf, Option<String>), MigError> {
             ),
         ));
     };
+
+    debug!("Using root device: '{}'", root_device.display());
 
     let root_fs_type =
         if let Some(captures) = Regex::new(&ROOT_FSTYPE_REGEX).unwrap().captures(&cmd_line) {
