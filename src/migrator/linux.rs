@@ -256,16 +256,20 @@ impl<'a> LinuxMigrator {
 
         // TODO: compare total transfer size (kernel, initramfs, backup, configs )  to memory size (needs to fit in ramfs)
 
+        // TODO: this might not be a smart place to put things, everything in system-connections
+        // will end up in /mnt/boot/system-connections
         trace!("nwmgr_files");
         let nwmgr_path = path_append(work_dir, SYSTEM_CONNECTIONS_DIR);
 
         if self.mig_info.nwmgr_files.len() > 0
             || self.mig_info.wifis.len() > 0 && !dir_exists(&nwmgr_path)?
         {
-            create_dir(&nwmgr_path).context(MigErrCtx::from_remark(
-                MigErrorKind::Upstream,
-                &format!("failed to create directory '{}'", nwmgr_path.display()),
-            ))?;
+            if ! dir_exists(&nwmgr_path)? {
+                create_dir(&nwmgr_path).context(MigErrCtx::from_remark(
+                    MigErrorKind::Upstream,
+                    &format!("failed to create directory '{}'", nwmgr_path.display()),
+                ))?;
+            }
         }
 
         for file in &self.mig_info.nwmgr_files {
