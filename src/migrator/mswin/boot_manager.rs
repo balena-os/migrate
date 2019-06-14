@@ -3,6 +3,7 @@ use log::{debug, info};
 use regex::Regex;
 use std::fs::{copy, create_dir_all, rename, File};
 use std::io::Write;
+use std::path::{PathBuf};
 
 const STARTUP_TEMPLATE: &str = r#"
 echo -off
@@ -84,9 +85,9 @@ impl BootManager for EfiBootManager {
         if let Some(ref efi_path) = mig_info.drive_info.efi_path {
 
             s2_cfg.set_bootmgr_cfg(BootMgrConfig::new(
-                &Pathbuf::from(efi_path.get_linux_part()),
-                &Pathbuf::from(efi_path.get_linux_fstype()),
-                &PathBuf::from(efi_path.get_path())));
+                PathBuf::from(efi_path.get_linux_part()),
+                String::from(efi_path.get_linux_fstype()),
+                PathBuf::from(efi_path.get_path())));
 
             let balena_efi_dir = path_append(efi_path.get_path(), BALENA_EFI_DIR);
             if !dir_exists(&balena_efi_dir)? {

@@ -58,10 +58,10 @@ impl<'a> PathInfo {
                 let partuuid = String::from(captures.get(1).unwrap().as_str());
                 let drive = match drive.get_drive_type() {
                     DriveType::Scsi => {
-                        format!("/dev/sd{}", DRIVE_SUFFIX[drive.get_index()])
+                        PathBuf::from(format!("/dev/sd{}", DRIVE_SUFFIX[drive.get_index()]))
                     }
                     DriveType::Ide => {
-                        format!("/dev/hd{}", DRIVE_SUFFIX[drive.get_index()])
+                        PathBuf::from(format!("/dev/hd{}", DRIVE_SUFFIX[drive.get_index()]))
                     }
                     DriveType::Other => {
                         return Err(MigError::from_remark(
@@ -73,8 +73,8 @@ impl<'a> PathInfo {
                         ));
                     }
                 };
-                let part = format!("/dev/disk/by-partuuid/{}", partuuid);
-                Some((partuuid, drive, part ))
+                let part = PathBuf::from(format!("/dev/disk/by-partuuid/{}", partuuid));
+                (Some(partuuid), drive, part )
             } else {
                 warn!(
                     "No Part UUID extracted for volume '{}'",
@@ -103,9 +103,6 @@ impl<'a> PathInfo {
                 }
             };
 
-        let (linux_drive, linux_part) =
-
-
         // TODO: extract information rather than copy
         Ok(PathInfo {
             path: PathBuf::from(path),
@@ -126,8 +123,8 @@ impl<'a> PathInfo {
         })
     }
 
-    pub fn get_linux_path(&'a self) -> &'a Path {
-        &to_linux_path(&self.path)
+    pub fn get_linux_path(&self) -> PathBuf {
+        to_linux_path(&self.path)
     }
 
     pub fn get_path(&'a self) -> &'a Path {
