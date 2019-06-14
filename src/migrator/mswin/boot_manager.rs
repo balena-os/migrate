@@ -11,7 +11,12 @@ echo Starting balena Migrate Environment
 
 use crate::{
     common::{
-        dir_exists, file_exists, path_append, stage2_config::Stage2ConfigBuilder, Config,
+        dir_exists, file_exists, path_append,
+        stage2_config::{
+            Stage2ConfigBuilder,
+            BootMgrConfig
+        },
+        Config,
         MigErrCtx, MigError, MigErrorKind,
     },
     defs::{
@@ -66,7 +71,7 @@ impl BootManager for EfiBootManager {
         &self,
         mig_info: &MigrateInfo,
         _config: &Config,
-        _s2_cfg: &mut Stage2ConfigBuilder,
+        s2_cfg: &mut Stage2ConfigBuilder,
     ) -> Result<(), MigError> {
         // for now:
         // copy our kernel & initramfs to \EFI\balena-migrate
@@ -77,6 +82,12 @@ impl BootManager for EfiBootManager {
         // create a startup.nsh file in \EFI\Boot\ that refers to our kernel & initramfs
 
         if let Some(ref efi_path) = mig_info.drive_info.efi_path {
+
+            s2_cfg.set_bootmgr_cfg(BootMgrConfig::new(
+                &Pathbuf::from(efi_path.get_linux_part()),
+                &Pathbuf::from(efi_path.get_linux_fstype()),
+                &PathBuf::from(efi_path.get_path())));
+
             let balena_efi_dir = path_append(efi_path.get_path(), BALENA_EFI_DIR);
             if !dir_exists(&balena_efi_dir)? {
                 create_dir_all(&balena_efi_dir).context(MigErrCtx::from_remark(

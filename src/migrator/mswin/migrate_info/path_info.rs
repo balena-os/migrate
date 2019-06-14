@@ -6,6 +6,7 @@ use std::path::{Path, PathBuf};
 use crate::{
     common::{MigError, MigErrorKind},
     mswin::{
+        util::{to_linux_path},
         msw_defs::FileSystem,
         wmi_utils::{physical_drive::DriveType, LogicalDrive, Partition, PhysicalDrive, Volume},
     },
@@ -15,6 +16,9 @@ use crate::{
 // \\?\Volume{e907ceea-7513-4f34-a1d1-fee089d1dd4b}\
 const PARTUUID_RE: &str =
     r#"\\\\\?\\Volume\{([0-9,a-f]{8}-[0-9,a-f]{4}-[0-9,a-f]{4}-[0-9,a-f]{4}-[0-9,a-f]{12})\}\\"#;
+
+
+
 
 const DRIVE_SUFFIX: &[char] = &['a', 'b', 'c', 'd', 'e'];
 
@@ -49,39 +53,58 @@ impl<'a> PathInfo {
             static ref PARTUUID_REGEX: Regex = Regex::new(PARTUUID_RE).unwrap();
         }
 
-        let part_uuid = if let Some(captures) = PARTUUID_REGEX.captures(volume.get_device_id()) {
-            Some(String::from(captures.get(1).unwrap().as_str()))
-        } else {
-            warn!(
-                "No Part UUID extracted for volume '{}'",
-                volume.get_device_id()
-            );
-            None
-        };
+        let (part_uuid, linux_drive, linux_part) =
+            if let Some(captures) = PARTUUID_REGEX.captures(volume.get_device_id()) {
+                let partuuid = String::from(captures.get(1).unwrap().as_str());
+                let drive = match drive.get_drive_type() {
+                    DriveType::Scsi => {
+                        format!("/dev/sd{}", DRIVE_SUFFIX[drive.get_index()])
+                    }
+                    DriveType::Ide => {
+                        format!("/dev/hd{}", DRIVE_SUFFIX[drive.get_index()])
+                    }
+                    DriveType::Other => {
+                        return Err(MigError::from_remark(
+                            MigErrorKind::NotImpl,
+                            &format!(
+                                "Cannot derive linux drive name from drive type {:?}",
+                                drive.get_drive_type()
+                            ),
+                        ));
+                    }
+                };
+                let part = format!("/dev/disk/by-partuuid/{}", partuuid);
+                Some((partuuid, drive, part ))
+            } else {
+                warn!(
+                    "No Part UUID extracted for volume '{}'",
+                    volume.get_device_id()
+                );
+                match drive.get_drive_type() {
+                    DriveType::Scsi => {
+                        let drive = format!("/dev/sd{}", DRIVE_SUFFIX[drive.get_index()]);
+                        let part = format!("{}{}", drive, partition.get_part_index() + 1);
+                        (None, PathBuf::from(drive), PathBuf::from(part))
+                    }
+                    DriveType::Ide => {
+                        let drive = format!("/dev/hd{}", DRIVE_SUFFIX[drive.get_index()]);
+                        let part = format!("{}{}", drive, partition.get_part_index() + 1);
+                        (None, PathBuf::from(drive), PathBuf::from(part))
+                    }
+                    DriveType::Other => {
+                        return Err(MigError::from_remark(
+                            MigErrorKind::NotImpl,
+                            &format!(
+                                "Cannot derive linux drive name from drive type {:?}",
+                                drive.get_drive_type()
+                            ),
+                        ));
+                    }
+                }
+            };
 
-        // TODO: is this likely to work with anything other than the first drive
-        // TODO: propper implementation of linux device names
-        let (linux_drive, linux_part) = match drive.get_drive_type() {
-            DriveType::Scsi => {
-                let drive = format!("/dev/sd{}", DRIVE_SUFFIX[drive.get_index()]);
-                let part = format!("{}{}", drive, partition.get_part_index() + 1);
-                (PathBuf::from(drive), PathBuf::from(part))
-            }
-            DriveType::Ide => {
-                let drive = format!("/dev/hd{}", DRIVE_SUFFIX[drive.get_index()]);
-                let part = format!("{}{}", drive, partition.get_part_index() + 1);
-                (PathBuf::from(drive), PathBuf::from(part))
-            }
-            DriveType::Other => {
-                return Err(MigError::from_remark(
-                    MigErrorKind::NotImpl,
-                    &format!(
-                        "Cannot derive linux drive name from drive type {:?}",
-                        drive.get_drive_type()
-                    ),
-                ));
-            }
-        };
+        let (linux_drive, linux_part) =
+
 
         // TODO: extract information rather than copy
         Ok(PathInfo {
@@ -101,6 +124,10 @@ impl<'a> PathInfo {
             mount: mount.clone(),
             */
         })
+    }
+
+    pub fn get_linux_path(&'a self) -> &'a Path {
+        &to_linux_path(&self.path)
     }
 
     pub fn get_path(&'a self) -> &'a Path {

@@ -13,7 +13,7 @@ pub const EMPTY_BACKUPS: &[(String, String)] = &[];
 const MODULE: &str = "stage2::stage2:config";
 
 use crate::{
-    common::{MigErrCtx, MigError, MigErrorKind},
+    common::{MigErrCtx, MigError, MigErrorKind, },
     defs::{BootType, DeviceType, FailMode, STAGE2_CFG_FILE},
 };
 

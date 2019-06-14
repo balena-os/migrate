@@ -6,6 +6,7 @@ use std::thread;
 use std::time::Duration;
 
 use crate::{
+    mswin::util::{to_linux_path},
     common::{
         dir_exists, path_append, stage2_config::Stage2ConfigBuilder, Config, MigErrCtx, MigError,
         MigErrorKind, MigMode,
@@ -148,12 +149,12 @@ impl<'a> MSWMigrator {
 
         // later
         self.stage2_config
-            .set_balena_image(PathBuf::from(&self.mig_info.image_file.path));
+            .set_balena_image(PathBuf::from(&to_linux_path(&self.mig_info.image_file.path)));
         self.stage2_config
-            .set_balena_config(PathBuf::from(self.mig_info.config_file.get_path()));
+            .set_balena_config(PathBuf::from(&to_linux_path(&self.mig_info.config_file.get_path())));
 
         self.stage2_config.set_work_dir(&PathBuf::from(
-            self.mig_info.drive_info.work_path.get_path(),
+            self.mig_info.drive_info.work_path.get_linux_path(),
         ));
 
         self.stage2_config
