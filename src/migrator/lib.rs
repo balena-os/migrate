@@ -40,6 +40,7 @@ pub fn stage2() -> Result<(), MigError> {
         Ok(res) => res,
         Err(why) => {
             error!("Failed to initialize stage2: Error: {}", why);
+            Logger::flush();
             Stage2::default_exit()?;
             // should not be getting here
             return Ok(());

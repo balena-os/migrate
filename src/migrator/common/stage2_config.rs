@@ -59,9 +59,9 @@ pub(crate) struct Stage2Config {
     // skip the flashing, only makes sense with fake / forced flash device
     skip_flash: bool,
     // which device to flash
-    flash_device: PathBuf,
-    boot_device: PathBuf,
-    boot_fstype: String,
+    flash_device: Option<PathBuf>,
+    boot_device: Option<PathBuf>,
+    boot_fstype: Option<String>,
     // root_device: PathBuf,
     bootmgr: Option<BootMgrConfig>,
     balena_config: PathBuf,
@@ -153,16 +153,28 @@ impl<'a> Stage2Config {
     }
     */
 
-    pub fn get_flash_device(&'a self) -> &'a Path {
-        self.flash_device.as_path()
+    pub fn get_flash_device(&'a self) -> Option<&'a Path> {
+        if let Some(ref flash_device) = self.flash_device {
+            Some(flash_device)
+        } else {
+            None
+        }
     }
 
-    pub fn get_boot_device(&'a self) -> &'a Path {
-        self.boot_device.as_path()
+    pub fn get_boot_device(&'a self) -> Option<&'a Path> {
+        if let Some(ref boot_device) = self.boot_device {
+            Some(boot_device)
+        } else {
+            None
+        }
     }
 
-    pub fn get_boot_fstype(&'a self) -> &'a str {
-        &self.boot_fstype
+    pub fn get_boot_fstype(&'a self) -> Option<&'a str> {
+        if let Some(ref boot_fstype) = self.boot_fstype {
+            Some(boot_fstype)
+        } else {
+            None
+        }
     }
 
     pub fn get_boot_type(&'a self) -> &'a BootType {
@@ -266,6 +278,9 @@ impl<T: Clone> Optional<T> {
     fn set(&mut self, val: T) {
         self.data = Some(val);
     }
+    fn set_ref(&mut self, val: &T) {
+        self.data = Some(val.clone());
+    }
 
     /*
         fn set_ref(&mut self, val: &T) {
@@ -290,9 +305,9 @@ pub(crate) struct Stage2ConfigBuilder {
     fail_mode: Required<FailMode>,
     no_flash: Required<bool>,
     skip_flash: Required<bool>,
-    flash_device: Required<PathBuf>,
-    boot_device: Required<PathBuf>,
-    boot_fstype: Required<String>,
+    flash_device: Optional<PathBuf>,
+    boot_device: Optional<PathBuf>,
+    boot_fstype: Optional<String>,
     bootmgr: Optional<BootMgrConfig>,
     balena_config: Required<PathBuf>,
     balena_image: Required<PathBuf>,
@@ -312,9 +327,9 @@ impl<'a> Stage2ConfigBuilder {
             fail_mode: Required::new("fail_mode", Some(&FailMode::Reboot)),
             no_flash: Required::new("no_flash", Some(&true)),
             skip_flash: Required::new("skip_flash", Some(&false)),
-            flash_device: Required::new("flash_device", None),
-            boot_device: Required::new("boot_device", None),
-            boot_fstype: Required::new("boot_fstype", None),
+            flash_device: Optional::new(None),
+            boot_device: Optional::new( None),
+            boot_fstype: Optional::new( None),
             bootmgr: Optional::new(None),
             balena_config: Required::new("balena_config", None),
             balena_image: Required::new("balena_image", None),
@@ -334,9 +349,9 @@ impl<'a> Stage2ConfigBuilder {
             fail_mode: self.fail_mode.get()?.clone(),
             no_flash: self.no_flash.get()?.clone(),
             skip_flash: *self.skip_flash.get()?,
-            flash_device: self.flash_device.get()?.clone(),
-            boot_device: self.boot_device.get()?.clone(),
-            boot_fstype: self.boot_fstype.get()?.clone(),
+            flash_device: self.flash_device.get().clone(),
+            boot_device: self.boot_device.get().clone(),
+            boot_fstype: self.boot_fstype.get().clone(),
             // root_device: self.root_device.get()?.clone(),
             bootmgr: self.bootmgr.get().clone(),
             balena_config: self.balena_config.get()?.clone(),

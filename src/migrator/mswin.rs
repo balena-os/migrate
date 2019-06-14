@@ -115,6 +115,9 @@ impl<'a> MSWMigrator {
 
         stage2_config.set_boot_type(&boot_manager.get_boot_type());
 
+        // TODO: Don't migrate if we do not have PARTUUIDS
+        // TODO: maybe allow hints otherwise  ->
+
         Ok(MSWMigrator {
             ps_info,
             config,

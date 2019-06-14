@@ -33,6 +33,8 @@ const BIN_DIRS: &[&str] = &["/bin", "/usr/bin", "/sbin", "/usr/sbin"];
 const OS_RELEASE_FILE: &str = "/etc/os-release";
 const OS_NAME_REGEX: &str = r#"^PRETTY_NAME="([^"]+)"$"#;
 
+const DRIVE2PART_REGEX: &str = r#"^(\/dev\/([hs]d[a-z]|nvme\d+n\d+|mmcblk\d+))(p?\d+)$"#;
+
 #[cfg(not(debug_assertions))]
 pub(crate) fn is_admin(_config: &Config) -> Result<bool, MigError> {
     trace!("LinuxMigrator::is_admin: entered");
@@ -314,32 +316,7 @@ pub(crate) fn get_root_info() -> Result<(PathBuf, Option<String>), MigError> {
             }
         {
             debug!("trying device path: '{}'", uuid_part.display());
-            if file_exists(&uuid_part) {
-                path_append(
-                    uuid_part.parent().unwrap(),
-                    read_link(&uuid_part).context(MigErrCtx::from_remark(
-                        MigErrorKind::Upstream,
-                        &format!("failed to read link: '{}'", uuid_part.display()),
-                    ))?,
-                )
-                .canonicalize()
-                .context(MigErrCtx::from_remark(
-                    MigErrorKind::Upstream,
-                    &format!(
-                        "failed to canonicalize path from: '{}'",
-                        uuid_part.display()
-                    ),
-                ))?
-            } else {
-                return Err(MigError::from_remark(
-                    MigErrorKind::NotFound,
-                    &format!(
-                        "The root device path '{}' parsed from kernel command line: '{}' does not exist",
-                        uuid_part.display(),
-                        cmd_line
-                    ),
-                ));
-            }
+            to_std_device_path(&uuid_part)?
         } else {
             debug!("Got plain root device '{}'", root_dev);
             PathBuf::from(root_dev)
@@ -366,6 +343,53 @@ pub(crate) fn get_root_info() -> Result<(PathBuf, Option<String>), MigError> {
         };
 
     Ok((root_device, root_fs_type))
+}
+
+pub(crate) fn to_std_device_path(device: &Path) -> Result<PathBuf, MigError> {
+    if file_exists(device) {
+        return Err(MigError::from_remark(MigErrorKind::NotFound, &format!("File does not exist: '{}'", device.display())));
+    }
+
+    let metadata = device.metadata()
+        .context(MigErrCtx::from_remark(
+            MigErrorKind::Upstream,
+            &format!("Failed to retrieve metadata for file: '{}'", device.display())))?;
+
+    if metadata.file_type().is_symlink() {
+        let dev_path = path_append(
+            device.parent().unwrap(),
+            read_link(device).context(MigErrCtx::from_remark(
+                MigErrorKind::Upstream,
+                &format!("failed to read link: '{}'", device.display()),
+            ))?);
+
+        Ok(dev_path
+            .canonicalize()
+            .context(MigErrCtx::from_remark(
+                MigErrorKind::Upstream,
+                &format!(
+                    "failed to canonicalize path from: '{}'",
+                    dev_path.display()
+                ),
+            ))?)
+    } else {
+        Ok(PathBuf::from(device))
+    }
+}
+
+
+pub(crate) fn drive_from_partition(partition: &Path) -> Result<PathBuf, MigError> {
+    lazy_static! {
+        static ref DRIVE2PART_RE: Regex = Regex::new(DRIVE2PART_REGEX).unwrap();
+    }
+
+    if let Some(captures) = DRIVE2PART_RE.captures(&partition.to_string_lossy()) {
+        Ok(PathBuf::from(captures.get(1).unwrap().as_str()))
+    } else {
+        Err(MigError::from_remark(
+            MigErrorKind::InvParam,
+            &format!("Failed to derive drive nam from partition name: '{}'", partition.display())))
+    }
 }
 
 /*

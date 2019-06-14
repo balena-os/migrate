@@ -23,7 +23,7 @@ use crate::{
     defs::{FailMode, BACKUP_FILE, STAGE2_CFG_FILE, SYSTEM_CONNECTIONS_DIR},
     linux::{
         device,
-        linux_common::{get_mem_info, get_root_info},
+        linux_common::{get_mem_info, get_root_info, to_std_device_path, drive_from_partition},
         linux_defs::{
             BALENA_BOOT_FSTYPE, BALENA_BOOT_PART, BALENA_DATA_FSTYPE, BALENA_DATA_PART,
             BALENA_ROOTA_PART, BALENA_ROOTB_PART, BALENA_STATE_PART, BOOT_PATH, DISK_BY_LABEL_PATH,
@@ -62,10 +62,11 @@ const PARTPROBE_WAIT_NANOS: u32 = 0;
 
 pub(crate) struct Stage2 {
     config: Stage2Config,
-    boot_mounted: bool,
-    bootmgr_mounted: bool,
+    boot_mount: Option<PathBuf>,
+    bootmgr_mount: Option<PathBuf>,
     recoverable_state: bool,
     root_fs_path: PathBuf,
+    root_device: PathBuf,
 }
 
 impl<'a> Stage2 {
@@ -167,12 +168,21 @@ impl<'a> Stage2 {
 
         // TODO: add options to make this more reliable)
 
-        let stage2_cfg = Stage2Config::from_config(&stage2_cfg_file)?;
+        let stage2_cfg = match  Stage2Config::from_config(&stage2_cfg_file) {
+            Ok(s2_cfg) => {
+                info!(
+                    "Successfully read stage 2 config file from {}",
+                    stage2_cfg_file.display()
+                );
+                s2_cfg
+            },
+            Err(why) => {
+                error!("Failed to read stage 2 config file from file '{}' with error: {:?}", stage2_cfg_file.display(), why);
+                return Err(MigError::displayed());
+            }
+        };
 
-        info!(
-            "Successfully read stage 2 config file from {}",
-            stage2_cfg_file.display()
-        );
+        dbg!("stage2 loaded");
 
         info!("Setting log level to {:?}", stage2_cfg.get_log_level());
         Logger::set_default_level(&stage2_cfg.get_log_level());
@@ -180,99 +190,111 @@ impl<'a> Stage2 {
             Stage2::init_logging(device, fstype);
         }
 
-        /*
-        // TODO: probably paranoid
-        if root_device != stage2_cfg.get_root_device() {
-            let message = format!(
-                "The device mounted as root does not match the former root device: {} != {}",
-                root_device.display(),
-                stage2_cfg.get_root_device().display()
-            );
-            error!("{}", &message);
-            return Err(MigError::from_remark(MigErrorKind::InvState, &message));
-        }
-        */
-
         // Ensure /boot is mounted in ROOTFS_DIR/boot
 
         let boot_path = path_append(&root_fs_dir, BOOT_PATH);
-        if !dir_exists(&boot_path)? {
-            let message = format!(
-                "cannot find boot mount point on root device: {}, path {}",
-                root_device.display(),
-                boot_path.display()
-            );
-            error!("{}", &message);
-            return Err(MigError::from_remark(MigErrorKind::InvState, &message));
-        }
 
-        // TODO: provide fstype for boot
-        let boot_device = stage2_cfg.get_boot_device();
-        let mut boot_mounted = false;
-        if boot_device != root_device {
-            debug!(
-                "attempting to mount '{}' on '{}' with fstype: {}",
-                boot_device.display(),
-                boot_path.display(),
-                stage2_cfg.get_boot_fstype()
-            );
-            mount(
-                Some(boot_device),
-                &boot_path,
-                Some(stage2_cfg.get_boot_fstype()),
-                MsFlags::empty(),
-                NIX_NONE,
-            )
-            .context(MigErrCtx::from_remark(
-                MigErrorKind::Upstream,
-                &format!(
-                    "Failed to mount previous boot device '{}' to '{}' with fstype: {}",
-                    &boot_device.display(),
-                    &boot_path.display(),
-                    stage2_cfg.get_boot_fstype()
-                ),
-            ))?;
-            boot_mounted = true;
-        }
+        let (boot_mount,boot_device) =
+            if dir_exists(&boot_path)? {
+                // TODO: provide fstype for boot
+                if let Some(boot_device) = stage2_cfg.get_boot_device() {
+                    let boot_device = to_std_device_path(boot_device)?;
+
+                    if boot_device != root_device {
+                        debug!(
+                            "attempting to mount '{}' on '{}' with fstype: {:?}",
+                            boot_device.display(),
+                            boot_path.display(),
+                            stage2_cfg.get_boot_fstype()
+                        );
+                        mount(
+                            Some(&boot_device),
+                            &boot_path,
+                            stage2_cfg.get_boot_fstype(),
+                            MsFlags::empty(),
+                            NIX_NONE,
+                        )
+                            .context(MigErrCtx::from_remark(
+                                MigErrorKind::Upstream,
+                                &format!(
+                                    "Failed to mount previous boot device '{}' to '{}' with fstype: {:?}",
+                                    &boot_device.display(),
+                                    &boot_path.display(),
+                                    stage2_cfg.get_boot_fstype()
+                                ),
+                            ))?;
+                        (Some(boot_path), Some(boot_device))
+                    } else {
+                        (None, None)
+                    }
+                } else {
+                    (None, None)
+                }
+            } else {
+                warn!(
+                    "cannot find boot mount point on root device: {}, path {}",
+                    root_device.display(),
+                    boot_path.display()
+                );
+                (None, None)
+            };
+
 
         // mount bootmgr partition (EFI, uboot)
-        let mut bootmgr_mounted = false;
-        if let Some(bootmgr_cfg) = stage2_cfg.get_bootmgr_config() {
-            let device = bootmgr_cfg.get_device();
-            if device != boot_device && device != root_device {
-                let mountpoint = path_append(&root_fs_dir, bootmgr_cfg.get_mountpoint());
-                debug!(
-                    "attempting to mount '{}' on '{}' with fstype: {}",
-                    device.display(),
-                    mountpoint.display(),
-                    bootmgr_cfg.get_fstype()
-                );
-                mount(
-                    Some(device),
-                    &mountpoint,
-                    Some(bootmgr_cfg.get_fstype()),
-                    MsFlags::empty(),
-                    NIX_NONE,
-                )
-                .context(MigErrCtx::from_remark(
-                    MigErrorKind::Upstream,
-                    &format!(
-                        "Failed to mount previous bootmanager device '{}' to '{}' with fstype: {}",
+
+        let bootmgr_mount =
+            if let Some(bootmgr_cfg) = stage2_cfg.get_bootmgr_config() {
+                let device = to_std_device_path(bootmgr_cfg.get_device())?;
+                let mounted =
+                    if let Some(boot_device) = boot_device {
+                        device == boot_device
+                    }  else {
+                        false
+                    };
+
+                if !mounted && device != root_device {
+                    // TODO: sort out boot manager mountpoint for windows
+                    // create 'virtual' mount point in windows and adjust boot backup paths appropriately as
+                    // mountpoint D: for EFI backup will no t work
+                    // maybe try /boot/ EFI
+                    let mountpoint = path_append(&root_fs_dir, bootmgr_cfg.get_mountpoint());
+                    debug!(
+                        "attempting to mount '{}' on '{}' with fstype: {}",
                         device.display(),
                         mountpoint.display(),
                         bootmgr_cfg.get_fstype()
-                    ),
-                ))?;
-                bootmgr_mounted = true;
-            }
-        }
+                    );
+                    mount(
+                        Some(&device),
+                        &mountpoint,
+                        Some(bootmgr_cfg.get_fstype()),
+                        MsFlags::empty(),
+                        NIX_NONE,
+                    )
+                    .context(MigErrCtx::from_remark(
+                        MigErrorKind::Upstream,
+                        &format!(
+                            "Failed to mount previous bootmanager device '{}' to '{}' with fstype: {}",
+                            device.display(),
+                            mountpoint.display(),
+                            bootmgr_cfg.get_fstype()
+                        ),
+                    ))?;
+                    Some(mountpoint)
+                } else {
+                    None
+                }
+            } else {
+              None
+            };
 
         return Ok(Stage2 {
             config: stage2_cfg,
-            boot_mounted,
-            bootmgr_mounted,
+            boot_mount,
+            bootmgr_mount,
             recoverable_state: false,
             root_fs_path: root_fs_dir,
+            root_device,
         });
     }
 
@@ -453,29 +475,26 @@ impl<'a> Stage2 {
 
         info!("Files copied to RAMFS");
 
-        if self.boot_mounted {
-            umount(&path_append(&self.root_fs_path, BOOT_PATH)).context(MigErrCtx::from_remark(
+        if let Some(ref bootmgr_mount) = self.bootmgr_mount {
+            umount(bootmgr_mount).context(MigErrCtx::from_remark(
                 MigErrorKind::Upstream,
                 &format!(
-                    "Failed to unmount former boot device: '{}'",
-                    self.config.get_boot_device().display()
+                    "Failed to unmount boot manager device from '{}'",
+                    bootmgr_mount.display()
                 ),
             ))?;
         }
 
-        if self.bootmgr_mounted {
-            if let Some(bootmgr_cfg) = self.config.get_bootmgr_config() {
-                let mountpoint = path_append(&self.root_fs_path, bootmgr_cfg.get_mountpoint());
-                umount(&mountpoint).context(MigErrCtx::from_remark(
-                    MigErrorKind::Upstream,
-                    &format!(
-                        "Failed to unmount former boot device: '{}' from '{}'",
-                        bootmgr_cfg.get_device().display(),
-                        mountpoint.display()
-                    ),
-                ))?;
-            }
+        if let Some(ref boot_mount) = self.boot_mount {
+            umount(boot_mount).context(MigErrCtx::from_remark(
+                MigErrorKind::Upstream,
+                &format!(
+                    "Failed to unmount former boot device: '{}'",
+                    boot_mount.display()
+                ),
+            ))?;
         }
+
 
         // Write our buffered log to workdir before unmounting boot if we are not flashing anyway
         if self.config.is_no_flash() && Logger::get_log_dest().is_buffer_dest() {
@@ -513,7 +532,12 @@ impl<'a> Stage2 {
         // * from migrate:
         // * gzip -d -c "${MIGRATE_TMP}/${IMAGE_FILE}" | dd of=${BOOT_DEV} bs=4194304 || fail  "failed with gzip -d -c ${MIGRATE_TMP}/${IMAGE_FILE} | dd of=${BOOT_DEV} bs=4194304"
 
-        let target_path = self.config.get_flash_device();
+        let target_path =
+            if let Some(target_path) = self.config.get_flash_device() {
+                PathBuf::from(target_path)
+            } else {
+                drive_from_partition(&self.root_device)?
+            };
 
         if !file_exists(&target_path) {
             return Err(MigError::from_remark(
@@ -1087,7 +1111,7 @@ impl<'a> Stage2 {
         config_path: &'a PathBuf,
         root_mount: &PathBuf,
         root_fs_type: &Option<String>,
-    ) -> Option<&'a     PathBuf> {
+    ) -> Option<&'a PathBuf> {
         let devices = match read_dir("/dev/") {
             Ok(devices) => devices,
             Err(_why) => {
