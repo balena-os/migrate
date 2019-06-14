@@ -200,7 +200,7 @@ impl<'a> MSWMigrator {
                 ),
             ))?;
         }
-        self.stage2_config.write_stage2_cfg_to(&stage2_cfg_path)?;
+        
 
         match self
             .boot_manager
@@ -216,6 +216,8 @@ impl<'a> MSWMigrator {
             }
         }
 
+        self.stage2_config.write_stage2_cfg_to(&stage2_cfg_path)?;
+        
         if let Some(delay) = self.config.migrate.get_reboot() {
             let message = format!(
                 "Migration stage 1 was successfull, rebooting system in {} seconds",

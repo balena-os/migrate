@@ -1,3 +1,15 @@
+use failure::ResultExt;
+use std::io::Write;
+
+use lazy_static::lazy_static;
+use log::{debug, warn};
+use regex::Regex;
+use std::collections::HashMap;
+use std::fmt::{Debug, Display};
+use std::process::{Command, ExitStatus, Stdio};
+
+use crate::common::{MigErrCtx, MigError, MigErrorKind};
+
 const MODULE: &str = "win_test::mswin::powershell";
 
 const POWERSHELL: &str = "powershell.exe";
@@ -14,18 +26,6 @@ const PS_CMD_IS_SECURE_BOOT: &str = "Confirm-SecureBootUEFI";
 const PS_CMD_REBOOT: &str = "Restart-Computer";
 
 const PS_ARGS_VERSION_PARAMS: [&'static str; 1] = ["$PSVersionTable.PSVersion"];
-
-use crate::common::{MigErrCtx, MigError, MigErrorKind};
-
-use failure::ResultExt;
-use std::io::Write;
-
-use lazy_static::lazy_static;
-use log::{debug, warn};
-use regex::Regex;
-use std::collections::HashMap;
-use std::fmt::{Debug, Display};
-use std::process::{Command, ExitStatus, Stdio};
 
 pub type PSVER = (u32, u32);
 

@@ -1,5 +1,5 @@
 use failure::ResultExt;
-use log::{debug, info};
+use log::{debug, info, trace};
 use regex::Regex;
 use std::fs::{copy, create_dir_all, rename, File};
 use std::io::Write;
@@ -74,6 +74,7 @@ impl BootManager for EfiBootManager {
         _config: &Config,
         s2_cfg: &mut Stage2ConfigBuilder,
     ) -> Result<(), MigError> {
+        trace!("setup: entered");
         // for now:
         // copy our kernel & initramfs to \EFI\balena-migrate
         // move all boot manager files in
@@ -83,7 +84,7 @@ impl BootManager for EfiBootManager {
         // create a startup.nsh file in \EFI\Boot\ that refers to our kernel & initramfs
 
         if let Some(ref efi_path) = mig_info.drive_info.efi_path {
-
+            debug!("efi drive found, setting boot manager to '{}'", efi_path.get_linux_part().display());
             s2_cfg.set_bootmgr_cfg(BootMgrConfig::new(
                 PathBuf::from(efi_path.get_linux_part()),
                 String::from(efi_path.get_linux_fstype()),

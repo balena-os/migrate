@@ -21,11 +21,15 @@ pub(crate) fn to_linux_path(path: &Path) -> PathBuf {
             static ref MS2LINUX_PATH_REGEX: Regex = Regex::new(MS2LINUX_PATH_RE).unwrap();
         }
 
-    if let Some(captures) = MS2LINUX_PATH_REGEX.captures(&path.to_string_lossy()) {
-        PathBuf::from(captures.get(1).unwrap().as_str())
-    } else {
-        PathBuf::from(path)
-    }    
+    let path_str = String::from(&*path.to_string_lossy());
+    let path = 
+        if let Some(captures) = MS2LINUX_PATH_REGEX.captures(&path_str) {
+            captures.get(1).unwrap().as_str()
+        } else {
+            &path_str
+        };
+
+    PathBuf::from(path.replace(r#"\"#, "/"))       
 }
 
 pub(crate) fn mount_efi() -> Result<LogicalDrive, MigError> {
