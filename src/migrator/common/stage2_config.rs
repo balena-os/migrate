@@ -54,25 +54,36 @@ impl<'a> BootMgrConfig {
 pub(crate) struct Stage2Config {
     // what to do on failure
     fail_mode: FailMode,
-    // pretend mode stop after unmounting root
+    // no_flash mode - stop after unmounting root if true
     no_flash: bool,
     // skip the flashing, only makes sense with fake / forced flash device
     skip_flash: bool,
-    // which device to flash
+    // which device to flash - derive from /root partition if not set (windows)
     flash_device: Option<PathBuf>,
+    // optional /boot partition device & fstype
     boot_device: Option<PathBuf>,
     boot_fstype: Option<String>,
-    // root_device: PathBuf,
+    // optional boot manager config - partition, fstype & mountpoint - EFI or uboot partition
     bootmgr: Option<BootMgrConfig>,
+    // balena config file in /root partition
     balena_config: PathBuf,
+    // balena OS image file in /root partition
     balena_image: PathBuf,
+    // working directory  in /root partition
     work_dir: PathBuf,
+    // backed up former boot configuration (from , to)
     boot_bckup: Option<Vec<(String, String)>>,
+    // backup present in work_dir/backup.tgz
     has_backup: bool,
+    // use rust internal gzip
     gzip_internal: bool,
+    // stage 2 log level
     log_level: String,
+    // stage 2 log destination
     log_to: Option<Stage2LogConfig>,
+    // device type
     device_type: DeviceType,
+    // boot type
     boot_type: BootType,
 }
 

@@ -248,6 +248,7 @@ impl MigrateInfo {
             ));
         };
 
+        // TODO: Sort out what do do abount boot path distinct from work path
         let mut boot_path: Option<PathInfo> = None;
         let mut efi_path: Option<PathInfo> = None;
         let mut work_path: Option<PathInfo> = None;

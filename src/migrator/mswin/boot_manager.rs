@@ -60,12 +60,29 @@ impl BootManager for EfiBootManager {
 
     fn can_migrate(
         &mut self,
-        _dev_info: &MigrateInfo,
+        mig_info: &MigrateInfo,
         _config: &Config,
         _s2_cfg: &mut Stage2ConfigBuilder,
     ) -> Result<bool, MigError> {
+        if let None = mig_info.drive_info.efi_path.get_partuuid() {
+            // TODO: add option to override this
+            error!("Cowardly refusing to migrate EFI partition without partuuid. Windows to linux drive name mapping is insecure");
+            Ok(false)
+        }
+
+        if let None = mig_info.drive_info.boot_path.get_partuuid() {
+            // TODO: add option to override this
+            error!("Cowardly refusing to migrate boot partition without partuuid. Windows to linux drive name mapping is insecure");
+            Ok(false)
+        }
+
+        if let None = mig_info.drive_info.work_path.get_partuuid() {
+            // TODO: add option to override this
+            error!("Cowardly refusing to migrate work partition without partuuid. Windows to linux drive name mapping is insecure");
+            Ok(false)
+        }
+
         Ok(true)
-        // Err(MigError::from(MigErrorKind::NotImpl))
     }
 
     fn setup(
@@ -159,7 +176,7 @@ impl BootManager for EfiBootManager {
             // TODO: prefer PARTUUID to guessed device name
 
             let startup_content =
-                if let Some(partuuid) = mig_info.drive_info.work_path.get_partuuid() {
+                if let Some(partuuid) = mig_info.drive_info.boot_path.get_partuuid() {
                     format!(
                         "{}{} initrd={} root=PARTUUID={} rootfstype={}",
                         STARTUP_TEMPLATE,
@@ -169,6 +186,7 @@ impl BootManager for EfiBootManager {
                         mig_info.drive_info.work_path.get_linux_fstype()
                     )
                 } else {
+                    warn!("setting up /root device without partuuid, this is unsafe!");
                     format!(
                         "{}{} initrd={} root={} rootfstype={}",
                         STARTUP_TEMPLATE,
@@ -200,6 +218,8 @@ impl BootManager for EfiBootManager {
                     ),
                 ))?;
 
+
+            // TODO: create fake EFI mountpoint and adapt backup paths to it
             let efi_bckup_dir = path_append(efi_path.get_path(), EFI_BCKUP_DIR);
             if !dir_exists(&efi_bckup_dir)? {
                 create_dir_all(&efi_bckup_dir).context(MigErrCtx::from_remark(
