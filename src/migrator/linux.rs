@@ -5,15 +5,19 @@ use std::path::PathBuf;
 use std::thread;
 use std::time::Duration;
 
+// TODO: Require files to be in work_dir
+
 use crate::{
     common::{
         backup, dir_exists, format_size_with_unit, path_append, Config, MigErrCtx, MigError,
         MigErrorKind, MigMode,
+        stage2_config::{PathType, MountConfig, Stage2ConfigBuilder, Stage2LogConfig, },
     },
     defs::{BACKUP_FILE, MIN_DISK_SIZE, SYSTEM_CONNECTIONS_DIR},
 };
 
 pub(crate) mod linux_defs;
+use linux_defs::{BOOT_PATH};
 
 pub(crate) mod device;
 pub(crate) use device::Device;
@@ -35,7 +39,6 @@ pub(crate) use migrate_info::MigrateInfo;
 pub(crate) mod linux_common;
 pub(crate) use linux_common::is_admin;
 
-use crate::common::stage2_config::{Stage2ConfigBuilder, Stage2LogConfig};
 
 const REQUIRED_CMDS: &'static [&'static str] = &[
     DF_CMD, LSBLK_CMD, FILE_CMD, UNAME_CMD, MOUNT_CMD, REBOOT_CMD, CHMOD_CMD, MKTEMP_CMD,
@@ -316,19 +319,25 @@ impl<'a> LinuxMigrator {
         self.stage2_config
             .set_skip_flash(self.config.debug.is_skip_flash());
 
-        self.stage2_config
-            .set_boot_device(&self.mig_info.boot_path.device);
-        self.stage2_config
-            .set_boot_fstype(&self.mig_info.boot_path.fs_type);
 
+        if self.mig_info.boot_path.device != self.mig_info.root_path.device {
+            self.stage2_config
+                .set_boot_mount(&MountConfig::new(
+                    self.mig_info.boot_path.device,
+                    self.mig_info.boot_path.fs_type,
+                    PathBuf::from(BOOT_PATH),
+                ));
+        }
         // later
         self.stage2_config
             .set_balena_image(PathBuf::from(&self.mig_info.image_file.path));
         self.stage2_config
             .set_balena_config(PathBuf::from(self.mig_info.config_file.get_path()));
 
+        // TODO: setpath if on / mount else set mount
+
         self.stage2_config
-            .set_work_dir(&self.mig_info.work_path.path);
+            .set_work_path(&PathType::Path(self.mig_info.work_path.path));
 
         self.stage2_config
             .set_gzip_internal(self.config.migrate.is_gzip_internal());

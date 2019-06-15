@@ -4,6 +4,7 @@ use regex::Regex;
 use std::path::{Path, PathBuf};
 
 use crate::{
+    defs::{DISK_BY_PARTUUID_PATH, },
     common::{MigError, MigErrorKind},
     mswin::{
         util::{to_linux_path},
@@ -73,7 +74,7 @@ impl<'a> PathInfo {
                         ));
                     }
                 };
-                let part = PathBuf::from(format!("/dev/disk/by-partuuid/{}", partuuid));
+                let part = PathBuf::from(format!("{}/{}", DISK_BY_PARTUUID_PATH, partuuid));
                 (Some(partuuid), drive, part )
             } else {
                 warn!(

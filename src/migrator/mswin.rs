@@ -5,6 +5,8 @@ use std::path::PathBuf;
 use std::thread;
 use std::time::Duration;
 
+// TODO: Require files to be in work_dir
+
 use crate::{
     mswin::util::{to_linux_path},
     common::{

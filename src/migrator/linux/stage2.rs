@@ -18,7 +18,8 @@ use std::time::{Duration, Instant};
 use crate::{
     common::{
         dir_exists, file_exists, file_size, format_size_with_unit, path_append,
-        stage2_config::Stage2Config, MigErrCtx, MigError, MigErrorKind,
+        stage2_config::{Stage2Config, PathType, MountConfig},
+        MigErrCtx, MigError, MigErrorKind,
     },
     defs::{FailMode, BACKUP_FILE, STAGE2_CFG_FILE, SYSTEM_CONNECTIONS_DIR},
     linux::{
@@ -37,11 +38,13 @@ use crate::{
 
 // later ensure all other required commands
 
+mod mounts;
+use mounts::{Mounts};
+
 const REBOOT_DELAY: u64 = 3;
 
 // TODO: set this to Info once mature
 const INIT_LOG_LEVEL: Level = Level::Trace;
-const ROOTFS_DIR: &str = "/tmp_root";
 const LOG_MOUNT_DIR: &str = "/migrate_log";
 const LOG_FILE_NAME: &str = "migrate.log";
 
@@ -61,12 +64,9 @@ const POST_PARTPROBE_WAIT_SECS: u64 = 5;
 const PARTPROBE_WAIT_NANOS: u32 = 0;
 
 pub(crate) struct Stage2 {
+    mounts: Mounts,
     config: Stage2Config,
-    boot_mount: Option<PathBuf>,
-    bootmgr_mount: Option<PathBuf>,
     recoverable_state: bool,
-    root_fs_path: PathBuf,
-    root_device: PathBuf,
 }
 
 impl<'a> Stage2 {
@@ -88,83 +88,14 @@ impl<'a> Stage2 {
             }
         }
 
-        let root_fs_dir = PathBuf::from(ROOTFS_DIR);
+
 
         // TODO: beaglebone version - make device_slug dependant
 
-        let (root_device, root_fs_type) = get_root_info()?;
+        let mut mounts = Mounts::new()?;
+        let root_fs_dir = mounts.get_root_mountpoint();
+        let stage2_cfg_file = mounts.get_stage2_config();
 
-        info!(
-            "Using root device '{}' with fs-type: '{:?}'",
-            root_device.display(),
-            root_fs_type
-        );
-
-        if !dir_exists(&root_fs_dir)? {
-            create_dir(&root_fs_dir).context(MigErrCtx::from_remark(
-                MigErrorKind::Upstream,
-                &format!(
-                    "failed to create mountpoint for roofs in {}",
-                    &root_fs_dir.display()
-                ),
-            ))?;
-        } else {
-            warn!("root mount directory {} exists", &root_fs_dir.display());
-        }
-
-
-        let stage2_cfg_file = path_append(&root_fs_dir, STAGE2_CFG_FILE);
-
-        if file_exists(&root_device) {
-            debug!(
-                "mounting root device '{}' on '{}' with fs type: {:?}",
-                root_device.display(),
-                root_fs_dir.display(),
-                root_fs_type
-            );
-            mount(
-                Some(&root_device),
-                &root_fs_dir,
-                if let Some(ref fs_type) = root_fs_type {
-                    Some(fs_type.as_bytes())
-                } else {
-                    NIX_NONE
-                },
-                MsFlags::empty(),
-                NIX_NONE,
-            )
-                .context(MigErrCtx::from_remark(
-                    MigErrorKind::Upstream,
-                    &format!(
-                        "Failed to mount previous root device '{}' to '{}' with type: {:?}",
-                        &root_device.display(),
-                        &root_fs_dir.display(),
-                        root_fs_type
-                    ),
-                ))?;
-
-            debug!("looking for '{}'", stage2_cfg_file.display());
-
-            if !file_exists(&stage2_cfg_file) {
-                let message = format!(
-                    "failed to locate stage2 config in {}",
-                    stage2_cfg_file.display()
-                );
-                error!("{}", &message);
-                return Err(MigError::from_remark(MigErrorKind::InvState, &message));
-            }
-        } else {
-            warn!("root device {} does not exist", &root_device.display());
-            match Stage2::find_config(&stage2_cfg_file, &root_fs_dir, &root_fs_type) {
-                Some(_result) => (),
-                None => {
-                    return Err(MigError::from_remark(
-                        MigErrorKind::NotFound,
-                        "find for roofs",
-                    ));
-                }
-            }
-        }
 
         // TODO: add options to make this more reliable)
 
@@ -184,6 +115,7 @@ impl<'a> Stage2 {
 
         dbg!("stage2 loaded");
 
+
         info!("Setting log level to {:?}", stage2_cfg.get_log_level());
         Logger::set_default_level(&stage2_cfg.get_log_level());
         if let Some((device, fstype)) = stage2_cfg.get_log_device() {
@@ -192,109 +124,12 @@ impl<'a> Stage2 {
 
         // Ensure /boot is mounted in ROOTFS_DIR/boot
 
-        let boot_path = path_append(&root_fs_dir, BOOT_PATH);
-
-        let (boot_mount,boot_device) =
-            if dir_exists(&boot_path)? {
-                // TODO: provide fstype for boot
-                if let Some(boot_device) = stage2_cfg.get_boot_device() {
-                    let boot_device = to_std_device_path(boot_device)?;
-
-                    if boot_device != root_device {
-                        debug!(
-                            "attempting to mount '{}' on '{}' with fstype: {:?}",
-                            boot_device.display(),
-                            boot_path.display(),
-                            stage2_cfg.get_boot_fstype()
-                        );
-                        mount(
-                            Some(&boot_device),
-                            &boot_path,
-                            stage2_cfg.get_boot_fstype(),
-                            MsFlags::empty(),
-                            NIX_NONE,
-                        )
-                            .context(MigErrCtx::from_remark(
-                                MigErrorKind::Upstream,
-                                &format!(
-                                    "Failed to mount previous boot device '{}' to '{}' with fstype: {:?}",
-                                    &boot_device.display(),
-                                    &boot_path.display(),
-                                    stage2_cfg.get_boot_fstype()
-                                ),
-                            ))?;
-                        (Some(boot_path), Some(boot_device))
-                    } else {
-                        (None, None)
-                    }
-                } else {
-                    (None, None)
-                }
-            } else {
-                warn!(
-                    "cannot find boot mount point on root device: {}, path {}",
-                    root_device.display(),
-                    boot_path.display()
-                );
-                (None, None)
-            };
-
-
-        // mount bootmgr partition (EFI, uboot)
-
-        let bootmgr_mount =
-            if let Some(bootmgr_cfg) = stage2_cfg.get_bootmgr_config() {
-                let device = to_std_device_path(bootmgr_cfg.get_device())?;
-                let mounted =
-                    if let Some(boot_device) = boot_device {
-                        device == boot_device
-                    }  else {
-                        false
-                    };
-
-                if !mounted && device != root_device {
-                    // TODO: sort out boot manager mountpoint for windows
-                    // create 'virtual' mount point in windows and adjust boot backup paths appropriately as
-                    // mountpoint D: for EFI backup will no t work
-                    // maybe try /boot/ EFI
-                    let mountpoint = path_append(&root_fs_dir, bootmgr_cfg.get_mountpoint());
-                    debug!(
-                        "attempting to mount '{}' on '{}' with fstype: {}",
-                        device.display(),
-                        mountpoint.display(),
-                        bootmgr_cfg.get_fstype()
-                    );
-                    mount(
-                        Some(&device),
-                        &mountpoint,
-                        Some(bootmgr_cfg.get_fstype()),
-                        MsFlags::empty(),
-                        NIX_NONE,
-                    )
-                    .context(MigErrCtx::from_remark(
-                        MigErrorKind::Upstream,
-                        &format!(
-                            "Failed to mount previous bootmanager device '{}' to '{}' with fstype: {}",
-                            device.display(),
-                            mountpoint.display(),
-                            bootmgr_cfg.get_fstype()
-                        ),
-                    ))?;
-                    Some(mountpoint)
-                } else {
-                    None
-                }
-            } else {
-              None
-            };
+        mounts.mount_all(stage2_cfg)?;
 
         return Ok(Stage2 {
+            mounts,
             config: stage2_cfg,
-            boot_mount,
-            bootmgr_mount,
             recoverable_state: false,
-            root_fs_path: root_fs_dir,
-            root_device,
         });
     }
 
@@ -314,6 +149,21 @@ impl<'a> Stage2 {
         self.recoverable_state = true;
 
         let cmds = EnsuredCmds::new(MIG_REQUIRED_CMDS)?;
+
+        // TODO: mount work dir if required,
+        // TODO: no copy if workdir is on separate disk
+
+        match self.config.get_work_path() {
+            PathType::Path(path) => {
+
+            },
+            PathType::Mount(mount_config) => {
+
+            }
+        }
+
+
+
 
         // check if we have enough space to copy files to initramfs
         let mig_tmp_dir = match get_mem_info() {
@@ -1107,71 +957,4 @@ impl<'a> Stage2 {
         }
     }
 
-    fn find_config(
-        config_path: &'a PathBuf,
-        root_mount: &PathBuf,
-        root_fs_type: &Option<String>,
-    ) -> Option<&'a PathBuf> {
-        let devices = match read_dir("/dev/") {
-            Ok(devices) => devices,
-            Err(_why) => {
-                return None;
-            }
-        };
-
-        let fstypes: Vec<&str> = if let Some(fstype) = root_fs_type {
-            vec![fstype]
-        } else {
-            vec!["ext4", "vfat", "ntfs", "ext2", "ext3"]
-        };
-
-        for device in devices {
-            if let Ok(device) = device {
-                if let Ok(ref file_type) = device.file_type() {
-                    if file_type.is_file() {
-                        let file_name = String::from(device.file_name().to_string_lossy());
-                        debug!(
-                            "Looking at '{}' -> '{}'",
-                            device.path().display(),
-                            file_name
-                        );
-                        if file_name.starts_with("sd")
-                            || file_name.starts_with("hd")
-                            || file_name.starts_with("mmcblk")
-                            || file_name.starts_with("nvme")
-                        {
-                            debug!("Trying to mount '{}'", device.path().display());
-                            for fstype in &fstypes {
-                                debug!(
-                                    "Attempting to mount '{}' with '{}'",
-                                    device.path().display(),
-                                    fstype
-                                );
-                                if let Ok(_s) = mount(
-                                    Some(&device.path()),
-                                    root_mount.as_path(),
-                                    Some(fstype.as_bytes()),
-                                    MsFlags::empty(),
-                                    NIX_NONE,
-                                ) {
-                                    debug!(
-                                        "'{}' mounted ok with '{}' looking for ",
-                                        device.path().display(),
-                                        config_path.display()
-                                    );
-                                    if file_exists(config_path) {
-                                        return Some(config_path);
-                                    } else {
-                                        let _res = umount(&device.path());
-                                    }
-                                }
-                            }
-                        }
-                    }
-                }
-            }
-        }
-
-        None
-    }
 }

@@ -21,6 +21,11 @@ pub const EFI_BOOT_DIR: &str = r#"\EFI\Boot"#;
 pub const EFI_BCKUP_DIR: &str = r#"\efi_backup"#;
 pub const EFI_STARTUP_FILE: &str = "startup.nsh";
 
+// where do disk labels live ?
+pub const DISK_BY_LABEL_PATH: &str = "/dev/disk/by-label";
+pub const DISK_BY_PARTUUID_PATH: &str = "/dev/disk/by-partuuid";
+pub const DISK_BY_UUID_PATH: &str = "/dev/disk/by-uuid";
+
 // tag files with this to determine they are written by balena-migrate
 // and can be overwritten
 pub const BALENA_FILE_TAG: &str = "## created by balena-migrate";

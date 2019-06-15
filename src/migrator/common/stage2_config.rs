@@ -24,15 +24,15 @@ pub(crate) struct Stage2LogConfig {
 }
 
 #[derive(Debug, Deserialize, Serialize, Clone)]
-pub(crate) struct BootMgrConfig {
+pub(crate) struct MountConfig {
     device: PathBuf,
     fstype: String,
     mountpoint: PathBuf,
 }
 
-impl<'a> BootMgrConfig {
-    pub fn new(device: PathBuf, fstype: String, mountpoint: PathBuf) -> BootMgrConfig {
-        BootMgrConfig {
+impl<'a> MountConfig {
+    pub fn new(device: PathBuf, fstype: String, mountpoint: PathBuf) -> MountConfig {
+        MountConfig {
             device,
             fstype,
             mountpoint,
@@ -50,6 +50,12 @@ impl<'a> BootMgrConfig {
     }
 }
 
+#[derive(Debug, Deserialize, Serialize, Clone)]
+pub(crate) enum PathType {
+    Path(PathBuf),
+    Mount(MountConfig)
+}
+
 #[derive(Debug, Deserialize, Serialize)]
 pub(crate) struct Stage2Config {
     // what to do on failure
@@ -61,17 +67,16 @@ pub(crate) struct Stage2Config {
     // which device to flash - derive from /root partition if not set (windows)
     flash_device: Option<PathBuf>,
     // optional /boot partition device & fstype
-    boot_device: Option<PathBuf>,
-    boot_fstype: Option<String>,
+    boot_mount: Option<MountConfig>,
     // optional boot manager config - partition, fstype & mountpoint - EFI or uboot partition
-    bootmgr: Option<BootMgrConfig>,
-    // balena config file in /root partition
+    bootmgr: Option<MountConfig>,
+    // balena config file in work_path
     balena_config: PathBuf,
-    // balena OS image file in /root partition
+    // balena OS image file in work_path
     balena_image: PathBuf,
-    // working directory  in /root partition
-    work_dir: PathBuf,
-    // backed up former boot configuration (from , to)
+    // working directory  in path on root or mount partition
+    work_path: PathType,
+    // backed up former boot configuration (from , to) expected in boot manager
     boot_bckup: Option<Vec<(String, String)>>,
     // backup present in work_dir/backup.tgz
     has_backup: bool,
@@ -118,7 +123,7 @@ impl<'a> Stage2Config {
         Stage2Config::from_str(&config_str)
     }
 
-    pub fn get_bootmgr_config(&'a self) -> Option<&'a BootMgrConfig> {
+    pub fn get_bootmgr_mount(&'a self) -> Option<&'a MountConfig> {
         if let Some(ref bootmgr) = self.bootmgr {
             Some(bootmgr)
         } else {
@@ -172,17 +177,9 @@ impl<'a> Stage2Config {
         }
     }
 
-    pub fn get_boot_device(&'a self) -> Option<&'a Path> {
-        if let Some(ref boot_device) = self.boot_device {
-            Some(boot_device)
-        } else {
-            None
-        }
-    }
-
-    pub fn get_boot_fstype(&'a self) -> Option<&'a str> {
-        if let Some(ref boot_fstype) = self.boot_fstype {
-            Some(boot_fstype)
+    pub fn get_boot_mount(&'a self) -> Option<&'a MountConfig> {
+        if let Some(ref boot_mount) = self.boot_mount {
+            Some(boot_mount)
         } else {
             None
         }
@@ -212,8 +209,8 @@ impl<'a> Stage2Config {
         }
     }
 
-    pub fn get_work_path(&'a self) -> &'a Path {
-        &self.work_dir
+    pub fn get_work_path(&'a self) -> &'a PathType {
+        &self.work_path
     }
 
     pub fn get_fail_mode(&'a self) -> &'a FailMode {
@@ -317,12 +314,11 @@ pub(crate) struct Stage2ConfigBuilder {
     no_flash: Required<bool>,
     skip_flash: Required<bool>,
     flash_device: Optional<PathBuf>,
-    boot_device: Optional<PathBuf>,
-    boot_fstype: Optional<String>,
-    bootmgr: Optional<BootMgrConfig>,
+    boot_mount: Optional<MountConfig>,
+    bootmgr: Optional<MountConfig>,
     balena_config: Required<PathBuf>,
     balena_image: Required<PathBuf>,
-    work_dir: Required<PathBuf>,
+    work_path: Required<PathType>,
     boot_bckup: Optional<Vec<(String, String)>>,
     has_backup: Required<bool>,
     gzip_internal: Required<bool>,
@@ -339,12 +335,11 @@ impl<'a> Stage2ConfigBuilder {
             no_flash: Required::new("no_flash", Some(&true)),
             skip_flash: Required::new("skip_flash", Some(&false)),
             flash_device: Optional::new(None),
-            boot_device: Optional::new( None),
-            boot_fstype: Optional::new( None),
+            boot_mount: Optional::new( None),
             bootmgr: Optional::new(None),
             balena_config: Required::new("balena_config", None),
             balena_image: Required::new("balena_image", None),
-            work_dir: Required::new("work_dir", None),
+            work_path: Required::new("work_path", None),
             boot_bckup: Optional::new(None),
             has_backup: Required::new("has_backup", None),
             gzip_internal: Required::new("gzip_internal", Some(&true)),
@@ -361,13 +356,11 @@ impl<'a> Stage2ConfigBuilder {
             no_flash: self.no_flash.get()?.clone(),
             skip_flash: *self.skip_flash.get()?,
             flash_device: self.flash_device.get().clone(),
-            boot_device: self.boot_device.get().clone(),
-            boot_fstype: self.boot_fstype.get().clone(),
-            // root_device: self.root_device.get()?.clone(),
+            boot_mount: self.boot_mount.get().clone(),
             bootmgr: self.bootmgr.get().clone(),
             balena_config: self.balena_config.get()?.clone(),
             balena_image: self.balena_image.get()?.clone(),
-            work_dir: self.work_dir.get()?.clone(),
+            work_path: self.work_path.get()?.clone(),
             boot_bckup: self.boot_bckup.get().clone(),
             has_backup: *self.has_backup.get()?,
             gzip_internal: *self.gzip_internal.get()?,
@@ -422,15 +415,11 @@ impl<'a> Stage2ConfigBuilder {
         self.flash_device.set_ref(val);
     }
 
-    pub fn set_boot_device(&mut self, val: &PathBuf) {
-        self.boot_device.set_ref(val);
+    pub fn set_boot_mount(&mut self, val: &MountConfig) {
+        self.boot_mount.set_ref(val);
     }
 
-    pub fn set_boot_fstype(&mut self, val: &String) {
-        self.boot_fstype.set_ref(val);
-    }
-
-    pub fn set_bootmgr_cfg(&mut self, bootmgr_cfg: BootMgrConfig) {
+    pub fn set_bootmgr_cfg(&mut self, bootmgr_cfg: MountConfig) {
         self.bootmgr.set(bootmgr_cfg);
     }
 
@@ -442,8 +431,8 @@ impl<'a> Stage2ConfigBuilder {
         self.balena_image.set(val);
     }
 
-    pub fn set_work_dir(&mut self, val: &PathBuf) {
-        self.work_dir.set_ref(val);
+    pub fn set_work_path(&mut self, val: &PathType) {
+        self.work_path.set_ref(val);
     }
 
     pub fn set_boot_bckup(&mut self, boot_backup: Vec<(String, String)>) {

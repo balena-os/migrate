@@ -15,7 +15,7 @@ use crate::{
         dir_exists, file_exists, path_append,
         stage2_config::{
             Stage2ConfigBuilder,
-            BootMgrConfig
+            MountConfig
         },
         Config,
         MigErrCtx, MigError, MigErrorKind,
@@ -102,7 +102,7 @@ impl BootManager for EfiBootManager {
 
         if let Some(ref efi_path) = mig_info.drive_info.efi_path {
             debug!("efi drive found, setting boot manager to '{}'", efi_path.get_linux_part().display());
-            s2_cfg.set_bootmgr_cfg(BootMgrConfig::new(
+            s2_cfg.set_bootmgr_cfg(MountConfig::new(
                 PathBuf::from(efi_path.get_linux_part()),
                 String::from(efi_path.get_linux_fstype()),
                 PathBuf::from(efi_path.get_path())));

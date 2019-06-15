@@ -16,10 +16,6 @@ pub const SYS_UEFI_DIR: &str = "/sys/firmware/efi";
 
 pub const NIX_NONE: Option<&'static [u8]> = None;
 
-// where do disk labels live ?
-pub const DISK_BY_LABEL_PATH: &str = "/dev/disk/by-label";
-pub const DISK_BY_PARTUUID_PATH: &str = "/dev/disk/by-partuuid";
-pub const DISK_BY_UUID_PATH: &str = "/dev/disk/by-uuid";
 
 // Default balena partition labels and FS types
 pub const BALENA_BOOT_PART: &str = "resin-boot";

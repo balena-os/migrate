@@ -10,7 +10,7 @@ use std::path::{Path, PathBuf};
 use crate::{
     common::{
         file_exists, format_size_with_unit, is_balena_file, path_append,
-        stage2_config::{BootMgrConfig, Stage2Config, Stage2ConfigBuilder},
+        stage2_config::{MountConfig, Stage2Config, Stage2ConfigBuilder},
         Config, MigErrCtx, MigError, MigErrorKind,
     },
     defs::{BootType, BALENA_FILE_TAG, MIG_DTB_NAME, MIG_INITRD_NAME, MIG_KERNEL_NAME},
@@ -194,7 +194,7 @@ impl BootManager for UBootManager {
 
             self.bootmgr_path = Some(PathBuf::from(&bootmgr_path.mountpoint));
 
-            s2_cfg.set_bootmgr_cfg(BootMgrConfig::new(
+            s2_cfg.set_bootmgr_cfg(MountConfig::new(
                 bootmgr_path.device,
                 bootmgr_path.fs_type,
                 bootmgr_path.mountpoint,
@@ -402,7 +402,7 @@ impl BootManager for UBootManager {
         info!("restoring boot configuration for {}", slug);
 
         // TODO: restore on bootmgr device
-        let uenv_file = if let Some(bootmgr) = config.get_bootmgr_config() {
+        let uenv_file = if let Some(bootmgr) = config.get_bootmgr_mount() {
             path_append(
                 path_append(root_path, bootmgr.get_mountpoint()),
                 UENV_FILE_NAME,
