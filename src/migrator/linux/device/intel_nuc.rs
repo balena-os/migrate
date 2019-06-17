@@ -1,5 +1,4 @@
 use log::{error, info, trace};
-use std::path::Path;
 
 use crate::{
     common::{
@@ -11,7 +10,8 @@ use crate::{
         boot_manager::{from_boot_type, BootManager, GrubBootManager},
         device::Device,
         linux_common::is_secure_boot,
-        EnsuredCmds, MigrateInfo,
+        EnsuredCmds, MigrateInfo, migrate_info::PathInfo,
+        stage2::mounts::Mounts,
     },
 };
 
@@ -46,6 +46,11 @@ impl IntelNuc {
         // **********************************************************************
         // ** AMD64 specific initialisation/checks
         // **********************************************************************
+
+        // TODO: determine boot device
+        // use config.migrate.flash_device
+        // if EFI boot look for EFI partition
+        // else look for /boot
 
         let secure_boot = is_secure_boot()?;
         info!(
@@ -115,8 +120,13 @@ impl<'a> Device for IntelNuc {
         self.boot_manager.setup(cmds, dev_info, config, s2_cfg)
     }
 
-    fn restore_boot(&self, root_path: &Path, config: &Stage2Config) -> Result<(), MigError> {
+    fn restore_boot(&self, mounts:& Mounts, config: &Stage2Config) -> Result<(), MigError> {
         self.boot_manager
-            .restore(self.get_device_slug(), root_path, config)
+            .restore(mounts, config)
     }
+
+    fn get_boot_device(&self) -> PathInfo {
+        self.boot_manager.get_boot_path()
+    }
+
 }

@@ -3,7 +3,7 @@ use log::{debug, error, info, trace};
 use regex::Regex;
 use std::fs::{read_to_string, File};
 use std::io::Write;
-use std::path::{Path, PathBuf};
+use std::path::{Path};
 
 use crate::{
     common::{
@@ -20,8 +20,10 @@ use crate::{
         },
         migrate_info::{label_type::LabelType, MigrateInfo},
         EnsuredCmds, CHMOD_CMD, GRUB_REBOOT_CMD, GRUB_UPDT_CMD,
+        stage2::mounts::{Mounts},
     },
 };
+use crate::linux::migrate_info::PathInfo;
 
 const GRUB_UPDT_VERSION_ARGS: [&str; 1] = ["--version"];
 const GRUB_UPDT_VERSION_RE: &str = r#"^.*\s+\(GRUB\)\s+([0-9]+)\.([0-9]+)[^0-9].*$"#;
@@ -46,12 +48,12 @@ menuentry "balena-migrate" {
 
 pub(crate) struct GrubBootManager {
     // valid is just used to enforce the use of new
-    _valid: bool,
+    boot_path: Option<PathInfo>,
 }
 
-impl GrubBootManager {
+impl<'a> GrubBootManager {
     pub fn new() -> GrubBootManager {
-        GrubBootManager { _valid: true }
+        GrubBootManager { boot_path: None }
     }
 
     /******************************************************************
@@ -102,11 +104,16 @@ impl GrubBootManager {
             ))
         }
     }
+
 }
 
-impl BootManager for GrubBootManager {
+impl<'a> BootManager for GrubBootManager {
     fn get_boot_type(&self) -> BootType {
         BootType::Grub
+    }
+
+    fn get_boot_path(&self) -> PathInfo {
+        self.boot_path.as_ref().unwrap().clone()
     }
 
     fn can_migrate(
@@ -120,6 +127,13 @@ impl BootManager for GrubBootManager {
 
         // TODO: several things to do:
         //  make sure grub is actually the active boot manager
+
+        if !dir_exists(BOOT_PATH)? || !dir_exists(GRUB_CONFIG_DIR)? {
+            error!("Some directories required for the grub boot manager could not be found");
+            return Ok(false);
+        }
+
+        let boot_path = PathInfo::new(cmds, BOOT_PATH, &mig_info.lsblk_info)?.unwrap();
 
         let grub_version = GrubBootManager::get_grub_version(cmds)?;
         info!(
@@ -142,7 +156,6 @@ impl BootManager for GrubBootManager {
 
         // TODO: this could be more reliable, taking into account the size of the existing files
         // vs the size of the files that will be copied
-        let boot_path = &mig_info.boot_path;
 
         let mut boot_req_space = if !file_exists(path_append(&boot_path.path, MIG_KERNEL_NAME)) {
             mig_info.kernel_file.size
@@ -156,11 +169,13 @@ impl BootManager for GrubBootManager {
             0
         };
 
-        if mig_info.boot_path.fs_free < boot_req_space {
+        if boot_path.fs_free < boot_req_space {
             error!("The boot directory '{}' does not have enough space to store the migrate kernel and initramfs. Required space is {}",
                    boot_path.path.display(), format_size_with_unit(boot_req_space));
             return Ok(false);
         }
+
+        self.boot_path = Some(boot_path);
 
         Ok(true)
     }
@@ -179,31 +194,18 @@ impl BootManager for GrubBootManager {
         // c) call grub-reboot to enable boot once to migrate env
 
         // let install_drive = mig_info.get_installPath().drive;
-        let boot_path = &mig_info.boot_path;
-        let root_path = &mig_info.root_path;
+        let boot_path = self.boot_path.as_ref().unwrap();
 
-        /*
-            let grub_root = if Some(uuid) = root_path.uuid {
-                format!("root=UUID={}", uuid)
+        // path to kernel & initramfs at boot time depends on how /boot is mounted
+        // either / (for a /boot mount or /boot for a directory of /root file system)
+        let grub_boot: &Path =
+            if boot_path.path == boot_path.mountpoint {
+                // /boot is a mounted filesystem
+                &Path::new(ROOT_PATH)
             } else {
-                if let Some(uuid) = root_path.part_uuid {
-                    format!("root=PARTUUID={}", uuid)
-                } else {
-                    format!("root={}", &root_path.path.to_string_lossy());
-                }
+                // /boot is a directory on /root
+                &boot_path.path
             };
-        */
-
-        let grub_boot = if boot_path.device == root_path.device {
-            PathBuf::from(BOOT_PATH)
-        } else {
-            if boot_path.mountpoint == Path::new(BOOT_PATH) {
-                PathBuf::from(ROOT_PATH)
-            } else {
-                // TODO: create appropriate path
-                panic!("boot partition mus be mounted in /boot for now");
-            }
-        };
 
         let part_type = match LabelType::from_device(cmds, &boot_path.drive)? {
             LabelType::GPT => "gpt",
@@ -282,7 +284,7 @@ impl BootManager for GrubBootManager {
             linux.push_str(&format!(" {}", word));
         }
 
-        linux.push_str(&format!(" rootfstype={} debug", root_path.fs_type));
+        linux.push_str(&format!(" rootfstype={} debug", boot_path.fs_type));
 
         let mut grub_cfg = String::from(GRUB_CFG_TEMPLATE);
 
@@ -401,8 +403,7 @@ impl BootManager for GrubBootManager {
 
     fn restore(
         &self,
-        _slug: &str,
-        _root_path: &Path,
+        _mounts: &Mounts,
         _config: &Stage2Config,
     ) -> Result<(), MigError> {
         trace!("restore: entered");

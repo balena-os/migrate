@@ -1,6 +1,5 @@
 use log::{debug, error, trace};
 use regex::Regex;
-use std::path::Path;
 
 use crate::{
     common::{
@@ -11,7 +10,8 @@ use crate::{
     linux::{
         boot_manager::{from_boot_type, BootManager, UBootManager},
         device::Device,
-        EnsuredCmds, MigrateInfo,
+        EnsuredCmds, MigrateInfo, migrate_info::PathInfo,
+        stage2::mounts::{Mounts},
     },
 };
 
@@ -90,6 +90,10 @@ impl BeagleboneGreen {
         if let Some(_idx) = SUPPORTED_OSSES.iter().position(|&r| r == os_name) {
             let mut boot_manager = UBootManager::new();
 
+            // TODO: determine boot device
+            // use config.migrate.flash_device
+            //
+
             if boot_manager.can_migrate(cmds, mig_info, config, s2_cfg)? {
                 Ok(BeagleboneGreen {
                     boot_manager: Box::new(boot_manager),
@@ -120,7 +124,7 @@ impl BeagleboneGreen {
     }
 }
 
-impl<'a> Device for BeagleboneGreen {
+impl Device for BeagleboneGreen {
     fn get_device_type(&self) -> DeviceType {
         DeviceType::BeagleboneGreen
     }
@@ -143,9 +147,12 @@ impl<'a> Device for BeagleboneGreen {
         self.boot_manager.setup(cmds, dev_info, config, s2_cfg)
     }
 
-    fn restore_boot(&self, root_path: &Path, config: &Stage2Config) -> Result<(), MigError> {
-        self.boot_manager
-            .restore(self.get_device_slug(), root_path, config)
+    fn restore_boot(&self, mounts: &Mounts, config: &Stage2Config) -> Result<(), MigError> {
+        self.boot_manager.restore( mounts, config)
+    }
+
+    fn get_boot_device(&self) -> PathInfo {
+        self.boot_manager.get_boot_path()
     }
 }
 
@@ -196,7 +203,7 @@ impl BeagleboneBlack {
     }
 }
 
-impl<'a> Device for BeagleboneBlack {
+impl Device for BeagleboneBlack {
     fn get_device_type(&self) -> DeviceType {
         DeviceType::BeagleboneBlack
     }
@@ -219,10 +226,15 @@ impl<'a> Device for BeagleboneBlack {
         self.boot_manager.setup(cmds, dev_info, config, s2_cfg)
     }
 
-    fn restore_boot(&self, root_path: &Path, config: &Stage2Config) -> Result<(), MigError> {
+    fn restore_boot(&self, mounts: &Mounts, config: &Stage2Config) -> Result<(), MigError> {
         self.boot_manager
-            .restore(self.get_device_slug(), root_path, config)
+            .restore(mounts, config)
     }
+
+    fn get_boot_device(&self) -> PathInfo {
+        self.boot_manager.get_boot_path()
+    }
+
 }
 
 pub(crate) struct BeagleboardXM {
@@ -286,9 +298,9 @@ impl<'a> Device for BeagleboardXM {
         self.boot_manager.get_boot_type()
     }
 
-    fn restore_boot(&self, root_path: &Path, config: &Stage2Config) -> Result<(), MigError> {
+    fn restore_boot(&self, mounts: &Mounts, config: &Stage2Config) -> Result<(), MigError> {
         self.boot_manager
-            .restore(self.get_device_slug(), root_path, config)
+            .restore(mounts, config)
     }
 
     fn setup(
@@ -299,5 +311,9 @@ impl<'a> Device for BeagleboardXM {
         s2_cfg: &mut Stage2ConfigBuilder,
     ) -> Result<(), MigError> {
         self.boot_manager.setup(cmds, dev_info, config, s2_cfg)
+    }
+
+    fn get_boot_device(&self) -> PathInfo {
+        self.boot_manager.get_boot_path()
     }
 }

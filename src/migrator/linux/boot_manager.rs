@@ -1,12 +1,12 @@
-use std::path::Path;
-
 use crate::{
     common::{
         stage2_config::{Stage2Config, Stage2ConfigBuilder},
         Config, MigError, MigErrorKind,
     },
     defs::BootType,
-    linux::{EnsuredCmds, MigrateInfo},
+    linux::{EnsuredCmds,
+            MigrateInfo, migrate_info::PathInfo,
+            stage2::mounts::{Mounts}},
 };
 
 pub(crate) mod u_boot_manager;
@@ -43,7 +43,10 @@ pub(crate) trait BootManager {
         config: &Config,
         s2_cfg: &mut Stage2ConfigBuilder,
     ) -> Result<(), MigError>;
-    fn restore(&self, slug: &str, root_path: &Path, config: &Stage2Config) -> Result<(), MigError>;
+
+    fn restore(&self, mounts: &Mounts, config: &Stage2Config) -> Result<(), MigError>;
+    // TODO: make return reference
+    fn get_boot_path(&self) -> PathInfo;
 }
 
 pub(crate) struct EfiBootManager {
@@ -59,6 +62,9 @@ impl EfiBootManager {
 impl BootManager for EfiBootManager {
     fn get_boot_type(&self) -> BootType {
         BootType::Efi
+    }
+    fn get_boot_path(&self) -> PathInfo {
+        unimplemented!()
     }
 
     fn can_migrate(
@@ -81,8 +87,7 @@ impl BootManager for EfiBootManager {
     }
     fn restore(
         &self,
-        _slug: &str,
-        _root_path: &Path,
+        _mounts: &Mounts,
         _config: &Stage2Config,
     ) -> Result<(), MigError> {
         Err(MigError::from(MigErrorKind::NotImpl))

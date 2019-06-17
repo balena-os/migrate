@@ -12,9 +12,9 @@ use crate::{
     common::{
         call, file_exists, parse_file, path_append, Config, MigErrCtx, MigError, MigErrorKind,
     },
-    defs::OSArch,
-    linux::{
-        linux_defs::{DISK_BY_PARTUUID_PATH, DISK_BY_UUID_PATH, KERNEL_CMDLINE_PATH, SYS_UEFI_DIR},
+    defs::{OSArch,DISK_BY_PARTUUID_PATH, DISK_BY_UUID_PATH,},
+           linux::{
+        linux_defs::{KERNEL_CMDLINE_PATH, SYS_UEFI_DIR},
         EnsuredCmds, DF_CMD, MOKUTIL_CMD, UNAME_CMD,
     },
 };
@@ -249,6 +249,8 @@ pub(crate) fn is_secure_boot() -> Result<bool, MigError> {
  * Backups are coded as list of ("orig-file","backup-file")
  ******************************************************************/
 
+// TODO: allow restoring from work_dir to Boot
+
 pub(crate) fn restore_backups(
     root_path: &Path,
     backups: &[(String, String)],
@@ -426,4 +428,78 @@ pub(crate) fn get_fs_space<P: AsRef<Path>>(
     };
 
     Ok((fs_size, fs_size - fs_used))
+}
+
+/******************************************************************
+* parse /proc/cmdline to extract root device & fs_type
+******************************************************************/
+
+pub(crate) fn get_kernel_root_info() -> Result<(PathBuf, Option<String>), MigError> {
+    const ROOT_DEVICE_REGEX: &str = r#"\sroot=(\S+)\s"#;
+    const ROOT_PARTUUID_REGEX: &str = r#"^PARTUUID=(\S+)$"#;
+    const ROOT_UUID_REGEX: &str = r#"^UUID=(\S+)$"#;
+    const ROOT_FSTYPE_REGEX: &str = r#"\srootfstype=(\S+)\s"#;
+
+    trace!("get_root_info: entered");
+
+    let cmd_line = read_to_string(KERNEL_CMDLINE_PATH).context(MigErrCtx::from_remark(
+        MigErrorKind::Upstream,
+        &format!("Failed to read from file: '{}'", KERNEL_CMDLINE_PATH),
+    ))?;
+
+    debug!("get_root_info: got cmdline: '{}'", cmd_line);
+
+    let root_device = if let Some(captures) =
+    Regex::new(ROOT_DEVICE_REGEX).unwrap().captures(&cmd_line)
+    {
+        let root_dev = captures.get(1).unwrap().as_str();
+        debug!("Got root device string: '{}'", root_dev);
+
+        if let Some(uuid_part) =
+        if let Some(captures) = Regex::new(ROOT_PARTUUID_REGEX).unwrap().captures(root_dev) {
+            debug!("Got root device PARTUUID: {:?}", captures.get(1));
+            Some(path_append(
+                DISK_BY_PARTUUID_PATH,
+                captures.get(1).unwrap().as_str(),
+            ))
+        } else {
+            if let Some(captures) = Regex::new(ROOT_UUID_REGEX).unwrap().captures(root_dev) {
+                debug!("Got root device UUID: {:?}", captures.get(1));
+                Some(path_append(
+                    DISK_BY_UUID_PATH,
+                    captures.get(1).unwrap().as_str(),
+                ))
+            } else {
+                None
+            }
+        }
+        {
+            debug!("trying device path: '{}'", uuid_part.display());
+            to_std_device_path(&uuid_part)?
+        } else {
+            debug!("Got plain root device '{}'", root_dev);
+            PathBuf::from(root_dev)
+        }
+    } else {
+        warn!("Got no root was found in kernel command line '{}'", cmd_line);
+        return Err(MigError::from_remark(
+            MigErrorKind::NotFound,
+            &format!(
+                "Failed to parse root device path from kernel command line: '{}'",
+                cmd_line
+            ),
+        ));
+    };
+
+    debug!("Using root device: '{}'", root_device.display());
+
+    let root_fs_type =
+        if let Some(captures) = Regex::new(&ROOT_FSTYPE_REGEX).unwrap().captures(&cmd_line) {
+            Some(String::from(captures.get(1).unwrap().as_str()))
+        } else {
+            warn!("failed to parse {} for root fs type", cmd_line);
+            None
+        };
+
+    Ok((root_device, root_fs_type))
 }

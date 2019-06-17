@@ -14,7 +14,7 @@ const MODULE: &str = "stage2::stage2:config";
 
 use crate::{
     common::{MigErrCtx, MigError, MigErrorKind, },
-    defs::{BootType, DeviceType, FailMode, STAGE2_CFG_FILE},
+    defs::{BootType, DeviceType, FailMode},
 };
 
 #[derive(Debug, Deserialize, Serialize, Clone)]
@@ -25,17 +25,20 @@ pub(crate) struct Stage2LogConfig {
 
 #[derive(Debug, Deserialize, Serialize, Clone)]
 pub(crate) struct MountConfig {
+    // the device to mount
     device: PathBuf,
+    // the devices to fs_type
     fstype: String,
-    mountpoint: PathBuf,
+    // Path to target directory in mount
+    path: PathBuf,
 }
 
 impl<'a> MountConfig {
-    pub fn new(device: PathBuf, fstype: String, mountpoint: PathBuf) -> MountConfig {
+    pub fn new(device: &Path, fstype: &str, path: &Path) -> MountConfig {
         MountConfig {
-            device,
-            fstype,
-            mountpoint,
+            device: PathBuf::from(device),
+            fstype: String::from(fstype),
+            path: PathBuf::from(path),
         }
     }
 
@@ -45,8 +48,8 @@ impl<'a> MountConfig {
     pub fn get_fstype(&'a self) -> &'a str {
         &self.fstype
     }
-    pub fn get_mountpoint(&'a self) -> &'a Path {
-        &self.mountpoint.as_path()
+    pub fn get_path(&'a self) -> &'a Path {
+        &self.path.as_path()
     }
 }
 
@@ -66,10 +69,9 @@ pub(crate) struct Stage2Config {
     skip_flash: bool,
     // which device to flash - derive from /root partition if not set (windows)
     flash_device: Option<PathBuf>,
-    // optional /boot partition device & fstype
-    boot_mount: Option<MountConfig>,
-    // optional boot manager config - partition, fstype & mountpoint - EFI or uboot partition
-    bootmgr: Option<MountConfig>,
+/*    // optional /boot partition device & fstype
+    boot_path: PathBuf,
+*/
     // balena config file in work_path
     balena_config: PathBuf,
     // balena OS image file in work_path
@@ -123,14 +125,10 @@ impl<'a> Stage2Config {
         Stage2Config::from_str(&config_str)
     }
 
-    pub fn get_bootmgr_mount(&'a self) -> Option<&'a MountConfig> {
-        if let Some(ref bootmgr) = self.bootmgr {
-            Some(bootmgr)
-        } else {
-            None
-        }
+/*    pub fn get_boot_mount(&'a self) -> &'a PathType {
+        &self.boot_mount
     }
-
+*/
     pub fn get_log_level(&self) -> Level {
         if let Ok(level) = Level::from_str(&self.log_level) {
             level
@@ -161,28 +159,6 @@ impl<'a> Stage2Config {
 
     pub fn is_skip_flash(&self) -> bool {
         self.skip_flash
-    }
-
-    /*
-    pub fn get_bootmgr(&'a self) -> &'a BootType {
-        &self.boot_type
-    }
-    */
-
-    pub fn get_flash_device(&'a self) -> Option<&'a Path> {
-        if let Some(ref flash_device) = self.flash_device {
-            Some(flash_device)
-        } else {
-            None
-        }
-    }
-
-    pub fn get_boot_mount(&'a self) -> Option<&'a MountConfig> {
-        if let Some(ref boot_mount) = self.boot_mount {
-            Some(boot_mount)
-        } else {
-            None
-        }
     }
 
     pub fn get_boot_type(&'a self) -> &'a BootType {
@@ -314,8 +290,6 @@ pub(crate) struct Stage2ConfigBuilder {
     no_flash: Required<bool>,
     skip_flash: Required<bool>,
     flash_device: Optional<PathBuf>,
-    boot_mount: Optional<MountConfig>,
-    bootmgr: Optional<MountConfig>,
     balena_config: Required<PathBuf>,
     balena_image: Required<PathBuf>,
     work_path: Required<PathType>,
@@ -335,8 +309,6 @@ impl<'a> Stage2ConfigBuilder {
             no_flash: Required::new("no_flash", Some(&true)),
             skip_flash: Required::new("skip_flash", Some(&false)),
             flash_device: Optional::new(None),
-            boot_mount: Optional::new( None),
-            bootmgr: Optional::new(None),
             balena_config: Required::new("balena_config", None),
             balena_image: Required::new("balena_image", None),
             work_path: Required::new("work_path", None),
@@ -356,8 +328,7 @@ impl<'a> Stage2ConfigBuilder {
             no_flash: self.no_flash.get()?.clone(),
             skip_flash: *self.skip_flash.get()?,
             flash_device: self.flash_device.get().clone(),
-            boot_mount: self.boot_mount.get().clone(),
-            bootmgr: self.bootmgr.get().clone(),
+            // boot_mount: self.boot_mount.get()?.clone(),
             balena_config: self.balena_config.get()?.clone(),
             balena_image: self.balena_image.get()?.clone(),
             work_path: self.work_path.get()?.clone(),
@@ -373,10 +344,10 @@ impl<'a> Stage2ConfigBuilder {
         Ok(result)
     }
 
-    pub fn write_stage2_cfg(&self) -> Result<(), MigError> {
+/*    pub fn write_stage2_cfg(&self) -> Result<(), MigError> {
         self.write_stage2_cfg_to(&Path::new(STAGE2_CFG_FILE))
     }
-
+*/
     pub fn write_stage2_cfg_to(&self, file: &Path) -> Result<(), MigError> {
         // TODO: check first
 
@@ -413,14 +384,6 @@ impl<'a> Stage2ConfigBuilder {
 
     pub fn set_flash_device(&mut self, val: &PathBuf) {
         self.flash_device.set_ref(val);
-    }
-
-    pub fn set_boot_mount(&mut self, val: &MountConfig) {
-        self.boot_mount.set_ref(val);
-    }
-
-    pub fn set_bootmgr_cfg(&mut self, bootmgr_cfg: MountConfig) {
-        self.bootmgr.set(bootmgr_cfg);
     }
 
     pub fn set_balena_config(&mut self, val: PathBuf) {

@@ -2,7 +2,7 @@ use serde::{Deserialize, Serialize};
 use std::fmt::{self, Display, Formatter};
 
 // where does the stage 2 config file live
-pub const STAGE2_CFG_FILE: &str = "/etc/balena-stage2.yml";
+pub const STAGE2_CFG_FILE: &str = "balena-stage2.yml";
 
 // where do network manager connection profiles live
 pub const SYSTEM_CONNECTIONS_DIR: &str = "system-connections";

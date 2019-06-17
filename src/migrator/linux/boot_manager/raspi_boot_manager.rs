@@ -1,20 +1,25 @@
 use failure::{Fail, ResultExt};
-use log::{info, trace, warn};
+use log::{info, trace, warn, error};
 use regex::Regex;
 use std::fs::{copy, File};
 use std::io::{BufRead, BufReader, Write};
-use std::path::Path;
 
 use std::time::SystemTime;
 
 use crate::{
     common::{
-        file_exists, is_balena_file, path_append,
+        dir_exists, file_exists, is_balena_file, path_append,
         stage2_config::{Stage2Config, Stage2ConfigBuilder},
         Config, MigErrCtx, MigError, MigErrorKind,
     },
     defs::{BootType, BALENA_FILE_TAG},
-    linux::{boot_manager::BootManager, EnsuredCmds, MigrateInfo, CHMOD_CMD},
+    linux::{
+        linux_defs::{BOOT_PATH},
+        boot_manager::BootManager,
+        stage2::mounts::{Mounts},
+        EnsuredCmds,
+        MigrateInfo, migrate_info::PathInfo,
+        CHMOD_CMD},
 };
 
 const RPI_MIG_KERNEL_PATH: &str = "/boot/balena.zImage";
@@ -27,12 +32,12 @@ const RPI_CONFIG_TXT: &str = "config.txt";
 
 pub(crate) struct RaspiBootManager {
     // valid is just used to enforce the use of new
-    _valid: bool,
+    boot_path: Option<PathInfo>,
 }
 
 impl RaspiBootManager {
     pub fn new() -> RaspiBootManager {
-        RaspiBootManager { _valid: true }
+        RaspiBootManager { boot_path: None }
     }
 }
 
@@ -41,14 +46,25 @@ impl BootManager for RaspiBootManager {
         BootType::Raspi
     }
 
+    fn get_boot_path(&self) -> PathInfo {
+        self.boot_path.as_ref().unwrap().clone()
+    }
+
     fn can_migrate(
         &mut self,
-        _cmds: &mut EnsuredCmds,
-        _mig_info: &MigrateInfo,
+        cmds: &mut EnsuredCmds,
+        mig_info: &MigrateInfo,
         _config: &Config,
         _s2_cfg: &mut Stage2ConfigBuilder,
     ) -> Result<bool, MigError> {
         // TODO: calculate/ensure  required space on /boot /bootmgr
+
+        if !dir_exists(BOOT_PATH)?  {
+            error!("The /boot directory required for the raspi boot manager could not be found");
+            return Ok(false);
+        }
+
+        self.boot_path = Some(PathInfo::new(cmds, BOOT_PATH, &mig_info.lsblk_info)?.unwrap());
 
         Ok(true)
     }
@@ -56,7 +72,7 @@ impl BootManager for RaspiBootManager {
     fn setup(
         &self,
         cmds: &EnsuredCmds,
-        mig_info: &MigrateInfo,
+        _mig_info: &MigrateInfo,
         config: &Config,
         s2_cfg: &mut Stage2ConfigBuilder,
     ) -> Result<(), MigError> {
@@ -98,7 +114,7 @@ impl BootManager for RaspiBootManager {
             RPI_MIG_INITRD_PATH
         );
 
-        let boot_path = &mig_info.boot_path.path;
+        let boot_path = &self.boot_path.as_ref().unwrap().path;
         let config_path = path_append(boot_path, RPI_CONFIG_TXT);
 
         if !file_exists(&config_path) {
@@ -238,8 +254,7 @@ impl BootManager for RaspiBootManager {
 
     fn restore(
         &self,
-        _slug: &str,
-        _root_path: &Path,
+        _mounts: &Mounts,
         _config: &Stage2Config,
     ) -> Result<(), MigError> {
         Err(MigError::from(MigErrorKind::NotImpl))

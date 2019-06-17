@@ -1,0 +1,791 @@
+
+U-Boot SPL 2018.11 (Jan 14 2019 - 10:26:00 +0000)
+Trying to boot from MMC1
+Loading Environment from EXT4... 
+** Unable to use mmc 0:1 for loading the env **
+
+
+U-Boot 2018.11 (Jan 14 2019 - 10:26:00 +0000)
+
+CPU  : AM335X-GP rev 2.1
+I2C:   ready
+DRAM:  512 MiB
+No match for driver 'omap_hsmmc'
+No match for driver 'omap_hsmmc'
+Some drivers were not found
+Reset Source: Power-on reset has occurred.
+RTC 32KCLK Source: External.
+MMC:   OMAP SD/MMC: 0, OMAP SD/MMC: 1
+Loading Environment from EXT4... 
+** Unable to use mmc 0:1 for loading the env **
+Board: BeagleBone Black
+<ethaddr> not set. Validating first E-fuse MAC
+BeagleBone Black:
+Model: SeeedStudio BeagleBone Green:
+Timed out in wait_for_event: status=0000
+Check if pads/pull-ups of bus are properly configured
+BeagleBone: cape eeprom: i2c_probe: 0x54:
+Timed out in wait_for_event: status=0000
+Check if pads/pull-ups of bus are properly configured
+BeagleBone: cape eeprom: i2c_probe: 0x55:
+Timed out in wait_for_event: status=0000
+Check if pads/pull-ups of bus are properly configured
+BeagleBone: cape eeprom: i2c_probe: 0x56:
+Timed out in wait_for_event: status=0000
+Check if pads/pull-ups of bus are properly configured
+BeagleBone: cape eeprom: i2c_probe: 0x57:
+Net:   eth0: MII MODE
+cpsw, usb_ether
+Press SPACE to abort autoboot in 2 seconds
+board_name=[BBG1] ...
+Scanning MMC and USB devices 0 1 2
+** Unable to read file resin-image-flasher **
+24 bytes read in 1 ms (23.4 KiB/s)
+** Invalid partition 1 **
+MMC Device 2 not found
+Found resin image on mmc 0
+Loading resinOS_uEnv.txt from mmc device 0 partition 1
+** Unable to read file resinOS_uEnv.txt **
+switch to partitions #0, OK
+mmc0 is current device
+SD/MMC found on device 0
+** Unable to read file uEnv.txt **
+switch to partitions #0, OK
+mmc0 is current device
+debug: [enable_uboot_overlays=] ...
+loading /boot/am335x-bonegreen.dtb ...
+58307 bytes read in 60 ms (948.2 KiB/s)
+uboot_overlays: add [enable_uboot_overlays=1] to /boot/uEnv.txt to enable...
+SD/MMC found on device 0
+13816320 bytes read in 930 ms (14.2 MiB/s)
+## Flattened Device Tree blob at 88000000
+   Booting using the fdt blob at 0x88000000
+   Loading Device Tree to 8ffee000, end 8ffff3c2 ... OK
+
+Starting kernel ...
+
+[    0.000000] Booting Linux on physical CPU 0x0
+[    0.000000] Linux version 4.14.53+ (oe-user@oe-host) (gcc version 7.3.0 (GCC)) #2 SMP PREEMPT Tue Feb 5 12:25:43 UTC 2019
+[    0.000000] CPU: ARMv7 Processor [413fc082] revision 2 (ARMv7), cr=10c5387d
+[    0.000000] CPU: PIPT / VIPT nonaliasing data cache, VIPT aliasing instruction cache
+[    0.000000] OF: fdt: Machine model: TI AM335x BeagleBone Green
+[    0.000000] Memory policy: Data cache writeback
+[    0.000000] efi: Getting EFI parameters from FDT:
+[    0.000000] efi: UEFI not found.
+[    0.000000] cma: Reserved 48 MiB at 0x9c800000
+[    0.000000] CPU: All CPU(s) started in SVC mode.
+[    0.000000] AM335X ES2.1 (sgx neon)
+[    0.000000] random: get_random_bytes called from start_kernel+0xac/0x45c with crng_init=0
+[    0.000000] percpu: Embedded 18 pages/cpu @df929000 s41612 r8192 d23924 u73728
+[    0.000000] Built 1 zonelists, mobility grouping on.  Total pages: 129412
+[    0.000000] Kernel command line: console=ttyO0,115200n8 root=PARTUUID=896127ff-02 ro rootfstype=ext4 rootwait
+[    0.000000] PID hash table entries: 2048 (order: 1, 8192 bytes)
+[    0.000000] Dentry cache hash table entries: 65536 (order: 6, 262144 bytes)
+[    0.000000] Inode-cache hash table entries: 32768 (order: 5, 131072 bytes)
+[    0.000000] Memory: 438184K/522240K available (13312K kernel code, 1143K rwdata, 4368K rodata, 8192K init, 659K bss, 34904K reserved, 49152K cma-reserved, 0K highmem)
+[    0.000000] Virtual kernel memory layout:
+[    0.000000]     vector  : 0xffff0000 - 0xffff1000   (   4 kB)
+[    0.000000]     fixmap  : 0xffc00000 - 0xfff00000   (3072 kB)
+[    0.000000]     vmalloc : 0xe0000000 - 0xff800000   ( 504 MB)
+[    0.000000]     lowmem  : 0xc0000000 - 0xdfe00000   ( 510 MB)
+[    0.000000]     pkmap   : 0xbfe00000 - 0xc0000000   (   2 MB)
+[    0.000000]     modules : 0xbf000000 - 0xbfe00000   (  14 MB)
+[    0.000000]       .text : 0xc0008000 - 0xc0e00000   (14304 kB)
+[    0.000000]       .init : 0xc1400000 - 0xc1c00000   (8192 kB)
+[    0.000000]       .data : 0xc1c00000 - 0xc1d1ddd8   (1144 kB)
+[    0.000000]        .bss : 0xc1d26cbc - 0xc1dcbb64   ( 660 kB)
+[    0.000000] SLUB: HWalign=64, Order=0-3, MinObjects=0, CPUs=1, Nodes=1
+[    0.000000] ftrace: allocating 42619 entries in 125 pages
+[    0.000000] Preemptible hierarchical RCU implementation.
+[    0.000000] 	RCU restricting CPUs from NR_CPUS=2 to nr_cpu_ids=1.
+[    0.000000] 	Tasks RCU enabled.
+[    0.000000] RCU: Adjusting geometry for rcu_fanout_leaf=16, nr_cpu_ids=1
+[    0.000000] NR_IRQS: 16, nr_irqs: 16, preallocated irqs: 16
+[    0.000000] IRQ: Found an INTC at 0xfa200000 (revision 5.0) with 128 interrupts
+[    0.000000] OMAP clockevent source: timer2 at 24000000 Hz
+[    0.000017] sched_clock: 32 bits at 24MHz, resolution 41ns, wraps every 89478484971ns
+[    0.000037] clocksource: timer1: mask: 0xffffffff max_cycles: 0xffffffff, max_idle_ns: 79635851949 ns
+[    0.000050] OMAP clocksource: timer1 at 24000000 Hz
+[    0.000746] timer_probe: no matching timers found
+[    0.000971] Console: colour dummy device 80x30
+[    0.001001] WARNING: Your 'console=ttyO0' has been replaced by 'ttyS0'
+[    0.001009] This ensures that you still see kernel messages. Please
+[    0.001016] update your kernel commandline.
+[    0.001041] Calibrating delay loop... 995.32 BogoMIPS (lpj=1990656)
+[    0.046967] pid_max: default: 32768 minimum: 301
+[    0.047244] Security Framework initialized
+[    0.047265] Yama: becoming mindful.
+[    0.047307] AppArmor: AppArmor disabled by boot time parameter
+[    0.047507] Mount-cache hash table entries: 1024 (order: 0, 4096 bytes)
+[    0.047525] Mountpoint-cache hash table entries: 1024 (order: 0, 4096 bytes)
+[    0.048577] CPU: Testing write buffer coherency: ok
+[    0.049088] CPU0: thread -1, cpu 0, socket -1, mpidr 0
+[    0.063073] Setting up static identity map for 0x80100000 - 0x80100060
+[    0.070986] Hierarchical SRCU implementation.
+[    0.082856] EFI services will not be available.
+[    0.090993] smp: Bringing up secondary CPUs ...
+[    0.091016] smp: Brought up 1 node, 1 CPU
+[    0.091027] SMP: Total of 1 processors activated (995.32 BogoMIPS).
+[    0.091037] CPU: All CPU(s) started in SVC mode.
+[    0.092690] devtmpfs: initialized
+[    0.107291] VFP support v0.3: implementor 41 architecture 3 part 30 variant c rev 3
+[    0.107765] clocksource: jiffies: mask: 0xffffffff max_cycles: 0xffffffff, max_idle_ns: 7645041785100000 ns
+[    0.107796] futex hash table entries: 256 (order: 2, 16384 bytes)
+[    0.111873] pinctrl core: initialized pinctrl subsystem
+[    0.112706] DMI not present or invalid.
+[    0.113157] NET: Registered protocol family 16
+[    0.116358] DMA: preallocated 256 KiB pool for atomic coherent allocations
+[    0.141779] omap_hwmod: debugss: _wait_target_disable failed
+[    0.182423] cpuidle: using governor menu
+[    0.188355] OMAP GPIO hardware version 0.1
+[    0.201261] No ATAGs?
+[    0.201282] hw-breakpoint: debug architecture 0x4 unsupported.
+[    0.201631] omap4_sram_init:Unable to allocate sram needed to handle errata I688
+[    0.201647] omap4_sram_init:Unable to get sram pool needed to handle errata I688
+[    0.234193] edma 49000000.edma: TI EDMA DMA engine driver
+[    0.237637] SCSI subsystem initialized
+[    0.239465] usbcore: registered new interface driver usbfs
+[    0.239531] usbcore: registered new interface driver hub
+[    0.239653] usbcore: registered new device driver usb
+[    0.240224] omap_i2c 44e0b000.i2c: could not find pctldev for node /ocp/l4_wkup@44c00000/scm@210000/pinmux@800/pinmux_i2c0_pins, deferring probe
+[    0.241665] omap_i2c 4819c000.i2c: bus 2 rev0.11 at 100 kHz
+[    0.241930] media: Linux media interface: v0.10
+[    0.241986] Linux video capture interface: v2.00
+[    0.242167] pps_core: LinuxPPS API ver. 1 registered
+[    0.242179] pps_core: Software ver. 5.3.6 - Copyright 2005-2007 Rodolfo Giometti <giometti@linux.it>
+[    0.242206] PTP clock support registered
+[    0.242351] dmi: Firmware registration failed.
+[    0.242798] omap-mailbox 480c8000.mailbox: omap mailbox rev 0x400
+[    0.247315] Advanced Linux Sound Architecture Driver Initialized.
+[    0.248019] NetLabel: Initializing
+[    0.248036] NetLabel:  domain hash size = 128
+[    0.248044] NetLabel:  protocols = UNLABELED CIPSOv4 CALIPSO
+[    0.248133] NetLabel:  unlabeled traffic allowed by default
+[    0.251362] clocksource: Switched to clocksource timer1
+[    0.404138] VFS: Disk quotas dquot_6.6.0
+[    0.404263] VFS: Dquot-cache hash table entries: 1024 (order 0, 4096 bytes)
+[    0.416177] NET: Registered protocol family 2
+[    0.417085] TCP established hash table entries: 4096 (order: 2, 16384 bytes)
+[    0.417137] TCP bind hash table entries: 4096 (order: 3, 32768 bytes)
+[    0.417198] TCP: Hash tables configured (established 4096 bind 4096)
+[    0.417317] UDP hash table entries: 256 (order: 1, 8192 bytes)
+[    0.417344] UDP-Lite hash table entries: 256 (order: 1, 8192 bytes)
+[    0.417571] NET: Registered protocol family 1
+[    0.426541] RPC: Registered named UNIX socket transport module.
+[    0.426561] RPC: Registered udp transport module.
+[    0.426569] RPC: Registered tcp transport module.
+[    0.426577] RPC: Registered tcp NFSv4.1 backchannel transport module.
+[    0.526038] hw perfevents: no interrupt-affinity property for /pmu, guessing.
+[    0.526302] hw perfevents: enabled with armv7_cortex_a8 PMU driver, 5 counters available
+[    0.528277] audit: initializing netlink subsys (disabled)
+[    0.529510] audit: type=2000 audit(0.528:1): state=initialized audit_enabled=0 res=1
+[    0.529662] workingset: timestamp_bits=14 max_order=17 bucket_order=3
+[    0.535893] zbud: loaded
+[    0.543230] NFS: Registering the id_resolver key type
+[    0.543293] Key type id_resolver registered
+[    0.543303] Key type id_legacy registered
+[    0.543325] nfs4filelayout_init: NFSv4 File Layout Driver Registering...
+[    0.543761] fuse init (API version 7.26)
+[    0.544376] SGI XFS with ACLs, security attributes, realtime, no debug enabled
+[    0.547011] aufs 4.14-20180702
+[    0.555686] Key type asymmetric registered
+[    0.555710] Asymmetric key parser 'x509' registered
+[    0.555847] Block layer SCSI generic (bsg) driver version 0.4 loaded (major 244)
+[    0.560177] io scheduler noop registered
+[    0.560196] io scheduler deadline registered
+[    0.560604] io scheduler cfq registered (default)
+[    0.560619] io scheduler mq-deadline registered
+[    0.562160] pinctrl-single 44e10800.pinmux: 142 pins at pa f9e10800 size 568
+[    0.563625] gpio-of-helper ocp:cape-universal: ready
+[    0.565866] wkup_m3_ipc 44e11324.wkup_m3_ipc: could not get rproc handle
+[    0.567174] Serial: 8250/16550 driver, 6 ports, IRQ sharing disabled
+[    0.570890] 44e09000.serial: ttyS0 at MMIO 0x44e09000 (irq = 30, base_baud = 3000000) is a 8250
+[    1.273055] random: fast init done
+[    1.358836] console [ttyS0] enabled
+[    1.363650] 48024000.serial: ttyS2 at MMIO 0x48024000 (irq = 31, base_baud = 3000000) is a 8250
+[    1.374934] omap_rng 48310000.rng: Random Number Generator ver. 20
+[    1.382424] [drm] Initialized vgem 1.0.0 20120112 for virtual device on minor 0
+[    1.390045] usbcore: registered new interface driver udl
+[    1.399278] at24 2-0054: 32768 byte 24c256 EEPROM, writable, 1 bytes/write
+[    1.406638] at24 2-0055: 32768 byte 24c256 EEPROM, writable, 1 bytes/write
+[    1.413839] at24 2-0056: 32768 byte 24c256 EEPROM, writable, 1 bytes/write
+[    1.421015] at24 2-0057: 32768 byte 24c256 EEPROM, writable, 1 bytes/write
+[    1.431009] libphy: Fixed MDIO Bus: probed
+[    1.436129] tun: Universal TUN/TAP device driver, 1.6
+[    1.441589] CAN device driver interface
+[    1.499471] davinci_mdio 4a101000.mdio: davinci mdio revision 1.6, bus freq 1000000
+[    1.507220] davinci_mdio 4a101000.mdio: detected phy mask fffffffe
+[    1.513836] MDIO: davinci_mdio: dt: updated phy_id[0] from phy_mask[fffffffe]
+[    1.533565] libphy: 4a101000.mdio: probed
+[    1.537819] davinci_mdio 4a101000.mdio: phy[0]: device 4a101000.mdio:00, driver SMSC LAN8710/LAN8720
+[    1.548380] cpsw 4a100000.ethernet: Detected MACID = 84:eb:18:9c:13:da
+[    1.555248] cpsw 4a100000.ethernet: initialized cpsw ale version 1.4
+[    1.561685] cpsw 4a100000.ethernet: ALE Table size 1024
+[    1.566997] cpsw 4a100000.ethernet: cpts: overflow check period 1250 (jiffies)
+[    1.576722] ehci_hcd: USB 2.0 'Enhanced' Host Controller (EHCI) Driver
+[    1.583430] ehci-platform: EHCI generic platform driver
+[    1.588918] ehci-omap: OMAP-EHCI Host Controller driver
+[    1.594704] usbcore: registered new interface driver usb-storage
+[    1.603193] am335x-phy-driver 47401300.usb-phy: 47401300.usb-phy supply vcc not found, using dummy regulator
+[    1.615957] am335x-phy-driver 47401b00.usb-phy: 47401b00.usb-phy supply vcc not found, using dummy regulator
+[    1.630058] musb-hdrc musb-hdrc.1: MUSB HDRC host driver
+[    1.635512] musb-hdrc musb-hdrc.1: new USB bus registered, assigned bus number 1
+[    1.643291] usb usb1: New USB device found, idVendor=1d6b, idProduct=0002
+[    1.650159] usb usb1: New USB device strings: Mfr=3, Product=2, SerialNumber=1
+[    1.657440] usb usb1: Product: MUSB HDRC host driver
+[    1.662449] usb usb1: Manufacturer: Linux 4.14.53+ musb-hcd
+[    1.668070] usb usb1: SerialNumber: musb-hdrc.1
+[    1.673439] hub 1-0:1.0: USB hub found
+[    1.677396] hub 1-0:1.0: 1 port detected
+[    1.692448] omap_rtc 44e3e000.rtc: registered as rtc0
+[    1.698706] i2c /dev entries driver
+[    1.705043] omap_wdt: OMAP Watchdog Timer Rev 0x01: initial timeout 60 sec
+[    1.712493] softdog: initialized. soft_noboot=0 soft_margin=60 sec soft_panic=0 (nowayout=0)
+[    1.722141] cpuidle: enable-method property 'ti,am3352' found operations
+[    1.729466] sdhci: Secure Digital Host Controller Interface driver
+[    1.735758] sdhci: Copyright(c) Pierre Ossman
+[    1.740620] omap_hsmmc 48060000.mmc: Got CD GPIO
+[    1.823766] sdhci-pltfm: SDHCI platform and OF driver helper
+[    1.834874] ledtrig-cpu: registered to indicate activity on CPUs
+[    1.841565] omap-aes 53500000.aes: OMAP AES hw accel rev: 3.2
+[    1.847729] omap-aes 53500000.aes: will run requests pump with realtime priority
+[    1.857794] omap-sham 53100000.sham: hw accel on OMAP rev 4.3
+[    1.870631] hidraw: raw HID events driver (C) Jiri Kosina
+[    1.877361] usbcore: registered new interface driver usbhid
+[    1.883226] usbhid: USB HID core driver
+[    1.887317] mmc0: host does not support reading read-only switch, assuming write-enable
+[    1.895715] mmc0: new high speed SDHC card at address aaaa
+[    1.902339] mmcblk0: mmc0:aaaa SC16G 14.8 GiB 
+[    1.908667] remoteproc remoteproc0: wkup_m3 is available
+[    1.914471]  mmcblk0: p1 p2 p3 p4 < p5 p6 >
+[    1.925200] nf_conntrack version 0.5.0 (8192 buckets, 32768 max)
+[    1.931529] mmc1: new high speed MMC card at address 0001
+[    1.937971] mmcblk1: mmc1:0001 P1XXXX 3.60 GiB 
+[    1.938417] mmcblk1boot0: mmc1:0001 P1XXXX partition 1 2.00 MiB
+[    1.938821] mmcblk1boot1: mmc1:0001 P1XXXX partition 2 2.00 MiB
+[    1.943822] mmcblk1rpmb: mmc1:0001 P1XXXX partition 3 128 KiB
+[    1.950913]  mmcblk1:
+[    1.968137] wireguard: WireGuard 0.0.20180625 loaded. See www.wireguard.com for information.
+[    1.976978] wireguard: Copyright (C) 2015-2018 Jason A. Donenfeld <Jason@zx2c4.com>. All Rights Reserved.
+[    1.987037] ip_tables: (C) 2000-2006 Netfilter Core Team
+[    1.993648] NET: Registered protocol family 10
+[    2.004010] Segment Routing with IPv6
+[    2.007896] mip6: Mobile IPv6
+[    2.010888] NET: Registered protocol family 17
+[    2.015484] bridge: filtering via arp/ip/ip6tables is no longer available by default. Update your scripts to load br_netfilter if you need this.
+[    2.028624] can: controller area network core (rev 20170425 abi 9)
+[    2.035065] NET: Registered protocol family 29
+[    2.039679] Key type dns_resolver registered
+[    2.044136] mpls_gso: MPLS GSO support
+[    2.047947] NET: Registered protocol family 44
+[    2.052675] omap_voltage_late_init: Voltage driver support not added
+[    2.059583] ThumbEE CPU extension supported.
+[    2.063941] Registering SWP/SWPB emulation handler
+[    2.069763] registered taskstats version 1
+[    2.074104] zswap: loaded using pool lzo/zbud
+[    2.079570] ima: No TPM chip found, activating TPM-bypass! (rc=-19)
+[    2.086005] ima: Allocated hash algorithm: sha256
+[    2.103456] usb 1-1: new high-speed USB device number 2 using musb-hdrc
+[    2.137302] input: tps65217_pwr_but as /devices/platform/ocp/44e0b000.i2c/i2c-0/0-0024/tps65217-pwrbutton/input/input0
+[    2.148708] tps65217 0-0024: TPS65217 ID 0xe version 1.2
+[    2.154572] at24 0-0050: 32768 byte 24c256 EEPROM, writable, 1 bytes/write
+[    2.161648] omap_i2c 44e0b000.i2c: bus 0 rev0.11 at 400 kHz
+[    2.168915] remoteproc remoteproc0: powering up wkup_m3
+[    2.174310] remoteproc remoteproc0: Booting fw image am335x-pm-firmware.elf, size 217168
+[    2.182928] remoteproc remoteproc0: remote processor wkup_m3 is now up
+[    2.182945] wkup_m3_ipc 44e11324.wkup_m3_ipc: CM3 Firmware Version = 0x193
+[    2.199997] bone_capemgr bone_capemgr: Baseboard: 'A335BNLT,,BBG115080307'
+[    2.207092] bone_capemgr bone_capemgr: compatible-baseboard=ti,beaglebone-black - #slots=4
+[    2.244561] bone_capemgr bone_capemgr: slot #0: No cape found
+[    2.259703] usb 1-1: New USB device found, idVendor=1a40, idProduct=0101
+[    2.266538] usb 1-1: New USB device strings: Mfr=0, Product=1, SerialNumber=0
+[    2.273781] usb 1-1: Product: USB 2.0 Hub
+[    2.277847] bone_capemgr bone_capemgr: slot #1: No cape found
+[    2.284570] hub 1-1:1.0: USB hub found
+[    2.288634] hub 1-1:1.0: 4 ports detected
+[    2.304559] bone_capemgr bone_capemgr: slot #2: No cape found
+[    2.335643] bone_capemgr bone_capemgr: slot #3: No cape found
+[    2.341501] bone_capemgr bone_capemgr: initialized OK.
+[    2.353882] omap_rtc 44e3e000.rtc: setting system clock to 2000-01-01 00:00:00 UTC (946684800)
+[    2.362776] of_cfs_init
+[    2.365458] of_cfs_init: OK
+[    2.369046] ALSA device list:
+[    2.372119]   No soundcards found.
+[    2.388463] Freeing unused kernel memory: 8192K
+[    2.579606] usb 1-1.3: new high-speed USB device number 3 using musb-hdrc
+[    2.709500] usb 1-1.3: New USB device found, idVendor=148f, idProduct=5370
+[    2.720874] usb 1-1.3: New USB device strings: Mfr=1, Product=2, SerialNumber=3
+[    2.744780] usb 1-1.3: Product: 802.11 n WLAN
+[    2.754166] usb 1-1.3: Manufacturer: Ralink
+[    2.760698] usb 1-1.3: SerialNumber: 1.0
+starting version 234
+CP437: Invalid argument
+fsck.fat 4.1 (2017-01-24)
+0x25: Dirty bit is set. Fs was not properly unmounted and some data may be corrupt.
+ Automatically removing dirty bit.
+Performing changes.
+/dev/disk/by-label/resin-boot: 15 files, 289/20431 clusters
+resin-rootA: recovering journal
+resin-rootA: clean, 6872/39936 files, 278911/319488 blocks
+resin-rootB: recovering journal
+resin-rootB: clean, 51/39936 files, 15481/319488 blocks
+resin-state: recovering journal
+resin-state: clean, 54/5136 files, 1891/20480 blocks
+[    5.847931] EXT4-fs (mmcblk0p2): mounted filesystem with ordered data mode. Opts: (null)
+[    6.043254] EXT4-fs (mmcblk0p5): mounted filesystem with ordered data mode. Opts: (null)
+[    7.155730] EXT4-fs (mmcblk0p2): re-mounted. Opts: (null)
+[    7.196260] aufs au_opts_verify:1622:init[1]: dirperm1 breaks the protection by the permission bits on the lower branch
+[33mWARN[0m[0000] Couldn't run auplink before unmount /tmp/docker-aufs-union807518002: exec: "auplink": executable file not found in $PATH 
+[    7.652737] systemd[1]: System time before build time, advancing clock.
+[    7.727857] systemd[1]: systemd 234 running in system mode. (-PAM -AUDIT -SELINUX +IMA -APPARMOR +SMACK +SYSVINIT +UTMP -LIBCRYPTSETUP -GCRYPT -GNUTLS +ACL +XZ -LZ4 -SECCOMP +BLKID -ELFUTILS +KMOD -IDN2 -IDN default-hierarchy=hybrid)
+[    7.749785] systemd[1]: Detected architecture arm.
+
+Welcome to [1mbalenaOS 2.29.2+rev3[0m!
+
+[    7.776269] systemd[1]: No hostname configured.
+[    7.781183] systemd[1]: Set hostname to <localhost>.
+[    7.806767] systemd[1]: Hardware watchdog 'OMAP Watchdog', version 0
+[    7.814841] systemd[1]: Set hardware watchdog to 10s.
+[    8.583652] systemd[1]: Unnecessary job for /dev/disk/by-label/resin-state was removed.
+[    8.595269] systemd[1]: Listening on udev Control Socket.
+[[0;32m  OK  [0m] Listening on udev Control Socket.
+[    8.612520] systemd[1]: Listening on Syslog Socket.
+[[0;32m  OK  [0m] Listening on Syslog Socket.
+[    8.633383] systemd[1]: Created slice User and Session Slice.
+[[0;32m  OK  [0m] Created slice User and Session Slice.
+[[0;32m  OK  [0m] Reached target Remote File Systems.
+[[0;32m  OK  [0m] Started Forward Password Requests to Wall Directory Watch.
+[[0;32m  OK  [0m] Listening on Journal Socket (/dev/log).
+[[0;32m  OK  [0m] Listening on Journal Audit Socket.
+[[0;32m  OK  [0m] Listening on udev Kernel Socket.
+[[0;32m  OK  [0m] Listening on /dev/initctl Compatibility Named Pipe.
+[[0;32m  OK  [0m] Reached target Swap.
+[[0;32m  OK  [0m] Listening on Journal Socket.
+[[0;32m  OK  [0m] Created slice System Slice.
+         Starting Resin boot partition mount service...
+         Mounting POSIX Message Queue File System...
+         Starting Create list of required st…ce nodes for the current kernel...
+         Starting Remount Root and Kernel File Systems...
+         Starting Journal Service...
+[[0;32m  OK  [0m] Created slice system-resin\x2dinfo.slice.
+         Starting Resin active root partition mount service...
+[[0;32m  OK  [0m] Created slice system-serial\x2dgetty.slice.
+         Mounting Kernel Debug File System...
+         Mounting Temporary Directory (/tmp)...
+         Mounting Kernel Configuration File System...
+         Mounting FUSE Control File System...
+         Starting Apply Kernel Variables...
+         Starting Setup Virtual Console...
+[[0;32m  OK  [0m] Created slice system-getty.slice.
+         Starting Resin inactive root partition mount service...
+         Starting Resin state partition mount service...
+[[0;32m  OK  [0m] Reached target Slices.
+[[0;32m  OK  [0m] Mounted Kernel Debug File System.
+[[0;32m  OK  [0m] Mounted Kernel Configuration File System.
+[[0;32m  OK  [0m] Mounted FUSE Control File System.
+[[0;32m  OK  [0m] Mounted POSIX Message Queue File System.
+[[0;32m  OK  [0m] Mounted Temporary Directory (/tmp).
+[[0;32m  OK  [0m] Started Journal Service.
+[[0;32m  OK  [0m] Started Resin boot partition mount service.
+[[0;32m  OK  [0m] Started Create list of required sta…vice nodes for the current kernel.
+[[0;32m  OK  [0m] Started Remount Root and Kernel File Systems.
+[[0;32m  OK  [0m] Started Apply Kernel Variables.
+[[0;32m  OK  [0m] Started Setup Virtual Console.
+[[0;32m  OK  [0m] Started Resin state partition mount service.
+         Starting udev Coldplug all Devices...
+         Starting Create Static Device Nodes in /dev...
+         Starting OS configuration device key service...
+         Starting Expand resin-data partition...
+[[0;32m  OK  [0m] Started Create Static Device Nodes in /dev.
+[[0;32m  OK  [0m] Reached target Local File Systems (Pre).
+         Mounting /var/volatile...
+[[0;32m  OK  [0m] Mounted /var/volatile.
+         Starting Bind mount volatile /var/cache...
+         Starting Bind mount volatile /srv...
+         Starting Bind mount volatile /var/lib...
+         Starting Bind mount volatile /var/spool...
+[   11.029060] random: crng init done
+[[0;32m  OK  [0m] Started Bind mount volatile /var/cache.
+[[0;32m  OK  [0m] Started Bind mount volatile /srv.
+[[0;32m  OK  [0m] Started Bind mount volatile /var/lib.
+[[0;32m  OK  [0m] Started Bind mount volatile /var/spool.
+[[0;32m  OK  [0m] Reached target Local File Systems.
+         Starting Tell Plymouth To Write Out Runtime Data...
+         Starting Create Volatile Files and Directories...
+[[0;32m  OK  [0m] Started Expand resin-data partition.
+[[0;32m  OK  [0m] Started Tell Plymouth To Write Out Runtime Data.
+         Starting Resin data partition mount service...
+[[0;32m  OK  [0m] Started Create Volatile Files and Directories.
+         Starting Bind mount for /etc/resin-supervisor...
+         Starting Bind mount for /etc/udev/rules.d...
+         Starting Bind mount for /etc/hostname...
+         Starting Bind mount for /home/root/.rnd...
+         Starting Bind mount for /var/lib/NetworkManager...
+         Starting Bind mount for /etc/docker...
+[   12.522314] EXT4-fs (mmcblk0p6): mounted filesystem with ordered data mode. Opts: (null)
+         Starting Bind mount for /etc/dropbear...
+         Starting Bind mount for /var/lib/systemd...
+         Starting Update UTMP about System Boot/Shutdown...
+         Starting Bind mount for /etc/NetworkManager/system-connections...
+         Starting Bind mount for /home/root/.docker...
+         Starting Bind mount for /var/lib/chrony...
+         Starting Bind mount for /home/root/.ssh...
+         Starting Bind mount for /etc/NetworkManager/conf.d...
+         Starting Bind mount for /etc/openvpn...
+[[0;32m  OK  [0m] Started OS configuration device key service.
+[[0;32m  OK  [0m] Started Resin data partition mount service.
+[[0;32m  OK  [0m] Started Bind mount for /etc/resin-supervisor.
+[[0;32m  OK  [0m] Started Bind mount for /etc/udev/rules.d.
+[[0;32m  OK  [0m] Started udev Coldplug all Devices.
+[[0;32m  OK  [0m] Started Bind mount for /etc/hostname.
+[[0;32m  OK  [0m] Started Bind mount for /home/root/.rnd.
+[[0;32m  OK  [0m] Started Bind mount for /var/lib/NetworkManager.
+[[0;32m  OK  [0m] Started Bind mount for /etc/docker.
+[[0;32m  OK  [0m] Started Bind mount for /etc/dropbear.
+[[0;32m  OK  [0m] Started Bind mount for /var/lib/systemd.
+[[0;32m  OK  [0m] Started Bind mount for /etc/NetworkManager/system-connections.
+[[0;32m  OK  [0m] Started Bind mount for /home/root/.docker.
+[[0;32m  OK  [0m] Started Bind mount for /var/lib/chrony.
+[[0;32m  OK  [0m] Started Bind mount for /home/root/.ssh.
+[[0;32m  OK  [0m] Started Bind mount for /etc/NetworkManager/conf.d.
+[[0;32m  OK  [0m] Started Bind mount for /etc/openvpn.
+[[0;32m  OK  [0m] Started Update UTMP about System Boot/Shutdown.
+         Starting Load/Save Random Seed...
+         Starting udev Wait for Complete Device Initialization...
+         Starting udev Kernel Device Manager...
+         Mounting resin-data bind mount...
+         Mounting Docker data mountpoint...
+[[0;32m  OK  [0m] Mounted resin-data bind mount.
+[[0;32m  OK  [0m] Mounted Docker data mountpoint.
+[[0;32m  OK  [0m] Started udev Kernel Device Manager.
+[[0;32m  OK  [0m] Started Load/Save Random Seed.
+[[0;32m  OK  [0m] Found device /dev/ttyS0.
+[[0;32m  OK  [0m] Listening on Load/Save RF Kill Switch Status /dev/rfkill Watch.
+[   19.128910] EXT4-fs (mmcblk0p3): mounted filesystem with ordered data mode. Opts: (null)
+[   19.259737] usb 1-1.3: reset high-speed USB device number 3 using musb-hdrc
+[[0;32m  OK  [0m] Started Resin inactive root partition mount service.
+[   19.418423] ieee80211 phy0: rt2x00_set_rt: Info - RT chipset 5390, rev 0502 detected
+[[0;32m  OK  [0m] Started Resin active root partition mount service.
+[   19.567974] ieee80211 phy0: rt2x00_set_rf: Info - RF chipset 5370 detected
+         Starting Load/Save RF Kill Switch Status...
+[   19.638704] usbcore: registered new interface driver rt2800usb
+[[0;32m  OK  [0m] Started Load/Save RF Kill Switch Status.
+[[0;32m  OK  [0m] Started udev Wait for Complete Device Initialization.
+         Starting Show Plymouth Boot Screen...
+[[0;32m  OK  [0m] Reached target System Initialization.
+[[0;32m  OK  [0m] Listening on dropbear.socket.
+
+balenaOS 2.29.2 68e0f47 ttyS0
+
+68e0f47 login: [   29.255931] IPv6: ADDRCONF(NETDEV_UP): eth0: link is not ready
+[   29.350293] net eth0: initializing cpsw version 1.12 (0)
+[   29.452686] SMSC LAN8710/LAN8720 4a101000.mdio:00: attached PHY driver [SMSC LAN8710/LAN8720] (mii_bus:phy_addr=4a101000.mdio:00, irq=POLL)
+[   29.533321] IPv6: ADDRCONF(NETDEV_UP): eth0: link is not ready
+[   30.120110] IPv6: ADDRCONF(NETDEV_UP): wlan0: link is not ready
+[   30.176328] ieee80211 phy0: rt2x00lib_request_firmware: Info - Loading firmware file 'rt2870.bin'
+[   30.243939] ieee80211 phy0: rt2x00lib_request_firmware: Info - Firmware detected - version: 0.36
+[   30.736056] IPv6: ADDRCONF(NETDEV_UP): wlan0: link is not ready
+[   31.022175] Initializing XFRM netlink socket
+[   31.179261] IPv6: ADDRCONF(NETDEV_UP): wlan0: link is not ready
+[   31.255593] Netfilter messages via NETLINK v0.30.
+[   31.294428] ctnetlink v0.93: registering with nfnetlink.
+[   31.429639] IPv6: ADDRCONF(NETDEV_UP): balena0: link is not ready
+[   32.385603] IPv6: ADDRCONF(NETDEV_UP): wlan0: link is not ready
+[   32.928978] Bridge firewalling registered
+[   33.204366] audit: type=1325 audit(946684832.112:2): table=filter family=2 entries=4
+[   33.232987] audit: type=1300 audit(946684832.112:2): arch=40000028 syscall=294 per=800000 success=yes exit=0 a0=4 a1=0 a2=40 a3=1d86738 items=0 ppid=640 pid=742 auid=4294967295 uid=0 gid=0 euid=0 suid=0 fsuid=0 egid=0 sgid=0 fsgid=0 tty=(none) ses=4294967295 comm="iptables" exe="/usr/sbin/xtables-multi" key=(null)
+[   33.329485] audit: type=1327 audit(946684832.112:2): proctitle=2F7573722F7362696E2F69707461626C6573002D2D77616974002D740066696C746572002D4E00444F434B45522D55534552
+[   33.377986] audit: type=1325 audit(946684832.256:3): table=filter family=2 entries=6
+[   33.404685] audit: type=1300 audit(946684832.256:3): arch=40000028 syscall=294 per=800000 success=yes exit=0 a0=4 a1=0 a2=40 a3=b2cce8 items=0 ppid=640 pid=746 auid=4294967295 uid=0 gid=0 euid=0 suid=0 fsuid=0 egid=0 sgid=0 fsgid=0 tty=(none) ses=4294967295 comm="iptables" exe="/usr/sbin/xtables-multi" key=(null)
+[   33.473492] audit: type=1327 audit(946684832.256:3): proctitle=2F7573722F7362696E2F69707461626C6573002D2D77616974002D4100444F434B45522D55534552002D6A0052455455524E
+[   33.508970] audit: type=1325 audit(946684832.368:4): table=filter family=2 entries=7
+[   33.522845] audit: type=1300 audit(946684832.368:4): arch=40000028 syscall=294 per=800000 success=yes exit=0 a0=4 a1=0 a2=40 a3=866e48 items=0 ppid=640 pid=749 auid=4294967295 uid=0 gid=0 euid=0 suid=0 fsuid=0 egid=0 sgid=0 fsgid=0 tty=(none) ses=4294967295 comm="iptables" exe="/usr/sbin/xtables-multi" key=(null)
+[   33.577752] audit: type=1327 audit(946684832.368:4): proctitle=2F7573722F7362696E2F69707461626C6573002D2D77616974002D4900464F5257415244002D6A00444F434B45522D55534552
+[   34.199532] IPv6: ADDRCONF(NETDEV_UP): wlan0: link is not ready
+[   34.905405] audit: type=1325 audit(946684833.812:5): table=nat family=2 entries=5
+[   36.098239] wlan0: authenticate with b0:55:08:23:21:4a
+[   36.144409] wlan0: send auth to b0:55:08:23:21:4a (try 1/3)
+[   36.155565] wlan0: authenticated
+[   36.187595] wlan0: associate with b0:55:08:23:21:4a (try 1/3)
+[   36.210257] wlan0: RX AssocResp from b0:55:08:23:21:4a (capab=0x1411 status=0 aid=6)
+[   36.243837] wlan0: associated
+[   36.442407] IPv6: ADDRCONF(NETDEV_CHANGE): wlan0: link becomes ready
+[   37.227914] IPv6: ADDRCONF(NETDEV_UP): supervisor0: link is not ready
+[   38.602347] kauditd_printk_skb: 80 callbacks suppressed
+[   38.602360] audit: type=1325 audit(946684837.508:32): table=filter family=2 entries=26
+[   38.642432] audit: type=1300 audit(946684837.508:32): arch=40000028 syscall=294 per=c00000 success=yes exit=0 a0=5 a1=0 a2=40 a3=4ad988 items=0 ppid=641 pid=888 auid=4294967295 uid=0 gid=0 euid=0 suid=0 fsuid=0 egid=0 sgid=0 fsgid=0 tty=(none) ses=4294967295 comm="iptables" exe="/usr/sbin/xtables-multi" key=(null)
+[   38.754380] audit: type=1327 audit(946684837.508:32): proctitle=2F7573722F7362696E2F69707461626C6573002D2D77616974002D4900464F5257415244002D6F0062722D306137383462303366303865002D6A00444F434B4552
+[   38.826096] audit: type=1325 audit(946684837.700:33): table=filter family=2 entries=27
+[   38.860726] audit: type=1300 audit(946684837.700:33): arch=40000028 syscall=294 per=c00000 success=yes exit=0 a0=5 a1=0 a2=40 a3=19b24b0 items=0 ppid=641 pid=891 auid=4294967295 uid=0 gid=0 euid=0 suid=0 fsuid=0 egid=0 sgid=0 fsgid=0 tty=(none) ses=4294967295 comm="iptables" exe="/usr/sbin/xtables-multi" key=(null)
+[   38.963243] audit: type=1327 audit(946684837.700:33): proctitle=2F7573722F7362696E2F69707461626C6573002D2D77616974002D4900464F5257415244002D6F0062722D306137383462303366303865002D6D00636F6E6E747261636B002D2D637473746174650052454C415445442C45535441424C4953484544002D6A00414343455054
+[   39.064878] audit: type=1325 audit(946684837.904:34): table=filter family=2 entries=28
+[   39.091327] audit: type=1300 audit(946684837.904:34): arch=40000028 syscall=294 per=c00000 success=yes exit=0 a0=5 a1=0 a2=40 a3=1353e78 items=0 ppid=641 pid=896 auid=4294967295 uid=0 gid=0 euid=0 suid=0 fsuid=0 egid=0 sgid=0 fsgid=0 tty=(none) ses=4294967295 comm="iptables" exe="/usr/sbin/xtables-multi" key=(null)
+[   39.200899] audit: type=1327 audit(946684837.904:34): proctitle=2F7573722F7362696E2F69707461626C6573002D2D77616974002D4400464F5257415244002D6A00444F434B45522D49534F4C4154494F4E
+[   39.252766] audit: type=1325 audit(946684837.956:35): table=filter family=2 entries=27
+[   39.504204] IPv6: ADDRCONF(NETDEV_UP): br-0a784b03f08e: link is not ready
+
+balenaOS 2.29.2 68e0f47 ttyS0
+
+68e0f47 login: debian
+Password: 
+Login incorrect
+
+68e0f47 login: ubuntu
+Password: 
+Login incorrect
+
+68e0f47 login: ^[[A^[[A^[[A^[[A^[[A^[[A^[[A^[[A^[[A^[[A^[[A^[[A^[[A^[[A^[[A^[[A^[[A^[[A^[[A^[[A^[[A^[[A^[[A^[[A^[[A^[[A^[[A^[[A^[[A^[[A^[[A^[[A^[[A^[[A^[[A^[[A^[[A^[[A^[[A^[[A^[[A^[[A^[[B^[[B^[[B^[[B^[[B^[[B^[[B^[[B^[[B^[[B^[[B^[[B^[[B^[[B^[[B^[[B^[[B^[[B^[[B^[[B^[[B^[[B^[[B^[[B^[[B^[[B^[[B^[[B^[[B^[[B[   69.279424] kauditd_printk_skb: 89 callbacks suppressed
+[   69.279436] audit: type=1325 audit(1560719709.827:65): table=filter family=2 entries=32
+[   69.311168] audit: type=1300 audit(1560719709.827:65): arch=40000028 syscall=294 per=c00000 success=yes exit=0 a0=4 a1=0 a2=40 a3=acb4c0 items=0 ppid=1099 pid=1100 auid=4294967295 uid=0 gid=0 euid=0 suid=0 fsuid=0 egid=0 sgid=0 fsgid=0 tty=(none) ses=4294967295 comm="iptables" exe="/usr/sbin/xtables-multi" key=(null)
+[   69.386423] audit: type=1327 audit(1560719709.827:65): proctitle=69707461626C6573002D4900494E505554002D7000746370002D2D64706F7274003438343834002D6900726573696E2D76706E002D6A00414343455054
+[   69.706559] audit: type=1325 audit(1560719710.255:66): table=filter family=2 entries=33
+[   69.722766] audit: type=1300 audit(1560719710.255:66): arch=40000028 syscall=294 per=c00000 success=yes exit=0 a0=4 a1=0 a2=40 a3=19d1650 items=0 ppid=1103 pid=1104 auid=4294967295 uid=0 gid=0 euid=0 suid=0 fsuid=0 egid=0 sgid=0 fsgid=0 tty=(none) ses=4294967295 comm="iptables" exe="/usr/sbin/xtables-multi" key=(null)
+[   69.801902] audit: type=1327 audit(1560719710.255:66): proctitle=69707461626C6573002D4900494E505554002D7000746370002D2D64706F7274003438343834002D690074756E30002D6A00414343455054
+^[[6;2~^[[5;2~[   70.111306] audit: type=1325 audit(1560719710.659:67): table=filter family=2 entries=34
+[   70.128091] audit: type=1300 audit(1560719710.659:67): arch=40000028 syscall=294 per=c00000 success=yes exit=0 a0=4 a1=0 a2=40 a3=a15858 items=0 ppid=1107 pid=1108 auid=4294967295 uid=0 gid=0 euid=0 suid=0 fsuid=0 egid=0 sgid=0 fsgid=0 tty=(none) ses=4294967295 comm="iptables" exe="/usr/sbin/xtables-multi" key=(null)
+[   70.192881] audit: type=1327 audit(1560719710.659:67): proctitle=69707461626C6573002D4900494E505554002D7000746370002D2D64706F7274003438343834002D6900646F636B657230002D6A00414343455054
+^[[5;2~^[[5;2~[   70.855949] audit: type=1325 audit(1560719711.403:68): table=filter family=2 entries=35
+^[[5;2~
+
+68e0f47 login: debian
+Password: 
+
+Login tim
+balenaOS 2.29.2 68e0f47 ttyS0
+
+68e0f47 login: root
+7[r[999;999H[6n8root@68e0f47:~# lsblk
+NAME         MAJ:MIN RM  SIZE RO TYPE MOUNTPOINT
+mmcblk0      179:0    0 14.9G  0 disk 
+|-mmcblk0p1  179:1    0   40M  0 part /mnt/boot
+|-mmcblk0p2  179:2    0  312M  0 part /mnt/sysroot/active
+|-mmcblk0p3  179:3    0  312M  0 part /mnt/sysroot/inactive
+|-mmcblk0p4  179:4    0    1K  0 part 
+|-mmcblk0p5  179:5    0   20M  0 part /mnt/state
+`-mmcblk0p6  179:6    0 14.2G  0 part /mnt/data
+mmcblk1      179:8    0  3.6G  0 disk 
+mmcblk1boot0 179:16   0    2M  1 disk 
+mmcblk1boot1 179:24   0    2M  1 disk 
+mmcblk1rpmb  179:32   0  128K  0 disk 
+root@68e0f47:~# ifconfig 
+balena0   Link encap:Ethernet  HWaddr 02:42:F1:47:3E:0C  
+          inet addr:10.114.101.1  Bcast:10.114.101.255  Mask:255.255.255.0
+          UP BROADCAST MULTICAST  MTU:1500  Metric:1
+          RX packets:0 errors:0 dropped:0 overruns:0 frame:0
+          TX packets:0 errors:0 dropped:0 overruns:0 carrier:0
+          collisions:0 txqueuelen:0 
+          RX bytes:0 (0.0 B)  TX bytes:0 (0.0 B)
+
+br-0a784b03f08e Link encap:Ethernet  HWaddr 02:42:09:F4:A0:50  
+          inet addr:172.18.0.1  Bcast:172.18.255.255  Mask:255.255.0.0
+          UP BROADCAST MULTICAST  MTU:1500  Metric:1
+          RX packets:0 errors:0 dropped:0 overruns:0 frame:0
+          TX packets:0 errors:0 dropped:0 overruns:0 carrier:0
+          collisions:0 txqueuelen:0 
+          RX bytes:0 (0.0 B)  TX bytes:0 (0.0 B)
+
+eth0      Link encap:Ethernet  HWaddr 84:EB:18:9C:13:DA  
+          UP BROADCAST MULTICAST  MTU:1500  Metric:1
+          RX packets:0 errors:0 dropped:0 overruns:0 frame:0
+          TX packets:0 errors:0 dropped:0 overruns:0 carrier:0
+          collisions:0 txqueuelen:1000 
+          RX bytes:0 (0.0 B)  TX bytes:0 (0.0 B)
+          Interrupt:46 
+
+lo        Link encap:Local Loopback  
+          inet addr:127.0.0.1  Mask:255.0.0.0
+          inet6 addr: ::1%121/128 Scope:Host
+          UP LOOPBACK RUNNING  MTU:65536  Metric:1
+          RX packets:276 errors:0 dropped:0 overruns:0 frame:0
+          TX packets:276 errors:0 dropped:0 overruns:0 carrier:0
+          collisions:0 txqueuelen:1000 
+          RX bytes:23781 (23.2 KiB)  TX bytes:23781 (23.2 KiB)
+
+resin-dns Link encap:Ethernet  HWaddr E6:A6:20:1A:F4:FE  
+          inet addr:10.114.102.1  Bcast:0.0.0.0  Mask:255.255.255.0
+          inet6 addr: fe80::e4a6:20ff:fe1a:f4fe%121/64 Scope:Link
+          UP BROADCAST RUNNING MULTICAST  MTU:1500  Metric:1
+          RX packets:0 errors:0 dropped:0 overruns:0 frame:0
+          TX packets:145 errors:0 dropped:0 overruns:0 carrier:0
+          collisions:0 txqueuelen:1000 
+          RX bytes:0 (0.0 B)  TX bytes:22573 (22.0 KiB)
+
+supervisor0 Link encap:Ethernet  HWaddr 02:42:A6:85:B1:C8  
+          inet addr:172.17.0.1  Bcast:172.17.255.255  Mask:255.255.0.0
+          UP BROADCAST MULTICAST  MTU:1500  Metric:1
+          RX packets:0 errors:0 dropped:0 overruns:0 frame:0
+          TX packets:0 errors:0 dropped:0 overruns:0 carrier:0
+          collisions:0 txqueuelen:0 
+          RX bytes:0 (0.0 B)  TX bytes:0 (0.0 B)
+
+wlan0     Link encap:Ethernet  HWaddr 00:19:86:51:5F:89  
+          inet addr:192.168.1.102  Bcast:192.168.1.255  Mask:255.255.255.0
+          inet6 addr: fe80::b2ef:7b3b:755c:b159%121/64 Scope:Link
+          UP BROADCAST RUNNING MULTICAST  MTU:1500  Metric:1
+          RX packets:286 errors:0 dropped:0 overruns:0 frame:0
+          TX packets:467 errors:0 dropped:0 overruns:0 carrier:0
+          collisions:0 txqueuelen:1000 
+          RX bytes:96440 (94.1 KiB)  TX bytes:73334 (71.6 KiB)
+
+root@68e0f47:~# cat /mnt/boot/config.json 
+{"apiEndpoint":"https://api.balena-cloud.com","appUpdatePollInterval":"900000","applicationId":1345581,"applicationName":"bbtest","deltaEndpoint":"https://delta.balena-cloud.com","deviceApiKey":"02e1d5b0cf3c4a70082cade1024fc17f","deviceApiKeys":{"api.balena-cloud.com":"02e1d5b0cf3c4a70082cade1024fc17f"},"deviceType":"beaglebone-green","listenPort":48484,"mixpanelToken":"9ef939ea64cb6cd8bbc96af72345d70d","os":{"sshKeys":["ssh-rsa AAAAB3NzaC1yc2EAAAADAQABAAABAQDb6MO7mLf5kXjRgTsaDzAH3ee74if4Endy/wpcq2oRohqvMJZCCdlkC/1O1bQadhOREyI7Bu0yww52EEuZCBxGwt4vG4kl6bP9Ky7JBN5neG/srrrG4ezWkn2I9lz+MNqazT6TmzpBp1gan3CE0IVQRmdoaSW0V/n3oAucfN0tx0RZ7Zkn5CqnzNfLvTGSzlGM8g2Sfqpd3lCEIrQJFlagOqPW2eBB9FQrI+i8+cwM2iny25h4Fl7yiZIQ579hEHNDM8sCsrSfmApbpTnL7uNJM2gsJlpMNnrQjPAN16zViOmvgKB/BwuuvzGYMSVXRA/vb5GVhcPsAUT0sE1hgaEb thomas@hpspectre"]},"pubnubPublishKey":"","pubnubSubscribeKey":"","registryEndpoint":"registry2.balena-cloud.com","userId":44854,"username":"thomasr","vpnEndpoint":"vpn.balena-cloud.com","vpnPort":443,"uuid":"68e0f47712b3cf759fe95eb8d5885ad6","registered_at":1559091298783,"deviceId":1631881}root@68e0f47:~# q
+-sh: q: command not found
+root@68e0f47:~# joun rnalctl -fa 
+-- Logs begin at Sat 2000-01-01 00:00:18 UTC. --
+Jun 16 21:17:57 68e0f47 prepare-openvpn[1246]: prepare-openvpn: [INFO] Resin.io VPN authentication.
+Jun 16 21:17:57 68e0f47 systemd[1]: Started Prepare OpenVPN.
+Jun 16 21:17:57 68e0f47 systemd[1]: Started OpenVPN.
+Jun 16 21:17:57 68e0f47 openvpn[1250]: Sun Jun 16 21:17:57 2019 WARNING: file '/var/volatile/vpn-auth' is group or others accessible
+Jun 16 21:17:57 68e0f47 openvpn[1250]: Sun Jun 16 21:17:57 2019 OpenVPN 2.4.3 arm-poky-linux-gnueabi [SSL (OpenSSL)] [LZO] [LZ4] [EPOLL] [MH/PKTINFO] [AEAD] built on Nov 23 2018
+Jun 16 21:17:57 68e0f47 openvpn[1250]: Sun Jun 16 21:17:57 2019 library versions: OpenSSL 1.0.2o  27 Mar 2018, LZO 2.10
+Jun 16 21:17:57 68e0f47 openvpn[1250]: Sun Jun 16 21:17:57 2019 NOTE: the current --script-security setting may allow this configuration to call user-defined scripts
+Jun 16 21:17:57 68e0f47 openvpn[1250]: Sun Jun 16 21:17:57 2019 TCP/UDP: Preserving recently used remote address: [AF_INET]34.237.229.125:443
+Jun 16 21:17:57 68e0f47 openvpn[1250]: Sun Jun 16 21:17:57 2019 Socket Buffers: R=[87380->87380] S=[16384->16384]
+Jun 16 21:17:57 68e0f47 openvpn[1250]: Sun Jun 16 21:17:57 2019 Attempting to establish TCP connection with [AF_INET]34.237.229.125:443 [nonblock]
+Jun 16 21:17:58 68e0f47 openvpn[1250]: Sun Jun 16 21:17:58 2019 TCP connection established with [AF_INET]34.237.229.125:443
+Jun 16 21:17:58 68e0f47 openvpn[1250]: Sun Jun 16 21:17:58 2019 TCP_CLIENT link local: (not bound)
+Jun 16 21:17:58 68e0f47 openvpn[1250]: Sun Jun 16 21:17:58 2019 TCP_CLIENT link remote: [AF_INET]34.237.229.125:443
+Jun 16 21:17:58 68e0f47 openvpn[1250]: Sun Jun 16 21:17:58 2019 NOTE: UID/GID downgrade will be delayed because of --client, --pull, or --up-delay
+Jun 16 21:17:58 68e0f47 openvpn[1250]: Sun Jun 16 21:17:58 2019 TLS: Initial packet from [AF_INET]34.237.229.125:443, sid=7f0edfe4 0727a311
+Jun 16 21:17:58 68e0f47 openvpn[1250]: Sun Jun 16 21:17:58 2019 WARNING: this configuration may cache passwords in memory -- use the auth-nocache option to prevent this
+Jun 16 21:17:59 68e0f47 openvpn[1250]: Sun Jun 16 21:17:59 2019 VERIFY OK: depth=1, C=AU, ST=Some-State, O=Internet Widgits Pty Ltd
+Jun 16 21:17:59 68e0f47 openvpn[1250]: Sun Jun 16 21:17:59 2019 VERIFY KU OK
+Jun 16 21:17:59 68e0f47 openvpn[1250]: Sun Jun 16 21:17:59 2019 Validating certificate extended key usage
+Jun 16 21:17:59 68e0f47 openvpn[1250]: Sun Jun 16 21:17:59 2019 ++ Certificate has EKU (str) TLS Web Server Authentication, expects TLS Web Server Authentication
+Jun 16 21:17:59 68e0f47 openvpn[1250]: Sun Jun 16 21:17:59 2019 VERIFY EKU OK
+Jun 16 21:17:59 68e0f47 openvpn[1250]: Sun Jun 16 21:17:59 2019 VERIFY OK: depth=0, C=US, ST=WA, L=Seattle, O=Resin.io, OU=VPN, CN=ResinVPN
+Jun 16 21:17:59 68e0f47 openvpn[1250]: Sun Jun 16 21:17:59 2019 Control Channel: TLSv1.2, cipher TLSv1/SSLv3 ECDHE-RSA-AES256-GCM-SHA384, 2048 bit RSA
+Jun 16 21:17:59 68e0f47 openvpn[1250]: Sun Jun 16 21:17:59 2019 [ResinVPN] Peer Connection Initiated with [AF_INET]34.237.229.125:443
+Jun 16 21:18:01 68e0f47 openvpn[1250]: Sun Jun 16 21:18:01 2019 SENT CONTROL [ResinVPN]: 'PUSH_REQUEST' (status=1)
+Jun 16 21:18:01 68e0f47 openvpn[1250]: Sun Jun 16 21:18:01 2019 AUTH: Received control message: AUTH_FAILED
+Jun 16 21:18:01 68e0f47 openvpn[1250]: Sun Jun 16 21:18:01 2019 SIGTERM[soft,auth-failure] received, process exiting
+Jun 16 21:18:11 68e0f47 systemd[1]: openvpn.service: Service hold-off time over, scheduling restart.
+Jun 16 21:18:11 68e0f47 systemd[1]: Stopped OpenVPN.
+Jun 16 21:18:11 68e0f47 systemd[1]: Starting Prepare OpenVPN...
+Jun 16 21:18:11 68e0f47 prepare-openvpn[1254]: prepare-openvpn: [INFO] Resin.io VPN authentication.
+Jun 16 21:18:11 68e0f47 systemd[1]: Started Prepare OpenVPN.
+Jun 16 21:18:11 68e0f47 systemd[1]: Started OpenVPN.
+Jun 16 21:18:12 68e0f47 openvpn[1258]: Sun Jun 16 21:18:12 2019 WARNING: file '/var/volatile/vpn-auth' is group or others accessible
+Jun 16 21:18:12 68e0f47 openvpn[1258]: Sun Jun 16 21:18:12 2019 OpenVPN 2.4.3 arm-poky-linux-gnueabi [SSL (OpenSSL)] [LZO] [LZ4] [EPOLL] [MH/PKTINFO] [AEAD] built on Nov 23 2018
+Jun 16 21:18:12 68e0f47 openvpn[1258]: Sun Jun 16 21:18:12 2019 library versions: OpenSSL 1.0.2o  27 Mar 2018, LZO 2.10
+Jun 16 21:18:12 68e0f47 openvpn[1258]: Sun Jun 16 21:18:12 2019 NOTE: the current --script-security setting may allow this configuration to call user-defined scripts
+Jun 16 21:18:12 68e0f47 openvpn[1258]: Sun Jun 16 21:18:12 2019 TCP/UDP: Preserving recently used remote address: [AF_INET]18.232.192.190:443
+Jun 16 21:18:12 68e0f47 openvpn[1258]: Sun Jun 16 21:18:12 2019 Socket Buffers: R=[87380->87380] S=[16384->16384]
+Jun 16 21:18:12 68e0f47 openvpn[1258]: Sun Jun 16 21:18:12 2019 Attempting to establish TCP connection with [AF_INET]18.232.192.190:443 [nonblock]
+Jun 16 21:18:13 68e0f47 openvpn[1258]: Sun Jun 16 21:18:13 2019 TCP connection established with [AF_INET]18.232.192.190:443
+Jun 16 21:18:13 68e0f47 openvpn[1258]: Sun Jun 16 21:18:13 2019 TCP_CLIENT link local: (not bound)
+Jun 16 21:18:13 68e0f47 openvpn[1258]: Sun Jun 16 21:18:13 2019 TCP_CLIENT link remote: [AF_INET]18.232.192.190:443
+Jun 16 21:18:13 68e0f47 openvpn[1258]: Sun Jun 16 21:18:13 2019 NOTE: UID/GID downgrade will be delayed because of --client, --pull, or --up-delay
+Jun 16 21:18:13 68e0f47 openvpn[1258]: Sun Jun 16 21:18:13 2019 TLS: Initial packet from [AF_INET]18.232.192.190:443, sid=a7d82e40 aacef590
+Jun 16 21:18:13 68e0f47 openvpn[1258]: Sun Jun 16 21:18:13 2019 WARNING: this configuration may cache passwords in memory -- use the auth-nocache option to prevent this
+Jun 16 21:18:13 68e0f47 openvpn[1258]: Sun Jun 16 21:18:13 2019 VERIFY OK: depth=1, C=AU, ST=Some-State, O=Internet Widgits Pty Ltd
+Jun 16 21:18:13 68e0f47 openvpn[1258]: Sun Jun 16 21:18:13 2019 VERIFY KU OK
+Jun 16 21:18:13 68e0f47 openvpn[1258]: Sun Jun 16 21:18:13 2019 Validating certificate extended key usage
+Jun 16 21:18:13 68e0f47 openvpn[1258]: Sun Jun 16 21:18:13 2019 ++ Certificate has EKU (str) TLS Web Server Authentication, expects TLS Web Server Authentication
+Jun 16 21:18:13 68e0f47 openvpn[1258]: Sun Jun 16 21:18:13 2019 VERIFY EKU OK
+Jun 16 21:18:13 68e0f47 openvpn[1258]: Sun Jun 16 21:18:13 2019 VERIFY OK: depth=0, C=US, ST=WA, L=Seattle, O=Resin.io, OU=VPN, CN=ResinVPN
+Jun 16 21:18:14 68e0f47 openvpn[1258]: Sun Jun 16 21:18:14 2019 Control Channel: TLSv1.2, cipher TLSv1/SSLv3 ECDHE-RSA-AES256-GCM-SHA384, 2048 bit RSA
+Jun 16 21:18:14 68e0f47 openvpn[1258]: Sun Jun 16 21:18:14 2019 [ResinVPN] Peer Connection Initiated with [AF_INET]18.232.192.190:443
+Jun 16 21:18:15 68e0f47 openvpn[1258]: Sun Jun 16 21:18:15 2019 SENT CONTROL [ResinVPN]: 'PUSH_REQUEST' (status=1)
+Jun 16 21:18:15 68e0f47 openvpn[1258]: Sun Jun 16 21:18:15 2019 AUTH: Received control message: AUTH_FAILED
+Jun 16 21:18:15 68e0f47 openvpn[1258]: Sun Jun 16 21:18:15 2019 SIGTERM[soft,auth-failure] received, process exiting
+Jun 16 21:18:26 68e0f47 systemd[1]: openvpn.service: Service hold-off time over, scheduling restart.
+Jun 16 21:18:26 68e0f47 systemd[1]: Stopped OpenVPN.
+Jun 16 21:18:26 68e0f47 systemd[1]: Starting Prepare OpenVPN...
+Jun 16 21:18:26 68e0f47 prepare-openvpn[1261]: prepare-openvpn: [INFO] Resin.io VPN authentication.
+Jun 16 21:18:26 68e0f47 systemd[1]: Started Prepare OpenVPN.
+Jun 16 21:18:26 68e0f47 systemd[1]: Started OpenVPN.
+Jun 16 21:18:26 68e0f47 openvpn[1265]: Sun Jun 16 21:18:26 2019 WARNING: file '/var/volatile/vpn-auth' is group or others accessible
+Jun 16 21:18:26 68e0f47 openvpn[1265]: Sun Jun 16 21:18:26 2019 OpenVPN 2.4.3 arm-poky-linux-gnueabi [SSL (OpenSSL)] [LZO] [LZ4] [EPOLL] [MH/PKTINFO] [AEAD] built on Nov 23 2018
+Jun 16 21:18:26 68e0f47 openvpn[1265]: Sun Jun 16 21:18:26 2019 library versions: OpenSSL 1.0.2o  27 Mar 2018, LZO 2.10
+Jun 16 21:18:26 68e0f47 openvpn[1265]: Sun Jun 16 21:18:26 2019 NOTE: the current --script-security setting may allow this configuration to call user-defined scripts
+Jun 16 21:18:26 68e0f47 openvpn[1265]: Sun Jun 16 21:18:26 2019 TCP/UDP: Preserving recently used remote address: [AF_INET]34.237.229.125:443
+Jun 16 21:18:26 68e0f47 openvpn[1265]: Sun Jun 16 21:18:26 2019 Socket Buffers: R=[87380->87380] S=[16384->16384]
+Jun 16 21:18:26 68e0f47 openvpn[1265]: Sun Jun 16 21:18:26 2019 Attempting to establish TCP connection with [AF_INET]34.237.229.125:443 [nonblock]
+Jun 16 21:18:27 68e0f47 openvpn[1265]: Sun Jun 16 21:18:27 2019 TCP connection established with [AF_INET]34.237.229.125:443
+Jun 16 21:18:27 68e0f47 openvpn[1265]: Sun Jun 16 21:18:27 2019 TCP_CLIENT link local: (not bound)
+Jun 16 21:18:27 68e0f47 openvpn[1265]: Sun Jun 16 21:18:27 2019 TCP_CLIENT link remote: [AF_INET]34.237.229.125:443
+Jun 16 21:18:27 68e0f47 openvpn[1265]: Sun Jun 16 21:18:27 2019 NOTE: UID/GID downgrade will be delayed because of --client, --pull, or --up-delay
+Jun 16 21:18:27 68e0f47 openvpn[1265]: Sun Jun 16 21:18:27 2019 TLS: Initial packet from [AF_INET]34.237.229.125:443, sid=ce9521a8 ec98a3e8
+Jun 16 21:18:27 68e0f47 openvpn[1265]: Sun Jun 16 21:18:27 2019 WARNING: this configuration may cache passwords in memory -- use the auth-nocache option to prevent this
+Jun 16 21:18:28 68e0f47 openvpn[1265]: Sun Jun 16 21:18:28 2019 VERIFY OK: depth=1, C=AU, ST=Some-State, O=Internet Widgits Pty Ltd
+Jun 16 21:18:28 68e0f47 openvpn[1265]: Sun Jun 16 21:18:28 2019 VERIFY KU OK
+Jun 16 21:18:28 68e0f47 openvpn[1265]: Sun Jun 16 21:18:28 2019 Validating certificate extended key usage
+Jun 16 21:18:28 68e0f47 openvpn[1265]: Sun Jun 16 21:18:28 2019 ++ Certificate has EKU (str) TLS Web Server Authentication, expects TLS Web Server Authentication
+Jun 16 21:18:28 68e0f47 openvpn[1265]: Sun Jun 16 21:18:28 2019 VERIFY EKU OK
+Jun 16 21:18:28 68e0f47 openvpn[1265]: Sun Jun 16 21:18:28 2019 VERIFY OK: depth=0, C=US, ST=WA, L=Seattle, O=Resin.io, OU=VPN, CN=ResinVPN
+Jun 16 21:18:29 68e0f47 openvpn[1265]: Sun Jun 16 21:18:29 2019 Control Channel: TLSv1.2, cipher TLSv1/SSLv3 ECDHE-RSA-AES256-GCM-SHA384, 2048 bit RSA
+Jun 16 21:18:29 68e0f47 openvpn[1265]: Sun Jun 16 21:18:29 2019 [ResinVPN] Peer Connection Initiated with [AF_INET]34.237.229.125:443
+Jun 16 21:18:30 68e0f47 openvpn[1265]: Sun Jun 16 21:18:30 2019 SENT CONTROL [ResinVPN]: 'PUSH_REQUEST' (status=1)
+Jun 16 21:18:30 68e0f47 openvpn[1265]: Sun Jun 16 21:18:30 2019 AUTH: Received control message: AUTH_FAILED
+Jun 16 21:18:30 68e0f47 openvpn[1265]: Sun Jun 16 21:18:30 2019 SIGTERM[soft,auth-failure] received, process exiting
+Jun 16 21:18:40 68e0f47 systemd[1]: openvpn.service: Service hold-off time over, scheduling restart.
+Jun 16 21:18:40 68e0f47 systemd[1]: Stopped OpenVPN.
+Jun 16 21:18:40 68e0f47 systemd[1]: Starting Prepare OpenVPN...
+Jun 16 21:18:40 68e0f47 prepare-openvpn[1268]: prepare-openvpn: [INFO] Resin.io VPN authentication.
+Jun 16 21:18:40 68e0f47 systemd[1]: Started Prepare OpenVPN.
+Jun 16 21:18:40 68e0f47 systemd[1]: Started OpenVPN.
+Jun 16 21:18:40 68e0f47 openvpn[1272]: Sun Jun 16 21:18:40 2019 WARNING: file '/var/volatile/vpn-auth' is group or others accessible
+Jun 16 21:18:40 68e0f47 openvpn[1272]: Sun Jun 16 21:18:40 2019 OpenVPN 2.4.3 arm-poky-linux-gnueabi [SSL (OpenSSL)] [LZO] [LZ4] [EPOLL] [MH/PKTINFO] [AEAD] built on Nov 23 2018
+Jun 16 21:18:40 68e0f47 openvpn[1272]: Sun Jun 16 21:18:40 2019 library versions: OpenSSL 1.0.2o  27 Mar 2018, LZO 2.10
+Jun 16 21:18:40 68e0f47 openvpn[1272]: Sun Jun 16 21:18:40 2019 NOTE: the current --script-security setting may allow this configuration to call user-defined scripts
+Jun 16 21:18:41 68e0f47 openvpn[1272]: Sun Jun 16 21:18:41 2019 TCP/UDP: Preserving recently used remote address: [AF_INET]18.232.192.190:443
+Jun 16 21:18:41 68e0f47 openvpn[1272]: Sun Jun 16 21:18:41 2019 Socket Buffers: R=[87380->87380] S=[16384->16384]
+Jun 16 21:18:41 68e0f47 openvpn[1272]: Sun Jun 16 21:18:41 2019 Attempting to establish TCP connection with [AF_INET]18.232.192.190:443 [nonblock]
+Jun 16 21:18:42 68e0f47 openvpn[1272]: Sun Jun 16 21:18:42 2019 TCP connection established with [AF_INET]18.232.192.190:443
+Jun 16 21:18:42 68e0f47 openvpn[1272]: Sun Jun 16 21:18:42 2019 TCP_CLIENT link local: (not bound)
+Jun 16 21:18:42 68e0f47 openvpn[1272]: Sun Jun 16 21:18:42 2019 TCP_CLIENT link remote: [AF_INET]18.232.192.190:443
+Jun 16 21:18:42 68e0f47 openvpn[1272]: Sun Jun 16 21:18:42 2019 NOTE: UID/GID downgrade will be delayed because of --client, --pull, or --up-delay
+Jun 16 21:18:42 68e0f47 openvpn[1272]: Sun Jun 16 21:18:42 2019 TLS: Initial packet from [AF_INET]18.232.192.190:443, sid=5ecc71f4 d40f96bf
+Jun 16 21:18:42 68e0f47 openvpn[1272]: Sun Jun 16 21:18:42 2019 WARNING: this configuration may cache passwords in memory -- use the auth-nocache option to prevent this
+Jun 16 21:18:42 68e0f47 openvpn[1272]: Sun Jun 16 21:18:42 2019 VERIFY OK: depth=1, C=AU, ST=Some-State, O=Internet Widgits Pty Ltd
+Jun 16 21:18:42 68e0f47 openvpn[1272]: Sun Jun 16 21:18:42 2019 VERIFY KU OK
+Jun 16 21:18:42 68e0f47 openvpn[1272]: Sun Jun 16 21:18:42 2019 Validating certificate extended key usage
+Jun 16 21:18:42 68e0f47 openvpn[1272]: Sun Jun 16 21:18:42 2019 ++ Certificate has EKU (str) TLS Web Server Authentication, expects TLS Web Server Authentication
+Jun 16 21:18:42 68e0f47 openvpn[1272]: Sun Jun 16 21:18:42 2019 VERIFY EKU OK
+Jun 16 21:18:42 68e0f47 openvpn[1272]: Sun Jun 16 21:18:42 2019 VERIFY OK: depth=0, C=US, ST=WA, L=Seattle, O=Resin.io, OU=VPN, CN=ResinVPN
+Jun 16 21:18:43 68e0f47 openvpn[1272]: Sun Jun 16 21:18:43 2019 Control Channel: TLSv1.2, cipher TLSv1/SSLv3 ECDHE-RSA-AES256-GCM-SHA384, 2048 bit RSA
+Jun 16 21:18:43 68e0f47 openvpn[1272]: Sun Jun 16 21:18:43 2019 [ResinVPN] Peer Connection Initiated with [AF_INET]18.232.192.190:443
+Jun 16 21:18:44 68e0f47 openvpn[1272]: Sun Jun 16 21:18:44 2019 SENT CONTROL [ResinVPN]: 'PUSH_REQUEST' (status=1)
+Jun 16 21:18:44 68e0f47 openvpn[1272]: Sun Jun 16 21:18:44 2019 AUTH: Received control message: AUTH_FAILED
+Jun 16 21:18:44 68e0f47 openvpn[1272]: Sun Jun 16 21:18:44 2019 SIGTERM[soft,auth-failure] received, process exiting
+Jun 16 21:18:54 68e0f47 systemd[1]: openvpn.service: Service hold-off time over, scheduling restart.
+Jun 16 21:18:54 68e0f47 systemd[1]: Stopped OpenVPN.
+Jun 16 21:18:54 68e0f47 systemd[1]: Starting Prepare OpenVPN...
+Jun 16 21:18:55 68e0f47 prepare-openvpn[1275]: prepare-openvpn: [INFO] Resin.io VPN authentication.
+Jun 16 21:18:55 68e0f47 systemd[1]: Started Prepare OpenVPN.
+Jun 16 21:18:55 68e0f47 systemd[1]: Started OpenVPN.
+Jun 16 21:18:55 68e0f47 openvpn[1279]: Sun Jun 16 21:18:55 2019 WARNING: file '/var/volatile/vpn-auth' is group or others accessible
+Jun 16 21:18:55 68e0f47 openvpn[1279]: Sun Jun 16 21:18:55 2019 OpenVPN 2.4.3 arm-poky-linux-gnueabi [SSL (OpenSSL)] [LZO] [LZ4] [EPOLL] [MH/PKTINFO] [AEAD] built on Nov 23 2018
+Jun 16 21:18:55 68e0f47 openvpn[1279]: Sun Jun 16 21:18:55 2019 library versions: OpenSSL 1.0.2o  27 Mar 2018, LZO 2.10
+Jun 16 21:18:55 68e0f47 openvpn[1279]: Sun Jun 16 21:18:55 2019 NOTE: the current --script-security setting may allow this configuration to call user-defined scripts
+Jun 16 21:18:55 68e0f47 openvpn[1279]: Sun Jun 16 21:18:55 2019 TCP/UDP: Preserving recently used remote address: [AF_INET]34.237.229.125:443
+Jun 16 21:18:55 68e0f47 openvpn[1279]: Sun Jun 16 21:18:55 2019 Socket Buffers: R=[87380->87380] S=[16384->16384]
+Jun 16 21:18:55 68e0f47 openvpn[1279]: Sun Jun 16 21:18:55 2019 Attempting to establish TCP connection with [AF_INET]34.237.229.125:443 [nonblock]
+Jun 16 21:18:56 68e0f47 openvpn[1279]: Sun Jun 16 21:18:56 2019 TCP connection established with [AF_INET]34.237.229.125:443
+Jun 16 21:18:56 68e0f47 openvpn[1279]: Sun Jun 16 21:18:56 2019 TCP_CLIENT link local: (not bound)
+Jun 16 21:18:56 68e0f47 openvpn[1279]: Sun Jun 16 21:18:56 2019 TCP_CLIENT link remote: [AF_INET]34.237.229.125:443
+Jun 16 21:18:56 68e0f47 openvpn[1279]: Sun Jun 16 21:18:56 2019 NOTE: UID/GID downgrade will be delayed because of --client, --pull, or --up-delay
+Jun 16 21:18:56 68e0f47 openvpn[1279]: Sun Jun 16 21:18:56 2019 TLS: Initial packet from [AF_INET]34.237.229.125:443, sid=1aff9522 c0b0ec94
+Jun 16 21:18:56 68e0f47 openvpn[1279]: Sun Jun 16 21:18:56 2019 WARNING: this configuration may cache passwords in memory -- use the auth-nocache option to prevent this
+^C
+root@68e0f47:~# poweroff
+[  332.812692] wlan0: deauthenticating from b0:55:08:23:21:4a by local choice (Reason: 3=DEAUTH_LEAVING)
+[  334.796440] systemd-shutdow: 33 output lines suppressed due to ratelimiting
+[  334.831921] systemd-shutdown[1]: Sending SIGTERM to remaining processes...
+[  334.856248] systemd-journald[365]: Received SIGTERM from PID 1 (systemd-shutdow).
+[  334.887086] systemd-shutdown[1]: Sending SIGKILL to remaining processes...
+[  334.914431] systemd-shutdown[1]: Unmounting file systems.
+[  334.921467] systemd-shutdown[1]: Remounting '/' read-only with options 'si=854acdec,dio,dirperm1'.
+[  334.955593] systemd-shutdown[1]: Remounting '/mnt/sysroot/active/balena/aufs' read-only with options 'data=ordered'.
+[  335.002227] EXT4-fs (mmcblk0p2): re-mounted. Opts: data=ordered
+[  335.016876] systemd-shutdown[1]: Unmounting /mnt/sysroot/active/balena/aufs.
+[  335.025445] systemd-shutdown[1]: Remounting '/mnt/sysroot/active' read-only with options 'data=ordered'.
+[  335.037473] EXT4-fs (mmcblk0p2): re-mounted. Opts: data=ordered
+[  335.043567] systemd-shutdown[1]: Unmounting /mnt/sysroot/active.
+[  335.049796] systemd-shutdown[1]: Remounting '/' read-only with options 'si=854acdec,dio,dirperm1'.
+[  335.078380] systemd-shutdown[1]: Remounting '/mnt/sysroot/active/balena/aufs' read-only with options 'data=ordered'.
+[  335.090483] EXT4-fs (mmcblk0p2): re-mounted. Opts: data=ordered
+[  335.102422] EXT4-fs (mmcblk0p2): re-mounted. Opts: data=ordered
+[  335.154255] reboot: Power down
+[  335.157551] System will go to power_off state in approx. 1 second

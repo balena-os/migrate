@@ -159,6 +159,7 @@ impl<'a> LsblkInfo {
             MigErrorKind::Upstream,
             &format!("failed to canonicalize path: '{}'", path.display()),
         ))?;
+
         let mut mp_match: Option<(&LsblkDevice, &LsblkPartition)> = None;
 
         for device in &self.blockdevices {
@@ -199,6 +200,10 @@ impl<'a> LsblkInfo {
                 ),
             ))
         }
+    }
+
+    pub fn get_blk_devices(&'a self) -> &'a Vec<LsblkDevice> {
+        &self.blockdevices
     }
 
     // get the LsblkDevice & LsblkPartition from partition device path as in /dev/sda1

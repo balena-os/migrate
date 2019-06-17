@@ -1,6 +1,5 @@
 use log::{debug, error, info, trace};
 use regex::Regex;
-use std::path::Path;
 
 use crate::{
     common::{
@@ -12,7 +11,9 @@ use crate::{
         boot_manager::{from_boot_type, BootManager, RaspiBootManager},
         device::Device,
         linux_common::restore_backups,
-        EnsuredCmds, MigrateInfo,
+        EnsuredCmds,
+        MigrateInfo, migrate_info::PathInfo,
+        stage2::mounts::Mounts,
     },
 };
 
@@ -121,13 +122,17 @@ impl<'a> Device for RaspberryPi3 {
         self.boot_manager.setup(cmds, dev_info, config, s2_cfg)
     }
 
-    fn restore_boot(&self, root_path: &Path, config: &Stage2Config) -> Result<(), MigError> {
+    fn restore_boot(&self, mounts: &Mounts, config: &Stage2Config) -> Result<(), MigError> {
         info!("restoring boot configuration for Raspberry Pi 3");
 
-        restore_backups(root_path, config.get_boot_backups())?;
+        restore_backups(mounts.get_boot_mountpoint(), config.get_boot_backups())?;
 
         info!("The original boot configuration was restored");
 
         Ok(())
+    }
+
+    fn get_boot_device(&self) -> PathInfo {
+        self.boot_manager.get_boot_path()
     }
 }

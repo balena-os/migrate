@@ -85,6 +85,7 @@ pub(crate) struct MigrateConfig {
     nwmgr_files: Option<Vec<PathBuf>>,
     require_nwmgr_config: Option<bool>,
     gzip_internal: Option<bool>,
+    flash_device: Option<PathBuf>,
     // COPY_NMGR_FILES="eth0_static enp2s0_static enp3s0_static"
 }
 
@@ -108,6 +109,7 @@ impl<'a> MigrateConfig {
             nwmgr_files: None,
             require_nwmgr_config: None,
             gzip_internal: None,
+            flash_device: None,
         }
     }
 

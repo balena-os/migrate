@@ -3,13 +3,12 @@ use std::path::PathBuf;
 
 use crate::{
     common::{
-        balena_cfg_json::BalenaCfgJson, format_size_with_unit, wifi_config::WifiConfig, Config,
+        balena_cfg_json::BalenaCfgJson, wifi_config::WifiConfig, Config,
         FileInfo, FileType, MigError, MigErrorKind, MigrateWifis,
     },
-    defs::{OSArch, APPROX_MEM_THRESHOLD},
+    defs::{OSArch,},
     linux::{
-        linux_common::{get_mem_info, get_os_arch, get_os_name},
-        linux_defs::{BOOT_PATH, ROOT_PATH},
+        linux_common::{get_os_arch, get_os_name},
         EnsuredCmds,
     },
 };
@@ -33,8 +32,8 @@ pub(crate) struct MigrateInfo {
     pub os_arch: OSArch,
 
     pub lsblk_info: LsblkInfo,
-    pub root_path: PathInfo,
-    pub boot_path: PathInfo,
+    // pub root_path: PathInfo,
+    // pub boot_path: PathInfo,
     pub work_path: PathInfo,
     pub log_path: Option<(PathBuf, String)>,
 
@@ -60,32 +59,8 @@ impl MigrateInfo {
 
         let lsblk_info = LsblkInfo::new(&cmds)?;
 
-        // get all required drives
-        let root_path = if let Some(path_info) = PathInfo::new(&cmds, ROOT_PATH, &lsblk_info)? {
-            path_info
-        } else {
-            return Err(MigError::from_remark(
-                MigErrorKind::NotFound,
-                &format!(
-                    "The device for path '{}' could not be established",
-                    ROOT_PATH
-                ),
-            ));
-        };
-        let boot_path = if let Some(path_info) = PathInfo::new(&cmds, BOOT_PATH, &lsblk_info)? {
-            path_info
-        } else {
-            return Err(MigError::from_remark(
-                MigErrorKind::NotFound,
-                &format!(
-                    "the device for path '{}' could not be established",
-                    BOOT_PATH
-                ),
-            ));
-        };
-
         let work_path = if let Some(path_info) =
-            PathInfo::new(&cmds, config.migrate.get_work_dir(), &lsblk_info)?
+        PathInfo::new(&cmds, config.migrate.get_work_dir(), &lsblk_info)?
         {
             path_info
         } else {
@@ -121,18 +96,43 @@ impl MigrateInfo {
         let image_file = if let Some(file_info) =
             FileInfo::new(&config.balena.get_image_path(), &work_dir)?
         {
-            file_info.expect_type(&cmds, &FileType::OSImage)?;
-            info!(
-                "The balena OS image looks ok: '{}'",
-                file_info.path.display()
-            );
+            // Make sure balena image is in workdir and on its mount
 
+            if let None = file_info.rel_path {
+                error!("The balena OS image was found outside of the working directory. This setup is not supported");
+                return Err(MigError::displayed());
+            }
+
+            let (_img_drive, img_part) = lsblk_info.get_path_info(&file_info.path)?;
+            if img_part.get_path() != work_path.device {
+                error!("The balena OS image appears to reside on a different partition from the working directory. This setup is not supported");
+                return Err(MigError::displayed());
+            }
+
+            // ensure expected type
+            match file_info.expect_type(&cmds, &FileType::OSImage) {
+                Ok(_) => {
+                    info!(
+                        "The balena OS image looks ok: '{}'",
+                        file_info.path.display()
+                    );
+                },
+                Err(_why) => {
+                    error!(
+                        "The balena OS image does not match the expected type: '{:?}'",
+                        FileType::OSImage
+                    );
+                    return Err(MigError::displayed());
+                }
+            }
+
+/*            // TODO: do this later, flash device will be determined by device / bootmanager
             let required_mem = file_info.size + APPROX_MEM_THRESHOLD;
             if get_mem_info()?.0 < required_mem {
                 error!("We have not found sufficient memory to store the balena OS image in ram. at least {} of memory is required.", format_size_with_unit(required_mem));
                 return Err(MigError::from(MigErrorKind::Displayed));
             }
-
+*/
             file_info
         } else {
             error!("The balena image has not been specified or cannot be accessed. Automatic download is not yet implemented, so you need to specify and supply all required files");
@@ -142,8 +142,31 @@ impl MigrateInfo {
         let config_file = if let Some(file_info) =
             FileInfo::new(&config.balena.get_config_path(), &work_dir)?
         {
-            file_info.expect_type(&cmds, &FileType::Json)?;
+            // Make sure balena config is in workdir and on its mount
+            if let None = file_info.rel_path {
+                error!("The balena OS config was found outside of the working directory. This setup is not supported");
+                return Err(MigError::displayed());
+            }
 
+            let (_cfg_drive, cfg_part) = lsblk_info.get_path_info(&file_info.path)?;
+            if cfg_part.get_path() != work_path.device {
+                error!("The balena OS config appears to reside on a different partition from the working directory. This setup is not supported");
+                return Err(MigError::displayed());
+            }
+
+            // ensure expected type
+            match file_info.expect_type(&cmds, &FileType::Json) {
+                Ok(_) => (),
+                Err(_why) => {
+                    error!(
+                        "The balena OS config does not match the expected type: '{:?}'",
+                        FileType::Json
+                    );
+                    return Err(MigError::displayed());
+                }
+            }
+
+            // check config
             let balena_cfg = BalenaCfgJson::new(file_info)?;
             info!(
                 "The balena config file looks ok: '{}'",
@@ -267,8 +290,6 @@ impl MigrateInfo {
             os_name: get_os_name()?,
             os_arch,
             lsblk_info,
-            root_path,
-            boot_path,
             work_path,
             log_path,
             image_file,

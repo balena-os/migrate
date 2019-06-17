@@ -62,6 +62,14 @@ impl BalenaCfgJson {
         Ok(())
     }
 
+    pub fn get_rel_path<'a>(&'a self) -> Option<&'a PathBuf> {
+        if let Some(ref rel_path) = self.file.rel_path {
+            Some(rel_path)
+        } else {
+            None
+        }
+    }
+
     pub fn get_path<'a>(&'a self) -> &'a PathBuf {
         &self.file.path
     }

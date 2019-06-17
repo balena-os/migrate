@@ -1,23 +1,23 @@
 use failure::{Fail, ResultExt};
-use log::{debug, error, info, trace, warn};
+use log::{debug, error, info, trace,};
 use std::fs::{copy, create_dir};
-use std::path::PathBuf;
+use std::path::{Path};
 use std::thread;
 use std::time::Duration;
 
-// TODO: Require files to be in work_dir
+// TODO: Require files to be in work_dir: balena-image, balena-config, system-connections
 
 use crate::{
     common::{
         backup, dir_exists, format_size_with_unit, path_append, Config, MigErrCtx, MigError,
         MigErrorKind, MigMode,
-        stage2_config::{PathType, MountConfig, Stage2ConfigBuilder, Stage2LogConfig, },
+        stage2_config::{PathType, Stage2ConfigBuilder, Stage2LogConfig, },
     },
     defs::{BACKUP_FILE, MIN_DISK_SIZE, SYSTEM_CONNECTIONS_DIR},
 };
 
 pub(crate) mod linux_defs;
-use linux_defs::{BOOT_PATH};
+use crate::linux::linux_defs::ROOT_PATH;
 
 pub(crate) mod device;
 pub(crate) use device::Device;
@@ -38,6 +38,8 @@ pub(crate) use migrate_info::MigrateInfo;
 
 pub(crate) mod linux_common;
 pub(crate) use linux_common::is_admin;
+use crate::defs::STAGE2_CFG_FILE;
+use crate::common::stage2_config::MountConfig;
 
 
 const REQUIRED_CMDS: &'static [&'static str] = &[
@@ -170,7 +172,7 @@ impl<'a> LinuxMigrator {
             .config_file
             .check(&config, device.get_device_slug())
         {
-            Ok(_bla) => info!(
+            Ok(_dummy) => info!(
                 "The sanity check on '{}' passed",
                 mig_info.config_file.get_path().display()
             ),
@@ -192,14 +194,29 @@ impl<'a> LinuxMigrator {
         // **********************************************************************
         // Pick the current root device as flash device
 
-        let flash_device = &mig_info.root_path.drive;
-        let flash_dev_size = mig_info.root_path.drive_size;
+        let boot_info = device.get_boot_device();
+        let flash_device = &boot_info.drive;
+        let flash_dev_size = boot_info.drive_size;
 
         info!(
             "The install drive is {}, size: {}",
-            flash_device.display(),
+            boot_info.drive.display(),
             format_size_with_unit(flash_dev_size)
         );
+
+        /*
+        if let Some(flash_device) = config.migrate.get_flash_device() {
+            // force annother device to be flashed, strictly debug !!!
+            // forced flash device currently  goes unchecked for existence and size
+            warn!(
+                "Overriding chosen flash device with: '{}'",
+                force_flash_device.display()
+            );
+            stage2_config.set_flash_device(&PathBuf::from(force_flash_device));
+        } else {
+            stage2_config.set_flash_device(flash_device);
+        }
+        */
 
         // **********************************************************************
         // Require a minimum disk device size for installation
@@ -211,28 +228,6 @@ impl<'a> LinuxMigrator {
                 format_size_with_unit(flash_dev_size)
             );
             return Err(MigError::from(MigErrorKind::Displayed));
-        }
-
-        if let Some(force_flash_device) = config.debug.get_force_flash_device() {
-            // force annother device to be flashed, strictly debug !!!
-            // forced flash device currently  goes unchecked for existence and size
-            warn!(
-                "Overriding chosen flash device with: '{}'",
-                force_flash_device.display()
-            );
-            stage2_config.set_flash_device(&PathBuf::from(force_flash_device));
-        } else {
-            stage2_config.set_flash_device(flash_device);
-        }
-
-        if mig_info.boot_path.device != mig_info.root_path.device {
-            // /boot on separate partition
-            info!(
-                "Found boot device '{}', fs type: {}, free space: {}",
-                mig_info.boot_path.device.display(),
-                mig_info.boot_path.fs_type,
-                format_size_with_unit(mig_info.boot_path.fs_free)
-            );
         }
 
         Ok(LinuxMigrator {
@@ -320,24 +315,25 @@ impl<'a> LinuxMigrator {
             .set_skip_flash(self.config.debug.is_skip_flash());
 
 
-        if self.mig_info.boot_path.device != self.mig_info.root_path.device {
-            self.stage2_config
-                .set_boot_mount(&MountConfig::new(
-                    self.mig_info.boot_path.device,
-                    self.mig_info.boot_path.fs_type,
-                    PathBuf::from(BOOT_PATH),
-                ));
-        }
-        // later
-        self.stage2_config
-            .set_balena_image(PathBuf::from(&self.mig_info.image_file.path));
-        self.stage2_config
-            .set_balena_config(PathBuf::from(self.mig_info.config_file.get_path()));
+        self.stage2_config.set_balena_image(self.mig_info.image_file.rel_path.as_ref().unwrap().clone());
+        self.stage2_config.set_balena_config(self.mig_info.config_file.get_rel_path().unwrap().clone());
 
         // TODO: setpath if on / mount else set mount
 
-        self.stage2_config
-            .set_work_path(&PathType::Path(self.mig_info.work_path.path));
+
+        if &self.mig_info.work_path.mountpoint == Path::new(ROOT_PATH) {
+            self.stage2_config
+                .set_work_path(&PathType::Path(self.mig_info.work_path.path.clone()));
+        } else {
+            let (_lsblk_device,lsblk_part) = self.mig_info.lsblk_info.get_path_info(&work_dir)?;
+            self.stage2_config
+                .set_work_path(&PathType::Mount(MountConfig::new(
+                    &lsblk_part.get_path(),
+                    lsblk_part.fstype.as_ref().unwrap(),
+                    work_dir.strip_prefix(lsblk_part.mountpoint.as_ref().unwrap())
+                        .context(MigErrCtx::from_remark(MigErrorKind::Upstream, "failed to create relative work path"))?
+                )));
+        }
 
         self.stage2_config
             .set_gzip_internal(self.config.migrate.is_gzip_internal());
@@ -365,7 +361,8 @@ impl<'a> LinuxMigrator {
         )?;
 
         trace!("write stage 2 config");
-        self.stage2_config.write_stage2_cfg()?;
+        let s2_path = path_append(&self.device.get_boot_device().path, STAGE2_CFG_FILE);
+        self.stage2_config.write_stage2_cfg_to(&s2_path)?;
 
         if let Some(delay) = self.config.migrate.get_reboot() {
             println!(

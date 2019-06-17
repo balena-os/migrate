@@ -1,7 +1,6 @@
 use failure::ResultExt;
 use log::error;
 use std::fs::read_to_string;
-use std::path::Path;
 
 use crate::{
     common::{
@@ -9,7 +8,10 @@ use crate::{
         Config, MigErrCtx, MigError, MigErrorKind,
     },
     defs::{BootType, DeviceType, OSArch},
-    linux::{EnsuredCmds, MigrateInfo},
+    linux::{
+        EnsuredCmds, MigrateInfo,
+        migrate_info::PathInfo,
+        stage2::mounts::Mounts},
 };
 
 mod beaglebone;
@@ -22,6 +24,9 @@ pub(crate) trait Device {
     fn get_device_slug(&self) -> &'static str;
     fn get_device_type(&self) -> DeviceType;
     fn get_boot_type(&self) -> BootType;
+    // TODO: make return reference
+    fn get_boot_device(&self) -> PathInfo;
+
     fn setup(
         &self,
         cmds: &EnsuredCmds,
@@ -29,7 +34,7 @@ pub(crate) trait Device {
         config: &Config,
         s2_cfg: &mut Stage2ConfigBuilder,
     ) -> Result<(), MigError>;
-    fn restore_boot(&self, root_path: &Path, config: &Stage2Config) -> Result<(), MigError>;
+    fn restore_boot(&self, mounts: &Mounts, config: &Stage2Config) -> Result<(), MigError>;
 }
 
 pub(crate) fn from_config(

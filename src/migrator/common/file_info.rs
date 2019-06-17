@@ -57,6 +57,7 @@ impl FileType {
 #[derive(Debug, Clone)]
 pub(crate) struct FileInfo {
     pub path: PathBuf,
+    pub rel_path: Option<PathBuf>,
     pub size: u64,
 }
 
@@ -100,8 +101,14 @@ impl FileInfo {
             &format!("failed to retrieve metadata for path {:?}", abs_path),
         ))?;
 
+        let rel_path = match abs_path.strip_prefix(work_path) {
+            Ok(rel_path) => Some(PathBuf::from(rel_path)),
+            Err(_why) => None,
+        };
+
         Ok(Some(FileInfo {
             path: abs_path,
+            rel_path,
             size: metadata.len(),
         }))
     }
