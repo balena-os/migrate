@@ -275,7 +275,9 @@ pub(crate) fn restore_backups(
 
 
 pub(crate) fn to_std_device_path(device: &Path) -> Result<PathBuf, MigError> {
-    if file_exists(device) {
+    debug!("to_std_device_path: entered with '{}'", device.display());
+
+    if !file_exists(device) {
         return Err(MigError::from_remark(MigErrorKind::NotFound, &format!("File does not exist: '{}'", device.display())));
     }
 
@@ -285,6 +287,7 @@ pub(crate) fn to_std_device_path(device: &Path) -> Result<PathBuf, MigError> {
             &format!("Failed to retrieve metadata for file: '{}'", device.display())))?;
 
     if metadata.file_type().is_symlink() {
+        debug!("to_std_device_path: is symlink '{}'", device.display());
         let dev_path = path_append(
             device.parent().unwrap(),
             read_link(device).context(MigErrCtx::from_remark(
@@ -292,6 +295,7 @@ pub(crate) fn to_std_device_path(device: &Path) -> Result<PathBuf, MigError> {
                 &format!("failed to read link: '{}'", device.display()),
             ))?);
 
+        debug!("to_std_device_path: trying '{}'", dev_path.display());
         Ok(dev_path
             .canonicalize()
             .context(MigErrCtx::from_remark(
@@ -302,6 +306,7 @@ pub(crate) fn to_std_device_path(device: &Path) -> Result<PathBuf, MigError> {
                 ),
             ))?)
     } else {
+        debug!("to_std_device_path: not a symlink '{}'", device.display());
         Ok(PathBuf::from(device))
     }
 }

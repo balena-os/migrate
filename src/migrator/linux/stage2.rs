@@ -86,7 +86,7 @@ impl<'a> Stage2 {
             }
         }
 
-
+        trace!("try_init: trace on");
 
         // TODO: beaglebone version - make device_slug dependant
 

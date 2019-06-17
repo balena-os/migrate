@@ -204,6 +204,9 @@ impl<'a> LinuxMigrator {
             format_size_with_unit(flash_dev_size)
         );
 
+        // TODO: check available space for work files here if work is not on a distinct partition
+
+
         /*
         if let Some(flash_device) = config.migrate.get_flash_device() {
             // force annother device to be flashed, strictly debug !!!
@@ -361,7 +364,7 @@ impl<'a> LinuxMigrator {
         )?;
 
         trace!("write stage 2 config");
-        let s2_path = path_append(&self.device.get_boot_device().path, STAGE2_CFG_FILE);
+        let s2_path = path_append(&self.device.get_boot_device().mountpoint, STAGE2_CFG_FILE);
         self.stage2_config.write_stage2_cfg_to(&s2_path)?;
 
         if let Some(delay) = self.config.migrate.get_reboot() {

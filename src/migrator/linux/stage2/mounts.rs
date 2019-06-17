@@ -1,7 +1,7 @@
 use failure::{ResultExt};
 use std::path::{PathBuf, Path};
 use std::fs::{create_dir_all, read_dir};
-use log::{info, warn, debug, error};
+use log::{trace, info, warn, debug, error};
 
 use nix::{
     mount::{mount, umount, MsFlags},
@@ -54,7 +54,7 @@ pub(crate) struct Mounts {
 
 impl<'a> Mounts {
     pub fn new() -> Result<Mounts, MigError> {
-
+        trace!("new: entered");
         let boot_mountpoint = PathBuf::from(path_append(MOUNT_DIR, BOOTFS_DIR));
 
         let stage2_config = path_append(&boot_mountpoint, STAGE2_CFG_FILE);
@@ -62,7 +62,7 @@ impl<'a> Mounts {
         let (kernel_root_device, kernel_root_fs_type) = get_kernel_root_info()?;
 
         info!(
-            "Trying to root device '{}' with fs-type: '{:?}' on '{}'",
+            "Trying to mount root device '{}' with fs-type: '{:?}' on '{}'",
             kernel_root_device.display(),
             kernel_root_fs_type,
             boot_mountpoint.display(),
