@@ -12,7 +12,7 @@ use crate::{
     common::{
         call, file_exists, parse_file, path_append, Config, MigErrCtx, MigError, MigErrorKind,
     },
-    defs::{OSArch,DISK_BY_PARTUUID_PATH, DISK_BY_UUID_PATH,},
+    defs::{OSArch,DISK_BY_PARTUUID_PATH, DISK_BY_UUID_PATH, DISK_BY_LABEL_PATH},
            linux::{
         linux_defs::{KERNEL_CMDLINE_PATH, SYS_UEFI_DIR},
         EnsuredCmds, DF_CMD, MOKUTIL_CMD, UNAME_CMD,
@@ -281,33 +281,36 @@ pub(crate) fn to_std_device_path(device: &Path) -> Result<PathBuf, MigError> {
         return Err(MigError::from_remark(MigErrorKind::NotFound, &format!("File does not exist: '{}'", device.display())));
     }
 
-    let metadata = device.metadata()
-        .context(MigErrCtx::from_remark(
-            MigErrorKind::Upstream,
-            &format!("Failed to retrieve metadata for file: '{}'", device.display())))?;
+    if ! (device.starts_with(DISK_BY_PARTUUID_PATH) ||
+        device.starts_with(DISK_BY_UUID_PATH) ||
+        device.starts_with(DISK_BY_LABEL_PATH)) {
+            return Ok(PathBuf::from(device))
+    }
 
-    if metadata.file_type().is_symlink() {
-        debug!("to_std_device_path: is symlink '{}'", device.display());
-        let dev_path = path_append(
-            device.parent().unwrap(),
-            read_link(device).context(MigErrCtx::from_remark(
-                MigErrorKind::Upstream,
-                &format!("failed to read link: '{}'", device.display()),
-            ))?);
+    debug!("to_std_device_path: attempting to fdereference as link '{}'", device.display());
 
-        debug!("to_std_device_path: trying '{}'", dev_path.display());
-        Ok(dev_path
-            .canonicalize()
-            .context(MigErrCtx::from_remark(
-                MigErrorKind::Upstream,
-                &format!(
-                    "failed to canonicalize path from: '{}'",
-                    dev_path.display()
-                ),
-            ))?)
-    } else {
-        debug!("to_std_device_path: not a symlink '{}'", device.display());
-        Ok(PathBuf::from(device))
+    match read_link(device) {
+        Ok(link) => {
+            if let Some(parent) = device.parent() {
+                let dev_path = path_append(parent, link);
+                return Ok(dev_path
+                    .canonicalize()
+                    .context(MigErrCtx::from_remark(
+                        MigErrorKind::Upstream,
+                        &format!(
+                            "failed to canonicalize path from: '{}'",
+                            dev_path.display()
+                        ),
+                    ))?);
+            } else {
+                debug!("Failed to retrieve parent from  '{}'", device.display());
+                return Ok(PathBuf::from(device));
+            }
+        },
+        Err(why) => {
+            debug!("Failed to dereference file '{}' : {:?}", device.display(), why);
+            return Ok(PathBuf::from(device));
+        }
     }
 }
 

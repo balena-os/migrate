@@ -1,5 +1,5 @@
 use failure::{Fail, ResultExt};
-use log::{debug, error, info, trace,};
+use log::{debug, error, info, trace, warn};
 use std::fs::{copy, create_dir};
 use std::path::{Path};
 use std::thread;
@@ -37,7 +37,7 @@ pub(crate) mod migrate_info;
 pub(crate) use migrate_info::MigrateInfo;
 
 pub(crate) mod linux_common;
-pub(crate) use linux_common::is_admin;
+pub(crate) use linux_common::{is_admin};
 use crate::defs::STAGE2_CFG_FILE;
 use crate::common::stage2_config::MountConfig;
 
@@ -344,11 +344,22 @@ impl<'a> LinuxMigrator {
         self.stage2_config
             .set_log_level(String::from(self.config.migrate.get_log_level()));
 
-        if let Some((ref device, ref fstype)) = self.mig_info.log_path {
-            self.stage2_config.set_log_to(Stage2LogConfig {
-                device: device.clone(),
-                fstype: fstype.clone(),
-            });
+        if let Some((ref log_path, ref log_drive, ref log_part)) = self.mig_info.log_path {
+            let boot_drive = self.device.get_boot_device().drive;
+            if log_drive.get_path() != boot_drive {
+                if let Some(ref fstype) = log_part.fstype {
+                    self.stage2_config.set_log_to(Stage2LogConfig {
+                        device: log_path.clone(),
+                        fstype: fstype.clone(),
+                    });
+
+                    info!("Set up log device as '{}' with file system type '{}'", log_path.display(), fstype);
+                } else {
+                    warn!("Could not determine file system type for log partition '{}'  - ignoring", log_path.display());
+                }
+            } else {
+                warn!("Log partition '{}' is not on a distinct drive from flash drive: '{}' - ignoring", log_path.display(), boot_drive.display());
+            }
         }
 
         self.stage2_config

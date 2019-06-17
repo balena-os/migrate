@@ -1,4 +1,4 @@
-use log::{debug, error, info, trace};
+use log::{debug, error, info, trace, warn};
 use std::path::PathBuf;
 
 use crate::{
@@ -25,6 +25,8 @@ pub(crate) mod label_type;
 
 pub(crate) mod path_info;
 pub(crate) use path_info::PathInfo;
+use crate::linux::linux_common::to_std_device_path;
+use crate::linux::migrate_info::lsblk_info::{LsblkDevice, LsblkPartition};
 
 #[derive(Debug)]
 pub(crate) struct MigrateInfo {
@@ -35,7 +37,7 @@ pub(crate) struct MigrateInfo {
     // pub root_path: PathInfo,
     // pub boot_path: PathInfo,
     pub work_path: PathInfo,
-    pub log_path: Option<(PathBuf, String)>,
+    pub log_path: Option<(PathBuf, LsblkDevice, LsblkPartition)>,
 
     pub nwmgr_files: Vec<FileInfo>,
     pub wifis: Vec<WifiConfig>,
@@ -73,22 +75,28 @@ impl MigrateInfo {
             ));
         };
 
-        let log_path = if let Some(log_dev) = config.migrate.get_log_device() {
-            let (_lsblk_drive, lsblk_part) = lsblk_info.get_devinfo_from_partition(log_dev)?;
-            Some((
-                lsblk_part.get_path(),
-                if let Some(ref fs_type) = lsblk_part.fstype {
-                    fs_type.clone()
+        let log_path =
+            if let Some(log_dev) = config.migrate.get_log_device() {
+                if let Ok(ref std_dev) = to_std_device_path(log_dev) {
+                    if let Ok((log_drive, log_part)) = lsblk_info.get_devinfo_from_partition(std_dev) {
+                        if let Some(ref fstype) = log_part.fstype {
+                            info!("Found log device '{}' with file system type '{}'", log_dev.display(), fstype);
+                            Some((PathBuf::from(log_dev), log_drive.clone(), log_part.clone()))
+                        } else {
+                            warn!("Could not determine file system type for log partition '{}'  - ignoring", log_dev.display());
+                            None
+                        }
+                    } else {
+                        warn!("failed to find lsblk info for log device '{}'", log_dev.display());
+                        None
+                    }
                 } else {
-                    return Err(MigError::from_remark(
-                        MigErrorKind::InvState,
-                        &format!("Log fstype was not initialized for '{}'", log_dev.display()),
-                    ));
-                },
-            ))
-        } else {
-            None
-        };
+                    warn!("failed to evaluate log device '{}'", log_dev.display());
+                    None
+                }
+            } else {
+                None
+            };
 
         let work_dir = &work_path.path;
         info!("Working directory is '{}'", work_dir.display());

@@ -42,7 +42,7 @@ use mounts::{Mounts};
 const REBOOT_DELAY: u64 = 3;
 
 // TODO: set this to Info once mature
-const INIT_LOG_LEVEL: Level = Level::Trace;
+const INIT_LOG_LEVEL: Level = Level::Info;
 const LOG_MOUNT_DIR: &str = "/migrate_log";
 const LOG_FILE_NAME: &str = "migrate.log";
 
@@ -90,10 +90,21 @@ impl<'a> Stage2 {
 
         // TODO: beaglebone version - make device_slug dependant
 
-        let mut mounts = Mounts::new()?;
+        let mut mounts = match Mounts::new() {
+            Ok(mounts) => {
+                debug!("Successfully mounted file system");
+                mounts
+            },
+            Err(why) => {
+                error!("Failed to mount file system: {:?}", why);
+                return Err(MigError::displayed());
+            }
+        };
+
         //let boot_fs_dir = mounts.get_boot_mountpoint();
         let stage2_cfg_file = mounts.get_stage2_config();
 
+        dbg!(stage2_cfg_file);
 
         // TODO: add options to make this more reliable)
 
