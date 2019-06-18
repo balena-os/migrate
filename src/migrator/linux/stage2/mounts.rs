@@ -177,7 +177,7 @@ impl<'a> Mounts {
     }
 
     pub fn get_log_path(&'a self) -> Option<&'a Path> {
-        if let Some(ref log_path) = log_path {
+        if let Some(ref log_path) = self.log_path {
             Some(log_path)
         } else {
             None

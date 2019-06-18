@@ -10,7 +10,7 @@ use nix::{
 
 use std::fs::{copy, create_dir, read_dir, read_link, File};
 use std::io::{BufWriter, Read, Write};
-use std::path::{Path, PathBuf};
+use std::path::{Path};
 use std::process::{Command, Stdio};
 use std::thread;
 use std::time::{Duration, Instant};
@@ -132,16 +132,16 @@ impl<'a> Stage2 {
         if let Some(log_path) = mounts.get_log_path() {
             info!("Setting Log destination to '{}'", log_path.display());
             let log_name = path_append(log_path, "migrate.log");
-            match File.create(&log_name) {
-                Ok(file) => {
+            match File::create(&log_name) {
+                Ok(log_file) => {
                     let mut log_stream = BufWriter::new(log_file);
                     if let Some(buffer) = Logger::get_buffer() {
                         let _res = log_stream.write_all(buffer.as_slice());
                     }
-                    let _res = Logger::set_log_dest(&LogDestination::Stream, log_stream);
+                    let _res = Logger::set_log_dest(&LogDestination::Stream, Some(log_stream));
                 },
                 Err(why) => {
-                    error!("Failed to set up logging to '{}'", log_name);
+                    error!("Failed to set up logging to '{}'", log_name.display());
                 }
             }
         }
