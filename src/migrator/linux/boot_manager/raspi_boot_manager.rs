@@ -282,7 +282,7 @@ impl BootManager for RaspiBootManager {
                 mod_cmdline
             },
             Err(why) => {
-                error!("failed to read boot file '{}'", cmdline_path.display());
+                error!("failed to read boot file '{}', error: {:?}", cmdline_path.display(), why);
                 return Err(MigError::displayed());
             }
         };

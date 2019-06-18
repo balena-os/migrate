@@ -2,6 +2,8 @@ use failure::{ResultExt};
 use std::path::{PathBuf, Path};
 use std::fs::{create_dir_all, read_dir};
 use log::{trace, info, warn, debug, error};
+use std::thread;
+use std::time::{Duration};
 
 use nix::{
     mount::{mount, umount, MsFlags},
@@ -197,49 +199,59 @@ impl<'a> Mounts {
         Ok(())
     }
 
+    pub fn mount_log(&mut self, device: &Path, fstype: &str) -> Result<Option<PathBuf>,MigError> {
+        // TODO: retry with delay
+        let device = to_std_device_path(device)?;
+        let mountpoint = path_append(MOUNT_DIR, LOGFS_DIR);
+        match create_dir_all(&mountpoint) {
+            Ok(_) => {
+                for x in 1..4 {
+                    if file_exists(&device) {
+                        debug!(
+                            "attempting to mount '{}' on '{}' with fstype: {}",
+                            device.display(),
+                            mountpoint.display(),
+                            fstype
+                        );
+                        mount(
+                            Some(&device),
+                            &mountpoint,
+                            Some(fstype.as_bytes()),
+                            MsFlags::empty(),
+                            NIX_NONE,
+                        )
+                            .context(MigErrCtx::from_remark(
+                                MigErrorKind::Upstream,
+                                &format!(
+                                    "Failed to mount previous boot manager device '{}' to '{}' with fstype: {:?}",
+                                    &device.display(),
+                                    &mountpoint.display(),
+                                    fstype
+                                ),
+                            ))?;
+
+                        return Ok(Some(mountpoint))
+                    } else {
+                        thread::sleep(Duration::from_secs(3))
+                    }
+                }
+
+                error!("failed to find log device '{}'", device.display());
+                return Err(MigError::displayed())
+            },
+            Err(why) => {
+                error!("Failed to create mountpoint: '{}' for log : {:?}", mountpoint.display(), why);
+                Err(MigError::displayed())
+            }
+        }
+    }
+
     pub fn mount_all(&mut self, stage2_config: &Stage2Config) -> Result<(),MigError> {
         trace!("mount_all: entered");
 
-        let log_mount =
-            if let Some((device, fstype)) = stage2_config.get_log_device() {
-                let device = to_std_device_path(device)?;
-                let mountpoint = path_append(MOUNT_DIR, LOGFS_DIR);
-
-                match create_dir_all(&mountpoint) {
-                    Ok(_) => {
-                    debug!(
-                        "attempting to mount '{}' on '{}' with fstype: {}",
-                        device.display(),
-                        mountpoint.display(),
-                        fstype
-                    );
-                    mount(
-                        Some(&device),
-                        &mountpoint,
-                        Some(fstype.as_bytes()),
-                        MsFlags::empty(),
-                        NIX_NONE,
-                    )
-                        .context(MigErrCtx::from_remark(
-                            MigErrorKind::Upstream,
-                            &format!(
-                                "Failed to mount previous boot manager device '{}' to '{}' with fstype: {:?}",
-                                &device.display(),
-                                &mountpoint.display(),
-                                fstype
-                            ),
-                        ))?;
-
-                    Some(mountpoint)
-                    },
-                    Err(why) => {
-                        error!("Failed to create mountpoint: '{}' for log : {:?}", mountpoint.display(), why);
-                        None
-                    }
-                }
-            } else {
-                None
-            };
+        if let Some((log_dev, log_fs)) = stage2_config.get_log_device() {
+            let _res = self.mount_log(log_dev, log_fs);
+        }
 
         match stage2_config.get_work_path() {
             PathType::Path(work_path) => {
