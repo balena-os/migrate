@@ -262,7 +262,7 @@ impl BootManager for RaspiBootManager {
         let cmdline_str = match read_to_string(&cmdline_path) {
             Ok(cmdline) => {
                 let cmdline = cmdline.trim_end();
-                let root_cmd = format!("root={}", &boot_path.get_portable_path().to_string_lossy());
+                let root_cmd = format!("root={}", &boot_path.get_kernel_cmd());
                 let rep: &str = root_cmd.as_ref();
                 let mut mod_cmdline = String::from(Regex::new(r#"root=\S+"#).unwrap().replace(cmdline,rep));
                 if !mod_cmdline.contains(rep) {

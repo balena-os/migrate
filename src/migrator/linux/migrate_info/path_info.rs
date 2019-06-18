@@ -59,6 +59,18 @@ impl PathInfo {
         }
     }
 
+    pub fn get_kernel_cmd(&self) -> String {
+        if let Some(ref partuuid) = self.part_uuid {
+            format!("PARTUUID={}", partuuid)
+        } else {
+            if let Some(ref uuid) = self.uuid {
+                format!("UUID={}", uuid)
+            } else {
+                String::from(self.path.to_string_lossy())
+            }
+        }
+    }
+
     pub fn from_mounted<P1: AsRef<Path>, P2: AsRef<Path>>(
         cmds: &EnsuredCmds,
         abs_path: &P1,

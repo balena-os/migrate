@@ -273,7 +273,6 @@ pub(crate) fn restore_backups(
     Ok(())
 }
 
-
 pub(crate) fn to_std_device_path(device: &Path) -> Result<PathBuf, MigError> {
     debug!("to_std_device_path: entered with '{}'", device.display());
 
