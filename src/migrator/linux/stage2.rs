@@ -104,7 +104,7 @@ impl<'a> Stage2 {
         //let boot_fs_dir = mounts.get_boot_mountpoint();
         let stage2_cfg_file = mounts.get_stage2_config();
 
-        dbg!(stage2_cfg_file);
+        // dbg!(stage2_cfg_file);
 
         // TODO: add options to make this more reliable)
 
@@ -122,15 +122,35 @@ impl<'a> Stage2 {
             }
         };
 
-        dbg!("stage2 loaded");
+        // dbg!("stage2 loaded");
 
 
         info!("Setting log level to {:?}", stage2_cfg.get_log_level());
         Logger::set_default_level(&stage2_cfg.get_log_level());
+
+
+        if let Some(log_path) = mounts.get_log_path() {
+            info!("Setting Log destination to '{}'", log_path.display());
+            let log_name = path_append(log_path, "migrate.log");
+            match File.create(&log_name) {
+                Ok(file) => {
+                    let mut log_stream = BufWriter::new(log_file);
+                    if let Some(buffer) = Logger::get_buffer() {
+                        let _res = log_stream.write_all(buffer.as_slice());
+                    }
+                    let _res = Logger::set_log_dest(&LogDestination::Stream, log_stream);
+                },
+                Err(why) => {
+                    error!("Failed to set up logging to '{}'", log_name);
+                }
+            }
+        }
+
+/*
         if let Some((device, fstype)) = stage2_cfg.get_log_device() {
             Stage2::init_logging(device, fstype);
         }
-
+*/
         // Ensure /boot is mounted in ROOTFS_DIR/boot
 
         mounts.mount_all(&stage2_cfg)?;
@@ -850,6 +870,7 @@ impl<'a> Stage2 {
         }
     }
 
+    /*
     fn init_logging(device: &Path, fstype: &str) {
         trace!(
             "init_logging: entered with '{}' fstype: {}",
@@ -927,5 +948,6 @@ impl<'a> Stage2 {
             info!("Set up logger to log to '{}'", log_file.display());
         }
     }
+    */
 
 }

@@ -176,6 +176,14 @@ impl<'a> Mounts {
         self.work_path.as_ref().unwrap()
     }
 
+    pub fn get_log_path(&'a self) -> Option<&'a Path> {
+        if let Some(ref log_path) = log_path {
+            Some(log_path)
+        } else {
+            None
+        }
+    }
+
     pub fn unmount_all(&mut self,) -> Result<(),MigError> {
         // TODO: unmount work_dir if necessarry
         umount(&self.boot_mountpoint)
