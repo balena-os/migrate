@@ -63,11 +63,7 @@ pub(crate) struct RaspberryPi3 {
 }
 
 impl RaspberryPi3 {
-    pub fn new() -> RaspberryPi3 {
-        RaspberryPi3 {
-            boot_manager: Box::new(RaspiBootManager::new()),
-        }
-    }
+
     pub fn from_config(
         cmds: &mut EnsuredCmds,
         mig_info: &MigrateInfo,
@@ -81,7 +77,7 @@ impl RaspberryPi3 {
         if let Some(_n) = SUPPORTED_OSSES.iter().position(|&r| r == os_name) {
             let mut boot_manager = RaspiBootManager::new();
             if boot_manager.can_migrate(cmds, mig_info, config, s2_cfg)? {
-                Ok(RaspberryPi3::new())
+                Ok(RaspberryPi3{ boot_manager: Box::new(boot_manager) })
             } else {
                 Err(MigError::from(MigErrorKind::Displayed))
             }
