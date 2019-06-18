@@ -94,7 +94,6 @@ impl<'a> Mounts {
                     kernel_root_fs_type
                 );
 
-                dbg!(&kernel_root_device);
                 match mount(
                         Some(&kernel_root_device),
                         &boot_mountpoint,
@@ -110,7 +109,6 @@ impl<'a> Mounts {
                         info!("Mount succeeded");
                     },
                     Err(why) => {
-                        dbg!(&why);
                         error!(
                             "Failed to mount previous root device '{}' to '{}' with type: {:?}",
                             &kernel_root_device.display(),
