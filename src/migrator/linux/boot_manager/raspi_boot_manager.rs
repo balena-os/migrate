@@ -264,7 +264,7 @@ impl BootManager for RaspiBootManager {
                 let root_cmd = format!("root={}", &boot_path.get_portable_path().to_string_lossy());
                 let rep: &str = root_cmd.as_ref();
                 let mut mod_cmdline = String::from(Regex::new(r#"root=\S+"#).unwrap().replace(cmdline.as_ref(),rep));
-                if !mod_cmdline.contains(&root_cmd) {
+                if !mod_cmdline.contains(rep) {
                     mod_cmdline.push(' ');
                     mod_cmdline.push_str(&root_cmd);
                 }
@@ -272,7 +272,7 @@ impl BootManager for RaspiBootManager {
                 let rootfs_cmd = format!("rootfstype={}", &boot_path.fs_type);
                 let rep: &str = rootfs_cmd.as_ref();
                 mod_cmdline = String::from(Regex::new(r#"rootfstype==\S+"#).unwrap().replace(mod_cmdline.as_ref(),rep));
-                if !mod_cmdline.contains(&rootfs_cmd) {
+                if !mod_cmdline.contains(rep) {
                     mod_cmdline.push(' ');
                     mod_cmdline.push_str(&rootfs_cmd);
                 }
