@@ -352,7 +352,7 @@ impl<'a> Stage2ConfigBuilder {
         // TODO: check first
 
         let mut cfg_str = String::from("# Balena Migrate Stage2 Config\n");
-        cfg_str.push_str("# auto-created by balena migrete - do not edit");
+        cfg_str.push_str("# auto-created by balena migrate - do not edit\n");
         cfg_str.push_str(&self.build()?.to_str()?);
         File::create(file)
             .context(MigErrCtx::from_remark(

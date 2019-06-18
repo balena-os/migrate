@@ -1,7 +1,7 @@
 use failure::{Fail, ResultExt};
 use log::{info, trace, warn, error};
 use regex::Regex;
-use std::fs::{copy, File};
+use std::fs::{copy, File, read_to_string};
 use std::io::{BufRead, BufReader, Write};
 
 use std::time::SystemTime;
@@ -29,6 +29,7 @@ const RPI_MIG_INITRD_PATH: &str = "/boot/balena.initramfs.cpio.gz";
 const RPI_MIG_INITRD_NAME: &str = "balena.initramfs.cpio.gz";
 
 const RPI_CONFIG_TXT: &str = "config.txt";
+const RPI_CMDLINE_TXT: &str = "cmdline.txt";
 
 pub(crate) struct RaspiBootManager {
     // valid is just used to enforce the use of new
@@ -114,8 +115,8 @@ impl BootManager for RaspiBootManager {
             RPI_MIG_INITRD_PATH
         );
 
-        let boot_path = &self.boot_path.as_ref().unwrap().path;
-        let config_path = path_append(boot_path, RPI_CONFIG_TXT);
+        let boot_path = self.boot_path.as_ref().unwrap();
+        let config_path = path_append(&boot_path.path, RPI_CONFIG_TXT);
 
         if !file_exists(&config_path) {
             return Err(MigError::from_remark(
@@ -126,16 +127,20 @@ impl BootManager for RaspiBootManager {
 
         // create backup of config.txt
 
+        let system_time = SystemTime::now()
+            .duration_since(SystemTime::UNIX_EPOCH)
+            .context(MigErrCtx::from_remark(
+                MigErrorKind::Upstream,
+                "Failed to create timestamp",
+            ))?;
+
+        let mut boot_cfg_bckup: Vec<(String, String)> = Vec::new();
+
         let balena_config = is_balena_file(&config_path)?;
         if !balena_config {
-            let system_time = SystemTime::now()
-                .duration_since(SystemTime::UNIX_EPOCH)
-                .context(MigErrCtx::from_remark(
-                    MigErrorKind::Upstream,
-                    "Failed to create timestamp",
-                ))?;
+            // backup config.txt
             let backup_path = path_append(
-                boot_path,
+                &boot_path.path,
                 &format!("{}.{}", RPI_CONFIG_TXT, system_time.as_secs()),
             );
 
@@ -148,12 +153,10 @@ impl BootManager for RaspiBootManager {
                 ),
             ))?;
 
-            let mut boot_cfg_bckup: Vec<(String, String)> = Vec::new();
             boot_cfg_bckup.push((
                 String::from(&*config_path.to_string_lossy()),
                 String::from(&*backup_path.to_string_lossy()),
             ));
-            s2_cfg.set_boot_bckup(boot_cfg_bckup);
 
             info!(
                 "Created backup of '{}' in '{}'",
@@ -171,10 +174,10 @@ impl BootManager for RaspiBootManager {
         let kernel_re = Regex::new(r#"^\s*kernel"#).unwrap();
         let mut kernel_found = false;
 
-        let mut out_str = String::new();
+        let mut config_str = String::new();
 
         if !balena_config {
-            out_str += &format!("{}\n", BALENA_FILE_TAG);
+            config_str += &format!("{}\n", BALENA_FILE_TAG);
         }
 
         {
@@ -188,9 +191,9 @@ impl BootManager for RaspiBootManager {
                         // TODO: more modifications to /boot/config.txt
                         if initrd_re.is_match(&line) {
                             // save commented version anyway
-                            out_str.push_str(&format!("# {}\n", line));
+                            config_str.push_str(&format!("# {}\n", line));
                             if !initrd_found {
-                                out_str.push_str(&format!(
+                                config_str.push_str(&format!(
                                     "initramfs {} followkernel\n",
                                     RPI_MIG_INITRD_NAME
                                 ));
@@ -198,13 +201,13 @@ impl BootManager for RaspiBootManager {
                             }
                         } else if kernel_re.is_match(&line) {
                             // save commented version anyway
-                            out_str.push_str(&format!("# {}\n", line));
+                            config_str.push_str(&format!("# {}\n", line));
                             if !kernel_found {
-                                out_str.push_str(&format!("kernel {}\n", RPI_MIG_KERNEL_NAME));
+                                config_str.push_str(&format!("kernel {}\n", RPI_MIG_KERNEL_NAME));
                                 kernel_found = true;
                             }
                         } else {
-                            out_str.push_str(&format!("{}\n", &line));
+                            config_str.push_str(&format!("{}\n", &line));
                         }
                     }
                     Err(why) => {
@@ -219,13 +222,75 @@ impl BootManager for RaspiBootManager {
 
         if !initrd_found {
             // add it if it did not exist
-            out_str.push_str(&format!("initramfs {} followkernel\n", RPI_MIG_INITRD_NAME));
+            config_str.push_str(&format!("initramfs {} followkernel\n", RPI_MIG_INITRD_NAME));
         }
 
         if !kernel_found {
             // add it if it did not exist
-            out_str.push_str(&format!("kernel {}\n", RPI_MIG_KERNEL_NAME));
+            config_str.push_str(&format!("kernel {}\n", RPI_MIG_KERNEL_NAME));
         }
+
+        info!(
+            "Modified '{}' to boot migrate environment",
+            config_path.display()
+        );
+
+        let cmdline_path = path_append(&boot_path.path, RPI_CMDLINE_TXT);
+        // Assume we have to backup cmdline.txt if we had to backup config.txt
+        if !balena_config {
+            // backup cmdline.txt
+            let backup_path = path_append(
+                &boot_path.path,
+                &format!("{}.{}", RPI_CMDLINE_TXT, system_time.as_secs()),
+            );
+
+            copy(&cmdline_path, &backup_path).context(MigErrCtx::from_remark(
+                MigErrorKind::Upstream,
+                &format!(
+                    "Failed to copy '{}' to '{}'",
+                    cmdline_path.display(),
+                    backup_path.display()
+                ),
+            ))?;
+
+            boot_cfg_bckup.push((
+                String::from(&*cmdline_path.to_string_lossy()),
+                String::from(&*backup_path.to_string_lossy()),
+            ));
+        }
+
+        let cmdline_str = match read_to_string(&cmdline_path) {
+            Ok(cmdline) => {
+                let root_cmd = format!("root={}", &boot_path.get_portable_path().to_string_lossy());
+                let rep: &str = root_cmd.as_ref();
+                let mut mod_cmdline = String::from(Regex::new(r#"root=\S+"#).unwrap().replace(cmdline.as_ref(),rep));
+                if !mod_cmdline.contains(&root_cmd) {
+                    mod_cmdline.push(' ');
+                    mod_cmdline.push_str(&root_cmd);
+                }
+
+                let rootfs_cmd = format!("rootfstype={}", &boot_path.fs_type);
+                let rep: &str = rootfs_cmd.as_ref();
+                mod_cmdline = String::from(Regex::new(r#"rootfstype==\S+"#).unwrap().replace(mod_cmdline.as_ref(),rep));
+                if !mod_cmdline.contains(&rootfs_cmd) {
+                    mod_cmdline.push(' ');
+                    mod_cmdline.push_str(&rootfs_cmd);
+                }
+
+                mod_cmdline
+            },
+            Err(why) => {
+                error!("failed to read boot file '{}'", cmdline_path.display());
+                return Err(MigError::displayed());
+            }
+        };
+
+        // save the backup loactions to s2_config
+        if boot_cfg_bckup.len() > 0 {
+            s2_cfg.set_boot_bckup(boot_cfg_bckup);
+        }
+
+        // Finally write stuff
 
         let mut config_file = File::create(&config_path).context(MigErrCtx::from_remark(
             MigErrorKind::Upstream,
@@ -236,16 +301,28 @@ impl BootManager for RaspiBootManager {
         ))?;
 
         config_file
-            .write(out_str.as_bytes())
+            .write(config_str.as_bytes())
             .context(MigErrCtx::from_remark(
                 MigErrorKind::Upstream,
                 &format!("Failed write to file '{}'", config_path.display()),
             ))?;
 
-        info!(
-            "Modified '{}' to boot migrate environment",
-            config_path.display()
-        );
+
+        let mut cmdline_file = File::create(&cmdline_path).context(MigErrCtx::from_remark(
+            MigErrorKind::Upstream,
+            &format!(
+                "Failed to open file '{}' for writing",
+                cmdline_path.display()
+            ),
+        ))?;
+
+
+        cmdline_file
+            .write(cmdline_str.as_bytes())
+            .context(MigErrCtx::from_remark(
+                MigErrorKind::Upstream,
+                &format!("Failed write to file '{}'", cmdline_path.display()),
+            ))?;
 
         // TODO: Optional backup & modify cmd_line.txt - eg. add debug
 
