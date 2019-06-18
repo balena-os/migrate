@@ -13,7 +13,8 @@ use crate::{
     defs::{STAGE2_CFG_FILE},
     linux::{
         linux_common::{to_std_device_path, get_kernel_root_info, drive_from_partition},
-        linux_defs::{NIX_NONE, }
+        linux_defs::{NIX_NONE, },
+        ensured_cmds::{EnsuredCmds, UDEVADM_CMD},
     },
     common::{
         dir_exists, file_exists, path_append,
@@ -25,11 +26,14 @@ use crate::{
 };
 
 use crate::common::stage2_config::Stage2Config;
+use crate::common::call;
 
 const MOUNT_DIR: &str = "/tmp_mount";
 const BOOTFS_DIR: &str = "boot";
 const WORKFS_DIR: &str = "work";
 const LOGFS_DIR: &str = "log";
+
+const UDEVADM_PARAMS: &[&str] = &["settle"];
 
 /*
 Attempts to mount the former boot device
@@ -56,7 +60,7 @@ pub(crate) struct Mounts {
 
 
 impl<'a> Mounts {
-    pub fn new() -> Result<Mounts, MigError> {
+    pub fn new(cmds: &mut EnsuredCmds) -> Result<Mounts, MigError> {
         trace!("new: entered");
         let boot_mountpoint = PathBuf::from(path_append(MOUNT_DIR, BOOTFS_DIR));
 
@@ -65,11 +69,27 @@ impl<'a> Mounts {
         let (kernel_root_device, kernel_root_fs_type) = get_kernel_root_info()?;
 
         info!(
-            "Trying to mount root device '{}' with fs-type: '{:?}' on '{}'",
+            "Kernel cmd line points to root device '{}' with fs-type: '{:?}'",
             kernel_root_device.display(),
             kernel_root_fs_type,
-            boot_mountpoint.display(),
         );
+
+        if let Ok(command) = cmds.ensure(UDEVADM_CMD) {
+            debug!("calling {} {:?}", command, UDEVADM_PARAMS);
+            match call(&command, UDEVADM_PARAMS, true) {
+                Ok(cmd_res) => {
+                    if !cmd_res.status.success() {
+                        warn!("{} {:?} failed with '{}'", command, UDEVADM_PARAMS, cmd_res.stderr);
+                    }
+                },
+                Err(why) => {
+                    warn!("{} {:?} failed with {:?}", command, UDEVADM_PARAMS, why);
+                }
+            }
+            debug!("{} {:?} done", command, UDEVADM_PARAMS);
+        } else {
+            warn!("{} is not available", UDEVADM_CMD);
+        }
 
         if !dir_exists(&boot_mountpoint)? {
             create_dir_all(&boot_mountpoint).context(MigErrCtx::from_remark(
@@ -79,10 +99,10 @@ impl<'a> Mounts {
                     &boot_mountpoint.display()
                 ),
             ))?;
+            debug!("created root mount directory {}", &boot_mountpoint.display());
         } else {
             warn!("root mount directory {} exists", &boot_mountpoint.display());
         }
-
 
         // try find root from kernel cmd line
         let mut boot_part =

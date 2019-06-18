@@ -21,6 +21,7 @@ pub const PARTPROBE_CMD: &str = "partprobe";
 pub const PARTED_CMD: &str = "parted";
 pub const GZIP_CMD: &str = "gzip";
 pub const MKTEMP_CMD: &str = "mktemp";
+pub const UDEVADM_CMD: &str = "udevadm";
 
 #[derive(Debug)]
 pub(crate) struct EnsuredCmds {

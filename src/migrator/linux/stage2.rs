@@ -62,6 +62,7 @@ const POST_PARTPROBE_WAIT_SECS: u64 = 5;
 const PARTPROBE_WAIT_NANOS: u32 = 0;
 
 pub(crate) struct Stage2 {
+    cmds: EnsuredCmds,
     mounts: Mounts,
     config: Stage2Config,
     recoverable_state: bool,
@@ -91,9 +92,11 @@ impl<'a> Stage2 {
 
         trace!("try_init: trace on");
 
+        let mut cmds = EnsuredCmds::new(&[])?;
+
         // TODO: beaglebone version - make device_slug dependant
 
-        let mut mounts = match Mounts::new() {
+        let mut mounts = match Mounts::new(&mut cmds) {
             Ok(mounts) => {
                 debug!("Successfully mounted file system");
                 mounts
@@ -159,6 +162,7 @@ impl<'a> Stage2 {
         mounts.mount_all(&stage2_cfg)?;
 
         return Ok(Stage2 {
+            cmds,
             mounts,
             config: stage2_cfg,
             recoverable_state: false,
@@ -181,7 +185,7 @@ impl<'a> Stage2 {
         // boot config restored can reboot
         self.recoverable_state = true;
 
-        let cmds = EnsuredCmds::new(MIG_REQUIRED_CMDS)?;
+        self.cmds.ensure_cmds(MIG_REQUIRED_CMDS)?;
 
         // TODO: mount work dir if required,
         // TODO: no copy if workdir is on separate disk
@@ -413,7 +417,7 @@ impl<'a> Stage2 {
                 ));
             }
 
-            if let Ok(ref dd_cmd) = cmds.get(DD_CMD) {
+            if let Ok(ref dd_cmd) = self.cmds.get(DD_CMD) {
                 debug!("dd found at: {}", dd_cmd);
 
                 let cmd_res_dd = if self.config.is_gzip_internal() {
@@ -507,7 +511,7 @@ impl<'a> Stage2 {
                             ));
                     }
                 } else {
-                    if let Ok(ref gzip_cmd) = cmds.get(GZIP_CMD) {
+                    if let Ok(ref gzip_cmd) = self.cmds.get(GZIP_CMD) {
                         debug!("gzip found at: {}", gzip_cmd);
                         let gzip_child = Command::new(gzip_cmd)
                             .args(&["-d", "-c", &image_path.to_string_lossy()])
@@ -571,7 +575,7 @@ impl<'a> Stage2 {
 
                 thread::sleep(Duration::new(PRE_PARTPROBE_WAIT_SECS, PARTPROBE_WAIT_NANOS));
 
-                cmds.call(PARTPROBE_CMD, &[&target_path.to_string_lossy()], true)?;
+                self.cmds.call(PARTPROBE_CMD, &[&target_path.to_string_lossy()], true)?;
 
                 thread::sleep(Duration::new(
                     POST_PARTPROBE_WAIT_SECS,
