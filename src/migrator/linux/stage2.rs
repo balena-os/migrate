@@ -42,7 +42,7 @@ use mounts::{Mounts};
 const REBOOT_DELAY: u64 = 3;
 
 // TODO: set this to Info once mature
-const INIT_LOG_LEVEL: Level = Level::Info;
+const INIT_LOG_LEVEL: Level = Level::Debug;
 const LOG_MOUNT_DIR: &str = "/migrate_log";
 const LOG_FILE_NAME: &str = "migrate.log";
 
@@ -76,7 +76,7 @@ impl<'a> Stage2 {
         trace!("try_init: entered");
 
         Logger::set_default_level(&INIT_LOG_LEVEL);
-        match Logger::set_log_dest(&LogDestination::BufferStderr, NO_STREAM) {
+        /*match Logger::set_log_dest(&LogDestination::BufferStderr, NO_STREAM) {
             Ok(_s) => {
                 info!("Balena Migrate Stage 2 initializing");
             }
@@ -85,6 +85,9 @@ impl<'a> Stage2 {
                 println!("failed to initalize logger");
             }
         }
+        */
+
+        info!("Balena Migrate Stage 2 initializing");
 
         trace!("try_init: trace on");
 
@@ -124,10 +127,10 @@ impl<'a> Stage2 {
 
         // dbg!("stage2 loaded");
 
+        mounts.mount_all(&stage2_cfg);
 
-        info!("Setting log level to {:?}", stage2_cfg.get_log_level());
-        Logger::set_default_level(&stage2_cfg.get_log_level());
-
+        // info!("Setting log level to {:?}", stage2_cfg.get_log_level());
+        // Logger::set_default_level(&stage2_cfg.get_log_level());
 
         if let Some(log_path) = mounts.get_log_path() {
             info!("Setting Log destination to '{}'", log_path.display());
