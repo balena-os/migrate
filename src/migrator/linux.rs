@@ -40,6 +40,7 @@ pub(crate) mod linux_common;
 pub(crate) use linux_common::{is_admin};
 use crate::defs::STAGE2_CFG_FILE;
 use crate::common::stage2_config::MountConfig;
+use mod_logger::{Logger, LogDestination};
 
 
 const REQUIRED_CMDS: &'static [&'static str] = &[
@@ -57,11 +58,15 @@ pub(crate) struct LinuxMigrator {
 impl<'a> LinuxMigrator {
     pub fn migrate() -> Result<(), MigError> {
         let mut migrator = LinuxMigrator::try_init(Config::new()?)?;
-        match migrator.config.migrate.get_mig_mode() {
+        let res = match migrator.config.migrate.get_mig_mode() {
             MigMode::IMMEDIATE => migrator.do_migrate(),
             MigMode::PRETEND => Ok(()),
             MigMode::AGENT => Err(MigError::from(MigErrorKind::NotImpl)),
-        }
+        };
+
+        Logger::flush();
+
+        res
     }
 
     // **********************************************************************
@@ -83,6 +88,7 @@ impl<'a> LinuxMigrator {
                 ));
             }
         };
+
 
         // **********************************************************************
         // We need to be root to do this
@@ -250,6 +256,13 @@ impl<'a> LinuxMigrator {
         // TODO: prepare logging
 
         let work_dir = &self.mig_info.work_path.path;
+        let log_file = path_append(work_dir, "stage1.log");
+
+        Logger::set_log_file(&LogDestination::Stderr, &log_file)
+            .context(MigErrCtx::from_remark(MigErrorKind::Upstream, &format!("Failed to set logging to '{}'", log_file.display())))?;
+
+        dbg!("Logger set");
+
         let backup_path = path_append(work_dir, BACKUP_FILE);
 
         self.stage2_config.set_has_backup(backup::create(
@@ -305,6 +318,7 @@ impl<'a> LinuxMigrator {
 
         trace!("stage2 config");
 
+        dbg!("setting up stage2_cfg");
         // *****************************************************************************************
         // Finish Stage2ConfigBuilder & create stage2 config file
 

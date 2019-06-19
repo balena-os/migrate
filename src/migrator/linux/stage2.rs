@@ -27,7 +27,8 @@ use crate::{
         linux_common::{get_mem_info, },
         linux_defs::{NIX_NONE, STAGE2_MEM_THRESHOLD,
                      BALENA_BOOT_PART, BALENA_ROOTA_PART, BALENA_ROOTB_PART, BALENA_STATE_PART,
-                     BALENA_DATA_PART, BALENA_BOOT_FSTYPE, BALENA_DATA_FSTYPE},
+                     BALENA_DATA_PART, BALENA_BOOT_FSTYPE, BALENA_DATA_FSTYPE,
+                     MIGRATE_LOG_FILE},
         EnsuredCmds, DD_CMD, GZIP_CMD, PARTPROBE_CMD, REBOOT_CMD,
     },
 };
@@ -40,6 +41,7 @@ pub(crate) mod mounts;
 use mounts::{Mounts};
 
 const REBOOT_DELAY: u64 = 3;
+const S2_REV: u32 = 3;
 
 // TODO: set this to Info once mature
 const INIT_LOG_LEVEL: Level = Level::Debug;
@@ -80,15 +82,15 @@ impl<'a> Stage2 {
         // Logger::set_color(true);
         match Logger::set_log_dest(&LogDestination::BufferStderr, NO_STREAM) {
             Ok(_s) => {
-                info!("Balena Migrate Stage 2 initializing");
+                info!("Balena Migrate Stage 2 rev {} initializing", S2_REV);
             }
             Err(_why) => {
-                println!("Balena Migrate Stage 2 initializing");
+                println!("Balena Migrate Stage 2 rev {} initializing", S2_REV);
                 println!("failed to initalize logger");
             }
         }
 
-        info!("Balena Migrate Stage 2 initializing");
+        // info!("Balena Migrate Stage 2 initializing");
 
         trace!("try_init: trace on");
 
@@ -99,18 +101,23 @@ impl<'a> Stage2 {
         let mut mounts = match Mounts::new(&mut cmds) {
             Ok(mounts) => {
                 debug!("Successfully mounted file system");
+                Logger::flush();
                 mounts
             },
             Err(why) => {
                 error!("Failed to mount file system: {:?}", why);
+                Logger::flush();
                 return Err(MigError::displayed());
             }
         };
 
+        debug!("got mounts: {:?}", mounts);
+        Logger::flush();
         //let boot_fs_dir = mounts.get_boot_mountpoint();
         let stage2_cfg_file = mounts.get_stage2_config();
 
-        // dbg!(stage2_cfg_file);
+        debug!("found stage2 config file: '{}'", stage2_cfg_file.display());
+        Logger::flush();
 
         // TODO: add options to make this more reliable)
 
@@ -124,11 +131,12 @@ impl<'a> Stage2 {
             },
             Err(why) => {
                 error!("Failed to read stage 2 config file from file '{}' with error: {:?}", stage2_cfg_file.display(), why);
+                Logger::flush();
                 return Err(MigError::displayed());
             }
         };
 
-        // dbg!("stage2 loaded");
+        Logger::flush();
 
         match mounts.mount_all(&stage2_cfg) {
             Ok(_) => {
@@ -139,34 +147,24 @@ impl<'a> Stage2 {
             }
         }
 
-        // info!("Setting log level to {:?}", stage2_cfg.get_log_level());
-        // Logger::set_default_level(&stage2_cfg.get_log_level());
+        info!("Setting log level to {:?}", stage2_cfg.get_log_level());
 
-        if let Some(log_path) = mounts.get_log_path() {
-            info!("Setting Log destination to '{}'", log_path.display());
-            let log_name = path_append(log_path, "migrate.log");
-            match File::create(&log_name) {
-                Ok(log_file) => {
-                    let mut log_stream = BufWriter::new(log_file);
-                    if let Some(buffer) = Logger::get_buffer() {
-                        let _res = log_stream.write_all(buffer.as_slice());
-                    }
-                    let _res = Logger::set_log_dest(&LogDestination::Stream, Some(log_stream));
-                },
-                Err(why) => {
-                    error!("Failed to set up logging to '{}'", log_name.display());
-                }
+        let log_path = if let Some(log_path) = mounts.get_log_path() {
+            path_append(log_path, MIGRATE_LOG_FILE)
+        } else {
+            path_append(mounts.get_boot_mountpoint(), MIGRATE_LOG_FILE)
+        };
+
+        match Logger::set_log_file(&LogDestination::Stderr, &log_path) {
+            Ok(_) => {
+                info!("Set log file to '{}'", log_path.display());
+            },
+            Err(why) => {
+                warn!("Failed to set log file to '{}', error: {:?}", log_path.display(), why);
             }
         }
 
-/*
-        if let Some((device, fstype)) = stage2_cfg.get_log_device() {
-            Stage2::init_logging(device, fstype);
-        }
-*/
-        // Ensure /boot is mounted in ROOTFS_DIR/boot
-
-        mounts.mount_all(&stage2_cfg)?;
+        Logger::flush();
 
         return Ok(Stage2 {
             cmds,
@@ -178,6 +176,7 @@ impl<'a> Stage2 {
 
     pub fn migrate(&mut self) -> Result<(), MigError> {
         trace!("migrate: entered");
+        Logger::flush();
 
         let device_type = self.config.get_device_type();
         let boot_type = self.config.get_boot_type();
@@ -188,6 +187,7 @@ impl<'a> Stage2 {
         device.restore_boot(&self.mounts, &self.config)?;
 
         info!("migrating {:?} boot type: {:?}", device_type, boot_type);
+        Logger::flush();
 
         // boot config restored can reboot
         self.recoverable_state = true;

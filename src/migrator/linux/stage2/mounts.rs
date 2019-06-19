@@ -1,6 +1,6 @@
 use failure::{ResultExt};
 use std::path::{PathBuf, Path};
-use std::fs::{create_dir_all, read_dir};
+use std::fs::{create_dir_all, read_dir, read_to_string};
 use log::{trace, info, warn, debug, error};
 use std::thread;
 use std::time::{Duration};
@@ -27,13 +27,14 @@ use crate::{
 
 use crate::common::stage2_config::Stage2Config;
 use crate::common::call;
+use mod_logger::{Logger, LogDestination};
 
 const MOUNT_DIR: &str = "/tmp_mount";
 const BOOTFS_DIR: &str = "boot";
 const WORKFS_DIR: &str = "work";
 const LOGFS_DIR: &str = "log";
 
-const UDEVADM_PARAMS: &[&str] = &["settle", "-t 10"];
+const UDEVADM_PARAMS: &[&str] = &["settle", "-t", "10"];
 
 /*
 Attempts to mount the former boot device
@@ -45,8 +46,7 @@ This device will be used to flash:
  partition in boot_part
 
 */
-
-
+#[derive(Debug)]
 pub(crate) struct Mounts {
     stage2_config: PathBuf,
     flash_device: PathBuf,
@@ -73,6 +73,10 @@ impl<'a> Mounts {
             kernel_root_device.display(),
             kernel_root_fs_type,
         );
+
+
+        debug!("letting things mature for a while");
+        thread::sleep(Duration::from_secs(3));
 
         debug!("attempting {} {:?}", UDEVADM_CMD, UDEVADM_PARAMS);
 
@@ -141,6 +145,18 @@ impl<'a> Mounts {
                     }
                 }
 
+/*
+                let log_path = path_append(&boot_mountpoint, "migrate.log");
+                match Logger::set_log_file(&LogDestination::Stderr, &log_path) {
+                    Ok(_) => {
+                        info!("now logging to '{}'", log_path.display());
+                    },
+                    Err(why) => {
+                        warn!("failed to set up logging to '{}' : {:?}", log_path.display(), why);
+                    }
+                }
+*/
+
                 debug!("looking for '{}'", stage2_config.display());
 
                 if !file_exists(&stage2_config) {
@@ -149,11 +165,11 @@ impl<'a> Mounts {
                         stage2_config.display()
                     );
                     error!("{}", &message);
-
                     umount(&boot_mountpoint)
                         .context(MigErrCtx::from_remark(MigErrorKind::Upstream, &format!("Failed to unmount from: '{}'", boot_mountpoint.display())))?;
                     None
                 } else {
+                    debug!("File found, returning '{}'", kernel_root_device.display());
                     Some(kernel_root_device)
                 }
             } else {
@@ -161,12 +177,22 @@ impl<'a> Mounts {
             };
 
         if let None = boot_part {
+            debug!("Attempting to find boot mount on any drive");
             boot_part = Mounts::find_boot_mount(&stage2_config, &boot_mountpoint, &kernel_root_fs_type);
         }
 
+        debug!("boot mount {:?}", boot_part);
+
         if let Some(boot_part) = boot_part {
             Ok(Mounts{
-                flash_device: drive_from_partition(&boot_part)?,
+                flash_device: match drive_from_partition(&boot_part) {
+                    Ok(flash_device) => flash_device,
+                    Err(why) => {
+                        error!("Failed to extract drive from partition: '{}', error: {:?}", boot_part.display(), why);
+                        Logger::flush();
+                        return Err(MigError::displayed());
+                    }
+                },
                 boot_part,
                 boot_mountpoint,
                 stage2_config,

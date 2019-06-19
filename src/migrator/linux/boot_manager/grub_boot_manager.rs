@@ -269,6 +269,11 @@ impl<'a> BootManager for GrubBootManager {
             .split_whitespace()
         {
             let word_lc = word.to_lowercase();
+
+            if word_lc.starts_with("console=") {
+                continue;
+            }
+
             if word_lc.starts_with("boot_image=") {
                 continue;
             }
@@ -284,7 +289,7 @@ impl<'a> BootManager for GrubBootManager {
             linux.push_str(&format!(" {}", word));
         }
 
-        linux.push_str(&format!(" rootfstype={} debug", boot_path.fs_type));
+        linux.push_str(&format!(" rootfstype={} console=tty0 debug", boot_path.fs_type));
 
         let mut grub_cfg = String::from(GRUB_CFG_TEMPLATE);
 

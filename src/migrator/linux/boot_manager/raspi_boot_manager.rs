@@ -278,6 +278,18 @@ impl BootManager for RaspiBootManager {
                     mod_cmdline.push_str(&rootfs_cmd);
                 }
 
+                // make sure console points to the right thing
+                // TODO: make configurable
+                let rep = "";
+                mod_cmdline = String::from(Regex::new(r#"console=\S+"#).unwrap().replace_all(mod_cmdline.as_ref(),rep));
+                mod_cmdline.push_str(&format!(" console=serial0,115200"));
+
+                let rep = "debug";
+                if !mod_cmdline.contains(rep) {
+                    mod_cmdline.push(' ');
+                    mod_cmdline.push_str(rep);
+                }
+
                 mod_cmdline.push('\n');
                 mod_cmdline
             },
