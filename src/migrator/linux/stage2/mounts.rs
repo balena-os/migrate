@@ -1,6 +1,6 @@
 use failure::{ResultExt};
 use std::path::{PathBuf, Path};
-use std::fs::{create_dir_all, read_dir, read_to_string};
+use std::fs::{create_dir_all, read_dir};
 use log::{trace, info, warn, debug, error};
 use std::thread;
 use std::time::{Duration};
@@ -245,10 +245,13 @@ impl<'a> Mounts {
         Ok(())
     }
 
-    pub fn mount_log(&mut self, device: &Path, fstype: &str) -> Result<Option<PathBuf>,MigError> {
+    pub fn mount_log(&mut self, device: &Path, fstype: &str) -> Result<PathBuf,MigError> {
         // TODO: retry with delay
         let device = to_std_device_path(device)?;
         let mountpoint = path_append(MOUNT_DIR, LOGFS_DIR);
+
+        debug!("Attempting to mount log as '{}' on '{}' with fstype {}", device.display(), mountpoint.display(), fstype);
+
         match create_dir_all(&mountpoint) {
             Ok(_) => {
                 for x in 1..4 {
@@ -276,8 +279,9 @@ impl<'a> Mounts {
                                 ),
                             ))?;
 
-                        return Ok(Some(mountpoint))
+                        return Ok(mountpoint)
                     } else {
+                        debug!("Device not found '{}' will retry in 3 seconds", device.display());
                         thread::sleep(Duration::from_secs(3))
                     }
                 }
@@ -296,20 +300,30 @@ impl<'a> Mounts {
         trace!("mount_all: entered");
 
         if let Some((log_dev, log_fs)) = stage2_config.get_log_device() {
-            let _res = self.mount_log(log_dev, log_fs);
+            self.log_path = match self.mount_log(log_dev, log_fs) {
+                Ok(mountpoint) => {
+                    Some(mountpoint)
+                },
+                Err(why) => {
+                    warn!("Failed to mount log device: '{}'", log_dev.display());
+                    None
+                }
+            };
         }
 
         match stage2_config.get_work_path() {
             PathType::Path(work_path) => {
-                self.work_path = Some(work_path.clone());
+                self.work_path = Some(path_append(&self.boot_mountpoint, work_path));
+                debug!("Work mountpoint is a path: {:?}",  self.work_path);
             },
             PathType::Mount(mount_cfg) => {
                 let device = to_std_device_path(mount_cfg.get_device())?;
-
+                debug!("Work mountpoint is a mount: '{}'", device.display());
+                // TODO: make all mounts retry with timeout
                 if self.boot_part != device {
                     let mountpoint = PathBuf::from(path_append(MOUNT_DIR, WORKFS_DIR));
                     debug!(
-                        "attempting to mount '{}' on '{}' with fstype: {}",
+                        "attempting to mount work using '{}' on '{}' with fstype: {}",
                         device.display(),
                         mountpoint.display(),
                         mount_cfg.get_fstype()
@@ -331,7 +345,12 @@ impl<'a> Mounts {
                             ),
                         ))?;
 
-                    self.work_path = Some(mountpoint);
+                    self.work_path = Some(path_append(&mountpoint, mount_cfg.get_path()));
+                    debug!("Work mountpoint is a path: {:?}", self.work_path);
+                    self.work_device = Some(device);
+                } else {
+                    self.work_path = Some(path_append(&self.boot_mountpoint, mount_cfg.get_path()));
+                    debug!("Work mountpoint is a path: {:?}", self.work_path);
                     self.work_device = Some(device);
                 }
             }
