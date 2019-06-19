@@ -74,6 +74,8 @@ impl<'a> Mounts {
             kernel_root_fs_type,
         );
 
+        debug!("attempting {} {:?}", UDEVADM_CMD, UDEVADM_PARAMS);
+
         if let Ok(command) = cmds.ensure(UDEVADM_CMD) {
             debug!("calling {} {:?}", command, UDEVADM_PARAMS);
             match call(&command, UDEVADM_PARAMS, true) {
