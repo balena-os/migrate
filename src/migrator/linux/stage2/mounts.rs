@@ -33,7 +33,7 @@ const BOOTFS_DIR: &str = "boot";
 const WORKFS_DIR: &str = "work";
 const LOGFS_DIR: &str = "log";
 
-const UDEVADM_PARAMS: &[&str] = &["settle"];
+const UDEVADM_PARAMS: &[&str] = &["settle", "-t 10"];
 
 /*
 Attempts to mount the former boot device
