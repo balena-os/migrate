@@ -130,7 +130,14 @@ impl<'a> Stage2 {
 
         // dbg!("stage2 loaded");
 
-        mounts.mount_all(&stage2_cfg);
+        match mounts.mount_all(&stage2_cfg) {
+            Ok(_) => {
+                info!("mounted all configured drives");
+            },
+            Err(why) => {
+                warn!("mount_all returned an error: {:?}", why);
+            }
+        }
 
         // info!("Setting log level to {:?}", stage2_cfg.get_log_level());
         // Logger::set_default_level(&stage2_cfg.get_log_level());
