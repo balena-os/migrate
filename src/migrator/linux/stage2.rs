@@ -77,7 +77,8 @@ impl<'a> Stage2 {
         trace!("try_init: entered");
 
         Logger::set_default_level(&INIT_LOG_LEVEL);
-        /*match Logger::set_log_dest(&LogDestination::BufferStderr, NO_STREAM) {
+        // Logger::set_color(true);
+        match Logger::set_log_dest(&LogDestination::BufferStderr, NO_STREAM) {
             Ok(_s) => {
                 info!("Balena Migrate Stage 2 initializing");
             }
@@ -86,7 +87,6 @@ impl<'a> Stage2 {
                 println!("failed to initalize logger");
             }
         }
-        */
 
         info!("Balena Migrate Stage 2 initializing");
 

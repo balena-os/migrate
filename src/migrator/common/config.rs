@@ -95,6 +95,8 @@ impl<'a> Config {
             _ => Logger::set_default_level(&Level::Trace),
         }
 
+        Logger::set_color(true);
+
         // try to establish work_dir and config file
         // work_dir can be specified on command line, it defaults to ./ if not
         // work_dir can also be specified in config, path specified on command line
