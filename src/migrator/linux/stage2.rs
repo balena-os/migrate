@@ -44,7 +44,7 @@ const REBOOT_DELAY: u64 = 3;
 const S2_REV: u32 = 3;
 
 // TODO: set this to Info once mature
-const INIT_LOG_LEVEL: Level = Level::Debug;
+const INIT_LOG_LEVEL: Level = Level::Trace;
 const LOG_MOUNT_DIR: &str = "/migrate_log";
 const LOG_FILE_NAME: &str = "migrate.log";
 
@@ -79,7 +79,7 @@ impl<'a> Stage2 {
         trace!("try_init: entered");
 
         Logger::set_default_level(&INIT_LOG_LEVEL);
-        // Logger::set_color(true);
+
         match Logger::set_log_dest(&LogDestination::BufferStderr, NO_STREAM) {
             Ok(_s) => {
                 info!("Balena Migrate Stage 2 rev {} initializing", S2_REV);
@@ -90,13 +90,9 @@ impl<'a> Stage2 {
             }
         }
 
-        // info!("Balena Migrate Stage 2 initializing");
-
         trace!("try_init: trace on");
 
         let mut cmds = EnsuredCmds::new(&[])?;
-
-        // TODO: beaglebone version - make device_slug dependant
 
         let mut mounts = match Mounts::new(&mut cmds) {
             Ok(mounts) => {
@@ -112,12 +108,11 @@ impl<'a> Stage2 {
         };
 
         debug!("got mounts: {:?}", mounts);
-        Logger::flush();
-        //let boot_fs_dir = mounts.get_boot_mountpoint();
+
+        let boot_fs_dir = mounts.get_boot_mountpoint();
         let stage2_cfg_file = mounts.get_stage2_config();
 
         debug!("found stage2 config file: '{}'", stage2_cfg_file.display());
-        Logger::flush();
 
         // TODO: add options to make this more reliable)
 
@@ -136,8 +131,6 @@ impl<'a> Stage2 {
             }
         };
 
-        Logger::flush();
-
         match mounts.mount_all(&stage2_cfg) {
             Ok(_) => {
                 info!("mounted all configured drives");
@@ -148,12 +141,19 @@ impl<'a> Stage2 {
         }
 
         info!("Setting log level to {:?}", stage2_cfg.get_log_level());
+        Logger::set_default_level(&stage2_cfg.get_log_level());
 
-        let log_path = if let Some(log_path) = mounts.get_log_path() {
-            path_append(log_path, MIGRATE_LOG_FILE)
-        } else {
-            path_append(mounts.get_boot_mountpoint(), MIGRATE_LOG_FILE)
-        };
+
+        let log_path =
+            if let Some(log_path) = mounts.get_log_path() {
+                path_append(log_path, MIGRATE_LOG_FILE)
+            } else {
+                if let Some(work_path) = mounts.get_work_path() {
+                    path_append(work_path, MIGRATE_LOG_FILE)
+                } else {
+                    path_append(mounts.get_boot_mountpoint(), MIGRATE_LOG_FILE)
+                }
+            };
 
         match Logger::set_log_file(&LogDestination::Stderr, &log_path) {
             Ok(_) => {
@@ -176,7 +176,6 @@ impl<'a> Stage2 {
 
     pub fn migrate(&mut self) -> Result<(), MigError> {
         trace!("migrate: entered");
-        Logger::flush();
 
         let device_type = self.config.get_device_type();
         let boot_type = self.config.get_boot_type();
@@ -198,7 +197,12 @@ impl<'a> Stage2 {
         // TODO: no copy if workdir is on separate disk
 
         // let boot_mountpoint = self.mounts.get_boot_mountpoint();
-        let work_path = self.mounts.get_work_path();
+        let work_path = if let Some(work_path) = self.mounts.get_work_path() {
+            work_path
+        } else {
+            error!("The working directory was not mounted - aborting migration");
+            return Err(MigError::displayed());
+        };
 
         // TODO: only do this if work_path is not distinct drive from flash drive
         // check if we have enough space to copy files to initramfs

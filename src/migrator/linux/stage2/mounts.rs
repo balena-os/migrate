@@ -220,8 +220,12 @@ impl<'a> Mounts {
         &self.flash_device
     }
 
-    pub fn get_work_path(&'a self) -> &'a Path {
-        self.work_path.as_ref().unwrap()
+    pub fn get_work_path(&'a self) -> Option<&'a Path> {
+        if let Some(ref work_path) = self.work_path {
+            Some(work_path)
+        } else {
+            None
+        }
     }
 
     pub fn get_log_path(&'a self) -> Option<&'a Path> {
@@ -311,6 +315,9 @@ impl<'a> Mounts {
             };
         }
 
+        debug!("log mountpoint is {:?}", self.log_path);
+        Logger::flush();
+
         match stage2_config.get_work_path() {
             PathType::Path(work_path) => {
                 self.work_path = Some(path_append(&self.boot_mountpoint, work_path));
@@ -356,108 +363,9 @@ impl<'a> Mounts {
             }
         }
 
-        /*
-        let boot_path = path_append(&root_fs_dir, BOOT_PATH);
+        Logger::flush();
+        Ok(())
 
-        let (boot_mount,boot_device) =
-            if dir_exists(&boot_path)? {
-                // TODO: provide fstype for boot
-                if let Some(boot_mount) = stage2_cfg.get_boot_mount() {
-                    let boot_device = to_std_device_path(boot_mount.get_device())?;
-
-
-                    if boot_device != root_device {
-                        let mountpoint = path_append(&root_fs_dir, boot_mount.get_mountpoint());
-                        debug!(
-                            "attempting to mount '{}' on '{}' with fstype: {}",
-                            boot_device.display(),
-                            mountpoint.display(),
-                            boot_mount.get_fstype()
-                        );
-                        mount(
-                            Some(&boot_device),
-                            &mountpoint,
-                            Some(boot_mount.get_fstype()),
-                            MsFlags::empty(),
-                            NIX_NONE,
-                        )
-                            .context(MigErrCtx::from_remark(
-                                MigErrorKind::Upstream,
-                                &format!(
-                                    "Failed to mount previous boot device '{}' to '{}' with fstype: {:?}",
-                                    &boot_mount.get_device().display(),
-                                    &mountpoint.display(),
-                                    boot_mount.get_fstype()
-                                ),
-                            ))?;
-                        (Some(boot_path), Some(boot_device))
-                    } else {
-                        (None, None)
-                    }
-                } else {
-                    (None, None)
-                }
-            } else {
-                warn!(
-                    "cannot find boot mount point on root device: {}, path {}",
-                    root_device.display(),
-                    boot_path.display()
-                );
-                (None, None)
-            };
-
-
-        // mount bootmgr partition (EFI, uboot)
-
-        let bootmgr_mount =
-            if let Some(bootmgr_mount) = stage2_cfg.get_bootmgr_mount() {
-                let device = to_std_device_path(bootmgr_mount.get_device())?;
-                let mounted =
-                    if let Some(boot_device) = boot_device {
-                        device == boot_device
-                    }  else {
-                        false
-                    };
-
-                if !mounted && device != root_device {
-                    // TODO: sort out boot manager mountpoint for windows
-                    // create 'virtual' mount point in windows and adjust boot backup paths appropriately as
-                    // mountpoint D: for EFI backup will no t work
-                    // maybe try /boot/ EFI
-                    let mountpoint = path_append(&root_fs_dir, bootmgr_mount.get_mountpoint());
-                    debug!(
-                        "attempting to mount '{}' on '{}' with fstype: {}",
-                        device.display(),
-                        mountpoint.display(),
-                        bootmgr_mount.get_fstype()
-                    );
-                    mount(
-                        Some(&device),
-                        &mountpoint,
-                        Some(bootmgr_mount.get_fstype()),
-                        MsFlags::empty(),
-                        NIX_NONE,
-                    )
-                    .context(MigErrCtx::from_remark(
-                        MigErrorKind::Upstream,
-                        &format!(
-                            "Failed to mount previous bootmanager device '{}' to '{}' with fstype: {}",
-                            device.display(),
-                            mountpoint.display(),
-                            bootmgr_mount.get_fstype()
-                        ),
-                    ))?;
-                    Some(mountpoint)
-                } else {
-                    None
-                }
-            } else {
-              None
-            };
-
-*/
-
-        unimplemented!()
     }
 
     fn find_boot_mount(
