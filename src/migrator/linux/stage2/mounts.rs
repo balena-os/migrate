@@ -53,9 +53,8 @@ pub(crate) struct Mounts {
     boot_part: PathBuf,
     boot_mountpoint: PathBuf,
     work_path: Option<PathBuf>,
-    work_device: Option<PathBuf>,
+    work_mountpoint:Option<PathBuf>,
     log_path: Option<PathBuf>,
-    log_device: Option<PathBuf>,
 }
 
 
@@ -197,8 +196,7 @@ impl<'a> Mounts {
                 boot_mountpoint,
                 stage2_config,
                 work_path: None,
-                work_device: None,
-                log_device: None,
+                work_mountpoint: None,
                 log_path: None
             })
         } else {
@@ -236,7 +234,21 @@ impl<'a> Mounts {
         }
     }
 
-    pub fn unmount_all(&mut self,) -> Result<(),MigError> {
+    pub fn unmount_log(&mut self,) -> Result<(),MigError> {
+        if let Some(ref mountpoint) = self.log_path {
+            umount(mountpoint)
+                .context(MigErrCtx::from_remark(
+                    MigErrorKind::Upstream,
+                    &format!(
+                        "Failed to unmount log device: '{}'",
+                        mountpoint.display()
+                    ),
+                ))?;
+        }
+        Ok(())
+    }
+
+    pub fn unmount_all(&self,) -> Result<(),MigError> {
         // TODO: unmount work_dir if necessarry
         umount(&self.boot_mountpoint)
             .context(MigErrCtx::from_remark(
@@ -246,6 +258,18 @@ impl<'a> Mounts {
                 self.boot_mountpoint.display()
             ),
         ))?;
+
+        if let Some(ref mountpoint) = self.work_mountpoint {
+            umount(mountpoint)
+                .context(MigErrCtx::from_remark(
+                    MigErrorKind::Upstream,
+                    &format!(
+                        "Failed to unmount former work device: '{}'",
+                        mountpoint.display()
+                    ),
+                ))?;
+        }
+
         Ok(())
     }
 
@@ -356,13 +380,13 @@ impl<'a> Mounts {
                             ),
                      ))?;
 
+
                     self.work_path = Some(path_append(&mountpoint, mount_cfg.get_path()));
+                    self.work_mountpoint = Some(mountpoint);
                     debug!("Work mountpoint is a path: {:?}", self.work_path);
-                    self.work_device = Some(device);
                 } else {
                     self.work_path = Some(path_append(&self.boot_mountpoint, mount_cfg.get_path()));
                     debug!("Work mountpoint is a path: {:?}", self.work_path);
-                    self.work_device = Some(device);
                 }
             }
         }

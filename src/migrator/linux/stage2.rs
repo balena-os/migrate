@@ -24,7 +24,7 @@ use crate::{
     defs::{FailMode, BACKUP_FILE, SYSTEM_CONNECTIONS_DIR, DISK_BY_LABEL_PATH},
     linux::{
         device,
-        linux_common::{get_mem_info, },
+        linux_common::{get_mem_info,},
         linux_defs::{NIX_NONE, STAGE2_MEM_THRESHOLD,
                      BALENA_BOOT_PART, BALENA_ROOTA_PART, BALENA_ROOTB_PART, BALENA_STATE_PART,
                      BALENA_DATA_PART, BALENA_BOOT_FSTYPE, BALENA_DATA_FSTYPE,
@@ -39,6 +39,8 @@ use crate::{
 
 pub(crate) mod mounts;
 use mounts::{Mounts};
+use crate::common::call;
+use crate::linux::ensured_cmds::UDEVADM_CMD;
 
 const REBOOT_DELAY: u64 = 3;
 const S2_REV: u32 = 3;
@@ -54,7 +56,7 @@ const DATA_MNT_DIR: &str = "mnt_data";
 
 const DD_BLOCK_SIZE: usize = 4194304;
 
-const MIG_REQUIRED_CMDS: &'static [&'static str] = &[DD_CMD, PARTPROBE_CMD, REBOOT_CMD];
+const MIG_REQUIRED_CMDS: &'static [&'static str] = &[DD_CMD, PARTPROBE_CMD, REBOOT_CMD, UDEVADM_CMD];
 
 const BALENA_IMAGE_FILE: &str = "balenaOS.img.gz";
 const BALENA_CONFIG_FILE: &str = "config.json";
@@ -62,6 +64,8 @@ const BALENA_CONFIG_FILE: &str = "config.json";
 const PRE_PARTPROBE_WAIT_SECS: u64 = 5;
 const POST_PARTPROBE_WAIT_SECS: u64 = 5;
 const PARTPROBE_WAIT_NANOS: u32 = 0;
+
+const UDEVADM_PARAMS: &[&str] = &["settle", "-t", "10"];
 
 pub(crate) struct Stage2 {
     cmds: EnsuredCmds,
@@ -146,25 +150,29 @@ impl<'a> Stage2 {
 
         let log_path =
             if let Some(log_path) = mounts.get_log_path() {
-                path_append(log_path, MIGRATE_LOG_FILE)
+                Some(path_append(log_path, MIGRATE_LOG_FILE))
             } else {
                 if let Some(work_path) = mounts.get_work_path() {
-                    path_append(work_path, MIGRATE_LOG_FILE)
+                    if stage2_cfg.is_no_flash() {
+                        Some(path_append(work_path, MIGRATE_LOG_FILE))
+                    } else {
+                        None
+                    }
                 } else {
-                    path_append(mounts.get_boot_mountpoint(), MIGRATE_LOG_FILE)
+                    None
                 }
             };
 
-        match Logger::set_log_file(&LogDestination::Stderr, &log_path) {
-            Ok(_) => {
-                info!("Set log file to '{}'", log_path.display());
-            },
-            Err(why) => {
-                warn!("Failed to set log file to '{}', error: {:?}", log_path.display(), why);
+        if let Some(log_path) = log_path {
+            match Logger::set_log_file(&LogDestination::Stderr, &log_path) {
+                Ok(_) => {
+                    info!("Set log file to '{}'", log_path.display());
+                },
+                Err(why) => {
+                    warn!("Failed to set log file to '{}', error: {:?}", log_path.display(), why);
+                }
             }
         }
-
-        Logger::flush();
 
         return Ok(Stage2 {
             cmds,
@@ -368,22 +376,10 @@ impl<'a> Stage2 {
 
 
         // Write our buffered log to workdir before unmounting if we are not flashing anyway
-        if self.config.is_no_flash() && Logger::get_log_dest().is_buffer_dest() {
-            let log_dest = path_append(
-                work_path, LOG_FILE_NAME,
-            );
-            info!("Saving the log to '{}'", log_dest.display());
+
+
+        if self.config.is_no_flash() {
             Logger::flush();
-
-            if let Some(buffer) = Logger::get_buffer() {
-                if let Ok(file) = File::create(&log_dest) {
-                    let mut writer = BufWriter::new(file);
-                    let _res = writer.write(&buffer);
-                    let _res = writer.flush();
-                    sync();
-                }
-            }
-
             let _res = Logger::set_log_dest(&LogDestination::StreamStderr, NO_STREAM);
         }
 
@@ -593,10 +589,8 @@ impl<'a> Stage2 {
                     PARTPROBE_WAIT_NANOS,
                 ));
 
-            // TODO: saw weird behaviour here, /dev/disk/by-label/resin-boot not found
-            // does something like
-            // 'udevadm settle --timeout=20 --exit-if-exists=/dev/disk/by-label/resin-boot'
-            // make sense ?
+
+                let _res = self.cmds.call(UDEVADM_CMD, UDEVADM_PARAMS, true);
             } else {
                 return Err(MigError::from_remark(
                     MigErrorKind::NotFound,
@@ -841,6 +835,8 @@ impl<'a> Stage2 {
             "Migration stage 2 was successful, rebooting in {} seconds!",
             REBOOT_DELAY
         );
+
+        let _res = self.mounts.unmount_log();
 
         thread::sleep(Duration::new(REBOOT_DELAY, 0));
 

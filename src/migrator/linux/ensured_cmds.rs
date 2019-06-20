@@ -39,15 +39,17 @@ impl EnsuredCmds {
 
     pub fn ensure_cmds(&mut self, cmds: &[&str]) -> Result<(), MigError> {
         for cmd in cmds {
-            if let Ok(cmd_path) = whereis(cmd) {
-                self.cmd_table.insert(String::from(*cmd), cmd_path.clone());
-            } else {
-                let message = format!("cannot find required command {}", cmd);
-                warn!("{}", message);
-                return Err(MigError::from_remark(
-                    MigErrorKind::NotFound,
-                    &format!("{}", message),
-                ));
+            if !self.cmd_table.contains_key(*cmd) {
+                if let Ok(cmd_path) = whereis(cmd) {
+                    self.cmd_table.insert(String::from(*cmd), cmd_path.clone());
+                } else {
+                    let message = format!("cannot find required command {}", cmd);
+                    warn!("{}", message);
+                    return Err(MigError::from_remark(
+                        MigErrorKind::NotFound,
+                        &format!("{}", message),
+                    ));
+                }
             }
         }
         Ok(())
