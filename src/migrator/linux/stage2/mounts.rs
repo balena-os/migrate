@@ -47,6 +47,10 @@ This device will be used to flash:
  partition in boot_part
 
 */
+
+// TODO: test fallback strategy - boot device search
+
+
 #[derive(Debug)]
 pub(crate) struct Mounts {
     stage2_config: PathBuf,
