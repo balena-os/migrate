@@ -32,7 +32,6 @@ const RPI_CONFIG_TXT: &str = "config.txt";
 const RPI_CMDLINE_TXT: &str = "cmdline.txt";
 
 pub(crate) struct RaspiBootManager {
-    // valid is just used to enforce the use of new
     boot_path: Option<PathInfo>,
 }
 
@@ -139,10 +138,8 @@ impl BootManager for RaspiBootManager {
         let balena_config = is_balena_file(&config_path)?;
         if !balena_config {
             // backup config.txt
-            let backup_path = path_append(
-                &boot_path.path,
-                &format!("{}.{}", RPI_CONFIG_TXT, system_time.as_secs()),
-            );
+            let backup_file = format!("{}.{}", RPI_CONFIG_TXT, system_time.as_secs());
+            let backup_path = path_append(&boot_path.path,&backup_file);
 
             copy(&config_path, &backup_path).context(MigErrCtx::from_remark(
                 MigErrorKind::Upstream,
@@ -154,8 +151,8 @@ impl BootManager for RaspiBootManager {
             ))?;
 
             boot_cfg_bckup.push((
-                String::from(&*config_path.to_string_lossy()),
-                String::from(&*backup_path.to_string_lossy()),
+                String::from(RPI_CONFIG_TXT),
+                backup_file.clone(),
             ));
 
             info!(
@@ -239,10 +236,8 @@ impl BootManager for RaspiBootManager {
         // Assume we have to backup cmdline.txt if we had to backup config.txt
         if !balena_config {
             // backup cmdline.txt
-            let backup_path = path_append(
-                &boot_path.path,
-                &format!("{}.{}", RPI_CMDLINE_TXT, system_time.as_secs()),
-            );
+            let backup_file = format!("{}.{}", RPI_CMDLINE_TXT, system_time.as_secs());
+            let backup_path = path_append(&boot_path.path,&backup_file );
 
             copy(&cmdline_path, &backup_path).context(MigErrCtx::from_remark(
                 MigErrorKind::Upstream,
@@ -254,8 +249,8 @@ impl BootManager for RaspiBootManager {
             ))?;
 
             boot_cfg_bckup.push((
-                String::from(&*cmdline_path.to_string_lossy()),
-                String::from(&*backup_path.to_string_lossy()),
+                String::from(RPI_CMDLINE_TXT),
+                backup_file.clone()
             ));
         }
 
