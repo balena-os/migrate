@@ -329,6 +329,11 @@ impl<'a> Mounts {
                 // TODO: make all mounts retry with timeout
                 if self.boot_part != device {
                     let mountpoint = PathBuf::from(path_append(MOUNT_DIR, WORKFS_DIR));
+                    if !dir_exists(&mountpoint)? {
+                        create_dir_all(&mountpoint)
+                            .context(MigErrCtx::from_remark(MigErrorKind::Upstream, &format!("Failed to create mountpoint '{}'", mountpoint.display())))?;
+                    }
+
                     debug!(
                         "attempting to mount work using '{}' on '{}' with fstype: {}",
                         device.display(),
@@ -341,16 +346,15 @@ impl<'a> Mounts {
                         Some(mount_cfg.get_fstype()),
                         MsFlags::empty(),
                         NIX_NONE,
-                    )
-                        .context(MigErrCtx::from_remark(
+                    ).context(MigErrCtx::from_remark(
                             MigErrorKind::Upstream,
                             &format!(
-                                "Failed to mount previous boot manager device '{}' to '{}' with fstype: {:?}",
+                                "Failed to mount previous work manager device '{}' to '{}' with fstype: {:?}",
                                 &device.display(),
                                 &mountpoint.display(),
                                 mount_cfg.get_fstype()
                             ),
-                        ))?;
+                     ))?;
 
                     self.work_path = Some(path_append(&mountpoint, mount_cfg.get_path()));
                     debug!("Work mountpoint is a path: {:?}", self.work_path);
