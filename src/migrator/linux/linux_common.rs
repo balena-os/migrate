@@ -286,7 +286,7 @@ pub(crate) fn to_std_device_path(device: &Path) -> Result<PathBuf, MigError> {
             return Ok(PathBuf::from(device))
     }
 
-    debug!("to_std_device_path: attempting to fdereference as link '{}'", device.display());
+    debug!("to_std_device_path: attempting to dereference as link '{}'", device.display());
 
     match read_link(device) {
         Ok(link) => {

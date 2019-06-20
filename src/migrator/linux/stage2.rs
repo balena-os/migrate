@@ -41,7 +41,7 @@ pub(crate) mod mounts;
 use mounts::{Mounts};
 
 const REBOOT_DELAY: u64 = 3;
-const S2_REV: u32 = 3;
+const S2_REV: u32 = 4;
 
 // TODO: set this to Info once mature
 const INIT_LOG_LEVEL: Level = Level::Trace;
