@@ -1,7 +1,6 @@
 use failure::{Fail, ResultExt};
 use log::{debug, error, info, trace, warn};
 use std::fs::{copy, create_dir};
-use std::path::{Path};
 use std::thread;
 use std::time::Duration;
 
@@ -17,7 +16,6 @@ use crate::{
 };
 
 pub(crate) mod linux_defs;
-use crate::linux::linux_defs::ROOT_PATH;
 
 pub(crate) mod device;
 pub(crate) use device::Device;
@@ -28,8 +26,8 @@ pub(crate) mod stage2;
 
 pub(crate) mod ensured_cmds;
 pub(crate) use ensured_cmds::{
-    EnsuredCmds, CHMOD_CMD, DD_CMD, DF_CMD, FDISK_CMD, FILE_CMD, GRUB_REBOOT_CMD, GRUB_UPDT_CMD,
-    GZIP_CMD, LSBLK_CMD, MKTEMP_CMD, MOKUTIL_CMD, MOUNT_CMD, PARTED_CMD, PARTPROBE_CMD, REBOOT_CMD,
+    EnsuredCmds, CHMOD_CMD, DF_CMD, FDISK_CMD, FILE_CMD, GRUB_REBOOT_CMD, GRUB_UPDT_CMD,
+    LSBLK_CMD, MKTEMP_CMD, MOKUTIL_CMD, MOUNT_CMD, PARTED_CMD, REBOOT_CMD,
     UNAME_CMD,
 };
 
@@ -78,17 +76,12 @@ impl<'a> LinuxMigrator {
 
         info!("migrate mode: {:?}", config.migrate.get_mig_mode());
 
-        let mut cmds = match EnsuredCmds::new(REQUIRED_CMDS) {
-            Ok(cmds) => cmds,
-            Err(why) => {
-                let message = format!("Failed to ensure required commands: {:?}", why);
-                error!("{}", message);
-                return Err(MigError::from(
-                    why.context(MigErrCtx::from_remark(MigErrorKind::Upstream, &message)),
-                ));
-            }
-        };
+        let mut cmds= EnsuredCmds::new();
 
+        if let Err(why) = cmds.ensure_cmds(REQUIRED_CMDS) {
+            error!("Failed to ensure required commands: {:?}", why);
+            return Err(MigError::displayed());
+        };
 
         // **********************************************************************
         // We need to be root to do this

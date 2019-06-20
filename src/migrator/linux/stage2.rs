@@ -29,7 +29,7 @@ use crate::{
                      BALENA_BOOT_PART, BALENA_ROOTA_PART, BALENA_ROOTB_PART, BALENA_STATE_PART,
                      BALENA_DATA_PART, BALENA_BOOT_FSTYPE, BALENA_DATA_FSTYPE,
                      MIGRATE_LOG_FILE},
-        EnsuredCmds, DD_CMD, GZIP_CMD, PARTPROBE_CMD, REBOOT_CMD,
+        ensured_cmds::{EnsuredCmds, DD_CMD, GZIP_CMD, PARTPROBE_CMD, REBOOT_CMD,UDEVADM_CMD, LSBLK_CMD, },
     },
 };
 
@@ -39,8 +39,6 @@ use crate::{
 
 pub(crate) mod mounts;
 use mounts::{Mounts};
-use crate::common::call;
-use crate::linux::ensured_cmds::UDEVADM_CMD;
 
 const REBOOT_DELAY: u64 = 3;
 const S2_REV: u32 = 3;
@@ -56,7 +54,8 @@ const DATA_MNT_DIR: &str = "mnt_data";
 
 const DD_BLOCK_SIZE: usize = 4194304;
 
-const MIG_REQUIRED_CMDS: &'static [&'static str] = &[DD_CMD, PARTPROBE_CMD, REBOOT_CMD, UDEVADM_CMD];
+const MIG_REQUIRED_CMDS: &'static [&'static str] =
+    &[DD_CMD, PARTPROBE_CMD, REBOOT_CMD, UDEVADM_CMD, LSBLK_CMD];
 
 const BALENA_IMAGE_FILE: &str = "balenaOS.img.gz";
 const BALENA_CONFIG_FILE: &str = "config.json";
@@ -96,7 +95,10 @@ impl<'a> Stage2 {
 
         trace!("try_init: trace on");
 
-        let mut cmds = EnsuredCmds::new(&[])?;
+        let mut cmds = EnsuredCmds::new();
+        if let Err(why) = cmds.ensure_cmds(MIG_REQUIRED_CMDS) {
+            warn!("Not all required commands were found: {:?}", why);
+        }
 
         let mut mounts = match Mounts::new(&mut cmds) {
             Ok(mounts) => {
@@ -113,7 +115,6 @@ impl<'a> Stage2 {
 
         debug!("got mounts: {:?}", mounts);
 
-        let boot_fs_dir = mounts.get_boot_mountpoint();
         let stage2_cfg_file = mounts.get_stage2_config();
 
         debug!("found stage2 config file: '{}'", stage2_cfg_file.display());
@@ -204,7 +205,6 @@ impl<'a> Stage2 {
         // TODO: mount work dir if required,
         // TODO: no copy if workdir is on separate disk
 
-        // let boot_mountpoint = self.mounts.get_boot_mountpoint();
         let work_path = if let Some(work_path) = self.mounts.get_work_path() {
             work_path
         } else {

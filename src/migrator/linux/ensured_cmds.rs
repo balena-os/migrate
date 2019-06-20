@@ -29,15 +29,14 @@ pub(crate) struct EnsuredCmds {
 }
 
 impl EnsuredCmds {
-    pub fn new(cmds: &[&str]) -> Result<EnsuredCmds, MigError> {
-        let mut ensured_cmds = EnsuredCmds {
+    pub fn new() -> EnsuredCmds {
+        EnsuredCmds {
             cmd_table: HashMap::new(),
-        };
-        ensured_cmds.ensure_cmds(cmds)?;
-        Ok(ensured_cmds)
+        }
     }
 
     pub fn ensure_cmds(&mut self, cmds: &[&str]) -> Result<(), MigError> {
+        let mut result: Result<(),MigError> = Ok(());
         for cmd in cmds {
             if !self.cmd_table.contains_key(*cmd) {
                 if let Ok(cmd_path) = whereis(cmd) {
@@ -45,14 +44,14 @@ impl EnsuredCmds {
                 } else {
                     let message = format!("cannot find required command {}", cmd);
                     warn!("{}", message);
-                    return Err(MigError::from_remark(
+                    result = Err(MigError::from_remark(
                         MigErrorKind::NotFound,
                         &format!("{}", message),
                     ));
                 }
             }
         }
-        Ok(())
+        result
     }
 
     pub fn ensure(&mut self, cmd: &str) -> Result<String, MigError> {
