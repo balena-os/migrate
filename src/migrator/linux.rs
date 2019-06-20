@@ -261,7 +261,22 @@ impl<'a> LinuxMigrator {
         Logger::set_log_file(&LogDestination::Stderr, &log_file)
             .context(MigErrCtx::from_remark(MigErrorKind::Upstream, &format!("Failed to set logging to '{}'", log_file.display())))?;
 
-        dbg!("Logger set");
+
+        let boot_device = self.device.get_boot_device();
+
+        if &self.mig_info.work_path.device == &boot_device {
+            self.stage2_config
+                .set_work_path(&PathType::Path(self.mig_info.work_path.path.clone()));
+        } else {
+            let (_lsblk_device,lsblk_part) = self.mig_info.lsblk_info.get_path_info(&work_dir)?;
+            self.stage2_config
+                .set_work_path(&PathType::Mount(MountConfig::new(
+                    &lsblk_part.get_path(),
+                    lsblk_part.fstype.as_ref().unwrap(),
+                    work_dir.strip_prefix(lsblk_part.mountpoint.as_ref().unwrap())
+                        .context(MigErrCtx::from_remark(MigErrorKind::Upstream, "failed to create relative work path"))?
+                )));
+        }
 
         let backup_path = path_append(work_dir, BACKUP_FILE);
 
@@ -338,20 +353,6 @@ impl<'a> LinuxMigrator {
         // TODO: setpath if on / mount else set mount
 
 
-        if &self.mig_info.work_path.mountpoint == Path::new(ROOT_PATH) {
-            self.stage2_config
-                .set_work_path(&PathType::Path(self.mig_info.work_path.path.clone()));
-        } else {
-            let (_lsblk_device,lsblk_part) = self.mig_info.lsblk_info.get_path_info(&work_dir)?;
-            self.stage2_config
-                .set_work_path(&PathType::Mount(MountConfig::new(
-                    &lsblk_part.get_path(),
-                    lsblk_part.fstype.as_ref().unwrap(),
-                    work_dir.strip_prefix(lsblk_part.mountpoint.as_ref().unwrap())
-                        .context(MigErrCtx::from_remark(MigErrorKind::Upstream, "failed to create relative work path"))?
-                )));
-        }
-
         self.stage2_config
             .set_gzip_internal(self.config.migrate.is_gzip_internal());
 
@@ -359,7 +360,6 @@ impl<'a> LinuxMigrator {
             .set_log_level(String::from(self.config.migrate.get_log_level()));
 
         if let Some((ref log_path, ref log_drive, ref log_part)) = self.mig_info.log_path {
-            let boot_drive = self.device.get_boot_device().drive;
             if log_drive.get_path() != boot_drive {
                 if let Some(ref fstype) = log_part.fstype {
                     self.stage2_config.set_log_to(Stage2LogConfig {
@@ -388,8 +388,9 @@ impl<'a> LinuxMigrator {
             &mut self.stage2_config,
         )?;
 
+
         trace!("write stage 2 config");
-        let s2_path = path_append(&self.device.get_boot_device().mountpoint, STAGE2_CFG_FILE);
+        let s2_path = path_append(&boot_device.mountpoint, STAGE2_CFG_FILE);
         self.stage2_config.write_stage2_cfg_to(&s2_path)?;
 
         if let Some(delay) = self.config.migrate.get_reboot() {
