@@ -4,11 +4,11 @@ use regex::Regex;
 use std::path::{Path, PathBuf};
 
 use crate::{
-    defs::{DISK_BY_PARTUUID_PATH, },
     common::{MigError, MigErrorKind},
+    defs::DISK_BY_PARTUUID_PATH,
     mswin::{
-        util::{to_linux_path},
         msw_defs::FileSystem,
+        util::to_linux_path,
         wmi_utils::{physical_drive::DriveType, LogicalDrive, Partition, PhysicalDrive, Volume},
     },
 };
@@ -17,9 +17,6 @@ use crate::{
 // \\?\Volume{e907ceea-7513-4f34-a1d1-fee089d1dd4b}\
 const PARTUUID_RE: &str =
     r#"\\\\\?\\Volume\{([0-9,a-f]{8}-[0-9,a-f]{4}-[0-9,a-f]{4}-[0-9,a-f]{4}-[0-9,a-f]{12})\}\\"#;
-
-
-
 
 const DRIVE_SUFFIX: &[char] = &['a', 'b', 'c', 'd', 'e'];
 
@@ -75,7 +72,7 @@ impl<'a> PathInfo {
                     }
                 };
                 let part = PathBuf::from(format!("{}/{}", DISK_BY_PARTUUID_PATH, partuuid));
-                (Some(partuuid), drive, part )
+                (Some(partuuid), drive, part)
             } else {
                 warn!(
                     "No Part UUID extracted for volume '{}'",

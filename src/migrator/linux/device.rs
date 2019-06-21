@@ -8,10 +8,7 @@ use crate::{
         Config, MigErrCtx, MigError, MigErrorKind,
     },
     defs::{BootType, DeviceType, OSArch},
-    linux::{
-        EnsuredCmds, MigrateInfo,
-        migrate_info::PathInfo,
-        stage2::mounts::Mounts},
+    linux::{migrate_info::PathInfo, stage2::mounts::Mounts, EnsuredCmds, MigrateInfo},
 };
 
 mod beaglebone;

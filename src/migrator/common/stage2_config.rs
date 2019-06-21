@@ -13,7 +13,7 @@ pub const EMPTY_BACKUPS: &[(String, String)] = &[];
 const MODULE: &str = "stage2::stage2:config";
 
 use crate::{
-    common::{MigErrCtx, MigError, MigErrorKind, },
+    common::{MigErrCtx, MigError, MigErrorKind},
     defs::{BootType, DeviceType, FailMode},
 };
 
@@ -56,7 +56,7 @@ impl<'a> MountConfig {
 #[derive(Debug, Deserialize, Serialize, Clone)]
 pub(crate) enum PathType {
     Path(PathBuf),
-    Mount(MountConfig)
+    Mount(MountConfig),
 }
 
 #[derive(Debug, Deserialize, Serialize)]
@@ -69,10 +69,6 @@ pub(crate) struct Stage2Config {
     skip_flash: bool,
     // which device to flash - derive from /root partition if not set (windows)
     flash_device: Option<PathBuf>,
-/*    // optional /boot partition device & fstype
-    boot_path: PathBuf,
-*/
-    // balena config file in work_path
     balena_config: PathBuf,
     // balena OS image file in work_path
     balena_image: PathBuf,
@@ -125,10 +121,10 @@ impl<'a> Stage2Config {
         Stage2Config::from_str(&config_str)
     }
 
-/*    pub fn get_boot_mount(&'a self) -> &'a PathType {
-        &self.boot_mount
-    }
-*/
+    /*    pub fn get_boot_mount(&'a self) -> &'a PathType {
+            &self.boot_mount
+        }
+    */
     pub fn get_log_level(&self) -> Level {
         if let Ok(level) = Level::from_str(&self.log_level) {
             level
@@ -344,10 +340,10 @@ impl<'a> Stage2ConfigBuilder {
         Ok(result)
     }
 
-/*    pub fn write_stage2_cfg(&self) -> Result<(), MigError> {
-        self.write_stage2_cfg_to(&Path::new(STAGE2_CFG_FILE))
-    }
-*/
+    /*    pub fn write_stage2_cfg(&self) -> Result<(), MigError> {
+            self.write_stage2_cfg_to(&Path::new(STAGE2_CFG_FILE))
+        }
+    */
     pub fn write_stage2_cfg_to(&self, file: &Path) -> Result<(), MigError> {
         // TODO: check first
 

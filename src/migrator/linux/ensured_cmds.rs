@@ -36,7 +36,7 @@ impl EnsuredCmds {
     }
 
     pub fn ensure_cmds(&mut self, cmds: &[&str]) -> Result<(), MigError> {
-        let mut result: Result<(),MigError> = Ok(());
+        let mut result: Result<(), MigError> = Ok(());
         for cmd in cmds {
             if !self.cmd_table.contains_key(*cmd) {
                 if let Ok(cmd_path) = whereis(cmd) {

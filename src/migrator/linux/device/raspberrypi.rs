@@ -11,9 +11,9 @@ use crate::{
         boot_manager::{from_boot_type, BootManager, RaspiBootManager},
         device::Device,
         linux_common::restore_backups,
-        EnsuredCmds,
-        MigrateInfo, migrate_info::PathInfo,
+        migrate_info::PathInfo,
         stage2::mounts::Mounts,
+        EnsuredCmds, MigrateInfo,
     },
 };
 
@@ -63,7 +63,6 @@ pub(crate) struct RaspberryPi3 {
 }
 
 impl RaspberryPi3 {
-
     pub fn from_config(
         cmds: &mut EnsuredCmds,
         mig_info: &MigrateInfo,
@@ -77,7 +76,9 @@ impl RaspberryPi3 {
         if let Some(_n) = SUPPORTED_OSSES.iter().position(|&r| r == os_name) {
             let mut boot_manager = RaspiBootManager::new();
             if boot_manager.can_migrate(cmds, mig_info, config, s2_cfg)? {
-                Ok(RaspberryPi3{ boot_manager: Box::new(boot_manager) })
+                Ok(RaspberryPi3 {
+                    boot_manager: Box::new(boot_manager),
+                })
             } else {
                 Err(MigError::from(MigErrorKind::Displayed))
             }

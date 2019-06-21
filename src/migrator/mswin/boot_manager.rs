@@ -3,7 +3,7 @@ use log::{debug, info, trace};
 use regex::Regex;
 use std::fs::{copy, create_dir_all, rename, File};
 use std::io::Write;
-use std::path::{PathBuf};
+use std::path::PathBuf;
 
 const STARTUP_TEMPLATE: &str = r#"
 echo -off
@@ -13,12 +13,8 @@ echo Starting balena Migrate Environment
 use crate::{
     common::{
         dir_exists, file_exists, path_append,
-        stage2_config::{
-            Stage2ConfigBuilder,
-            MountConfig
-        },
-        Config,
-        MigErrCtx, MigError, MigErrorKind,
+        stage2_config::{MountConfig, Stage2ConfigBuilder},
+        Config, MigErrCtx, MigError, MigErrorKind,
     },
     defs::{
         BootType, BALENA_EFI_DIR, EFI_BCKUP_DIR, EFI_BOOT_DIR, EFI_DEFAULT_BOOTMGR64,
@@ -101,11 +97,15 @@ impl BootManager for EfiBootManager {
         // create a startup.nsh file in \EFI\Boot\ that refers to our kernel & initramfs
 
         if let Some(ref efi_path) = mig_info.drive_info.efi_path {
-            debug!("efi drive found, setting boot manager to '{}'", efi_path.get_linux_part().display());
+            debug!(
+                "efi drive found, setting boot manager to '{}'",
+                efi_path.get_linux_part().display()
+            );
             s2_cfg.set_bootmgr_cfg(MountConfig::new(
                 PathBuf::from(efi_path.get_linux_part()),
                 String::from(efi_path.get_linux_fstype()),
-                PathBuf::from(efi_path.get_path())));
+                PathBuf::from(efi_path.get_path()),
+            ));
 
             let balena_efi_dir = path_append(efi_path.get_path(), BALENA_EFI_DIR);
             if !dir_exists(&balena_efi_dir)? {
@@ -217,7 +217,6 @@ impl BootManager for EfiBootManager {
                         startup_path.display()
                     ),
                 ))?;
-
 
             // TODO: create fake EFI mountpoint and adapt backup paths to it
             let efi_bckup_dir = path_append(efi_path.get_path(), EFI_BCKUP_DIR);

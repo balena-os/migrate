@@ -10,8 +10,9 @@ use crate::{
     linux::{
         boot_manager::{from_boot_type, BootManager, UBootManager},
         device::Device,
-        EnsuredCmds, MigrateInfo, migrate_info::PathInfo,
-        stage2::mounts::{Mounts},
+        migrate_info::PathInfo,
+        stage2::mounts::Mounts,
+        EnsuredCmds, MigrateInfo,
     },
 };
 
@@ -148,7 +149,7 @@ impl Device for BeagleboneGreen {
     }
 
     fn restore_boot(&self, mounts: &Mounts, config: &Stage2Config) -> Result<(), MigError> {
-        self.boot_manager.restore( mounts, config)
+        self.boot_manager.restore(mounts, config)
     }
 
     fn get_boot_device(&self) -> PathInfo {
@@ -227,14 +228,12 @@ impl Device for BeagleboneBlack {
     }
 
     fn restore_boot(&self, mounts: &Mounts, config: &Stage2Config) -> Result<(), MigError> {
-        self.boot_manager
-            .restore(mounts, config)
+        self.boot_manager.restore(mounts, config)
     }
 
     fn get_boot_device(&self) -> PathInfo {
         self.boot_manager.get_boot_path()
     }
-
 }
 
 pub(crate) struct BeagleboardXM {
@@ -299,8 +298,7 @@ impl<'a> Device for BeagleboardXM {
     }
 
     fn restore_boot(&self, mounts: &Mounts, config: &Stage2Config) -> Result<(), MigError> {
-        self.boot_manager
-            .restore(mounts, config)
+        self.boot_manager.restore(mounts, config)
     }
 
     fn setup(

@@ -3,10 +3,10 @@ use std::path::PathBuf;
 
 use crate::{
     common::{
-        balena_cfg_json::BalenaCfgJson, wifi_config::WifiConfig, Config,
-        FileInfo, FileType, MigError, MigErrorKind, MigrateWifis,
+        balena_cfg_json::BalenaCfgJson, wifi_config::WifiConfig, Config, FileInfo, FileType,
+        MigError, MigErrorKind, MigrateWifis,
     },
-    defs::{OSArch,},
+    defs::OSArch,
     linux::{
         linux_common::{get_os_arch, get_os_name},
         EnsuredCmds,
@@ -24,9 +24,9 @@ pub(crate) use lsblk_info::LsblkInfo;
 pub(crate) mod label_type;
 
 pub(crate) mod path_info;
-pub(crate) use path_info::PathInfo;
 use crate::linux::linux_common::to_std_device_path;
 use crate::linux::migrate_info::lsblk_info::{LsblkDevice, LsblkPartition};
+pub(crate) use path_info::PathInfo;
 
 #[derive(Debug)]
 pub(crate) struct MigrateInfo {
@@ -62,7 +62,7 @@ impl MigrateInfo {
         let lsblk_info = LsblkInfo::new(&cmds)?;
 
         let work_path = if let Some(path_info) =
-        PathInfo::new(&cmds, config.migrate.get_work_dir(), &lsblk_info)?
+            PathInfo::new(&cmds, config.migrate.get_work_dir(), &lsblk_info)?
         {
             path_info
         } else {
@@ -75,28 +75,34 @@ impl MigrateInfo {
             ));
         };
 
-        let log_path =
-            if let Some(log_dev) = config.migrate.get_log_device() {
-                if let Ok(ref std_dev) = to_std_device_path(log_dev) {
-                    if let Ok((log_drive, log_part)) = lsblk_info.get_devinfo_from_partition(std_dev) {
-                        if let Some(ref fstype) = log_part.fstype {
-                            info!("Found log device '{}' with file system type '{}'", log_dev.display(), fstype);
-                            Some((PathBuf::from(log_dev), log_drive.clone(), log_part.clone()))
-                        } else {
-                            warn!("Could not determine file system type for log partition '{}'  - ignoring", log_dev.display());
-                            None
-                        }
+        let log_path = if let Some(log_dev) = config.migrate.get_log_device() {
+            if let Ok(ref std_dev) = to_std_device_path(log_dev) {
+                if let Ok((log_drive, log_part)) = lsblk_info.get_devinfo_from_partition(std_dev) {
+                    if let Some(ref fstype) = log_part.fstype {
+                        info!(
+                            "Found log device '{}' with file system type '{}'",
+                            log_dev.display(),
+                            fstype
+                        );
+                        Some((PathBuf::from(log_dev), log_drive.clone(), log_part.clone()))
                     } else {
-                        warn!("failed to find lsblk info for log device '{}'", log_dev.display());
+                        warn!("Could not determine file system type for log partition '{}'  - ignoring", log_dev.display());
                         None
                     }
                 } else {
-                    warn!("failed to evaluate log device '{}'", log_dev.display());
+                    warn!(
+                        "failed to find lsblk info for log device '{}'",
+                        log_dev.display()
+                    );
                     None
                 }
             } else {
+                warn!("failed to evaluate log device '{}'", log_dev.display());
                 None
-            };
+            }
+        } else {
+            None
+        };
 
         let work_dir = &work_path.path;
         info!("Working directory is '{}'", work_dir.display());
@@ -124,7 +130,7 @@ impl MigrateInfo {
                         "The balena OS image looks ok: '{}'",
                         file_info.path.display()
                     );
-                },
+                }
                 Err(_why) => {
                     error!(
                         "The balena OS image does not match the expected type: '{:?}'",
@@ -134,13 +140,13 @@ impl MigrateInfo {
                 }
             }
 
-/*            // TODO: do this later, flash device will be determined by device / bootmanager
-            let required_mem = file_info.size + APPROX_MEM_THRESHOLD;
-            if get_mem_info()?.0 < required_mem {
-                error!("We have not found sufficient memory to store the balena OS image in ram. at least {} of memory is required.", format_size_with_unit(required_mem));
-                return Err(MigError::from(MigErrorKind::Displayed));
-            }
-*/
+            /*            // TODO: do this later, flash device will be determined by device / bootmanager
+                        let required_mem = file_info.size + APPROX_MEM_THRESHOLD;
+                        if get_mem_info()?.0 < required_mem {
+                            error!("We have not found sufficient memory to store the balena OS image in ram. at least {} of memory is required.", format_size_with_unit(required_mem));
+                            return Err(MigError::from(MigErrorKind::Displayed));
+                        }
+            */
             file_info
         } else {
             error!("The balena image has not been specified or cannot be accessed. Automatic download is not yet implemented, so you need to specify and supply all required files");

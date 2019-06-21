@@ -3,9 +3,10 @@ use log::{debug, trace};
 use std::fmt::{self, Display, Formatter};
 use std::path::{Path, PathBuf};
 
+use crate::common::path_append;
 use crate::{
-    defs::{DISK_BY_PARTUUID_PATH, },
     common::{dir_exists, format_size_with_unit, MigErrCtx, MigError, MigErrorKind},
+    defs::DISK_BY_PARTUUID_PATH,
     linux::{
         linux_common::{get_fs_space, get_kernel_root_info},
         linux_defs::ROOT_PATH,
@@ -13,7 +14,6 @@ use crate::{
         EnsuredCmds,
     },
 };
-use crate::common::path_append;
 
 const MODULE: &str = "linux_common::path_info";
 
@@ -50,7 +50,6 @@ pub(crate) struct PathInfo {
 }
 
 impl PathInfo {
-
     pub fn get_portable_path(&self) -> PathBuf {
         if let Some(ref part_uuid) = self.part_uuid {
             path_append(DISK_BY_PARTUUID_PATH, part_uuid)
@@ -191,13 +190,12 @@ impl PathInfo {
 
         debug!("looking fo path: '{}'", abs_path.display());
 
-        let (device, partition) =
-            if abs_path == Path::new(ROOT_PATH) {
-                let (root_device, _root_fs_type) = get_kernel_root_info()?;
-                lsblk_info.get_devinfo_from_partition(root_device)?
-            } else {
-                lsblk_info.get_path_info(&abs_path)?
-            };
+        let (device, partition) = if abs_path == Path::new(ROOT_PATH) {
+            let (root_device, _root_fs_type) = get_kernel_root_info()?;
+            lsblk_info.get_devinfo_from_partition(root_device)?
+        } else {
+            lsblk_info.get_path_info(&abs_path)?
+        };
 
         if let Some(ref mountpoint) = partition.mountpoint {
             Ok(Some(PathInfo::from_mounted(
@@ -213,8 +211,6 @@ impl PathInfo {
             ))
         }
     }
-
-
 }
 
 impl Display for PathInfo {

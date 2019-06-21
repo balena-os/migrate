@@ -8,12 +8,12 @@ use std::time::Duration;
 // TODO: Require files to be in work_dir
 
 use crate::{
-    mswin::util::{to_linux_path},
     common::{
         dir_exists, path_append, stage2_config::Stage2ConfigBuilder, Config, MigErrCtx, MigError,
         MigErrorKind, MigMode,
     },
     defs::{DeviceType, OSArch, STAGE2_CFG_FILE},
+    mswin::util::to_linux_path,
 };
 
 pub(crate) mod msw_defs;
@@ -158,9 +158,13 @@ impl<'a> MSWMigrator {
 
         // later
         self.stage2_config
-            .set_balena_image(PathBuf::from(&to_linux_path(&self.mig_info.image_file.path)));
+            .set_balena_image(PathBuf::from(&to_linux_path(
+                &self.mig_info.image_file.path,
+            )));
         self.stage2_config
-            .set_balena_config(PathBuf::from(&to_linux_path(&self.mig_info.config_file.get_path())));
+            .set_balena_config(PathBuf::from(&to_linux_path(
+                &self.mig_info.config_file.get_path(),
+            )));
 
         self.stage2_config.set_work_dir(&PathBuf::from(
             self.mig_info.drive_info.work_path.get_linux_path(),
@@ -188,16 +192,16 @@ impl<'a> MSWMigrator {
         match self
             .boot_manager
             .setup(&self.mig_info, &self.config, &mut self.stage2_config)
-            {
-                Ok(_s) => info!("The system is set up to boot into the migration environment"),
-                Err(why) => {
-                    error!(
-                        "Failed to set up the boot configuration for the migration environment: {:?}",
-                        why
-                    );
-                    return Err(MigError::displayed());
-                }
+        {
+            Ok(_s) => info!("The system is set up to boot into the migration environment"),
+            Err(why) => {
+                error!(
+                    "Failed to set up the boot configuration for the migration environment: {:?}",
+                    why
+                );
+                return Err(MigError::displayed());
             }
+        }
 
         trace!("write stage 2 config");
 
@@ -217,7 +221,7 @@ impl<'a> MSWMigrator {
         }
 
         self.stage2_config.write_stage2_cfg_to(&stage2_cfg_path)?;
-        
+
         if let Some(delay) = self.config.migrate.get_reboot() {
             let message = format!(
                 "Migration stage 1 was successfull, rebooting system in {} seconds",
@@ -235,7 +239,6 @@ impl<'a> MSWMigrator {
         Ok(())
     }
 }
-
 
 #[cfg(test)]
 mod tests {

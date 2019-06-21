@@ -1,7 +1,7 @@
 use failure::{Fail, ResultExt};
-use log::{info, trace, warn, error};
+use log::{error, info, trace, warn};
 use regex::Regex;
-use std::fs::{copy, File, read_to_string};
+use std::fs::{copy, read_to_string, File};
 use std::io::{BufRead, BufReader, Write};
 
 use std::time::SystemTime;
@@ -14,12 +14,9 @@ use crate::{
     },
     defs::{BootType, BALENA_FILE_TAG},
     linux::{
-        linux_defs::{BOOT_PATH},
-        boot_manager::BootManager,
-        stage2::mounts::{Mounts},
-        EnsuredCmds,
-        MigrateInfo, migrate_info::PathInfo,
-        CHMOD_CMD},
+        boot_manager::BootManager, linux_defs::BOOT_PATH, migrate_info::PathInfo,
+        stage2::mounts::Mounts, EnsuredCmds, MigrateInfo, CHMOD_CMD,
+    },
 };
 
 const RPI_MIG_KERNEL_PATH: &str = "/boot/balena.zImage";
@@ -59,7 +56,7 @@ impl BootManager for RaspiBootManager {
     ) -> Result<bool, MigError> {
         // TODO: calculate/ensure  required space on /boot /bootmgr
 
-        if !dir_exists(BOOT_PATH)?  {
+        if !dir_exists(BOOT_PATH)? {
             error!("The /boot directory required for the raspi boot manager could not be found");
             return Ok(false);
         }
@@ -139,7 +136,7 @@ impl BootManager for RaspiBootManager {
         if !balena_config {
             // backup config.txt
             let backup_file = format!("{}.{}", RPI_CONFIG_TXT, system_time.as_secs());
-            let backup_path = path_append(&boot_path.path,&backup_file);
+            let backup_path = path_append(&boot_path.path, &backup_file);
 
             copy(&config_path, &backup_path).context(MigErrCtx::from_remark(
                 MigErrorKind::Upstream,
@@ -150,10 +147,7 @@ impl BootManager for RaspiBootManager {
                 ),
             ))?;
 
-            boot_cfg_bckup.push((
-                String::from(RPI_CONFIG_TXT),
-                backup_file.clone(),
-            ));
+            boot_cfg_bckup.push((String::from(RPI_CONFIG_TXT), backup_file.clone()));
 
             info!(
                 "Created backup of '{}' in '{}'",
@@ -237,7 +231,7 @@ impl BootManager for RaspiBootManager {
         if !balena_config {
             // backup cmdline.txt
             let backup_file = format!("{}.{}", RPI_CMDLINE_TXT, system_time.as_secs());
-            let backup_path = path_append(&boot_path.path,&backup_file );
+            let backup_path = path_append(&boot_path.path, &backup_file);
 
             copy(&cmdline_path, &backup_path).context(MigErrCtx::from_remark(
                 MigErrorKind::Upstream,
@@ -248,10 +242,7 @@ impl BootManager for RaspiBootManager {
                 ),
             ))?;
 
-            boot_cfg_bckup.push((
-                String::from(RPI_CMDLINE_TXT),
-                backup_file.clone()
-            ));
+            boot_cfg_bckup.push((String::from(RPI_CMDLINE_TXT), backup_file.clone()));
         }
 
         let cmdline_str = match read_to_string(&cmdline_path) {
@@ -259,7 +250,8 @@ impl BootManager for RaspiBootManager {
                 let cmdline = cmdline.trim_end();
                 let root_cmd = format!("root={}", &boot_path.get_kernel_cmd());
                 let rep: &str = root_cmd.as_ref();
-                let mut mod_cmdline = String::from(Regex::new(r#"root=\S+"#).unwrap().replace(cmdline,rep));
+                let mut mod_cmdline =
+                    String::from(Regex::new(r#"root=\S+"#).unwrap().replace(cmdline, rep));
                 if !mod_cmdline.contains(rep) {
                     mod_cmdline.push(' ');
                     mod_cmdline.push_str(&root_cmd);
@@ -267,7 +259,11 @@ impl BootManager for RaspiBootManager {
 
                 let rootfs_cmd = format!("rootfstype={}", &boot_path.fs_type);
                 let rep: &str = rootfs_cmd.as_ref();
-                mod_cmdline = String::from(Regex::new(r#"rootfstype=\S+"#).unwrap().replace(mod_cmdline.as_ref(),rep));
+                mod_cmdline = String::from(
+                    Regex::new(r#"rootfstype=\S+"#)
+                        .unwrap()
+                        .replace(mod_cmdline.as_ref(), rep),
+                );
                 if !mod_cmdline.contains(rep) {
                     mod_cmdline.push(' ');
                     mod_cmdline.push_str(&rootfs_cmd);
@@ -276,7 +272,11 @@ impl BootManager for RaspiBootManager {
                 // make sure console points to the right thing
                 // TODO: make configurable
                 let rep = "";
-                mod_cmdline = String::from(Regex::new(r#"console=\S+"#).unwrap().replace_all(mod_cmdline.as_ref(),rep));
+                mod_cmdline = String::from(
+                    Regex::new(r#"console=\S+"#)
+                        .unwrap()
+                        .replace_all(mod_cmdline.as_ref(), rep),
+                );
                 mod_cmdline.push_str(&format!(" console=serial0,115200"));
 
                 let rep = "debug";
@@ -287,9 +287,13 @@ impl BootManager for RaspiBootManager {
 
                 mod_cmdline.push('\n');
                 mod_cmdline
-            },
+            }
             Err(why) => {
-                error!("failed to read boot file '{}', error: {:?}", cmdline_path.display(), why);
+                error!(
+                    "failed to read boot file '{}', error: {:?}",
+                    cmdline_path.display(),
+                    why
+                );
                 return Err(MigError::displayed());
             }
         };
@@ -316,7 +320,6 @@ impl BootManager for RaspiBootManager {
                 &format!("Failed write to file '{}'", config_path.display()),
             ))?;
 
-
         let mut cmdline_file = File::create(&cmdline_path).context(MigErrCtx::from_remark(
             MigErrorKind::Upstream,
             &format!(
@@ -324,7 +327,6 @@ impl BootManager for RaspiBootManager {
                 cmdline_path.display()
             ),
         ))?;
-
 
         cmdline_file
             .write(cmdline_str.as_bytes())
@@ -338,11 +340,7 @@ impl BootManager for RaspiBootManager {
         Ok(())
     }
 
-    fn restore(
-        &self,
-        _mounts: &Mounts,
-        _config: &Stage2Config,
-    ) -> Result<(), MigError> {
+    fn restore(&self, _mounts: &Mounts, _config: &Stage2Config) -> Result<(), MigError> {
         Err(MigError::from(MigErrorKind::NotImpl))
     }
 }

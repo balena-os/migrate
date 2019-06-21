@@ -10,8 +10,9 @@ use crate::{
         boot_manager::{from_boot_type, BootManager, GrubBootManager},
         device::Device,
         linux_common::is_secure_boot,
-        EnsuredCmds, MigrateInfo, migrate_info::PathInfo,
+        migrate_info::PathInfo,
         stage2::mounts::Mounts,
+        EnsuredCmds, MigrateInfo,
     },
 };
 
@@ -120,13 +121,11 @@ impl<'a> Device for IntelNuc {
         self.boot_manager.setup(cmds, dev_info, config, s2_cfg)
     }
 
-    fn restore_boot(&self, mounts:& Mounts, config: &Stage2Config) -> Result<(), MigError> {
-        self.boot_manager
-            .restore(mounts, config)
+    fn restore_boot(&self, mounts: &Mounts, config: &Stage2Config) -> Result<(), MigError> {
+        self.boot_manager.restore(mounts, config)
     }
 
     fn get_boot_device(&self) -> PathInfo {
         self.boot_manager.get_boot_path()
     }
-
 }

@@ -2,7 +2,7 @@ use failure::ResultExt;
 
 use lazy_static::lazy_static;
 use log::{debug, error, info, trace, warn};
-use regex::Regex;
+use regex::{Regex, RegexBuilder};
 use std::fs::{copy, read_link, read_to_string};
 use std::path::{Path, PathBuf};
 
@@ -12,8 +12,8 @@ use crate::{
     common::{
         call, file_exists, parse_file, path_append, Config, MigErrCtx, MigError, MigErrorKind,
     },
-    defs::{OSArch,DISK_BY_PARTUUID_PATH, DISK_BY_UUID_PATH, DISK_BY_LABEL_PATH},
-           linux::{
+    defs::{OSArch, DISK_BY_LABEL_PATH, DISK_BY_PARTUUID_PATH, DISK_BY_UUID_PATH},
+    linux::{
         linux_defs::{KERNEL_CMDLINE_PATH, SYS_UEFI_DIR},
         EnsuredCmds, DF_CMD, MOKUTIL_CMD, UNAME_CMD,
     },
@@ -277,54 +277,65 @@ pub(crate) fn to_std_device_path(device: &Path) -> Result<PathBuf, MigError> {
     debug!("to_std_device_path: entered with '{}'", device.display());
 
     if !file_exists(device) {
-        return Err(MigError::from_remark(MigErrorKind::NotFound, &format!("File does not exist: '{}'", device.display())));
+        return Err(MigError::from_remark(
+            MigErrorKind::NotFound,
+            &format!("File does not exist: '{}'", device.display()),
+        ));
     }
 
-    if ! (device.starts_with(DISK_BY_PARTUUID_PATH) ||
-        device.starts_with(DISK_BY_UUID_PATH) ||
-        device.starts_with(DISK_BY_LABEL_PATH)) {
-            return Ok(PathBuf::from(device))
+    if !(device.starts_with(DISK_BY_PARTUUID_PATH)
+        || device.starts_with(DISK_BY_UUID_PATH)
+        || device.starts_with(DISK_BY_LABEL_PATH))
+    {
+        return Ok(PathBuf::from(device));
     }
 
-    debug!("to_std_device_path: attempting to dereference as link '{}'", device.display());
+    debug!(
+        "to_std_device_path: attempting to dereference as link '{}'",
+        device.display()
+    );
 
     match read_link(device) {
         Ok(link) => {
             if let Some(parent) = device.parent() {
                 let dev_path = path_append(parent, link);
-                return Ok(dev_path
-                    .canonicalize()
-                    .context(MigErrCtx::from_remark(
-                        MigErrorKind::Upstream,
-                        &format!(
-                            "failed to canonicalize path from: '{}'",
-                            dev_path.display()
-                        ),
-                    ))?);
+                return Ok(dev_path.canonicalize().context(MigErrCtx::from_remark(
+                    MigErrorKind::Upstream,
+                    &format!("failed to canonicalize path from: '{}'", dev_path.display()),
+                ))?);
             } else {
                 debug!("Failed to retrieve parent from  '{}'", device.display());
                 return Ok(PathBuf::from(device));
             }
-        },
+        }
         Err(why) => {
-            debug!("Failed to dereference file '{}' : {:?}", device.display(), why);
+            debug!(
+                "Failed to dereference file '{}' : {:?}",
+                device.display(),
+                why
+            );
             return Ok(PathBuf::from(device));
         }
     }
 }
-
 
 pub(crate) fn drive_from_partition(partition: &Path) -> Result<PathBuf, MigError> {
     lazy_static! {
         static ref DRIVE2PART_RE: Regex = Regex::new(DRIVE2PART_REGEX).unwrap();
     }
 
-    if let Some(captures) = DRIVE2PART_RE.captures(&partition.to_string_lossy()) {
+    if let Some(captures) =
+        DRIVE2PART_RE.captures(&to_std_device_path(partition)?.to_string_lossy())
+    {
         Ok(PathBuf::from(captures.get(1).unwrap().as_str()))
     } else {
         Err(MigError::from_remark(
             MigErrorKind::InvParam,
-            &format!("Failed to derive drive nam from partition name: '{}'", partition.display())))
+            &format!(
+                "Failed to derive drive name from partition name: '{}'",
+                partition.display()
+            ),
+        ))
     }
 }
 
@@ -456,31 +467,43 @@ pub(crate) fn get_kernel_root_info() -> Result<(PathBuf, Option<String>), MigErr
 
     debug!("get_root_info: got cmdline: '{}'", cmd_line);
 
-    let root_device = if let Some(captures) =
-    Regex::new(ROOT_DEVICE_REGEX).unwrap().captures(&cmd_line)
+    let root_device = if let Some(captures) = RegexBuilder::new(ROOT_DEVICE_REGEX)
+        .case_insensitive(true)
+        .build()
+        .unwrap()
+        .captures(&cmd_line)
     {
         let root_dev = captures.get(1).unwrap().as_str();
         debug!("Got root device string: '{}'", root_dev);
 
-        if let Some(uuid_part) =
-        if let Some(captures) = Regex::new(ROOT_PARTUUID_REGEX).unwrap().captures(root_dev) {
+        if let Some(uuid_part) = if let Some(captures) = RegexBuilder::new(ROOT_PARTUUID_REGEX)
+            .case_insensitive(true)
+            .build()
+            .unwrap()
+            .captures(root_dev)
+        {
             debug!("Got root device PARTUUID: {:?}", captures.get(1));
             Some(path_append(
                 DISK_BY_PARTUUID_PATH,
                 captures.get(1).unwrap().as_str(),
             ))
         } else {
-            if let Some(captures) = Regex::new(ROOT_UUID_REGEX).unwrap().captures(root_dev) {
+            if let Some(captures) = RegexBuilder::new(ROOT_UUID_REGEX)
+                .case_insensitive(true)
+                .build()
+                .unwrap()
+                .captures(root_dev)
+            {
                 debug!("Got root device UUID: {:?}", captures.get(1));
                 Some(path_append(
                     DISK_BY_UUID_PATH,
                     captures.get(1).unwrap().as_str(),
                 ))
             } else {
+                debug!("Got plain root device UUID: {:?}", captures.get(1));
                 None
             }
-        }
-        {
+        } {
             debug!("trying device path: '{}'", uuid_part.display());
             to_std_device_path(&uuid_part)?
         } else {
@@ -488,7 +511,10 @@ pub(crate) fn get_kernel_root_info() -> Result<(PathBuf, Option<String>), MigErr
             PathBuf::from(root_dev)
         }
     } else {
-        warn!("Got no root was found in kernel command line '{}'", cmd_line);
+        warn!(
+            "Got no root was found in kernel command line '{}'",
+            cmd_line
+        );
         return Err(MigError::from_remark(
             MigErrorKind::NotFound,
             &format!(

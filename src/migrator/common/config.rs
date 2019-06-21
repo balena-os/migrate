@@ -1,6 +1,6 @@
 use failure::ResultExt;
 use log::{debug, error, info, Level};
-use mod_logger::{Logger, LogDestination, NO_STREAM};
+use mod_logger::{LogDestination, Logger, NO_STREAM};
 use serde::Deserialize;
 use serde_yaml;
 use std::fs::read_to_string;
@@ -96,8 +96,9 @@ impl<'a> Config {
         }
 
         Logger::set_color(true);
-        Logger::set_log_dest(&LogDestination::BufferStderr, NO_STREAM)
-            .context(MigErrCtx::from_remark(MigErrorKind::Upstream, "failed to set up logging"))?;
+        Logger::set_log_dest(&LogDestination::BufferStderr, NO_STREAM).context(
+            MigErrCtx::from_remark(MigErrorKind::Upstream, "failed to set up logging"),
+        )?;
 
         // try to establish work_dir and config file
         // work_dir can be specified on command line, it defaults to ./ if not

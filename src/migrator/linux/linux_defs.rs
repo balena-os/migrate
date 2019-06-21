@@ -18,7 +18,6 @@ pub const SYS_UEFI_DIR: &str = "/sys/firmware/efi";
 
 pub const NIX_NONE: Option<&'static [u8]> = None;
 
-
 // Default balena partition labels and FS types
 pub const BALENA_BOOT_PART: &str = "resin-boot";
 pub const BALENA_BOOT_FSTYPE: &str = "vfat";

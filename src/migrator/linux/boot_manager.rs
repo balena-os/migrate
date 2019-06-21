@@ -4,9 +4,7 @@ use crate::{
         Config, MigError, MigErrorKind,
     },
     defs::BootType,
-    linux::{EnsuredCmds,
-            MigrateInfo, migrate_info::PathInfo,
-            stage2::mounts::{Mounts}},
+    linux::{migrate_info::PathInfo, stage2::mounts::Mounts, EnsuredCmds, MigrateInfo},
 };
 
 pub(crate) mod u_boot_manager;
@@ -85,11 +83,7 @@ impl BootManager for EfiBootManager {
     ) -> Result<(), MigError> {
         Err(MigError::from(MigErrorKind::NotImpl))
     }
-    fn restore(
-        &self,
-        _mounts: &Mounts,
-        _config: &Stage2Config,
-    ) -> Result<(), MigError> {
+    fn restore(&self, _mounts: &Mounts, _config: &Stage2Config) -> Result<(), MigError> {
         Err(MigError::from(MigErrorKind::NotImpl))
     }
 }

@@ -3,33 +3,30 @@ use flate2::read::GzDecoder;
 use log::{debug, error, info, trace, warn, Level};
 use mod_logger::{LogDestination, Logger, NO_STREAM};
 use nix::{
-    mount::{mount, MsFlags},
     sys::reboot::{reboot, RebootMode},
     unistd::sync,
 };
 
-use std::fs::{copy, create_dir, read_dir, read_link, File};
+use std::fs::{copy, create_dir, read_dir, File};
 use std::io::{Read, Write};
-use std::path::{Path};
+use std::path::Path;
 use std::process::{Command, Stdio};
 use std::thread;
 use std::time::{Duration, Instant};
 
 use crate::{
     common::{
-        dir_exists, path_append,format_size_with_unit, file_size, file_exists,
-        stage2_config::{Stage2Config },
-        MigErrCtx, MigError, MigErrorKind,
+        dir_exists, file_exists, file_size, format_size_with_unit, path_append,
+        stage2_config::Stage2Config, MigErrCtx, MigError, MigErrorKind,
     },
-    defs::{FailMode, BACKUP_FILE, SYSTEM_CONNECTIONS_DIR, DISK_BY_LABEL_PATH},
+    defs::{FailMode, BACKUP_FILE, SYSTEM_CONNECTIONS_DIR},
     linux::{
         device,
-        linux_common::{get_mem_info,},
-        linux_defs::{NIX_NONE, STAGE2_MEM_THRESHOLD,
-                     BALENA_BOOT_PART, BALENA_ROOTA_PART, BALENA_ROOTB_PART, BALENA_STATE_PART,
-                     BALENA_DATA_PART, BALENA_BOOT_FSTYPE, BALENA_DATA_FSTYPE,
-                     MIGRATE_LOG_FILE},
-        ensured_cmds::{EnsuredCmds, DD_CMD, GZIP_CMD, PARTPROBE_CMD, REBOOT_CMD,UDEVADM_CMD, LSBLK_CMD, },
+        ensured_cmds::{
+            EnsuredCmds, DD_CMD, GZIP_CMD, LSBLK_CMD, PARTPROBE_CMD, REBOOT_CMD, UDEVADM_CMD,
+        },
+        linux_common::get_mem_info,
+        linux_defs::{MIGRATE_LOG_FILE, STAGE2_MEM_THRESHOLD},
     },
 };
 
@@ -38,7 +35,7 @@ use crate::{
 // later ensure all other required commands
 
 pub(crate) mod mounts;
-use mounts::{Mounts};
+use mounts::Mounts;
 
 const REBOOT_DELAY: u64 = 3;
 const S2_REV: u32 = 4;
@@ -80,7 +77,6 @@ impl<'a> Stage2 {
     pub fn try_init() -> Result<Stage2, MigError> {
         Logger::set_default_level(&INIT_LOG_LEVEL);
 
-
         // log to stderr & memory buffer - so it can be saved to a persistent log later
         match Logger::set_log_dest(&LogDestination::BufferStderr, NO_STREAM) {
             Ok(_s) => {
@@ -102,7 +98,7 @@ impl<'a> Stage2 {
             Ok(mounts) => {
                 debug!("Successfully mounted file system");
                 mounts
-            },
+            }
             Err(why) => {
                 error!("Failed to mount boot file system, giving up: {:?}", why);
                 return Err(MigError::displayed());
@@ -112,16 +108,20 @@ impl<'a> Stage2 {
         debug!("got mounts: {:?}", mounts);
 
         let stage2_cfg_file = mounts.get_stage2_config();
-        let stage2_cfg = match  Stage2Config::from_config(&stage2_cfg_file) {
+        let stage2_cfg = match Stage2Config::from_config(&stage2_cfg_file) {
             Ok(s2_cfg) => {
                 info!(
                     "Successfully read stage 2 config file from {}",
                     stage2_cfg_file.display()
                 );
                 s2_cfg
-            },
+            }
             Err(why) => {
-                error!("Failed to read stage 2 config file from file '{}' with error: {:?}", stage2_cfg_file.display(), why);
+                error!(
+                    "Failed to read stage 2 config file from file '{}' with error: {:?}",
+                    stage2_cfg_file.display(),
+                    why
+                );
                 // TODO: could try to restore former boot config anyway
                 return Err(MigError::displayed());
             }
@@ -134,37 +134,39 @@ impl<'a> Stage2 {
         match mounts.mount_all(&stage2_cfg) {
             Ok(_) => {
                 info!("mounted all configured drives");
-            },
+            }
             Err(why) => {
                 warn!("mount_all returned an error: {:?}", why);
             }
         }
 
-
         // try switch logging to a persistent log
-        let log_path =
-            if let Some(log_path) = mounts.get_log_path() {
-                Some(path_append(log_path, MIGRATE_LOG_FILE))
-            } else {
-                if stage2_cfg.is_no_flash() {
-                    if let Some(work_path) = mounts.get_work_path() {
-                        Some(path_append(work_path, MIGRATE_LOG_FILE))
-                    } else {
-                        None
-                    }
+        let log_path = if let Some(log_path) = mounts.get_log_path() {
+            Some(path_append(log_path, MIGRATE_LOG_FILE))
+        } else {
+            if stage2_cfg.is_no_flash() {
+                if let Some(work_path) = mounts.get_work_path() {
+                    Some(path_append(work_path, MIGRATE_LOG_FILE))
                 } else {
                     None
                 }
-            };
+            } else {
+                None
+            }
+        };
 
         if let Some(log_path) = log_path {
             match Logger::set_log_file(&LogDestination::Stderr, &log_path) {
                 Ok(_) => {
                     info!("Set log file to '{}'", log_path.display());
                     Logger::flush();
-                },
+                }
                 Err(why) => {
-                    warn!("Failed to set log file to '{}', error: {:?}", log_path.display(), why);
+                    warn!(
+                        "Failed to set log file to '{}', error: {:?}",
+                        log_path.display(),
+                        why
+                    );
                 }
             }
         }
@@ -193,9 +195,12 @@ impl<'a> Stage2 {
                 info!("Boot configuration was restored sucessfully");
                 // boot config restored can reboot
                 self.recoverable_state = true;
-            },
+            }
             Err(why) => {
-                warn!("Failed to restore boot configuration - trying to migrate anyway. error: {:?}", why);
+                warn!(
+                    "Failed to restore boot configuration - trying to migrate anyway. error: {:?}",
+                    why
+                );
             }
         }
 
@@ -222,15 +227,11 @@ impl<'a> Stage2 {
                         format_size_with_unit(mem_tot)
                     );
 
-                    let mut required_size = file_size(path_append(
-                        &work_path,
-                        &self.config.get_balena_image(),
-                    ))?;
+                    let mut required_size =
+                        file_size(path_append(&work_path, &self.config.get_balena_image()))?;
 
-                    required_size += file_size(path_append(
-                        &work_path,
-                        &self.config.get_balena_config(),
-                    ))?;
+                    required_size +=
+                        file_size(path_append(&work_path, &self.config.get_balena_config()))?;
 
                     if self.config.has_backup() {
                         required_size += file_size(path_append(&work_path, BACKUP_FILE))?;
@@ -308,10 +309,7 @@ impl<'a> Stage2 {
 
             info!("copied balena OS config to '{}'", tgt.display());
 
-            let src_nwmgr_dir = path_append(
-                &work_path,
-                SYSTEM_CONNECTIONS_DIR,
-            );
+            let src_nwmgr_dir = path_append(&work_path, SYSTEM_CONNECTIONS_DIR);
 
             let tgt_nwmgr_dir = path_append(mig_tmp_dir, SYSTEM_CONNECTIONS_DIR);
             if dir_exists(&src_nwmgr_dir)? {
@@ -334,7 +332,8 @@ impl<'a> Stage2 {
                     if let Ok(path) = path {
                         let src_path = path.path();
                         if src_path.metadata().unwrap().is_file() {
-                            let tgt_path = path_append(&tgt_nwmgr_dir, &src_path.file_name().unwrap());
+                            let tgt_path =
+                                path_append(&tgt_nwmgr_dir, &src_path.file_name().unwrap());
                             copy(&src_path, &tgt_path)
                                 .context(MigErrCtx::from_remark(MigErrorKind::Upstream, &format!("Failed copy network manager file to migrate temp directory '{}' -> '{}'", src_path.display(), tgt_path.display())))?;
                             info!("copied network manager config  to '{}'", tgt_path.display());
@@ -354,10 +353,7 @@ impl<'a> Stage2 {
             if self.config.has_backup() {
                 // TODO: check available memory / disk space
                 let target_path = path_append(mig_tmp_dir, BACKUP_FILE);
-                let source_path = path_append(
-                    &work_path,
-                    BACKUP_FILE,
-                );
+                let source_path = path_append(&work_path, BACKUP_FILE);
 
                 copy(&source_path, &target_path).context(MigErrCtx::from_remark(
                     MigErrorKind::Upstream,
@@ -379,7 +375,6 @@ impl<'a> Stage2 {
         };
 
         // Write our buffered log to workdir before unmounting if we are not flashing anyway
-
 
         if self.config.is_no_flash() {
             Logger::flush();
@@ -585,13 +580,13 @@ impl<'a> Stage2 {
 
                 thread::sleep(Duration::new(PRE_PARTPROBE_WAIT_SECS, PARTPROBE_WAIT_NANOS));
 
-                self.cmds.call(PARTPROBE_CMD, &[&target_path.to_string_lossy()], true)?;
+                self.cmds
+                    .call(PARTPROBE_CMD, &[&target_path.to_string_lossy()], true)?;
 
                 thread::sleep(Duration::new(
                     POST_PARTPROBE_WAIT_SECS,
                     PARTPROBE_WAIT_NANOS,
                 ));
-
 
                 let _res = self.cmds.call(UDEVADM_CMD, UDEVADM_PARAMS, true);
             } else {
@@ -674,9 +669,13 @@ impl<'a> Stage2 {
                         Ok(_) => {
                             info!("Set log file to '{}'", log_path.display());
                             Logger::flush();
-                        },
+                        }
                         Err(why) => {
-                            warn!("Failed to set log file to '{}', error: {:?}", log_path.display(), why);
+                            warn!(
+                                "Failed to set log file to '{}', error: {:?}",
+                                log_path.display(),
+                                why
+                            );
                         }
                     }
                 }

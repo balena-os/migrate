@@ -3,8 +3,9 @@ use log::{debug, error, info, trace};
 use regex::Regex;
 use std::fs::{read_to_string, File};
 use std::io::Write;
-use std::path::{Path};
+use std::path::Path;
 
+use crate::linux::migrate_info::PathInfo;
 use crate::{
     common::{
         dir_exists, file_exists, format_size_with_unit, path_append,
@@ -19,11 +20,10 @@ use crate::{
             ROOT_PATH,
         },
         migrate_info::{label_type::LabelType, MigrateInfo},
+        stage2::mounts::Mounts,
         EnsuredCmds, CHMOD_CMD, GRUB_REBOOT_CMD, GRUB_UPDT_CMD,
-        stage2::mounts::{Mounts},
     },
 };
-use crate::linux::migrate_info::PathInfo;
 
 const GRUB_UPDT_VERSION_ARGS: [&str; 1] = ["--version"];
 const GRUB_UPDT_VERSION_RE: &str = r#"^.*\s+\(GRUB\)\s+([0-9]+)\.([0-9]+)[^0-9].*$"#;
@@ -104,7 +104,6 @@ impl<'a> GrubBootManager {
             ))
         }
     }
-
 }
 
 impl<'a> BootManager for GrubBootManager {
@@ -198,14 +197,13 @@ impl<'a> BootManager for GrubBootManager {
 
         // path to kernel & initramfs at boot time depends on how /boot is mounted
         // either / (for a /boot mount or /boot for a directory of /root file system)
-        let grub_boot: &Path =
-            if boot_path.path == boot_path.mountpoint {
-                // /boot is a mounted filesystem
-                &Path::new(ROOT_PATH)
-            } else {
-                // /boot is a directory on /root
-                &boot_path.path
-            };
+        let grub_boot: &Path = if boot_path.path == boot_path.mountpoint {
+            // /boot is a mounted filesystem
+            &Path::new(ROOT_PATH)
+        } else {
+            // /boot is a directory on /root
+            &boot_path.path
+        };
 
         let part_type = match LabelType::from_device(cmds, &boot_path.drive)? {
             LabelType::GPT => "gpt",
@@ -289,7 +287,10 @@ impl<'a> BootManager for GrubBootManager {
             linux.push_str(&format!(" {}", word));
         }
 
-        linux.push_str(&format!(" rootfstype={} console=tty0 debug", boot_path.fs_type));
+        linux.push_str(&format!(
+            " rootfstype={} console=tty0 debug",
+            boot_path.fs_type
+        ));
 
         let mut grub_cfg = String::from(GRUB_CFG_TEMPLATE);
 
@@ -406,11 +407,7 @@ impl<'a> BootManager for GrubBootManager {
         Ok(())
     }
 
-    fn restore(
-        &self,
-        _mounts: &Mounts,
-        _config: &Stage2Config,
-    ) -> Result<(), MigError> {
+    fn restore(&self, _mounts: &Mounts, _config: &Stage2Config) -> Result<(), MigError> {
         trace!("restore: entered");
         // Nothing to restore with grub-reboot
         // TODO: might be worthwhile to remove kernel / initramfs and grub config

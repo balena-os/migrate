@@ -1,12 +1,12 @@
 use chrono::Local;
 use failure::ResultExt;
+use lazy_static::lazy_static;
 use log::{debug, error, info, trace, warn};
 use nix::mount::{mount, umount, MsFlags};
+use regex::Regex;
 use std::fs::{remove_file, File};
 use std::io::Write;
-use std::path::{PathBuf};
-use lazy_static::{lazy_static};
-use regex::{Regex};
+use std::path::PathBuf;
 
 use crate::{
     common::{
@@ -18,13 +18,14 @@ use crate::{
     linux::{
         boot_manager::BootManager,
         linux_common::restore_backups,
-        linux_defs::{MLO_FILE_NAME, NIX_NONE, ROOT_PATH, BOOT_PATH, UBOOT_FILE_NAME, UENV_FILE_NAME},
+        linux_defs::{
+            BOOT_PATH, MLO_FILE_NAME, NIX_NONE, ROOT_PATH, UBOOT_FILE_NAME, UENV_FILE_NAME,
+        },
         migrate_info::{path_info::PathInfo, MigrateInfo},
+        stage2::mounts::Mounts,
         EnsuredCmds, CHMOD_CMD, MKTEMP_CMD,
-        stage2::mounts::{Mounts},
     },
 };
-
 
 const UBOOT_DRIVE_REGEX: &str = r#"^/dev/mmcblk(\d+)p(\d+)$"#;
 
@@ -49,7 +50,7 @@ uenvcmd=run loadall; run mmcargs; echo debug: [${bootargs}] ... ; echo debug: [b
 "###;
 
 pub(crate) struct UBootManager {
-    boot_path: Option<PathInfo>
+    boot_path: Option<PathInfo>,
 }
 
 impl UBootManager {
@@ -58,7 +59,6 @@ impl UBootManager {
     }
 
     // Try to find a drive containing MLO, uEnv.txt or u-boot.bin, mount it if necessarry and return PathInfo if found
-
 
     /*
     Find boot manager partition - the partition where we will place our uEnv.txt
@@ -80,24 +80,26 @@ impl UBootManager {
 
     */
 
-    fn find_boot_path(        &self,
-                              cmds: &EnsuredCmds,
-                              mig_info: &MigrateInfo,
+    fn find_boot_path(
+        &self,
+        cmds: &EnsuredCmds,
+        mig_info: &MigrateInfo,
     ) -> Result<PathInfo, MigError> {
-
         lazy_static! {
             static ref BOOT_DRIVE_RE: Regex = Regex::new(r#"^mmcblk\d+p\d+$"#).unwrap();
         }
 
         // try our luck with /root, /boot
 
-        if file_exists(path_append(ROOT_PATH, MLO_FILE_NAME)) ||
-           file_exists(path_append(ROOT_PATH, UBOOT_FILE_NAME)) {
+        if file_exists(path_append(ROOT_PATH, MLO_FILE_NAME))
+            || file_exists(path_append(ROOT_PATH, UBOOT_FILE_NAME))
+        {
             return Ok(PathInfo::new(cmds, ROOT_PATH, &mig_info.lsblk_info)?.unwrap());
         }
 
-        if file_exists(path_append(BOOT_PATH, MLO_FILE_NAME)) ||
-            file_exists(path_append(BOOT_PATH, UBOOT_FILE_NAME)) {
+        if file_exists(path_append(BOOT_PATH, MLO_FILE_NAME))
+            || file_exists(path_append(BOOT_PATH, UBOOT_FILE_NAME))
+        {
             return Ok(PathInfo::new(cmds, BOOT_PATH, &mig_info.lsblk_info)?.unwrap());
         }
 
@@ -107,7 +109,6 @@ impl UBootManager {
             if !BOOT_DRIVE_RE.is_match(&*blk_device.name) {
                 debug!("Ignoring: '{}'", blk_device.get_path().display());
                 continue;
-
             }
             debug!("Looking at: '{}'", blk_device.get_path().display());
 
@@ -126,9 +127,16 @@ impl UBootManager {
                                 )?;
                                 if cmd_res.status.success() {
                                     tmp_mountpoint = Some(
-                                        PathBuf::from(&cmd_res.stdout)
-                                            .canonicalize()
-                                            .context(MigErrCtx::from_remark(MigErrorKind::Upstream, &format!("Failed to canonicalize path to mountpoint '{}'", cmd_res.stdout)))?);
+                                        PathBuf::from(&cmd_res.stdout).canonicalize().context(
+                                            MigErrCtx::from_remark(
+                                                MigErrorKind::Upstream,
+                                                &format!(
+                                                "Failed to canonicalize path to mountpoint '{}'",
+                                                cmd_res.stdout
+                                            ),
+                                            ),
+                                        )?,
+                                    );
                                 } else {
                                     return Err(MigError::from_remark(
                                         MigErrorKind::Upstream,
@@ -158,24 +166,25 @@ impl UBootManager {
                                 MsFlags::empty(),
                                 NIX_NONE,
                             )
-                                .context(
-                                    MigErrCtx::from_remark(
-                                        MigErrorKind::Upstream,
-                                        &format!(
-                                            "Failed to temporarily mount drive '{}' on '{}",
-                                            partition.get_path().display(),
-                                            tmp_mountpoint.as_ref().unwrap().display()
-                                        ),
-                                    ),
-                                )?;
+                            .context(MigErrCtx::from_remark(
+                                MigErrorKind::Upstream,
+                                &format!(
+                                    "Failed to temporarily mount drive '{}' on '{}",
+                                    partition.get_path().display(),
+                                    tmp_mountpoint.as_ref().unwrap().display()
+                                ),
+                            ))?;
 
                             (mountpoint, true)
-                        },
+                        }
                     };
 
-                    if file_exists(path_append(mountpoint, MLO_FILE_NAME)) ||
-                        file_exists(path_append(mountpoint, UBOOT_FILE_NAME)) {
-                        return Ok(PathInfo::from_mounted(cmds, mountpoint, mountpoint, blk_device, &partition)?)
+                    if file_exists(path_append(mountpoint, MLO_FILE_NAME))
+                        || file_exists(path_append(mountpoint, UBOOT_FILE_NAME))
+                    {
+                        return Ok(PathInfo::from_mounted(
+                            cmds, mountpoint, mountpoint, blk_device, &partition,
+                        )?);
                     } else {
                         if mounted {
                             umount(mountpoint).context(MigErrCtx::from_remark(
@@ -216,7 +225,7 @@ impl<'a> BootManager for UBootManager {
         // find the u-boot boot device
         // this is where uEnv.txt has to go
 
-        let boot_path= self.find_boot_path(cmds, mig_info)?;
+        let boot_path = self.find_boot_path(cmds, mig_info)?;
         info!(
             "Found boot manager '{}', mounpoint: '{}', fs type: {}, free space: {}",
             boot_path.device.display(),
@@ -225,15 +234,13 @@ impl<'a> BootManager for UBootManager {
             format_size_with_unit(boot_path.fs_free)
         );
 
-
-
-/*
-            s2_cfg.set_bootmgr_cfg(MountConfig::new(
-                boot_path.device,
-                boot_path.fs_type,
-                boot_path.mountpoint,
-            ));
-*/
+        /*
+                    s2_cfg.set_bootmgr_cfg(MountConfig::new(
+                        boot_path.device,
+                        boot_path.fs_type,
+                        boot_path.mountpoint,
+                    ));
+        */
 
         let mut boot_req_space = if !file_exists(path_append(&boot_path.path, MIG_KERNEL_NAME)) {
             mig_info.kernel_file.size
@@ -404,7 +411,10 @@ impl<'a> BootManager for UBootManager {
         uenv_text = uenv_text.replace("__DTB_PATH__", &dtb_path.to_string_lossy());
         uenv_text = uenv_text.replace("__DRIVE__", &drive_num.0);
         uenv_text = uenv_text.replace("__PARTITION__", &drive_num.1);
-        uenv_text = uenv_text.replace("__ROOT_DEV__", &boot_path.get_portable_path().to_string_lossy());
+        uenv_text = uenv_text.replace(
+            "__ROOT_DEV__",
+            &boot_path.get_portable_path().to_string_lossy(),
+        );
 
         debug!("writing uEnv.txt as:\n {}", uenv_text);
 
@@ -422,7 +432,7 @@ impl<'a> BootManager for UBootManager {
         Ok(())
     }
 
-    fn restore(&self,  mounts: &Mounts, config: &Stage2Config) -> Result<(), MigError> {
+    fn restore(&self, mounts: &Mounts, config: &Stage2Config) -> Result<(), MigError> {
         info!("restoring boot configuration",);
 
         // TODO: restore on bootmgr device

@@ -8,9 +8,9 @@ use std::time::Duration;
 
 use crate::{
     common::{
-        backup, dir_exists, format_size_with_unit, path_append, Config, MigErrCtx, MigError,
-        MigErrorKind, MigMode,
-        stage2_config::{PathType, Stage2ConfigBuilder, Stage2LogConfig, },
+        backup, dir_exists, format_size_with_unit, path_append,
+        stage2_config::{PathType, Stage2ConfigBuilder, Stage2LogConfig},
+        Config, MigErrCtx, MigError, MigErrorKind, MigMode,
     },
     defs::{BACKUP_FILE, MIN_DISK_SIZE, SYSTEM_CONNECTIONS_DIR},
 };
@@ -26,20 +26,18 @@ pub(crate) mod stage2;
 
 pub(crate) mod ensured_cmds;
 pub(crate) use ensured_cmds::{
-    EnsuredCmds, CHMOD_CMD, DF_CMD, FDISK_CMD, FILE_CMD, GRUB_REBOOT_CMD, GRUB_UPDT_CMD,
-    LSBLK_CMD, MKTEMP_CMD, MOKUTIL_CMD, MOUNT_CMD, PARTED_CMD, REBOOT_CMD,
-    UNAME_CMD,
+    EnsuredCmds, CHMOD_CMD, DF_CMD, FDISK_CMD, FILE_CMD, GRUB_REBOOT_CMD, GRUB_UPDT_CMD, LSBLK_CMD,
+    MKTEMP_CMD, MOKUTIL_CMD, MOUNT_CMD, PARTED_CMD, REBOOT_CMD, UNAME_CMD,
 };
 
 pub(crate) mod migrate_info;
 pub(crate) use migrate_info::MigrateInfo;
 
 pub(crate) mod linux_common;
-pub(crate) use linux_common::{is_admin};
-use crate::defs::STAGE2_CFG_FILE;
 use crate::common::stage2_config::MountConfig;
-use mod_logger::{Logger, LogDestination};
-
+use crate::defs::STAGE2_CFG_FILE;
+pub(crate) use linux_common::is_admin;
+use mod_logger::{LogDestination, Logger};
 
 const REQUIRED_CMDS: &'static [&'static str] = &[
     DF_CMD, LSBLK_CMD, FILE_CMD, UNAME_CMD, MOUNT_CMD, REBOOT_CMD, CHMOD_CMD, MKTEMP_CMD,
@@ -76,7 +74,7 @@ impl<'a> LinuxMigrator {
 
         info!("migrate mode: {:?}", config.migrate.get_mig_mode());
 
-        let mut cmds= EnsuredCmds::new();
+        let mut cmds = EnsuredCmds::new();
 
         if let Err(why) = cmds.ensure_cmds(REQUIRED_CMDS) {
             error!("Failed to ensure required commands: {:?}", why);
@@ -205,7 +203,6 @@ impl<'a> LinuxMigrator {
 
         // TODO: check available space for work files here if work is not on a distinct partition
 
-
         /*
         if let Some(flash_device) = config.migrate.get_flash_device() {
             // force annother device to be flashed, strictly debug !!!
@@ -251,9 +248,12 @@ impl<'a> LinuxMigrator {
         let work_dir = &self.mig_info.work_path.path;
         let log_file = path_append(work_dir, "stage1.log");
 
-        Logger::set_log_file(&LogDestination::Stderr, &log_file)
-            .context(MigErrCtx::from_remark(MigErrorKind::Upstream, &format!("Failed to set logging to '{}'", log_file.display())))?;
-
+        Logger::set_log_file(&LogDestination::Stderr, &log_file).context(
+            MigErrCtx::from_remark(
+                MigErrorKind::Upstream,
+                &format!("Failed to set logging to '{}'", log_file.display()),
+            ),
+        )?;
 
         let boot_device = self.device.get_boot_device();
 
@@ -261,13 +261,17 @@ impl<'a> LinuxMigrator {
             self.stage2_config
                 .set_work_path(&PathType::Path(self.mig_info.work_path.path.clone()));
         } else {
-            let (_lsblk_device,lsblk_part) = self.mig_info.lsblk_info.get_path_info(&work_dir)?;
+            let (_lsblk_device, lsblk_part) = self.mig_info.lsblk_info.get_path_info(&work_dir)?;
             self.stage2_config
                 .set_work_path(&PathType::Mount(MountConfig::new(
                     &lsblk_part.get_path(),
                     lsblk_part.fstype.as_ref().unwrap(),
-                    work_dir.strip_prefix(lsblk_part.mountpoint.as_ref().unwrap())
-                        .context(MigErrCtx::from_remark(MigErrorKind::Upstream, "failed to create relative work path"))?
+                    work_dir
+                        .strip_prefix(lsblk_part.mountpoint.as_ref().unwrap())
+                        .context(MigErrCtx::from_remark(
+                            MigErrorKind::Upstream,
+                            "failed to create relative work path",
+                        ))?,
                 )));
         }
 
@@ -288,7 +292,7 @@ impl<'a> LinuxMigrator {
         if self.mig_info.nwmgr_files.len() > 0
             || self.mig_info.wifis.len() > 0 && !dir_exists(&nwmgr_path)?
         {
-            if ! dir_exists(&nwmgr_path)? {
+            if !dir_exists(&nwmgr_path)? {
                 create_dir(&nwmgr_path).context(MigErrCtx::from_remark(
                     MigErrorKind::Upstream,
                     &format!("failed to create directory '{}'", nwmgr_path.display()),
@@ -339,12 +343,12 @@ impl<'a> LinuxMigrator {
         self.stage2_config
             .set_skip_flash(self.config.debug.is_skip_flash());
 
-
-        self.stage2_config.set_balena_image(self.mig_info.image_file.rel_path.as_ref().unwrap().clone());
-        self.stage2_config.set_balena_config(self.mig_info.config_file.get_rel_path().unwrap().clone());
+        self.stage2_config
+            .set_balena_image(self.mig_info.image_file.rel_path.as_ref().unwrap().clone());
+        self.stage2_config
+            .set_balena_config(self.mig_info.config_file.get_rel_path().unwrap().clone());
 
         // TODO: setpath if on / mount else set mount
-
 
         self.stage2_config
             .set_gzip_internal(self.config.migrate.is_gzip_internal());
@@ -360,9 +364,16 @@ impl<'a> LinuxMigrator {
                         fstype: fstype.clone(),
                     });
 
-                    info!("Set up log device as '{}' with file system type '{}'", log_path.display(), fstype);
+                    info!(
+                        "Set up log device as '{}' with file system type '{}'",
+                        log_path.display(),
+                        fstype
+                    );
                 } else {
-                    warn!("Could not determine file system type for log partition '{}'  - ignoring", log_path.display());
+                    warn!(
+                        "Could not determine file system type for log partition '{}'  - ignoring",
+                        log_path.display()
+                    );
                 }
             } else {
                 warn!("Log partition '{}' is not on a distinct drive from flash drive: '{}' - ignoring", log_path.display(), boot_device.drive.display());
@@ -380,7 +391,6 @@ impl<'a> LinuxMigrator {
             &self.config,
             &mut self.stage2_config,
         )?;
-
 
         trace!("write stage 2 config");
         let s2_path = path_append(&boot_device.mountpoint, STAGE2_CFG_FILE);
