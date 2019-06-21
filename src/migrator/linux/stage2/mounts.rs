@@ -426,13 +426,14 @@ impl<'a> Mounts {
             ))?;
         }
 
-        for _x in 1..3 {
+        for attempt in 1..3 {
             if file_exists(&device) {
                 let device = to_std_device_path(device.as_ref())?;
 
                 debug!(
-                    "attempting to mount '{}' on '{}' with fstype: {}",
+                    "Found device '{}' on attempt {} mounting on '{}' with fstype: {}",
                     device.display(),
+                    attempt,
                     mountpoint.display(),
                     fstype
                 );
@@ -456,8 +457,8 @@ impl<'a> Mounts {
                 return Ok(mountpoint);
             } else {
                 debug!(
-                    "Device not found '{}' will retry in 3 seconds",
-                    device.display()
+                    "Device '{}'  not found in attempt {}, will retry in 3 seconds",
+                    device.display(), attempt
                 );
                 thread::sleep(Duration::from_secs(3))
             }
