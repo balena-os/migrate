@@ -190,7 +190,7 @@ impl UBootManager {
 
         debug!("No u-boot boot files found, assuming '{}'", ROOT_PATH);
 
-        Ok(PathInfo::new(cmds, BOOT_PATH, &mig_info.lsblk_info)?.unwrap())
+        Ok(PathInfo::new(cmds, ROOT_PATH, &mig_info.lsblk_info)?.unwrap())
     }
 }
 
