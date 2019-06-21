@@ -598,7 +598,7 @@ impl<'a> Stage2 {
         }
         // check existence of partitions
 
-        if let Ok((parts_ok, boot_mountpoint, data_mountpoint)) = self.mounts.mount_balena() {
+        if let Ok((_parts_ok, boot_mountpoint, data_mountpoint)) = self.mounts.mount_balena() {
             // TODO: check fingerprints ?
 
             let src = path_append(mig_tmp_dir, BALENA_CONFIG_FILE);

@@ -182,7 +182,7 @@ impl<'a> Mounts {
                                                 log_path: None,
                                             });
                                         } else {
-                                            umount(&boot_mountpoint);
+                                            let _res = umount(&boot_mountpoint);
                                         }
                                     }
                                     Err(why) => {
@@ -352,8 +352,8 @@ impl<'a> Mounts {
             Ok(mountpoint) => mountpoint,
             Err(why) => {
                 error!(
-                    "Failed to mount balena boot device: '{}'",
-                    part_label.display()
+                    "Failed to mount balena boot device: '{}', error: {:?}",
+                    part_label.display(),why
                 );
                 return Err(MigError::displayed());
             }
@@ -391,8 +391,8 @@ impl<'a> Mounts {
             Ok(mountpoint) => Some(mountpoint),
             Err(why) => {
                 error!(
-                    "Failed to mount balena data device: '{}'",
-                    part_label.display()
+                    "Failed to mount balena data device: '{}', error: {:?}",
+                    part_label.display(), why
                 );
                 parts_found = false;
                 None
