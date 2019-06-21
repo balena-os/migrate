@@ -11,10 +11,13 @@ use nix::{
 };
 
 use crate::{
-    defs::{STAGE2_CFG_FILE},
+    defs::{STAGE2_CFG_FILE, DISK_BY_LABEL_PATH},
     linux::{
         linux_common::{to_std_device_path, get_kernel_root_info, drive_from_partition},
-        linux_defs::{NIX_NONE, },
+        linux_defs::{NIX_NONE,BALENA_BOOT_PART, BALENA_ROOTA_PART, BALENA_ROOTB_PART, BALENA_STATE_PART,
+                     BALENA_DATA_PART, BALENA_BOOT_FSTYPE, BALENA_DATA_FSTYPE,
+
+        },
         ensured_cmds::{EnsuredCmds, UDEVADM_CMD},
         migrate_info::{LsblkInfo},
     },
@@ -27,11 +30,16 @@ use crate::{
         }
     }
 };
+use crate::common::stage2_config::PathType::Mount;
 
 const MOUNT_DIR: &str = "/tmp_mount";
 const BOOTFS_DIR: &str = "boot";
 const WORKFS_DIR: &str = "work";
 const LOGFS_DIR: &str = "log";
+
+const BOOT_MNT_DIR: &str = "mnt_boot";
+const DATA_MNT_DIR: &str = "mnt_data";
+
 
 const UDEVADM_PARAMS: &[&str] = &["settle", "-t", "10"];
 
@@ -57,6 +65,7 @@ pub(crate) struct Mounts {
     flash_device: PathBuf,
     boot_part: PathBuf,
     boot_mountpoint: PathBuf,
+    work_no_copy: bool,
     work_path: Option<PathBuf>,
     work_mountpoint:Option<PathBuf>,
     log_path: Option<PathBuf>,
@@ -128,6 +137,7 @@ impl<'a> Mounts {
                             boot_part: kernel_root_device,
                             boot_mountpoint,
                             stage2_config,
+                            work_no_copy: false,
                             work_path: None,
                             work_mountpoint: None,
                             log_path: None
@@ -166,6 +176,7 @@ impl<'a> Mounts {
                                                 boot_part: device,
                                                 boot_mountpoint,
                                                 stage2_config,
+                                                work_no_copy: false,
                                                 work_path: None,
                                                 work_mountpoint: None,
                                                 log_path: None
@@ -206,6 +217,10 @@ impl<'a> Mounts {
         &self.flash_device
     }
 
+    pub fn is_work_no_copy(&'a self) -> bool {
+        self.work_no_copy
+    }
+
     pub fn get_work_path(&'a self) -> Option<&'a Path> {
         if let Some(ref work_path) = self.work_path {
             Some(work_path)
@@ -220,6 +235,63 @@ impl<'a> Mounts {
         } else {
             None
         }
+    }
+
+
+    pub fn mount_all(&mut self, stage2_config: &Stage2Config) -> Result<(),MigError> {
+        trace!("mount_all: entered");
+
+        if let Some((log_dev, log_fs)) = stage2_config.get_log_device() {
+            self.log_path = match Mounts::mount(LOGFS_DIR, log_dev, log_fs) {
+                Ok(mountpoint) => {
+                    Some(mountpoint)
+                },
+                Err(why) => {
+                    warn!("Failed to mount log device: '{}': error: {:?}", log_dev.display(), why);
+                    None
+                }
+            };
+        }
+
+        debug!("log mountpoint is {:?}", self.log_path);
+
+        match stage2_config.get_work_path() {
+            PathType::Path(work_path) => {
+                self.work_path = Some(path_append(&self.boot_mountpoint, work_path));
+                debug!("Work mountpoint is a path: {:?}",  self.work_path);
+            },
+            PathType::Mount(mount_cfg) => {
+                let device = to_std_device_path(mount_cfg.get_device())?;
+                debug!("Work mountpoint is a mount: '{}'", device.display());
+                // TODO: make all mounts retry with timeout
+                if self.boot_part != device {
+                    match Mounts::mount(WORKFS_DIR, &device, mount_cfg.get_fstype()) {
+                        Ok(mountpoint) => {
+                            match drive_from_partition(&device) {
+                                Ok(drive) => {
+                                    self.work_no_copy = drive != self.flash_device
+                                },
+                                Err(why) => {
+                                    warn!("Failed to derive drive from work partition: '{}', error: {:?}", device.display(), why);
+                                }
+                            };
+                            self.work_path = Some(path_append(&mountpoint, mount_cfg.get_path()));
+                            self.work_mountpoint = Some(mountpoint);
+                        },
+                        Err(why) => {
+                            error!("Failed to mount log mount: '{}', error: {:?}", device.display(), why);
+                            return Err(MigError::displayed());
+                        }
+                    }
+                    debug!("Work mountpoint is at path: {:?}", self.work_path);
+                } else {
+                    self.work_path = Some(path_append(&self.boot_mountpoint, mount_cfg.get_path()));
+                    debug!("Work mountpoint is at path: {:?}", self.work_path);
+                }
+            }
+        }
+
+        Ok(())
     }
 
     pub fn unmount_log(&self) -> Result<(),MigError> {
@@ -238,8 +310,30 @@ impl<'a> Mounts {
 
     // unmount all mounted drives except log
     // which is expected to be on a separate drive
-    pub fn unmount_all(&self,) -> Result<(),MigError> {
+    pub fn unmount_all(&mut self,) -> Result<(),MigError> {
         // TODO: unmount work_dir if necessarry
+
+        if let Some(ref mountpoint) = self.work_mountpoint {
+            match umount(mountpoint)
+                .context(MigErrCtx::from_remark(
+                    MigErrorKind::Upstream,
+                    &format!(
+                        "Failed to unmount former work device: '{}'",
+                        mountpoint.display()
+                    ),
+                )) {
+                Ok(_) => {
+                    self.work_mountpoint = None;
+                    self.work_path = None;
+                    self.work_no_copy = false;
+                },
+                Err(why) => {
+                    error!("Failed to unmount work mountpoint, error: {:?}", why);
+                }
+            }
+        }
+
+        // TODO: make boot moun optional ?
         umount(&self.boot_mountpoint)
             .context(MigErrCtx::from_remark(
             MigErrorKind::Upstream,
@@ -249,27 +343,62 @@ impl<'a> Mounts {
             ),
         ))?;
 
-        if let Some(ref mountpoint) = self.work_mountpoint {
-            umount(mountpoint)
-                .context(MigErrCtx::from_remark(
-                    MigErrorKind::Upstream,
-                    &format!(
-                        "Failed to unmount former work device: '{}'",
-                        mountpoint.display()
-                    ),
-                ))?;
-        }
-
         Ok(())
     }
+
+    pub fn mount_balena(&mut self) -> Result<(bool,PathBuf,Option<PathBuf>),MigError> {
+        let mut parts_found = true;
+        let part_label = path_append(DISK_BY_LABEL_PATH, BALENA_BOOT_PART);
+        let boot_mountpoint = match Mounts::mount(BOOT_MNT_DIR, &part_label, "vfat") {
+            Ok(mountpoint) => {
+                mountpoint
+            },
+            Err(why) => {
+                error!("Failed to mount balena boot device: '{}'", part_label.display());
+                return Err(MigError::displayed());
+            }
+        };
+
+        let part_label = path_append(DISK_BY_LABEL_PATH, BALENA_ROOTA_PART);
+        if !file_exists(&part_label) {
+            warn!("Unable to find labeled partition: '{}'", part_label.display());
+            parts_found = false;
+        }
+
+        let part_label = path_append(DISK_BY_LABEL_PATH, BALENA_ROOTB_PART);
+        if !file_exists(&part_label) {
+            warn!("Unable to find labeled partition: '{}'", part_label.display());
+            parts_found = false;
+        }
+
+        let part_label = path_append(DISK_BY_LABEL_PATH, BALENA_STATE_PART);
+        if !file_exists(&part_label) {
+            warn!("Unable to find labeled partition: '{}'", part_label.display());
+            parts_found = false;
+        }
+
+        let part_label = path_append(DISK_BY_LABEL_PATH, BALENA_DATA_PART);
+        let data_mountpoint = match Mounts::mount(DATA_MNT_DIR, &part_label, "ext4") {
+            Ok(mountpoint) => {
+                Some(mountpoint)
+            },
+            Err(why) => {
+                error!("Failed to mount balena data device: '{}'", part_label.display());
+                parts_found = false;
+                None
+            }
+        };
+
+        Ok((parts_found, boot_mountpoint, data_mountpoint))
+    }
+
 
     // this could be the function used to mount other drives too (boot, work)
     fn mount<P1: AsRef<Path>, P2: AsRef<Path>>(dir: P1, device: P2, fstype: &str) -> Result<PathBuf,MigError> {
         // TODO: retry with delay
+        let device = device.as_ref();
 
-        let device = to_std_device_path(device.as_ref())?;
         let mountpoint = path_append(MOUNT_DIR, dir.as_ref());
-
         debug!("Attempting to mount '{}' on '{}' with fstype {}", device.display(), mountpoint.display(), fstype);
 
         if !dir_exists(&mountpoint)? {
@@ -281,6 +410,8 @@ impl<'a> Mounts {
 
         for _x in 1..3 {
             if file_exists(&device) {
+                let device = to_std_device_path(device.as_ref())?;
+
                 debug!(
                     "attempting to mount '{}' on '{}' with fstype: {}",
                     device.display(),
@@ -313,53 +444,5 @@ impl<'a> Mounts {
 
         error!("failed to find log device '{}'", device.display());
         return Err(MigError::displayed())
-    }
-
-    pub fn mount_all(&mut self, stage2_config: &Stage2Config) -> Result<(),MigError> {
-        trace!("mount_all: entered");
-
-        if let Some((log_dev, log_fs)) = stage2_config.get_log_device() {
-            self.log_path = match Mounts::mount(LOGFS_DIR, log_dev, log_fs) {
-                Ok(mountpoint) => {
-                    Some(mountpoint)
-                },
-                Err(why) => {
-                    warn!("Failed to mount log device: '{}': error: {:?}", log_dev.display(), why);
-                    None
-                }
-            };
-        }
-
-        debug!("log mountpoint is {:?}", self.log_path);
-
-        match stage2_config.get_work_path() {
-            PathType::Path(work_path) => {
-                self.work_path = Some(path_append(&self.boot_mountpoint, work_path));
-                debug!("Work mountpoint is a path: {:?}",  self.work_path);
-            },
-            PathType::Mount(mount_cfg) => {
-                let device = to_std_device_path(mount_cfg.get_device())?;
-                debug!("Work mountpoint is a mount: '{}'", device.display());
-                // TODO: make all mounts retry with timeout
-                if self.boot_part != device {
-                    match Mounts::mount(WORKFS_DIR, &device, mount_cfg.get_fstype()) {
-                        Ok(mountpoint) => {
-                            self.work_path = Some(path_append(&mountpoint, mount_cfg.get_path()));
-                            self.work_mountpoint = Some(mountpoint);
-                        },
-                        Err(why) => {
-                            error!("Failed to mount log mount: '{}', error: {:?}", device.display(), why);
-                            return Err(MigError::displayed());
-                        }
-                    }
-                    debug!("Work mountpoint is at path: {:?}", self.work_path);
-                } else {
-                    self.work_path = Some(path_append(&self.boot_mountpoint, mount_cfg.get_path()));
-                    debug!("Work mountpoint is at path: {:?}", self.work_path);
-                }
-            }
-        }
-
-        Ok(())
     }
 }

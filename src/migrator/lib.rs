@@ -56,6 +56,7 @@ pub fn stage2() -> Result<(), MigError> {
         }
     }
 
+    Logger::flush();
     stage2.error_exit()?;
     // should not be getting here
     Ok(())

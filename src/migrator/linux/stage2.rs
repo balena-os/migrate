@@ -9,7 +9,7 @@ use nix::{
 };
 
 use std::fs::{copy, create_dir, read_dir, read_link, File};
-use std::io::{BufWriter, Read, Write};
+use std::io::{Read, Write};
 use std::path::{Path};
 use std::process::{Command, Stdio};
 use std::thread;
@@ -78,37 +78,33 @@ impl<'a> Stage2 {
     // load the stage2 config
 
     pub fn try_init() -> Result<Stage2, MigError> {
-        // TODO: wait a couple of seconds for more devices to show up ?
-        trace!("try_init: entered");
-
         Logger::set_default_level(&INIT_LOG_LEVEL);
 
+
+        // log to stderr & memory buffer - so it can be saved to a persistent log later
         match Logger::set_log_dest(&LogDestination::BufferStderr, NO_STREAM) {
             Ok(_s) => {
                 info!("Balena Migrate Stage 2 rev {} initializing", S2_REV);
             }
             Err(_why) => {
-                println!("Balena Migrate Stage 2 rev {} initializing", S2_REV);
                 println!("failed to initalize logger");
+                println!("Balena Migrate Stage 2 rev {} initializing", S2_REV);
             }
         }
-
-        trace!("try_init: trace on");
 
         let mut cmds = EnsuredCmds::new();
         if let Err(why) = cmds.ensure_cmds(MIG_REQUIRED_CMDS) {
             warn!("Not all required commands were found: {:?}", why);
         }
 
+        // mount boot device containing BALENA_STAGE2_CFG for starters
         let mut mounts = match Mounts::new(&mut cmds) {
             Ok(mounts) => {
                 debug!("Successfully mounted file system");
-                Logger::flush();
                 mounts
             },
             Err(why) => {
-                error!("Failed to mount file system: {:?}", why);
-                Logger::flush();
+                error!("Failed to mount boot file system, giving up: {:?}", why);
                 return Err(MigError::displayed());
             }
         };
@@ -116,11 +112,6 @@ impl<'a> Stage2 {
         debug!("got mounts: {:?}", mounts);
 
         let stage2_cfg_file = mounts.get_stage2_config();
-
-        debug!("found stage2 config file: '{}'", stage2_cfg_file.display());
-
-        // TODO: add options to make this more reliable)
-
         let stage2_cfg = match  Stage2Config::from_config(&stage2_cfg_file) {
             Ok(s2_cfg) => {
                 info!(
@@ -131,11 +122,15 @@ impl<'a> Stage2 {
             },
             Err(why) => {
                 error!("Failed to read stage 2 config file from file '{}' with error: {:?}", stage2_cfg_file.display(), why);
-                Logger::flush();
+                // TODO: could try to restore former boot config anyway
                 return Err(MigError::displayed());
             }
         };
 
+        info!("Setting log level to {:?}", stage2_cfg.get_log_level());
+        Logger::set_default_level(&stage2_cfg.get_log_level());
+
+        // Mount all remaining drives - work and log
         match mounts.mount_all(&stage2_cfg) {
             Ok(_) => {
                 info!("mounted all configured drives");
@@ -145,16 +140,14 @@ impl<'a> Stage2 {
             }
         }
 
-        info!("Setting log level to {:?}", stage2_cfg.get_log_level());
-        Logger::set_default_level(&stage2_cfg.get_log_level());
 
-
+        // try switch logging to a persistent log
         let log_path =
             if let Some(log_path) = mounts.get_log_path() {
                 Some(path_append(log_path, MIGRATE_LOG_FILE))
             } else {
-                if let Some(work_path) = mounts.get_work_path() {
-                    if stage2_cfg.is_no_flash() {
+                if stage2_cfg.is_no_flash() {
+                    if let Some(work_path) = mounts.get_work_path() {
                         Some(path_append(work_path, MIGRATE_LOG_FILE))
                     } else {
                         None
@@ -168,6 +161,7 @@ impl<'a> Stage2 {
             match Logger::set_log_file(&LogDestination::Stderr, &log_path) {
                 Ok(_) => {
                     info!("Set log file to '{}'", log_path.display());
+                    Logger::flush();
                 },
                 Err(why) => {
                     warn!("Failed to set log file to '{}', error: {:?}", log_path.display(), why);
@@ -183,6 +177,8 @@ impl<'a> Stage2 {
         });
     }
 
+    // Do the actual work once drives are mounted and config is read
+
     pub fn migrate(&mut self) -> Result<(), MigError> {
         trace!("migrate: entered");
 
@@ -192,21 +188,23 @@ impl<'a> Stage2 {
         // Recover device type and restore original boot configuration
 
         let device = device::from_config(device_type, boot_type)?;
-        device.restore_boot(&self.mounts, &self.config)?;
+        match device.restore_boot(&self.mounts, &self.config) {
+            Ok(_) => {
+                info!("Boot configuration was restored sucessfully");
+                // boot config restored can reboot
+                self.recoverable_state = true;
+            },
+            Err(why) => {
+                warn!("Failed to restore boot configuration - trying to migrate anyway. error: {:?}", why);
+            }
+        }
 
         info!("migrating {:?} boot type: {:?}", device_type, boot_type);
-        Logger::flush();
 
-        // boot config restored can reboot
-        self.recoverable_state = true;
-
-        self.cmds.ensure_cmds(MIG_REQUIRED_CMDS)?;
-
-        // TODO: mount work dir if required,
         // TODO: no copy if workdir is on separate disk
 
         let work_path = if let Some(work_path) = self.mounts.get_work_path() {
-            work_path
+            work_path.to_path_buf()
         } else {
             error!("The working directory was not mounted - aborting migration");
             return Err(MigError::displayed());
@@ -215,165 +213,170 @@ impl<'a> Stage2 {
         // TODO: only do this if work_path is not distinct drive from flash drive
         // check if we have enough space to copy files to initramfs
 
-        let mig_tmp_dir = match get_mem_info() {
-            Ok((mem_tot, mem_avail)) => {
-                info!(
-                    "Memory available is {} of {}",
-                    format_size_with_unit(mem_avail),
-                    format_size_with_unit(mem_tot)
-                );
+        let mig_tmp_dir = if !self.mounts.is_work_no_copy() {
+            let mig_tmp_dir = match get_mem_info() {
+                Ok((mem_tot, mem_avail)) => {
+                    info!(
+                        "Memory available is {} of {}",
+                        format_size_with_unit(mem_avail),
+                        format_size_with_unit(mem_tot)
+                    );
 
-                let mut required_size = file_size(path_append(
-                    work_path,
-                    &self.config.get_balena_image(),
-                ))?;
-
-                required_size += file_size(path_append(
-                    work_path,
-                    &self.config.get_balena_config(),
-                ))?;
-
-                if self.config.has_backup() {
-                    required_size += file_size(path_append(&work_path, BACKUP_FILE))?;
-                }
-
-                let src_nwmgr_dir = path_append(&work_path, SYSTEM_CONNECTIONS_DIR);
-                if dir_exists(&src_nwmgr_dir)? {
-                    let paths = read_dir(&src_nwmgr_dir).context(MigErrCtx::from_remark(
-                        MigErrorKind::Upstream,
-                        &format!("Failed to list directory '{}'", src_nwmgr_dir.display()),
+                    let mut required_size = file_size(path_append(
+                        &work_path,
+                        &self.config.get_balena_image(),
                     ))?;
 
-                    for path in paths {
-                        if let Ok(path) = path {
-                            required_size += file_size(path.path())?;
+                    required_size += file_size(path_append(
+                        &work_path,
+                        &self.config.get_balena_config(),
+                    ))?;
+
+                    if self.config.has_backup() {
+                        required_size += file_size(path_append(&work_path, BACKUP_FILE))?;
+                    }
+
+                    let src_nwmgr_dir = path_append(&work_path, SYSTEM_CONNECTIONS_DIR);
+                    if dir_exists(&src_nwmgr_dir)? {
+                        let paths = read_dir(&src_nwmgr_dir).context(MigErrCtx::from_remark(
+                            MigErrorKind::Upstream,
+                            &format!("Failed to list directory '{}'", src_nwmgr_dir.display()),
+                        ))?;
+
+                        for path in paths {
+                            if let Ok(path) = path {
+                                required_size += file_size(path.path())?;
+                            }
                         }
                     }
+
+                    info!(
+                        "Memory required for copying files is {}",
+                        format_size_with_unit(required_size)
+                    );
+
+                    if mem_avail > required_size + STAGE2_MEM_THRESHOLD {
+                        Path::new(MIGRATE_TEMP_DIR)
+                    } else {
+                        // TODO: create temporary storage on disk instead by resizing
+                        error!("Not enough memory available for copying files");
+                        return Err(MigError::from_remark(
+                            MigErrorKind::InvState,
+                            "Not enough memory available for copying files",
+                        ));
+                    }
                 }
-
-                info!(
-                    "Memory required for copying files is {}",
-                    format_size_with_unit(required_size)
-                );
-
-                if mem_avail > required_size + STAGE2_MEM_THRESHOLD {
-                    Path::new(MIGRATE_TEMP_DIR)
-                } else {
-                    // TODO: create temporary storage on disk instead by resizing
-                    error!("Not enough memory available for copying files");
-                    return Err(MigError::from_remark(
-                        MigErrorKind::InvState,
-                        "Not enough memory available for copying files",
-                    ));
+                Err(why) => {
+                    warn!("Failed to retrieve mem info, error: {:?}", why);
+                    return Err(MigError::displayed());
                 }
-            }
-            Err(why) => {
-                warn!("Failed to retrieve mem info, error: {:?}", why);
-                return Err(MigError::displayed());
-            }
-        };
+            };
 
-        if !dir_exists(mig_tmp_dir)? {
-            create_dir(mig_tmp_dir).context(MigErrCtx::from_remark(
-                MigErrorKind::Upstream,
-                &format!(
-                    "failed to create migrate temp directory {}",
-                    MIGRATE_TEMP_DIR
-                ),
-            ))?;
-        }
-
-        let src = path_append(work_path, self.config.get_balena_image());
-        let tgt = path_append(mig_tmp_dir, BALENA_IMAGE_FILE);
-        copy(&src, &tgt).context(MigErrCtx::from_remark(
-            MigErrorKind::Upstream,
-            &format!(
-                "failed to copy balena image to migrate temp directory, '{}' -> '{}'",
-                src.display(),
-                tgt.display()
-            ),
-        ))?;
-
-        info!("copied balena OS image to '{}'", tgt.display());
-
-        let src = path_append(work_path, self.config.get_balena_config());
-        let tgt = path_append(mig_tmp_dir, BALENA_CONFIG_FILE);
-        copy(&src, &tgt).context(MigErrCtx::from_remark(
-            MigErrorKind::Upstream,
-            &format!(
-                "failed to copy balena config to migrate temp directory, '{}' -> '{}'",
-                src.display(),
-                tgt.display()
-            ),
-        ))?;
-
-        info!("copied balena OS config to '{}'", tgt.display());
-
-        let src_nwmgr_dir = path_append(
-            work_path,
-            SYSTEM_CONNECTIONS_DIR,
-        );
-
-        let tgt_nwmgr_dir = path_append(mig_tmp_dir, SYSTEM_CONNECTIONS_DIR);
-        if dir_exists(&src_nwmgr_dir)? {
-            if !dir_exists(&tgt_nwmgr_dir)? {
-                create_dir(&tgt_nwmgr_dir).context(MigErrCtx::from_remark(
+            if !dir_exists(mig_tmp_dir)? {
+                create_dir(mig_tmp_dir).context(MigErrCtx::from_remark(
                     MigErrorKind::Upstream,
                     &format!(
-                        "failed to create systm-connections in migrate temp directory: '{}'",
-                        tgt_nwmgr_dir.display()
+                        "failed to create migrate temp directory {}",
+                        MIGRATE_TEMP_DIR
                     ),
                 ))?;
             }
 
-            let paths = read_dir(&src_nwmgr_dir).context(MigErrCtx::from_remark(
-                MigErrorKind::Upstream,
-                &format!("Failed to list directory '{}'", src_nwmgr_dir.display()),
-            ))?;
-
-            for path in paths {
-                if let Ok(path) = path {
-                    let src_path = path.path();
-                    if src_path.metadata().unwrap().is_file() {
-                        let tgt_path = path_append(&tgt_nwmgr_dir, &src_path.file_name().unwrap());
-                        copy(&src_path, &tgt_path)
-                            .context(MigErrCtx::from_remark(MigErrorKind::Upstream, &format!("Failed copy network manager file to migrate temp directory '{}' -> '{}'", src_path.display(), tgt_path.display())))?;
-                        info!("copied network manager config  to '{}'", tgt_path.display());
-                    }
-                } else {
-                    return Err(MigError::from_remark(
-                        MigErrorKind::Upstream,
-                        &format!(
-                            "Error reading entry from directory '{}'",
-                            src_nwmgr_dir.display()
-                        ),
-                    ));
-                }
-            }
-        }
-
-        if self.config.has_backup() {
-            // TODO: check available memory / disk space
-            let target_path = path_append(mig_tmp_dir, BACKUP_FILE);
-            let source_path = path_append(
-                &work_path,
-                BACKUP_FILE,
-            );
-
-            copy(&source_path, &target_path).context(MigErrCtx::from_remark(
+            let src = path_append(&work_path, self.config.get_balena_image());
+            let tgt = path_append(mig_tmp_dir, BALENA_IMAGE_FILE);
+            copy(&src, &tgt).context(MigErrCtx::from_remark(
                 MigErrorKind::Upstream,
                 &format!(
-                    "Failed copy backup file to migrate temp directory '{}' -> '{}'",
-                    source_path.display(),
-                    target_path.display()
+                    "failed to copy balena image to migrate temp directory, '{}' -> '{}'",
+                    src.display(),
+                    tgt.display()
                 ),
             ))?;
-            info!("copied backup  to '{}'", target_path.display());
-        }
 
-        info!("Files copied to RAMFS");
+            info!("copied balena OS image to '{}'", tgt.display());
 
+            let src = path_append(&work_path, self.config.get_balena_config());
+            let tgt = path_append(mig_tmp_dir, BALENA_CONFIG_FILE);
+            copy(&src, &tgt).context(MigErrCtx::from_remark(
+                MigErrorKind::Upstream,
+                &format!(
+                    "failed to copy balena config to migrate temp directory, '{}' -> '{}'",
+                    src.display(),
+                    tgt.display()
+                ),
+            ))?;
 
+            info!("copied balena OS config to '{}'", tgt.display());
+
+            let src_nwmgr_dir = path_append(
+                &work_path,
+                SYSTEM_CONNECTIONS_DIR,
+            );
+
+            let tgt_nwmgr_dir = path_append(mig_tmp_dir, SYSTEM_CONNECTIONS_DIR);
+            if dir_exists(&src_nwmgr_dir)? {
+                if !dir_exists(&tgt_nwmgr_dir)? {
+                    create_dir(&tgt_nwmgr_dir).context(MigErrCtx::from_remark(
+                        MigErrorKind::Upstream,
+                        &format!(
+                            "failed to create systm-connections in migrate temp directory: '{}'",
+                            tgt_nwmgr_dir.display()
+                        ),
+                    ))?;
+                }
+
+                let paths = read_dir(&src_nwmgr_dir).context(MigErrCtx::from_remark(
+                    MigErrorKind::Upstream,
+                    &format!("Failed to list directory '{}'", src_nwmgr_dir.display()),
+                ))?;
+
+                for path in paths {
+                    if let Ok(path) = path {
+                        let src_path = path.path();
+                        if src_path.metadata().unwrap().is_file() {
+                            let tgt_path = path_append(&tgt_nwmgr_dir, &src_path.file_name().unwrap());
+                            copy(&src_path, &tgt_path)
+                                .context(MigErrCtx::from_remark(MigErrorKind::Upstream, &format!("Failed copy network manager file to migrate temp directory '{}' -> '{}'", src_path.display(), tgt_path.display())))?;
+                            info!("copied network manager config  to '{}'", tgt_path.display());
+                        }
+                    } else {
+                        return Err(MigError::from_remark(
+                            MigErrorKind::Upstream,
+                            &format!(
+                                "Error reading entry from directory '{}'",
+                                src_nwmgr_dir.display()
+                            ),
+                        ));
+                    }
+                }
+            }
+
+            if self.config.has_backup() {
+                // TODO: check available memory / disk space
+                let target_path = path_append(mig_tmp_dir, BACKUP_FILE);
+                let source_path = path_append(
+                    &work_path,
+                    BACKUP_FILE,
+                );
+
+                copy(&source_path, &target_path).context(MigErrCtx::from_remark(
+                    MigErrorKind::Upstream,
+                    &format!(
+                        "Failed copy backup file to migrate temp directory '{}' -> '{}'",
+                        source_path.display(),
+                        target_path.display()
+                    ),
+                ))?;
+                info!("copied backup  to '{}'", target_path.display());
+            }
+
+            info!("Files copied to RAMFS");
+            mig_tmp_dir
+        } else {
+            info!("Files were not copied, work dir is on a separate drive");
+            // TODO: adapt path for no copy mode
+            &work_path
+        };
 
         // Write our buffered log to workdir before unmounting if we are not flashing anyway
 
@@ -600,61 +603,11 @@ impl<'a> Stage2 {
         }
         // check existence of partitions
 
-        let part_label = path_append(DISK_BY_LABEL_PATH, BALENA_BOOT_PART);
-
-        if file_exists(&part_label) {
-            info!("Found labeled partition for '{}'", part_label.display());
-
-            let boot_device = path_append(
-                part_label.parent().unwrap(),
-                read_link(&part_label).context(MigErrCtx::from_remark(
-                    MigErrorKind::Upstream,
-                    &format!("failed to read link: '{}'", part_label.display()),
-                ))?,
-            )
-            .canonicalize()
-            .context(MigErrCtx::from_remark(
-                MigErrorKind::Upstream,
-                &format!(
-                    "failed to canonicalize path from: '{}'",
-                    part_label.display()
-                ),
-            ))?;
-
-            let boot_path = path_append(mig_tmp_dir, BOOT_MNT_DIR);
-
-            create_dir(&boot_path).context(MigErrCtx::from_remark(
-                MigErrorKind::Upstream,
-                &format!("failed to create mount dir: '{}'", boot_path.display()),
-            ))?;
-
-            mount(
-                Some(&boot_device),
-                &boot_path,
-                Some(BALENA_BOOT_FSTYPE),
-                MsFlags::empty(),
-                NIX_NONE,
-            )
-            .context(MigErrCtx::from_remark(
-                MigErrorKind::Upstream,
-                &format!(
-                    "Failed to mount balena device '{}' to '{}' with fstype: {}",
-                    &boot_device.display(),
-                    &boot_path.display(),
-                    BALENA_BOOT_FSTYPE
-                ),
-            ))?;
-
-            info!(
-                "Mounted balena device '{}' on '{}'",
-                &boot_device.display(),
-                &boot_path.display()
-            );
-
+        if let Ok((parts_ok, boot_mountpoint, data_mountpoint)) = self.mounts.mount_balena() {
             // TODO: check fingerprints ?
 
             let src = path_append(mig_tmp_dir, BALENA_CONFIG_FILE);
-            let tgt = path_append(&boot_path, BALENA_CONFIG_FILE);
+            let tgt = path_append(&boot_mountpoint, BALENA_CONFIG_FILE);
 
             copy(&src, &tgt).context(MigErrCtx::from_remark(
                 MigErrorKind::Upstream,
@@ -670,7 +623,7 @@ impl<'a> Stage2 {
             // copy system connections
             let nwmgr_dir = path_append(mig_tmp_dir, SYSTEM_CONNECTIONS_DIR);
             if dir_exists(&nwmgr_dir)? {
-                let tgt_path = path_append(&boot_path, SYSTEM_CONNECTIONS_DIR);
+                let tgt_path = path_append(&boot_mountpoint, SYSTEM_CONNECTIONS_DIR);
                 for path in read_dir(&nwmgr_dir).context(MigErrCtx::from_remark(
                     MigErrorKind::Upstream,
                     &format!("Failed to read directory: '{}'", nwmgr_dir.display()),
@@ -696,139 +649,41 @@ impl<'a> Stage2 {
 
             // we can hope to successfully reboot again after writing config.json and system-connections
             self.recoverable_state = true;
-        } else {
-            let message = format!(
-                "unable to find labeled partition: '{}'",
-                part_label.display()
-            );
-            error!("{}", &message);
-            return Err(MigError::from_remark(MigErrorKind::NotFound, &message));
-        }
 
-        let part_label = path_append(DISK_BY_LABEL_PATH, BALENA_ROOTA_PART);
-        if !file_exists(&part_label) {
-            let message = format!(
-                "unable to find labeled partition: '{}'",
-                part_label.display()
-            );
-            error!("{}", &message);
-            return Err(MigError::from_remark(MigErrorKind::NotFound, &message));
-        }
+            if let Some(data_mountpoint) = data_mountpoint {
+                // TODO: copy log, backup to data_path
+                if self.config.has_backup() {
+                    // TODO: check available disk space
+                    let source_path = path_append(&mig_tmp_dir, BACKUP_FILE);
+                    let target_path = path_append(&data_mountpoint, BACKUP_FILE);
 
-        info!("Found labeled partition for '{}'", part_label.display());
+                    copy(&source_path, &target_path).context(MigErrCtx::from_remark(
+                        MigErrorKind::Upstream,
+                        &format!(
+                            "Failed copy backup file to data partition '{}' -> '{}'",
+                            source_path.display(),
+                            target_path.display()
+                        ),
+                    ))?;
+                    info!("copied backup  to '{}'", target_path.display());
+                }
 
-        let part_label = path_append(DISK_BY_LABEL_PATH, BALENA_ROOTB_PART);
-        if !file_exists(&part_label) {
-            let message = format!(
-                "unable to find labeled partition: '{}'",
-                part_label.display()
-            );
-            error!("{}", &message);
-            return Err(MigError::from_remark(MigErrorKind::NotFound, &message));
-        }
-
-        info!("Found labeled partition for '{}'", part_label.display());
-
-        let part_label = path_append(DISK_BY_LABEL_PATH, BALENA_STATE_PART);
-        if !file_exists(&part_label) {
-            let message = format!(
-                "unable to find labeled partition: '{}'",
-                part_label.display()
-            );
-            error!("{}", &message);
-            return Err(MigError::from_remark(MigErrorKind::NotFound, &message));
-        }
-
-        info!("Found labeled partition for '{}'", part_label.display());
-
-        let part_label = path_append(DISK_BY_LABEL_PATH, BALENA_DATA_PART);
-        if file_exists(&part_label) {
-            info!("Found labeled partition for '{}'", part_label.display());
-
-            let data_device = path_append(
-                part_label.parent().unwrap(),
-                read_link(&part_label).context(MigErrCtx::from_remark(
-                    MigErrorKind::Upstream,
-                    &format!("failed to read link: '{}'", part_label.display()),
-                ))?,
-            )
-            .canonicalize()
-            .context(MigErrCtx::from_remark(
-                MigErrorKind::Upstream,
-                &format!(
-                    "failed to canonicalize path from: '{}'",
-                    part_label.display()
-                ),
-            ))?;
-
-            let data_path = path_append(mig_tmp_dir, DATA_MNT_DIR);
-            create_dir(&data_path).context(MigErrCtx::from_remark(
-                MigErrorKind::Upstream,
-                &format!("failed to create mount dir: '{}'", data_path.display()),
-            ))?;
-
-            mount(
-                Some(&data_device),
-                &data_path,
-                Some(BALENA_DATA_FSTYPE),
-                MsFlags::empty(),
-                NIX_NONE,
-            )
-            .context(MigErrCtx::from_remark(
-                MigErrorKind::Upstream,
-                &format!(
-                    "Failed to mount balena device '{}' on '{}' with fstype: {}",
-                    &data_device.display(),
-                    &data_path.display(),
-                    BALENA_DATA_FSTYPE
-                ),
-            ))?;
-
-            info!(
-                "Mounted balena device '{}' on '{}'",
-                &data_device.display(),
-                &data_path.display()
-            );
-
-            if Logger::get_log_dest().is_buffer_dest() {
-                Logger::flush();
-
-                if let Some(buffer) = Logger::get_buffer() {
-                    let log_dest = path_append(&data_path, LOG_FILE_NAME);
-                    if let Ok(file) = File::create(&log_dest) {
-                        let mut writer = BufWriter::new(file);
-                        let _res = writer.write(&buffer);
-                        let _res = writer.flush();
-                        let _res =
-                            Logger::set_log_dest(&LogDestination::StreamStderr, Some(writer));
-                        info!("Set up logger to log to '{}'", log_dest.display());
+                if Logger::get_log_dest().is_buffer_dest() {
+                    let log_path = path_append(&data_mountpoint, MIGRATE_LOG_FILE);
+                    match Logger::set_log_file(&LogDestination::Stderr, &log_path) {
+                        Ok(_) => {
+                            info!("Set log file to '{}'", log_path.display());
+                            Logger::flush();
+                        },
+                        Err(why) => {
+                            warn!("Failed to set log file to '{}', error: {:?}", log_path.display(), why);
+                        }
                     }
                 }
             }
-
-            // TODO: copy log, backup to data_path
-            if self.config.has_backup() {
-                // TODO: check available disk space
-                let source_path = path_append(&mig_tmp_dir, BACKUP_FILE);
-                let target_path = path_append(&data_path, BACKUP_FILE);
-
-                copy(&source_path, &target_path).context(MigErrCtx::from_remark(
-                    MigErrorKind::Upstream,
-                    &format!(
-                        "Failed copy backup file to data partition '{}' -> '{}'",
-                        source_path.display(),
-                        target_path.display()
-                    ),
-                ))?;
-                info!("copied backup  to '{}'", target_path.display());
-            }
         } else {
-            let message = format!(
-                "unable to find labeled partition: '{}'",
-                part_label.display()
-            );
-            error!("{}", &message);
-            return Err(MigError::from_remark(MigErrorKind::NotFound, &message));
+            error!("Failed to mount balena partitions - cannot transfer configuration. Giving up");
+            return Err(MigError::displayed());
         }
 
         info!(
@@ -883,85 +738,4 @@ impl<'a> Stage2 {
             Stage2::exit(&FailMode::RescueShell)
         }
     }
-
-    /*
-    fn init_logging(device: &Path, fstype: &str) {
-        trace!(
-            "init_logging: entered with '{}' fstype: {}",
-            device.display(),
-            fstype
-        );
-        info!(
-            "Attempting to set up logging to '{}' with fstype: {}",
-            device.display(),
-            fstype
-        );
-
-        let log_mnt_dir = PathBuf::from(LOG_MOUNT_DIR);
-
-        if !if let Ok(res) = dir_exists(&log_mnt_dir) {
-            res
-        } else {
-            warn!("unable to stat path {}", log_mnt_dir.display());
-            return;
-        } {
-            if let Err(_why) = create_dir(&log_mnt_dir) {
-                warn!(
-                    "failed to create log mount directory directory {}",
-                    log_mnt_dir.display()
-                );
-                return;
-            }
-        } else {
-            warn!("root mount directory {} exists", log_mnt_dir.display());
-        }
-
-        debug!(
-            "Attempting to mount mount dir '{}' on '{}'",
-            device.display(),
-            log_mnt_dir.display()
-        );
-
-        if let Err(_why) = mount(
-            Some(device),
-            &log_mnt_dir,
-            Some(fstype.as_bytes()),
-            MsFlags::empty(),
-            NIX_NONE,
-        ) {
-            warn!(
-                "Failed to mount log device '{}' to '{}' with type: {:?}",
-                &device.display(),
-                &log_mnt_dir.display(),
-                fstype
-            );
-            return;
-        }
-
-        let log_file = path_append(&log_mnt_dir, LOG_FILE_NAME);
-
-        let mut writer = BufWriter::new(match File::create(&log_file) {
-            Ok(file) => file,
-            Err(_why) => {
-                warn!("Failed to create log file '{}' ", log_file.display(),);
-                return;
-            }
-        });
-
-        debug!("Attempting to flush log buffer to '{}'", log_file.display());
-        if let Some(buffer) = Logger::get_buffer() {
-            if let Err(_why) = writer.write(&buffer) {
-                warn!("Failed to write to log file '{}' ", log_file.display(),);
-                return;
-            }
-        }
-
-        if let Err(_why) = Logger::set_log_dest(&LogDestination::StreamStderr, Some(writer)) {
-            warn!("Failed to set logfile to file '{}' ", log_file.display(),);
-        } else {
-            info!("Set up logger to log to '{}'", log_file.display());
-        }
-    }
-    */
-
 }
