@@ -457,6 +457,8 @@ impl<'a> BootManager for UBootManager {
             );
         }
 
+        // TODO: remove kernel & initramfs, dtb  too
+
         info!("The original boot configuration was restored");
 
         Ok(())

@@ -34,6 +34,13 @@ use crate::{
 
 // later ensure all other required commands
 
+mod fs_writer;
+use fs_writer::{partition};
+
+mod flasher;
+use flasher::{flash, FlashResult};
+
+
 pub(crate) mod mounts;
 use mounts::Mounts;
 
@@ -215,10 +222,9 @@ impl<'a> Stage2 {
             return Err(MigError::displayed());
         };
 
-        // TODO: only do this if work_path is not distinct drive from flash drive
-        // check if we have enough space to copy files to initramfs
 
         let mig_tmp_dir = if !self.mounts.is_work_no_copy() {
+            // check if we have enough space to copy files to initramfs
             let mig_tmp_dir = match get_mem_info() {
                 Ok((mem_tot, mem_avail)) => {
                     info!(
@@ -422,180 +428,42 @@ impl<'a> Stage2 {
                 ));
             }
 
-            if let Ok(ref dd_cmd) = self.cmds.get(DD_CMD) {
-                debug!("dd found at: {}", dd_cmd);
 
-                let cmd_res_dd = if self.config.is_gzip_internal() {
-                    let mut decoder =
-                        GzDecoder::new(File::open(&image_path).context(MigErrCtx::from_remark(
-                            MigErrorKind::Upstream,
-                            &format!(
-                                "Failed to open gzip file for reading '{}'",
-                                image_path.display()
-                            ),
-                        ))?);
+            match flash(&target_path, &self.cmds, &self.config, &image_path) {
+                FlashResult::Ok => {
 
-                    debug!("invoking dd");
-
-                    let mut dd_child = Command::new(dd_cmd)
-                        .args(&[
-                            &format!("of={}", &target_path.to_string_lossy()),
-                            &format!("bs={}", DD_BLOCK_SIZE),
-                        ])
-                        .stdin(Stdio::piped())
-                        .spawn()
-                        .context(MigErrCtx::from_remark(
-                            MigErrorKind::Upstream,
-                            &format!("failed to execute command {}", dd_cmd),
-                        ))?;
-
+                },
+                FlashResult::FailRecoverable => {
+                    error!("Failed to flash balena OS image");
+                    self.recoverable_state = true;
+                    return Err(MigError::displayed());
+                },
+                FlashResult::FailNonRecoverable => {
+                    error!("Failed to flash balena OS image");
                     self.recoverable_state = false;
-
-                    let start_time = Instant::now();
-                    let mut last_elapsed = Duration::new(0, 0);
-                    let mut write_count: usize = 0;
-
-                    if let Some(ref mut stdin) = dd_child.stdin {
-                        let mut buffer: [u8; DD_BLOCK_SIZE] = [0; DD_BLOCK_SIZE];
-                        loop {
-                            let bytes_read =
-                                decoder.read(&mut buffer).context(MigErrCtx::from_remark(
-                                    MigErrorKind::Upstream,
-                                    &format!(
-                                        "Failed to read uncompressed data from '{}'",
-                                        image_path.display()
-                                    ),
-                                ))?;
-                            if bytes_read > 0 {
-                                let bytes_written = stdin.write(&buffer[0..bytes_read]).context(
-                                    MigErrCtx::from_remark(
-                                        MigErrorKind::Upstream,
-                                        "Failed to write to dd stdin",
-                                    ),
-                                )?;
-                                write_count += bytes_written;
-
-                                if bytes_read != bytes_written {
-                                    error!(
-                                        "Read/write count mismatch, read {}, wrote {}",
-                                        bytes_read, bytes_written
-                                    );
-                                }
-                                let curr_elapsed = start_time.elapsed();
-                                let since_last = curr_elapsed.checked_sub(last_elapsed).unwrap();
-                                if since_last.as_secs() >= 10 {
-                                    last_elapsed = curr_elapsed;
-                                    let secs_elapsed = curr_elapsed.as_secs();
-                                    info!(
-                                        "{} written @ {}/sec in {} seconds",
-                                        format_size_with_unit(write_count as u64),
-                                        format_size_with_unit(write_count as u64 / secs_elapsed),
-                                        secs_elapsed
-                                    );
-                                }
-                            } else {
-                                break;
-                            }
-                        }
-
-                        let secs_elapsed = start_time.elapsed().as_secs();
-                        info!(
-                            "{} written @ {}/sec in {} seconds",
-                            format_size_with_unit(write_count as u64),
-                            format_size_with_unit(write_count as u64 / secs_elapsed),
-                            secs_elapsed
-                        );
-                        dd_child.wait_with_output().context(MigErrCtx::from_remark(
-                            MigErrorKind::Upstream,
-                            "failed to wait for dd command",
-                        ))?
-                    } else {
-                        return Err(MigError::from_remark(
-                                MigErrorKind::NotFound,
-                                "failed to flash image to target disk, gzip command, failed to retrieve dd stdin",
-                            ));
-                    }
-                } else {
-                    if let Ok(ref gzip_cmd) = self.cmds.get(GZIP_CMD) {
-                        debug!("gzip found at: {}", gzip_cmd);
-                        let gzip_child = Command::new(gzip_cmd)
-                            .args(&["-d", "-c", &image_path.to_string_lossy()])
-                            .stdout(Stdio::piped())
-                            .spawn()
-                            .context(MigErrCtx::from_remark(
-                                MigErrorKind::Upstream,
-                                &format!("failed to spawn command {}", gzip_cmd),
-                            ))?;
-
-                        // TODO: implement progress for gzip or throw this out alltogether
-
-                        if let Some(stdout) = gzip_child.stdout {
-                            self.recoverable_state = false;
-                            debug!("invoking dd");
-                            Command::new(dd_cmd)
-                                .args(&[
-                                    &format!("of={}", &target_path.to_string_lossy()),
-                                    &format!("bs={}", DD_BLOCK_SIZE),
-                                ])
-                                .stdin(stdout)
-                                .output()
-                                .context(MigErrCtx::from_remark(
-                                    MigErrorKind::Upstream,
-                                    &format!("failed to execute command {}", dd_cmd),
-                                ))?
-                        } else {
-                            return Err(MigError::from_remark(
-                                    MigErrorKind::NotFound,
-                                    "failed to flash image to target disk, gzip command, failed to retrieved stdout",
-                                ));
-                        }
-                    } else {
-                        return Err(MigError::from_remark(
-                            MigErrorKind::NotFound,
-                            "failed to flash image to target disk, gzip command is not present",
-                        ));
-                    }
-                };
-
-                debug!("dd command result: {:?}", cmd_res_dd);
-
-                if cmd_res_dd.status.success() != true {
-                    return Err(MigError::from_remark(
-                        MigErrorKind::ExecProcess,
-                        &format!(
-                            "dd terminated with exit code: {:?}",
-                            cmd_res_dd.status.code()
-                        ),
-                    ));
+                    return Err(MigError::displayed());
                 }
-
-                // TODO: would like to check on gzip process status but ownership issues prevent it
-
-                sync();
-
-                info!(
-                    "The Balena OS image has been written to the device '{}'",
-                    target_path.display()
-                );
-
-                thread::sleep(Duration::new(PRE_PARTPROBE_WAIT_SECS, PARTPROBE_WAIT_NANOS));
-
-                self.cmds
-                    .call(PARTPROBE_CMD, &[&target_path.to_string_lossy()], true)?;
-
-                thread::sleep(Duration::new(
-                    POST_PARTPROBE_WAIT_SECS,
-                    PARTPROBE_WAIT_NANOS,
-                ));
-
-                let _res = self.cmds.call(UDEVADM_CMD, UDEVADM_PARAMS, true);
-            } else {
-                return Err(MigError::from_remark(
-                    MigErrorKind::NotFound,
-                    "failed to flash image to target disk, dd command is not present",
-                ));
             }
+
+
+            info!(
+                "The Balena OS image has been written to the device '{}'",
+                target_path.display()
+            );
+
+            thread::sleep(Duration::new(PRE_PARTPROBE_WAIT_SECS, PARTPROBE_WAIT_NANOS));
+
+            self.cmds
+                .call(PARTPROBE_CMD, &[&target_path.to_string_lossy()], true)?;
+
+            thread::sleep(Duration::new(
+                POST_PARTPROBE_WAIT_SECS,
+                PARTPROBE_WAIT_NANOS,
+            ));
+
+            let _res = self.cmds.call(UDEVADM_CMD, UDEVADM_PARAMS, true);
         }
+
         // check existence of partitions
 
         if let Ok((_parts_ok, boot_mountpoint, data_mountpoint)) = self.mounts.mount_balena() {
