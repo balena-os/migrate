@@ -124,7 +124,7 @@ impl MigrateInfo {
             }
 
             // ensure expected type
-            match file_info.expect_type(&cmds, &FileType::OSImage) {
+            match file_info.expect_type(&cmds, &FileType::GZipOSImage) {
                 Ok(_) => {
                     info!(
                         "The balena OS image looks ok: '{}'",
@@ -132,9 +132,10 @@ impl MigrateInfo {
                     );
                 }
                 Err(_why) => {
+                    // TODO: try gzip non compressed OS image
                     error!(
                         "The balena OS image does not match the expected type: '{:?}'",
-                        FileType::OSImage
+                        FileType::GZipOSImage
                     );
                     return Err(MigError::displayed());
                 }

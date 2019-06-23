@@ -13,7 +13,10 @@ use std::path::{Path, PathBuf};
 // file on ubuntu-14.04 reports x86 boot sector for image and kernel files
 
 const OS_IMG_FTYPE_REGEX: &str =
+    r#"^(DOS/MBR boot sector|x86 boot sector)$"#;
+const GZIP_OS_IMG_FTYPE_REGEX: &str =
     r#"^(DOS/MBR boot sector|x86 boot sector).*\(gzip compressed data.*\)$"#;
+
 const INITRD_FTYPE_REGEX: &str = r#"^ASCII cpio archive.*\(gzip compressed data.*\)$"#;
 const OS_CFG_FTYPE_REGEX: &str = r#"^ASCII text.*$"#;
 const KERNEL_AMD64_FTYPE_REGEX: &str =
@@ -29,6 +32,7 @@ use crate::linux::{EnsuredCmds, FILE_CMD};
 
 #[derive(Debug, Clone)]
 pub(crate) enum FileType {
+    GZipOSImage,
     OSImage,
     KernelAMD64,
     KernelARMHF,
@@ -42,6 +46,7 @@ pub(crate) enum FileType {
 impl FileType {
     pub fn get_descr(&self) -> &str {
         match self {
+            FileType::GZipOSImage => "gzipped balena OS image",
             FileType::OSImage => "balena OS image",
             FileType::KernelAMD64 => "balena migrate kernel image for AMD64",
             FileType::KernelARMHF => "balena migrate kernel image for ARMHF",
@@ -146,6 +151,7 @@ impl FileInfo {
 
         lazy_static! {
             static ref OS_IMG_FTYPE_RE: Regex = Regex::new(OS_IMG_FTYPE_REGEX).unwrap();
+            static ref GZIP_OS_IMG_FTYPE_RE: Regex = Regex::new(GZIP_OS_IMG_FTYPE_REGEX).unwrap();
             static ref INITRD_FTYPE_RE: Regex = Regex::new(INITRD_FTYPE_REGEX).unwrap();
             static ref OS_CFG_FTYPE_RE: Regex = Regex::new(OS_CFG_FTYPE_REGEX).unwrap();
             static ref TEXT_FTYPE_RE: Regex = Regex::new(TEXT_FTYPE_REGEX).unwrap();
@@ -161,6 +167,7 @@ impl FileInfo {
             cmd_res.stdout
         );
         match ftype {
+            FileType::GZipOSImage => Ok(GZIP_OS_IMG_FTYPE_RE.is_match(&cmd_res.stdout)),
             FileType::OSImage => Ok(OS_IMG_FTYPE_RE.is_match(&cmd_res.stdout)),
             FileType::InitRD => Ok(INITRD_FTYPE_RE.is_match(&cmd_res.stdout)),
             FileType::KernelARMHF => Ok(KERNEL_ARMHF_FTYPE_RE.is_match(&cmd_res.stdout)),

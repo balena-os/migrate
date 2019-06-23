@@ -12,6 +12,10 @@ mod mswin;
 mod linux;
 
 #[cfg(target_os = "linux")]
+mod extract;
+
+
+#[cfg(target_os = "linux")]
 use linux::stage2::Stage2;
 
 pub(crate) mod defs;

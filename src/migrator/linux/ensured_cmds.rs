@@ -5,23 +5,26 @@ use crate::{
 use log::{trace, warn};
 use std::collections::HashMap;
 
-pub const DF_CMD: &str = "df";
-pub const LSBLK_CMD: &str = "lsblk";
-pub const FDISK_CMD: &str = "fdisk";
-pub const FILE_CMD: &str = "file";
-pub const UNAME_CMD: &str = "uname";
-pub const MOUNT_CMD: &str = "mount";
-pub const MOKUTIL_CMD: &str = "mokutil";
-pub const GRUB_UPDT_CMD: &str = "update-grub";
-pub const GRUB_REBOOT_CMD: &str = "grub-reboot";
-pub const REBOOT_CMD: &str = "reboot";
 pub const CHMOD_CMD: &str = "chmod";
 pub const DD_CMD: &str = "dd";
-pub const PARTPROBE_CMD: &str = "partprobe";
-pub const PARTED_CMD: &str = "parted";
+pub const DF_CMD: &str = "df";
+pub const FDISK_CMD: &str = "fdisk";
+pub const FILE_CMD: &str = "file";
+pub const LSBLK_CMD: &str = "lsblk";
+pub const GRUB_REBOOT_CMD: &str = "grub-reboot";
+pub const GRUB_UPDT_CMD: &str = "update-grub";
 pub const GZIP_CMD: &str = "gzip";
 pub const MKTEMP_CMD: &str = "mktemp";
+pub const MOKUTIL_CMD: &str = "mokutil";
+pub const MOUNT_CMD: &str = "mount";
+pub const PARTED_CMD: &str = "parted";
+pub const PARTPROBE_CMD: &str = "partprobe";
+pub const REBOOT_CMD: &str = "reboot";
+pub const SFDISK_CMD: &str = "sfdisk";
+pub const TRUNCATE_CMD: &str = "truncate";
 pub const UDEVADM_CMD: &str = "udevadm";
+pub const UNAME_CMD: &str = "uname";
+
 
 #[derive(Debug)]
 pub(crate) struct EnsuredCmds {
