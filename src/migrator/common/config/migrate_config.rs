@@ -18,11 +18,13 @@ pub(crate) enum MigMode {
     AGENT,
     IMMEDIATE,
     PRETEND,
+    EXTRACT,
 }
 
 impl MigMode {
     pub fn from_str(mode: &str) -> Result<Self, MigError> {
         match mode.to_lowercase().as_str() {
+            "extract" => Ok(MigMode::EXTRACT),
             "immediate" => Ok(MigMode::IMMEDIATE),
             "agent" => Ok(MigMode::AGENT),
             "pretend" => Ok(MigMode::PRETEND),

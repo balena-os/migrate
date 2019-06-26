@@ -58,7 +58,14 @@ impl<'a> Config {
                     .short("m")
                     .long("mode")
                     .value_name("MODE")
-                    .help("Mode of operation - agent, immediate or pretend"),
+                    .help("Mode of operation - extract, agent, immediate or pretend"),
+            )
+            .arg(
+                Arg::with_name("image")
+                    .short("i")
+                    .long("image")
+                    .value_name("FILE")
+                    .help("use balena OS image"),
             )
             .arg(
                 Arg::with_name("config")
@@ -206,6 +213,12 @@ impl<'a> Config {
         if arg_matches.is_present("mode") {
             if let Some(mode) = arg_matches.value_of("mode") {
                 config.migrate.set_mig_mode(&MigMode::from_str(mode)?);
+            }
+        }
+
+        if arg_matches.is_present("image") {
+            if let Some(image) = arg_matches.value_of("image") {
+                config.balena.set_image_path(image);
             }
         }
 

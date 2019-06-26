@@ -137,6 +137,10 @@ impl<'a> BalenaConfig {
         }
     }
 
+    pub fn set_image_path(&mut self, image_path: &str) {
+        self.image = Some(PathBuf::from(image_path));
+    }
+
     // The following functions can only be safely called after check has succeeded
 
     pub fn get_image_path(&'a self) -> &'a Path {

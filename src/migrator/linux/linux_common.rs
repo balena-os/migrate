@@ -15,7 +15,7 @@ use crate::{
     defs::{OSArch, DISK_BY_LABEL_PATH, DISK_BY_PARTUUID_PATH, DISK_BY_UUID_PATH},
     linux::{
         linux_defs::{KERNEL_CMDLINE_PATH, SYS_UEFI_DIR},
-        EnsuredCmds, DF_CMD, MOKUTIL_CMD, UNAME_CMD,
+        EnsuredCmds, DF_CMD, MKTEMP_CMD, MOKUTIL_CMD, UNAME_CMD,
     },
 };
 
@@ -165,6 +165,44 @@ pub(crate) fn is_efi_boot() -> Result<bool, MigError> {
     }
 }
 */
+
+pub(crate) fn mktemp<P: AsRef<Path>>(
+    cmds: &EnsuredCmds,
+    dir: bool,
+    pattern: Option<&str>,
+    path: Option<P>,
+) -> Result<PathBuf, MigError> {
+    let mut cmd_args: Vec<&str> = Vec::new();
+
+    let mut dir_path: Option<String> = None;
+    if let Some(path) = path {
+        dir_path = Some(String::from(path.as_ref().to_string_lossy()));
+        cmd_args.push("-p");
+        cmd_args.push(dir_path.as_ref().unwrap());
+    }
+
+    if dir {
+        cmd_args.push("-d");
+    }
+
+    if let Some(pattern) = pattern {
+        cmd_args.push(pattern);
+    }
+
+    let cmd_res = cmds.call(MKTEMP_CMD, cmd_args.as_slice(), true)?;
+
+    if cmd_res.status.success() {
+        Ok(PathBuf::from(cmd_res.stdout))
+    } else {
+        Err(MigError::from_remark(
+            MigErrorKind::ExecProcess,
+            &format!(
+                "Failed to create temporary file for image extraction, error: {}",
+                cmd_res.stderr
+            ),
+        ))
+    }
+}
 
 /******************************************************************
  * Get OS name from /etc/os-release

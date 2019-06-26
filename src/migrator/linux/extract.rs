@@ -1,0 +1,519 @@
+use flate2::{read::GzDecoder, write::GzEncoder, Compression};
+use tar;
+
+use failure::ResultExt;
+use log::{debug, error, info, trace};
+use serde::Deserialize;
+use serde_json;
+use std::fs::{read_to_string, remove_dir, remove_file, File, OpenOptions};
+use std::io::{self, Read, Write};
+use std::mem;
+use std::path::{Path, PathBuf};
+// use nix::mount::{mount, MsFlags};
+
+use crate::{
+    common::{
+        format_size_with_unit, Config, FileInfo, FileType, MigErrCtx, MigError, MigErrorKind,
+    },
+    linux::{
+        ensured_cmds::{
+            EnsuredCmds, FILE_CMD, MKTEMP_CMD, MOUNT_CMD, SFDISK_CMD, TAR_CMD, TRUNCATE_CMD,
+            UMOUNT_CMD,
+        },
+        linux_common::mktemp,
+    },
+};
+
+mod image_file;
+use image_file::ImageFile;
+
+mod gzip_file;
+use gzip_file::GZipFile;
+
+mod plain_file;
+use plain_file::PlainFile;
+
+use crate::common::path_append;
+use nix::mount::umount;
+
+const REQUIRED_CMDS: &[&str] = &[FILE_CMD, MOUNT_CMD, UMOUNT_CMD, MKTEMP_CMD, TAR_CMD];
+
+const DEF_BLOCK_SIZE: usize = 512;
+const DEF_BUFFER_SIZE: usize = 1024 * 1024;
+
+const EXTRACT_FILE_TEMPLATE: &str = "extract.XXXXXXXXXX";
+
+const BUFFER_SIZE: usize = 1024 * 1024; // 1Mb
+
+const PART_NAME: &[&str] = &[
+    "resin-boot",
+    "resin-roota",
+    "resin-rootb",
+    "resin-state",
+    "resin-data",
+];
+const PART_FSTYPE: &[&str] = &["vfat", "ext4", "ext4", "ext4", "ext4"];
+
+#[repr(C, packed)]
+#[derive(Debug)]
+struct PartEntry {
+    status: u8,
+    first_head: u8,
+    first_comb: u8,
+    first_cyl: u8,
+    ptype: u8,
+    last_head: u8,
+    last_comb: u8,
+    last_cyl: u8,
+    first_lba: u32,
+    num_sectors: u32,
+}
+
+#[repr(C, packed)]
+struct MasterBootRecord {
+    fill0: [u8; 446],
+    part_tbl: [PartEntry; 4],
+    boot_sig1: u8,
+    boot_sig2: u8,
+}
+
+struct Partition {
+    name: &'static str,
+    fstype: &'static str,
+    ptype: u8,
+    status: u8,
+    start_lba: u64,
+    num_sectors: u64,
+    archive: Option<PathBuf>,
+}
+
+pub(crate) struct Extractor {
+    cmds: EnsuredCmds,
+    config: Config,
+    gzipped: bool,
+    image_file: Box<ImageFile>,
+}
+
+impl Extractor {
+    pub fn new(config: Config) -> Result<Extractor, MigError> {
+        trace!("new: entered");
+
+        let mut cmds = EnsuredCmds::new();
+        if let Err(why) = cmds.ensure_cmds(REQUIRED_CMDS) {
+            error!("Some Required commands could not be found");
+            return Err(MigError::displayed());
+        }
+
+        let image_info = FileInfo::new(
+            config.balena.get_image_path(),
+            config.migrate.get_work_dir(),
+        )?;
+
+        if let Some(image_info) = image_info {
+            debug!("new: working with file '{}'", image_info.path.display());
+            if image_info.is_type(&cmds, &FileType::GZipOSImage)? {
+                match GZipFile::new(&image_info.path) {
+                    Ok(gzip_file) => {
+                        debug!("new: is gzipped image '{}'", image_info.path.display());
+                        return Ok(Extractor {
+                            cmds,
+                            config,
+                            gzipped: true,
+                            image_file: Box::new(gzip_file),
+                        });
+                    }
+                    Err(why) => {
+                        error!(
+                            "Unable to open the gzipped image file '{}', error: {:?}",
+                            image_info.path.display(),
+                            why
+                        );
+                        return Err(MigError::displayed());
+                    }
+                }
+            } else {
+                if image_info.is_type(&cmds, &FileType::OSImage)? {
+                    match PlainFile::new(&image_info.path) {
+                        Ok(plain_file) => {
+                            debug!("new: is plain image '{}'", image_info.path.display());
+                            return Ok(Extractor {
+                                cmds,
+                                config,
+                                gzipped: true,
+                                image_file: Box::new(plain_file),
+                            });
+                        }
+                        Err(why) => {
+                            error!(
+                                "Unable to open the image file '{}', error: {:?}",
+                                image_info.path.display(),
+                                why
+                            );
+                            return Err(MigError::displayed());
+                        }
+                    }
+                } else {
+                    error!(
+                        "Found an unexpected file type in '{}', not an OS image",
+                        image_info.path.display()
+                    );
+                    return Err(MigError::displayed());
+                }
+            }
+        } else {
+            error!(
+                "The image file could not be found: '{}'",
+                config.balena.get_image_path().display()
+            );
+            Err(MigError::displayed())
+        }
+    }
+
+    pub fn extract(&mut self) -> Result<(), MigError> {
+        trace!("extract: entered");
+        let mut partitions: Vec<Partition> = Vec::new();
+        let mut part_idx: usize = 0;
+        let mut curr_offset: u64 = 0;
+
+        let mut res = Ok(());
+
+        // make temp mountpoint name
+        let mountpoint = match mktemp(
+            &self.cmds,
+            true,
+            None,
+            Some(self.config.migrate.get_work_dir()),
+        ) {
+            Ok(path) => path,
+            Err(why) => {
+                error!(
+                    "Failed to create temporary mountpoint for image extraction, error: {:?}",
+                    why
+                );
+                return Err(MigError::displayed());
+            }
+        };
+
+        // make file name
+        let tmp_name = match mktemp(
+            &self.cmds,
+            false,
+            None,
+            Some(self.config.migrate.get_work_dir()),
+        ) {
+            Ok(path) => path,
+            Err(why) => {
+                error!(
+                    "Failed to create temporary file for image extraction, error: {:?}",
+                    why
+                );
+                return Err(MigError::displayed());
+            }
+        };
+
+        let mut part_extract_idx: usize = 0;
+        loop {
+            let next_offset = match self.read_part_tbl(curr_offset, &mut partitions) {
+                Ok(offset) => offset,
+                Err(why) => {
+                    res = Err(why);
+                    break;
+                }
+            };
+
+            debug!("extract: got {} partitions", partitions.len());
+
+            for idx in part_extract_idx..partitions.len() {
+                let partition = &mut partitions[idx];
+                debug!(
+                    "partition: {}: fstype: {}, status: {:x}, type: {:x}, start: {}, length: {}",
+                    partition.name,
+                    partition.fstype,
+                    partition.status,
+                    partition.ptype,
+                    partition.start_lba,
+                    partition.num_sectors
+                );
+
+                match self.write_partition(partition, &tmp_name, &mountpoint) {
+                    Ok(_) => (),
+                    Err(why) => {
+                        res = Err(why);
+                        break;
+                    }
+                }
+            }
+
+            part_extract_idx = partitions.len();
+
+            if let Some(next_offset) = next_offset {
+                curr_offset = next_offset;
+            } else {
+                break;
+            }
+        }
+
+        // TODO: try to umount
+        let _res = remove_dir(&mountpoint);
+        let _res = remove_file(&tmp_name);
+
+        res
+    }
+
+    fn write_partition(
+        &mut self,
+        partition: &mut Partition,
+        tmp_name: &Path,
+        mountpoint: &Path,
+    ) -> Result<(), MigError> {
+        trace!(
+            "write_partition: entered with '{}', tmp_name: '{}', mountpoint: '{}'",
+            partition.name,
+            tmp_name.display(),
+            mountpoint.display()
+        );
+
+        // TODO: cleanup on failure
+
+        {
+            // read partition contents to file
+            let mut tmp_file = OpenOptions::new()
+                .create(false)
+                .write(true)
+                .truncate(true)
+                .open(&tmp_name)
+                .context(MigErrCtx::from_remark(
+                    MigErrorKind::Upstream,
+                    &format!("Failed to opent temp file '{}'", tmp_name.display()),
+                ))?;
+
+            // TODO: check free disk space
+            let mut buffer: [u8; DEF_BUFFER_SIZE] = [0; DEF_BUFFER_SIZE];
+            let mut offset: u64 = partition.start_lba * DEF_BLOCK_SIZE as u64;
+            let mut to_read: u64 = partition.num_sectors * DEF_BLOCK_SIZE as u64;
+
+            while to_read > DEF_BUFFER_SIZE as u64 {
+                self.image_file.fill(offset, &mut buffer)?;
+                let bytes_written = tmp_file.write(&buffer).context(MigErrCtx::from_remark(
+                    MigErrorKind::Upstream,
+                    &format!("Failed to write to temp file: '{}'", tmp_name.display()),
+                ))?;
+
+                if (bytes_written < DEF_BUFFER_SIZE) {
+                    return Err(MigError::from_remark(
+                        MigErrorKind::InvParam,
+                        "read / wite size mismatch on copy",
+                    ));
+                }
+
+                offset += bytes_written as u64;
+                to_read -= bytes_written as u64;
+            }
+
+            self.image_file
+                .fill(offset, &mut buffer[0..to_read as usize])?;
+            let bytes_written =
+                tmp_file
+                    .write(&buffer[0..to_read as usize])
+                    .context(MigErrCtx::from_remark(
+                        MigErrorKind::Upstream,
+                        &format!("Failed to write to temp file: '{}'", tmp_name.display()),
+                    ))?;
+
+            if (bytes_written < DEF_BUFFER_SIZE) {
+                return Err(MigError::from_remark(
+                    MigErrorKind::InvParam,
+                    "read / wite size mismatch on copy",
+                ));
+            }
+
+            debug!(
+                "write_partition: partition written to '{}'",
+                tmp_name.display()
+            );
+        }
+
+        // Loopmount the file
+        // mount -t iso9660 -o loop /home/tecmint/Fedora-18-i386-DVD.iso /mnt/iso/
+        // or use Nix::mount
+
+        debug!(
+            "write_partition: mounting '{}' on '{}'",
+            tmp_name.display(),
+            mountpoint.display()
+        );
+
+        let cmd_res = self.cmds.call(
+            MOUNT_CMD,
+            &[
+                "-t",
+                &partition.fstype,
+                "-o",
+                "loop",
+                &tmp_name.to_string_lossy(),
+                &mountpoint.to_string_lossy(),
+            ],
+            true,
+        )?;
+        if !cmd_res.status.success() {
+            return Err(MigError::from_remark(
+                MigErrorKind::ExecProcess,
+                "Failed to mount extracted partition",
+            ));
+        }
+
+        /* Try with builtin mount
+                mount(
+                    Some(&device),
+                    &mountpoint,
+                    Some(fstype.as_bytes()),
+                    MsFlags::empty(),
+                    NIX_NONE,
+                )
+                    .context(MigErrCtx::from_remark(
+                        MigErrorKind::Upstream,
+                        &format!(
+                            "Failed to mount previous boot manager device '{}' to '{}' with fstype: {:?}",
+                            &device.display(),
+                            &mountpoint.display(),
+                            fstype
+                        ),
+                    ))?;
+
+        */
+
+        let arch_name = path_append(
+            self.config.migrate.get_work_dir(),
+            &format!("{}.tgz", partition.name),
+        );
+        /*  Try to archive using rust builtin tar / gzip
+        {
+            debug!("write_partition: archivng '{}' to '{}'", mountpoint.display(), arch_name.display());
+            let mut archive = tar::Builder::new(GzEncoder::new(
+                File::create(&arch_name)
+                        .context(MigErrCtx::from_remark(
+                    MigErrorKind::Upstream,
+                    &format!("Failed to create partition archive in file '{}'", arch_name.display()),
+                ))?,
+                Compression::default(),
+            ));
+
+            archive.append_dir("./", mountpoint)
+                .context(MigErrCtx::from_remark(MigErrorKind::Upstream, &format!("Failed to append mountpoint '{}' to archive '{}'", mountpoint.display(), arch_name.display())))?;
+            archive.finish()
+                .context(MigErrCtx::from_remark(MigErrorKind::Upstream, &format!("Failed to finish  archive '{}'", arch_name.display())))?;
+        } */
+
+        let cmd_res = self.cmds.call(
+            TAR_CMD,
+            &[
+                "-czf",
+                &arch_name.to_string_lossy(),
+                &mountpoint.to_string_lossy(),
+            ],
+            true,
+        )?;
+        if !cmd_res.status.success() {
+            return Err(MigError::from_remark(
+                MigErrorKind::ExecProcess,
+                &format!(
+                    "Failed to archive extracted partition, msg: {}",
+                    cmd_res.stderr
+                ),
+            ));
+        }
+
+        debug!("write_partition: unmounting '{}'", mountpoint.display());
+        umount(mountpoint).context(MigErrCtx::from_remark(
+            MigErrorKind::Upstream,
+            &format!("failed to unmount '{}'", mountpoint.display()),
+        ))?;
+
+        /*
+        let cmd_res = self.cmds.call(UMOUNT_CMD, &[&mountpoint.to_string_lossy()],true)?;
+        if !cmd_res.status.success() {
+            return Err(MigError::from_remark(MigErrorKind::ExecProcess, &format!("Failed to unmount extracted partition, msg: {}", cmd_res.stderr));
+        }
+        */
+
+        debug!(
+            "write_partition: extracted partition '{}' to '{}'",
+            partition.name,
+            arch_name.display()
+        );
+
+        partition.archive = Some(arch_name);
+
+        Ok(())
+    }
+
+    // Read partition table at offset up to the first empty or extended partition
+    // return offset of next partition table for extended partition or None for end of table
+
+    // TODO: ensure that about using 0 size partition as
+
+    fn read_part_tbl(
+        &mut self,
+        offset: u64,
+        table: &mut Vec<Partition>,
+    ) -> Result<Option<u64>, MigError> {
+        trace!("read_part_tbl: entered with offset {}", offset);
+        let mut buffer: [u8; DEF_BLOCK_SIZE] = [0; DEF_BLOCK_SIZE];
+
+        self.image_file
+            .fill(offset * DEF_BLOCK_SIZE as u64, &mut buffer)?;
+
+        let mbr: MasterBootRecord = unsafe { mem::transmute(buffer) };
+
+        if (mbr.boot_sig1 != 0x55) || (mbr.boot_sig2 != 0xAA) {
+            error!(
+                "invalid mbr sig1: {:x}, sig2: {:x}",
+                mbr.boot_sig1, mbr.boot_sig2
+            );
+            return Err(MigError::from_remark(
+                MigErrorKind::InvParam,
+                "unexpeted signatures found in partition table",
+            ));
+        }
+
+        for partition in &mbr.part_tbl {
+            let part_idx = table.len();
+
+            if part_idx > PART_NAME.len() || partition.num_sectors == 0 {
+                return Ok(None);
+            }
+
+            if (partition.ptype == 0xF) || (partition.ptype == 0x5) {
+                debug!(
+                    "return extended partition offset: {}",
+                    offset + partition.first_lba as u64
+                );
+                return Ok(Some(offset + partition.first_lba as u64));
+            } else {
+                let part_info = Partition {
+                    name: PART_NAME[part_idx],
+                    fstype: PART_FSTYPE[part_idx],
+                    start_lba: offset + partition.first_lba as u64,
+                    num_sectors: partition.num_sectors as u64,
+                    ptype: partition.ptype,
+                    status: partition.status,
+                    archive: None,
+                };
+
+                debug!(
+                    "partition name: {}, fstype: {}, status: {:x}, type: {:x}, start: {}, size: {}",
+                    part_info.name,
+                    part_info.fstype,
+                    part_info.status,
+                    part_info.ptype,
+                    part_info.start_lba,
+                    part_info.num_sectors
+                );
+
+                table.push(part_info);
+            }
+        }
+        debug!("return no further offset");
+        Ok(None)
+    }
+}

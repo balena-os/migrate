@@ -1,14 +1,9 @@
-use std::path::{Path};
+use std::path::Path;
 
-use crate::{
-    common::{
-        MigError, MigErrorKind,
-        stage2_config::{Stage2Config}
-    },
-};
+use crate::common::{stage2_config::Stage2Config, MigError, MigErrorKind};
 
 // TODO: partition & untar balena to drive
 
-pub(crate) fn partition(device : &Path, config: &Stage2Config) -> Result<(),MigError> {
+pub(crate) fn partition(device: &Path, config: &Stage2Config) -> Result<(), MigError> {
     unimplemented!()
 }

@@ -12,8 +12,7 @@ use std::path::{Path, PathBuf};
 
 // file on ubuntu-14.04 reports x86 boot sector for image and kernel files
 
-const OS_IMG_FTYPE_REGEX: &str =
-    r#"^(DOS/MBR boot sector|x86 boot sector)$"#;
+const OS_IMG_FTYPE_REGEX: &str = r#"^(DOS/MBR boot sector|x86 boot sector)$"#;
 const GZIP_OS_IMG_FTYPE_REGEX: &str =
     r#"^(DOS/MBR boot sector|x86 boot sector).*\(gzip compressed data.*\)$"#;
 

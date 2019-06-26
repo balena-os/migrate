@@ -1,6 +1,8 @@
 use log::error;
 
 use mod_logger::{Level, Logger};
+use std::path::Path;
+
 // use std::path::Path;
 
 pub mod common;
@@ -10,10 +12,6 @@ mod mswin;
 
 #[cfg(target_os = "linux")]
 mod linux;
-
-#[cfg(target_os = "linux")]
-mod extract;
-
 
 #[cfg(target_os = "linux")]
 use linux::stage2::Stage2;

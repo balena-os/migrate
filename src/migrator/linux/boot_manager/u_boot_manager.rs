@@ -411,10 +411,7 @@ impl<'a> BootManager for UBootManager {
         uenv_text = uenv_text.replace("__DTB_PATH__", &dtb_path.to_string_lossy());
         uenv_text = uenv_text.replace("__DRIVE__", &drive_num.0);
         uenv_text = uenv_text.replace("__PARTITION__", &drive_num.1);
-        uenv_text = uenv_text.replace(
-            "__ROOT_DEV__",
-            &boot_path.get_kernel_cmd(),
-        );
+        uenv_text = uenv_text.replace("__ROOT_DEV__", &boot_path.get_kernel_cmd());
 
         debug!("writing uEnv.txt as:\n {}", uenv_text);
 

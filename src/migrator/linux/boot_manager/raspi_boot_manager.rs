@@ -341,7 +341,6 @@ impl BootManager for RaspiBootManager {
     }
 
     fn restore(&self, _mounts: &Mounts, _config: &Stage2Config) -> Result<(), MigError> {
-
         // TODO: remove kernel & initramfs, dtb  too
         Err(MigError::from(MigErrorKind::NotImpl))
     }

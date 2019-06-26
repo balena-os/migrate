@@ -1,28 +1,22 @@
 // TODO: flash image using DD
 
-use failure::{ResultExt};
-use std::path::{Path};
-use std::io::{Read, Write};
+use failure::ResultExt;
 use flate2::read::GzDecoder;
-use std::fs::{File};
-use log::{debug, info, error};
+use log::{debug, error, info};
+use nix::unistd::sync;
+use std::fs::File;
+use std::io::{Read, Write};
+use std::path::Path;
 use std::process::{Command, Stdio};
 use std::time::{Duration, Instant};
-use nix::{
-    unistd::sync,
-};
 
+use crate::linux::stage2::flasher::FlashResult::{FailNonRecoverable, FailRecoverable};
 use crate::{
     common::{
-        format_size_with_unit,
-        MigError, MigErrorKind, MigErrCtx,
-        stage2_config::{Stage2Config}
+        format_size_with_unit, stage2_config::Stage2Config, MigErrCtx, MigError, MigErrorKind,
     },
-    linux::{
-        ensured_cmds::{EnsuredCmds, DD_CMD, GZIP_CMD},
-    },
+    linux::ensured_cmds::{EnsuredCmds, DD_CMD, GZIP_CMD},
 };
-use crate::linux::stage2::flasher::FlashResult::{FailRecoverable, FailNonRecoverable};
 
 const DD_BLOCK_SIZE: usize = 4194304;
 
@@ -33,26 +27,34 @@ const DD_BLOCK_SIZE: usize = 4194304;
 pub(crate) enum FlashResult {
     Ok,
     FailRecoverable,
-    FailNonRecoverable
+    FailNonRecoverable,
 }
 
-fn flash_gzip_internal(dd_cmd: &str, target_path : &Path, cmds: &EnsuredCmds, image_path: &Path) -> FlashResult {
-    let mut decoder = GzDecoder::new(
-        match File::open(&image_path) {
-            Ok(file) => file,
-            Err(why) => {
-                error!("Failed to open image file '{}', error: {:?}", image_path.display(), why);
-                return FlashResult::FailRecoverable;
-            }
-        });
-/*    {
-        Ok(decoder) => decoder,
+fn flash_gzip_internal(
+    dd_cmd: &str,
+    target_path: &Path,
+    cmds: &EnsuredCmds,
+    image_path: &Path,
+) -> FlashResult {
+    let mut decoder = GzDecoder::new(match File::open(&image_path) {
+        Ok(file) => file,
         Err(why) => {
-            error!("Failed to create gzip decoder from image file '{}', error: {:?}", image_path.display(), why);
+            error!(
+                "Failed to open image file '{}', error: {:?}",
+                image_path.display(),
+                why
+            );
             return FlashResult::FailRecoverable;
         }
-    };
-*/
+    });
+    /*    {
+            Ok(decoder) => decoder,
+            Err(why) => {
+                error!("Failed to create gzip decoder from image file '{}', error: {:?}", image_path.display(), why);
+                return FlashResult::FailRecoverable;
+            }
+        };
+    */
     debug!("invoking dd");
 
     let mut dd_child = match Command::new(dd_cmd)
@@ -61,7 +63,8 @@ fn flash_gzip_internal(dd_cmd: &str, target_path : &Path, cmds: &EnsuredCmds, im
             &format!("bs={}", DD_BLOCK_SIZE),
         ])
         .stdin(Stdio::piped())
-        .spawn() {
+        .spawn()
+    {
         Ok(dd_child) => dd_child,
         Err(why) => {
             error!("failed to execute command {}, error: {:?}", dd_cmd, why);
@@ -73,7 +76,6 @@ fn flash_gzip_internal(dd_cmd: &str, target_path : &Path, cmds: &EnsuredCmds, im
     let mut last_elapsed = Duration::new(0, 0);
     let mut write_count: usize = 0;
 
-
     let mut fail_res = FailRecoverable;
     if let Some(ref mut stdin) = dd_child.stdin {
         let mut buffer: [u8; DD_BLOCK_SIZE] = [0; DD_BLOCK_SIZE];
@@ -83,7 +85,8 @@ fn flash_gzip_internal(dd_cmd: &str, target_path : &Path, cmds: &EnsuredCmds, im
                 Err(why) => {
                     error!(
                         "Failed to read uncompressed data from '{}', error: {:?}",
-                        image_path.display(), why
+                        image_path.display(),
+                        why
                     );
                     return fail_res;
                 }
@@ -149,13 +152,19 @@ fn flash_gzip_internal(dd_cmd: &str, target_path : &Path, cmds: &EnsuredCmds, im
     }
 }
 
-fn flash_gzip_external(dd_cmd: &str, target_path : &Path, cmds: &EnsuredCmds, image_path: &Path) -> FlashResult {
+fn flash_gzip_external(
+    dd_cmd: &str,
+    target_path: &Path,
+    cmds: &EnsuredCmds,
+    image_path: &Path,
+) -> FlashResult {
     if let Ok(ref gzip_cmd) = cmds.get(GZIP_CMD) {
         debug!("gzip found at: {}", gzip_cmd);
         let gzip_child = match Command::new(gzip_cmd)
             .args(&["-d", "-c", &image_path.to_string_lossy()])
             .stdout(Stdio::piped())
-            .spawn() {
+            .spawn()
+        {
             Ok(gzip_child) => gzip_child,
             Err(why) => {
                 error!("Failed to create gzip process, error: {:?}", why);
@@ -171,15 +180,19 @@ fn flash_gzip_external(dd_cmd: &str, target_path : &Path, cmds: &EnsuredCmds, im
                     &format!("bs={}", DD_BLOCK_SIZE),
                 ])
                 .stdin(stdout)
-                .output() {
+                .output()
+            {
                 Ok(dd_cmd_res) => {
                     if dd_cmd_res.status.success() == true {
                         return FlashResult::Ok;
                     } else {
-                        error!("dd terminated with exit code: {:?}", dd_cmd_res.status.code());
+                        error!(
+                            "dd terminated with exit code: {:?}",
+                            dd_cmd_res.status.code()
+                        );
                         return FlashResult::FailNonRecoverable;
                     }
-                },
+                }
                 Err(why) => {
                     error!("failed to execute command {}, error: {:?}", dd_cmd, why);
                     return FlashResult::FailRecoverable;
@@ -195,7 +208,12 @@ fn flash_gzip_external(dd_cmd: &str, target_path : &Path, cmds: &EnsuredCmds, im
     }
 }
 
-pub(crate) fn flash(target_path : &Path, cmds: &EnsuredCmds, config: &Stage2Config, image_path: &Path) -> FlashResult {
+pub(crate) fn flash(
+    target_path: &Path,
+    cmds: &EnsuredCmds,
+    config: &Stage2Config,
+    image_path: &Path,
+) -> FlashResult {
     if let Ok(ref dd_cmd) = cmds.get(DD_CMD) {
         debug!("dd found at: {}", dd_cmd);
         let res = if config.is_gzip_internal() {
@@ -212,5 +230,3 @@ pub(crate) fn flash(target_path : &Path, cmds: &EnsuredCmds, config: &Stage2Conf
         FlashResult::FailRecoverable
     }
 }
-
-

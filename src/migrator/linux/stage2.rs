@@ -35,11 +35,10 @@ use crate::{
 // later ensure all other required commands
 
 mod fs_writer;
-use fs_writer::{partition};
+use fs_writer::partition;
 
 mod flasher;
 use flasher::{flash, FlashResult};
-
 
 pub(crate) mod mounts;
 use mounts::Mounts;
@@ -221,7 +220,6 @@ impl<'a> Stage2 {
             error!("The working directory was not mounted - aborting migration");
             return Err(MigError::displayed());
         };
-
 
         let mig_tmp_dir = if !self.mounts.is_work_no_copy() {
             // check if we have enough space to copy files to initramfs
@@ -428,23 +426,19 @@ impl<'a> Stage2 {
                 ));
             }
 
-
             match flash(&target_path, &self.cmds, &self.config, &image_path) {
-                FlashResult::Ok => {
-
-                },
+                FlashResult::Ok => {}
                 FlashResult::FailRecoverable => {
                     error!("Failed to flash balena OS image");
                     self.recoverable_state = true;
                     return Err(MigError::displayed());
-                },
+                }
                 FlashResult::FailNonRecoverable => {
                     error!("Failed to flash balena OS image");
                     self.recoverable_state = false;
                     return Err(MigError::displayed());
                 }
             }
-
 
             info!(
                 "The Balena OS image has been written to the device '{}'",

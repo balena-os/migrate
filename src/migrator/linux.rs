@@ -22,6 +22,9 @@ pub(crate) use device::Device;
 
 pub(crate) mod boot_manager;
 
+mod extract;
+use extract::Extractor;
+
 pub(crate) mod stage2;
 
 pub(crate) mod ensured_cmds;
@@ -53,16 +56,26 @@ pub(crate) struct LinuxMigrator {
 
 impl<'a> LinuxMigrator {
     pub fn migrate() -> Result<(), MigError> {
-        let mut migrator = LinuxMigrator::try_init(Config::new()?)?;
-        let res = match migrator.config.migrate.get_mig_mode() {
-            MigMode::IMMEDIATE => migrator.do_migrate(),
-            MigMode::PRETEND => Ok(()),
-            MigMode::AGENT => Err(MigError::from(MigErrorKind::NotImpl)),
-        };
+        let config = Config::new()?;
 
-        Logger::flush();
-
-        res
+        match config.migrate.get_mig_mode() {
+            MigMode::EXTRACT => {
+                let mut extractor = Extractor::new(config)?;
+                extractor.extract()?;
+                Ok(())
+            }
+            _ => {
+                let mut migrator = LinuxMigrator::try_init(config)?;
+                let res = match migrator.config.migrate.get_mig_mode() {
+                    MigMode::IMMEDIATE => migrator.do_migrate(),
+                    MigMode::PRETEND => Ok(()),
+                    MigMode::AGENT => Err(MigError::from(MigErrorKind::NotImpl)),
+                    MigMode::EXTRACT => panic!("impossible MigMode here"),
+                };
+                Logger::flush();
+                res
+            }
+        }
     }
 
     // **********************************************************************

@@ -353,7 +353,8 @@ impl<'a> Mounts {
             Err(why) => {
                 error!(
                     "Failed to mount balena boot device: '{}', error: {:?}",
-                    part_label.display(),why
+                    part_label.display(),
+                    why
                 );
                 return Err(MigError::displayed());
             }
@@ -392,7 +393,8 @@ impl<'a> Mounts {
             Err(why) => {
                 error!(
                     "Failed to mount balena data device: '{}', error: {:?}",
-                    part_label.display(), why
+                    part_label.display(),
+                    why
                 );
                 parts_found = false;
                 None
@@ -458,7 +460,8 @@ impl<'a> Mounts {
             } else {
                 debug!(
                     "Device '{}'  not found in attempt {}, will retry in 3 seconds",
-                    device.display(), attempt
+                    device.display(),
+                    attempt
                 );
                 thread::sleep(Duration::from_secs(3))
             }

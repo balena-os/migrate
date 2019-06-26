@@ -17,14 +17,15 @@ pub const GZIP_CMD: &str = "gzip";
 pub const MKTEMP_CMD: &str = "mktemp";
 pub const MOKUTIL_CMD: &str = "mokutil";
 pub const MOUNT_CMD: &str = "mount";
+pub const UMOUNT_CMD: &str = "umount";
 pub const PARTED_CMD: &str = "parted";
 pub const PARTPROBE_CMD: &str = "partprobe";
 pub const REBOOT_CMD: &str = "reboot";
 pub const SFDISK_CMD: &str = "sfdisk";
+pub const TAR_CMD: &str = "tar";
 pub const TRUNCATE_CMD: &str = "truncate";
 pub const UDEVADM_CMD: &str = "udevadm";
 pub const UNAME_CMD: &str = "uname";
-
 
 #[derive(Debug)]
 pub(crate) struct EnsuredCmds {
