@@ -50,7 +50,7 @@ impl ImageFile for PlainFile {
                 &format!("failed to seek to offset {}", offset),
             ))?;
         match self.file.read_exact(buffer) {
-            Ok(bytes_read) => Ok(()),
+            Ok(_) => Ok(()),
             Err(why) => Err(MigError::from_remark(
                 MigErrorKind::Upstream,
                 &format!(

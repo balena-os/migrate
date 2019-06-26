@@ -1,9 +1,6 @@
 use log::error;
 
 use mod_logger::{Level, Logger};
-use std::path::Path;
-
-// use std::path::Path;
 
 pub mod common;
 

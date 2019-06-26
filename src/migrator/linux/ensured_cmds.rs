@@ -8,7 +8,7 @@ use std::collections::HashMap;
 pub const CHMOD_CMD: &str = "chmod";
 pub const DD_CMD: &str = "dd";
 pub const DF_CMD: &str = "df";
-pub const FDISK_CMD: &str = "fdisk";
+// pub const FDISK_CMD: &str = "fdisk";
 pub const FILE_CMD: &str = "file";
 pub const LSBLK_CMD: &str = "lsblk";
 pub const GRUB_REBOOT_CMD: &str = "grub-reboot";
@@ -23,7 +23,7 @@ pub const PARTPROBE_CMD: &str = "partprobe";
 pub const REBOOT_CMD: &str = "reboot";
 pub const SFDISK_CMD: &str = "sfdisk";
 pub const TAR_CMD: &str = "tar";
-pub const TRUNCATE_CMD: &str = "truncate";
+// pub const TRUNCATE_CMD: &str = "truncate";
 pub const UDEVADM_CMD: &str = "udevadm";
 pub const UNAME_CMD: &str = "uname";
 

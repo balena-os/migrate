@@ -1,6 +1,5 @@
 use flate2::read::GzDecoder;
-use log::{debug, error, info, trace};
-use std::cmp;
+use log::{debug, trace};
 use std::fs::{File, OpenOptions};
 use std::io::Read;
 use std::path::{Path, PathBuf};

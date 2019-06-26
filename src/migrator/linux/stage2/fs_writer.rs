@@ -1,6 +1,6 @@
 use std::path::Path;
 
-use crate::common::{stage2_config::Stage2Config, MigError, MigErrorKind};
+use crate::common::{stage2_config::Stage2Config, MigError};
 
 // TODO: partition & untar balena to drive
 

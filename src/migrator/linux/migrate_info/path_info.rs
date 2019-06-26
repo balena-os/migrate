@@ -3,10 +3,8 @@ use log::{debug, trace};
 use std::fmt::{self, Display, Formatter};
 use std::path::{Path, PathBuf};
 
-use crate::common::path_append;
 use crate::{
     common::{dir_exists, format_size_with_unit, MigErrCtx, MigError, MigErrorKind},
-    defs::DISK_BY_PARTUUID_PATH,
     linux::{
         linux_common::{get_fs_space, get_kernel_root_info},
         linux_defs::ROOT_PATH,
@@ -50,13 +48,13 @@ pub(crate) struct PathInfo {
 }
 
 impl PathInfo {
-    pub fn get_portable_path(&self) -> PathBuf {
+    /*    pub fn get_portable_path(&self) -> PathBuf {
         if let Some(ref part_uuid) = self.part_uuid {
             path_append(DISK_BY_PARTUUID_PATH, part_uuid)
         } else {
             self.path.clone()
         }
-    }
+    } */
 
     pub fn get_kernel_cmd(&self) -> String {
         if let Some(ref partuuid) = self.part_uuid {

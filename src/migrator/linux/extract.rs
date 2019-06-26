@@ -1,25 +1,17 @@
-use flate2::{read::GzDecoder, write::GzEncoder, Compression};
-use tar;
-
 use failure::ResultExt;
 use log::{debug, error, info, trace};
-use serde::Deserialize;
-use serde_json;
-use std::fs::{read_to_string, remove_dir, remove_file, File, OpenOptions};
-use std::io::{self, Read, Write};
+use nix::mount::umount;
+use std::fs::{remove_dir, remove_file, OpenOptions};
+use std::io::Write;
 use std::mem;
 use std::path::{Path, PathBuf};
-// use nix::mount::{mount, MsFlags};
 
 use crate::{
     common::{
         format_size_with_unit, Config, FileInfo, FileType, MigErrCtx, MigError, MigErrorKind,
     },
     linux::{
-        ensured_cmds::{
-            EnsuredCmds, FILE_CMD, MKTEMP_CMD, MOUNT_CMD, SFDISK_CMD, TAR_CMD, TRUNCATE_CMD,
-            UMOUNT_CMD,
-        },
+        ensured_cmds::{EnsuredCmds, FILE_CMD, MKTEMP_CMD, MOUNT_CMD, TAR_CMD},
         linux_common::mktemp,
     },
 };
@@ -34,28 +26,27 @@ mod plain_file;
 use plain_file::PlainFile;
 
 use crate::common::path_append;
-use nix::mount::umount;
 
-const REQUIRED_CMDS: &[&str] = &[FILE_CMD, MOUNT_CMD, UMOUNT_CMD, MKTEMP_CMD, TAR_CMD];
+const REQUIRED_CMDS: &[&str] = &[FILE_CMD, MOUNT_CMD, MKTEMP_CMD, TAR_CMD];
 
 const DEF_BLOCK_SIZE: usize = 512;
 const DEF_BUFFER_SIZE: usize = 1024 * 1024;
 
 const EXTRACT_FILE_TEMPLATE: &str = "extract.XXXXXXXXXX";
+const MOUNTPOINT_TEMPLATE: &str = "mountpoint.XXXXXXXXXX";
 
 const BUFFER_SIZE: usize = 1024 * 1024; // 1Mb
 
 const PART_NAME: &[&str] = &[
     "resin-boot",
-    "resin-roota",
-    "resin-rootb",
+    "resin-rootA",
+    "resin-rootB",
     "resin-state",
     "resin-data",
 ];
 const PART_FSTYPE: &[&str] = &["vfat", "ext4", "ext4", "ext4", "ext4"];
 
 #[repr(C, packed)]
-#[derive(Debug)]
 struct PartEntry {
     status: u8,
     first_head: u8,
@@ -100,7 +91,10 @@ impl Extractor {
 
         let mut cmds = EnsuredCmds::new();
         if let Err(why) = cmds.ensure_cmds(REQUIRED_CMDS) {
-            error!("Some Required commands could not be found");
+            error!(
+                "Some Required commands could not be found, error: {:?}",
+                why
+            );
             return Err(MigError::displayed());
         }
 
@@ -172,7 +166,7 @@ impl Extractor {
     pub fn extract(&mut self, output_path: Option<&Path>) -> Result<(), MigError> {
         trace!("extract: entered");
         let mut partitions: Vec<Partition> = Vec::new();
-        let mut part_idx: usize = 0;
+        // let mut part_idx: usize = 0;
         let mut curr_offset: u64 = 0;
 
         let mut res = Ok(());
@@ -181,7 +175,7 @@ impl Extractor {
         let mountpoint = match mktemp(
             &self.cmds,
             true,
-            None,
+            Some(MOUNTPOINT_TEMPLATE),
             Some(self.config.migrate.get_work_dir()),
         ) {
             Ok(path) => path,
@@ -198,7 +192,7 @@ impl Extractor {
         let tmp_name = match mktemp(
             &self.cmds,
             false,
-            None,
+            Some(EXTRACT_FILE_TEMPLATE),
             Some(self.config.migrate.get_work_dir()),
         ) {
             Ok(path) => path,
@@ -225,14 +219,15 @@ impl Extractor {
 
             for idx in part_extract_idx..partitions.len() {
                 let partition = &mut partitions[idx];
-                debug!(
-                    "partition: {}: fstype: {}, status: {:x}, type: {:x}, start: {}, length: {}",
+                info!(
+                    "extracting partition: {}: fstype: {}, status: {:x}, type: {:x}, start: {}, length: {}, size: {}",
                     partition.name,
                     partition.fstype,
                     partition.status,
                     partition.ptype,
                     partition.start_lba,
-                    partition.num_sectors
+                    partition.num_sectors,
+                    format_size_with_unit(partition.num_sectors * DEF_BLOCK_SIZE as u64),
                 );
 
                 match self.write_partition(partition, &tmp_name, &mountpoint, output_path) {
@@ -242,6 +237,12 @@ impl Extractor {
                         break;
                     }
                 }
+
+                info!(
+                    "extracted partition: {}: to '{}'",
+                    partition.name,
+                    partition.archive.as_ref().unwrap().display()
+                );
             }
 
             part_extract_idx = partitions.len();
@@ -265,7 +266,7 @@ impl Extractor {
         partition: &mut Partition,
         tmp_name: &Path,
         mountpoint: &Path,
-        output_path: Option<&Path>
+        output_path: Option<&Path>,
     ) -> Result<(), MigError> {
         trace!(
             "write_partition: entered with '{}', tmp_name: '{}', mountpoint: '{}'",
@@ -300,7 +301,7 @@ impl Extractor {
                     &format!("Failed to write to temp file: '{}'", tmp_name.display()),
                 ))?;
 
-                if (bytes_written < DEF_BUFFER_SIZE) {
+                if bytes_written < DEF_BUFFER_SIZE {
                     return Err(MigError::from_remark(
                         MigErrorKind::InvParam,
                         "read / wite size mismatch on copy",
@@ -321,7 +322,7 @@ impl Extractor {
                         &format!("Failed to write to temp file: '{}'", tmp_name.display()),
                     ))?;
 
-            if (bytes_written < DEF_BUFFER_SIZE) {
+            if bytes_written < DEF_BUFFER_SIZE {
                 return Err(MigError::from_remark(
                     MigErrorKind::InvParam,
                     "read / wite size mismatch on copy",
@@ -333,10 +334,6 @@ impl Extractor {
                 tmp_name.display()
             );
         }
-
-        // Loopmount the file
-        // mount -t iso9660 -o loop /home/tecmint/Fedora-18-i386-DVD.iso /mnt/iso/
-        // or use Nix::mount
 
         debug!(
             "write_partition: mounting '{}' on '{}'",
@@ -363,31 +360,10 @@ impl Extractor {
             ));
         }
 
-        /* Try with builtin mount
-                mount(
-                    Some(&device),
-                    &mountpoint,
-                    Some(fstype.as_bytes()),
-                    MsFlags::empty(),
-                    NIX_NONE,
-                )
-                    .context(MigErrCtx::from_remark(
-                        MigErrorKind::Upstream,
-                        &format!(
-                            "Failed to mount previous boot manager device '{}' to '{}' with fstype: {:?}",
-                            &device.display(),
-                            &mountpoint.display(),
-                            fstype
-                        ),
-                    ))?;
-
-        */
+        // TODO: Try with builtin mount - not sure if loopmount is possible with this
 
         let arch_name = if let Some(output_path) = output_path {
-            path_append(
-                output_path,
-                &format!("{}.tgz", partition.name),
-            )
+            path_append(output_path, &format!("{}.tgz", partition.name))
         } else {
             path_append(
                 self.config.migrate.get_work_dir(),
@@ -395,23 +371,12 @@ impl Extractor {
             )
         };
 
-        /*  Try to archive using rust builtin tar / gzip
-        {
-            debug!("write_partition: archivng '{}' to '{}'", mountpoint.display(), arch_name.display());
-            let mut archive = tar::Builder::new(GzEncoder::new(
-                File::create(&arch_name)
-                        .context(MigErrCtx::from_remark(
-                    MigErrorKind::Upstream,
-                    &format!("Failed to create partition archive in file '{}'", arch_name.display()),
-                ))?,
-                Compression::default(),
-            ));
+        let arch_name = arch_name.canonicalize().context(MigErrCtx::from_remark(
+            MigErrorKind::Upstream,
+            &format!("Failed to canonicalize path: '{}'", arch_name.display()),
+        ))?;
 
-            archive.append_dir("./", mountpoint)
-                .context(MigErrCtx::from_remark(MigErrorKind::Upstream, &format!("Failed to append mountpoint '{}' to archive '{}'", mountpoint.display(), arch_name.display())))?;
-            archive.finish()
-                .context(MigErrCtx::from_remark(MigErrorKind::Upstream, &format!("Failed to finish  archive '{}'", arch_name.display())))?;
-        } */
+        // TODO: Try to archive using rust builtin tar / gzip have to traverse directories myself
 
         let cmd_res = self.cmds.call(
             TAR_CMD,
@@ -437,13 +402,6 @@ impl Extractor {
             MigErrorKind::Upstream,
             &format!("failed to unmount '{}'", mountpoint.display()),
         ))?;
-
-        /*
-        let cmd_res = self.cmds.call(UMOUNT_CMD, &[&mountpoint.to_string_lossy()],true)?;
-        if !cmd_res.status.success() {
-            return Err(MigError::from_remark(MigErrorKind::ExecProcess, &format!("Failed to unmount extracted partition, msg: {}", cmd_res.stderr));
-        }
-        */
 
         debug!(
             "write_partition: extracted partition '{}' to '{}'",

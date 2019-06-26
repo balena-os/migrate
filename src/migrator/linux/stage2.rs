@@ -1,5 +1,4 @@
 use failure::ResultExt;
-use flate2::read::GzDecoder;
 use log::{debug, error, info, trace, warn, Level};
 use mod_logger::{LogDestination, Logger, NO_STREAM};
 use nix::{
@@ -7,12 +6,11 @@ use nix::{
     unistd::sync,
 };
 
-use std::fs::{copy, create_dir, read_dir, File};
-use std::io::{Read, Write};
+use std::fs::{copy, create_dir, read_dir};
+// use std::io::{Write};
 use std::path::Path;
-use std::process::{Command, Stdio};
 use std::thread;
-use std::time::{Duration, Instant};
+use std::time::Duration;
 
 use crate::{
     common::{
@@ -22,9 +20,7 @@ use crate::{
     defs::{FailMode, BACKUP_FILE, SYSTEM_CONNECTIONS_DIR},
     linux::{
         device,
-        ensured_cmds::{
-            EnsuredCmds, DD_CMD, GZIP_CMD, LSBLK_CMD, PARTPROBE_CMD, REBOOT_CMD, UDEVADM_CMD,
-        },
+        ensured_cmds::{EnsuredCmds, DD_CMD, LSBLK_CMD, PARTPROBE_CMD, REBOOT_CMD, UDEVADM_CMD},
         linux_common::get_mem_info,
         linux_defs::{MIGRATE_LOG_FILE, STAGE2_MEM_THRESHOLD},
     },

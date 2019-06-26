@@ -1,6 +1,5 @@
 // TODO: flash image using DD
 
-use failure::ResultExt;
 use flate2::read::GzDecoder;
 use log::{debug, error, info};
 use nix::unistd::sync;
@@ -10,11 +9,8 @@ use std::path::Path;
 use std::process::{Command, Stdio};
 use std::time::{Duration, Instant};
 
-use crate::linux::stage2::flasher::FlashResult::{FailNonRecoverable, FailRecoverable};
 use crate::{
-    common::{
-        format_size_with_unit, stage2_config::Stage2Config, MigErrCtx, MigError, MigErrorKind,
-    },
+    common::{format_size_with_unit, stage2_config::Stage2Config},
     linux::ensured_cmds::{EnsuredCmds, DD_CMD, GZIP_CMD},
 };
 
@@ -33,7 +29,7 @@ pub(crate) enum FlashResult {
 fn flash_gzip_internal(
     dd_cmd: &str,
     target_path: &Path,
-    cmds: &EnsuredCmds,
+    // cmds: &EnsuredCmds,
     image_path: &Path,
 ) -> FlashResult {
     let mut decoder = GzDecoder::new(match File::open(&image_path) {
@@ -76,7 +72,7 @@ fn flash_gzip_internal(
     let mut last_elapsed = Duration::new(0, 0);
     let mut write_count: usize = 0;
 
-    let mut fail_res = FailRecoverable;
+    let mut fail_res = FlashResult::FailRecoverable;
     if let Some(ref mut stdin) = dd_child.stdin {
         let mut buffer: [u8; DD_BLOCK_SIZE] = [0; DD_BLOCK_SIZE];
         loop {
@@ -217,7 +213,7 @@ pub(crate) fn flash(
     if let Ok(ref dd_cmd) = cmds.get(DD_CMD) {
         debug!("dd found at: {}", dd_cmd);
         let res = if config.is_gzip_internal() {
-            flash_gzip_internal(dd_cmd, target_path, cmds, image_path)
+            flash_gzip_internal(dd_cmd, target_path, image_path)
         } else {
             flash_gzip_external(dd_cmd, target_path, cmds, image_path)
         };
