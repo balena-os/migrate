@@ -68,14 +68,14 @@ struct MasterBootRecord {
     boot_sig2: u8,
 }
 
-struct Partition {
-    name: &'static str,
-    fstype: &'static str,
-    ptype: u8,
-    status: u8,
-    start_lba: u64,
-    num_sectors: u64,
-    archive: Option<PathBuf>,
+pub(crate) struct Partition {
+    pub name: &'static str,
+    pub fstype: &'static str,
+    pub ptype: u8,
+    pub status: u8,
+    pub start_lba: u64,
+    pub num_sectors: u64,
+    pub archive: Option<PathBuf>,
 }
 
 pub(crate) struct Extractor {
