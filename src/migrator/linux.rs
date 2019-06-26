@@ -61,7 +61,7 @@ impl<'a> LinuxMigrator {
         match config.migrate.get_mig_mode() {
             MigMode::EXTRACT => {
                 let mut extractor = Extractor::new(config)?;
-                extractor.extract()?;
+                extractor.extract(None)?;
                 Ok(())
             }
             _ => {

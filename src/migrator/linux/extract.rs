@@ -169,7 +169,7 @@ impl Extractor {
         }
     }
 
-    pub fn extract(&mut self) -> Result<(), MigError> {
+    pub fn extract(&mut self, output_path: Option<&Path>) -> Result<(), MigError> {
         trace!("extract: entered");
         let mut partitions: Vec<Partition> = Vec::new();
         let mut part_idx: usize = 0;
@@ -235,7 +235,7 @@ impl Extractor {
                     partition.num_sectors
                 );
 
-                match self.write_partition(partition, &tmp_name, &mountpoint) {
+                match self.write_partition(partition, &tmp_name, &mountpoint, output_path) {
                     Ok(_) => (),
                     Err(why) => {
                         res = Err(why);
@@ -265,6 +265,7 @@ impl Extractor {
         partition: &mut Partition,
         tmp_name: &Path,
         mountpoint: &Path,
+        output_path: Option<&Path>
     ) -> Result<(), MigError> {
         trace!(
             "write_partition: entered with '{}', tmp_name: '{}', mountpoint: '{}'",
@@ -382,10 +383,18 @@ impl Extractor {
 
         */
 
-        let arch_name = path_append(
-            self.config.migrate.get_work_dir(),
-            &format!("{}.tgz", partition.name),
-        );
+        let arch_name = if let Some(output_path) = output_path {
+            path_append(
+                output_path,
+                &format!("{}.tgz", partition.name),
+            )
+        } else {
+            path_append(
+                self.config.migrate.get_work_dir(),
+                &format!("{}.tgz", partition.name),
+            )
+        };
+
         /*  Try to archive using rust builtin tar / gzip
         {
             debug!("write_partition: archivng '{}' to '{}'", mountpoint.display(), arch_name.display());
