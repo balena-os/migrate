@@ -123,6 +123,7 @@ impl UBootManager {
                         None => {
                             // make mountpoint directory if none exists
                             if let None = tmp_mountpoint {
+                                debug!("creating mountpoint");
                                 let cmd_res = cmds.call(
                                     MKTEMP_CMD,
                                     &["-d", "-p", &mig_info.work_path.path.to_string_lossy()],
@@ -130,16 +131,19 @@ impl UBootManager {
                                 )?;
                                 if cmd_res.status.success() {
                                     tmp_mountpoint = Some(
-                                        PathBuf::from(&cmd_res.stdout).canonicalize().context(
-                                            MigErrCtx::from_remark(
-                                                MigErrorKind::Upstream,
-                                                &format!(
-                                                "Failed to canonicalize path to mountpoint '{}'",
-                                                cmd_res.stdout
-                                            ),
-                                            ),
-                                        )?,
+                                        PathBuf::from(&cmd_res.stdout)
+                                            .canonicalize()
+                                            .context(
+                                                MigErrCtx::from_remark(
+                                                    MigErrorKind::Upstream,
+                                                    &format!(
+                                                    "Failed to canonicalize path to mountpoint '{}'",
+                                                    cmd_res.stdout
+                                                    ),
+                                                ),
+                                            )?,
                                     );
+
                                 } else {
                                     return Err(MigError::from_remark(
                                         MigErrorKind::Upstream,
@@ -177,7 +181,7 @@ impl UBootManager {
                                 &format!(
                                     "Failed to temporarily mount drive '{}' on '{}",
                                     partition.get_path().display(),
-                                    tmp_mountpoint.as_ref().unwrap().display()
+                                    mountpoint.display()
                                 ),
                             ))?;
 
@@ -195,6 +199,7 @@ impl UBootManager {
                         )?);
                     } else {
                         if mounted {
+                            debug!("unmouting '{}', from {}", partition.get_path().display(), mountpoint.display());
                             umount(mountpoint).context(MigErrCtx::from_remark(
                                 MigErrorKind::Upstream,
                                 &format!("Failed to unmount '{}'", mountpoint.display()),
