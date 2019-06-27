@@ -56,8 +56,8 @@ fn flash_gzip_internal(
 
     let mut dd_child = match Command::new(dd_cmd)
         .args(&[
-            "conv=fsync",
-            "oflag=direct",
+            // "conv=fsync", sadly not supported on busybox 
+            // "oflag=direct",
             &format!("of={}", &target_path.to_string_lossy()),
             &format!("bs={}", DD_BLOCK_SIZE),
         ])
