@@ -6,8 +6,9 @@ use nix::mount::{mount, umount, MsFlags};
 use regex::Regex;
 use std::fs::{remove_file, File};
 use std::io::Write;
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 
+use crate::common::dir_exists;
 use crate::{
     common::{
         file_exists, format_size_with_unit, is_balena_file, path_append,
@@ -26,10 +27,10 @@ use crate::{
         EnsuredCmds, CHMOD_CMD, MKTEMP_CMD,
     },
 };
-use crate::common::dir_exists;
 
-// TODO: this might be  a bit tight
-const UBOOT_DRIVE_REGEX: &str = r#"^/dev/mmcblk\d+$"#; //p(\d+)$"#;
+// TODO: this might be a bit of a tight fit, allow (s|h)d([a-z])(\d+) too ?
+const UBOOT_DRIVE_FILTER_REGEX: &str = r#"^mmcblk\d+$"#;
+const UBOOT_DRIVE_REGEX: &str = r#"^/dev/mmcblk(\d+)p(\d+)$"#;
 
 const UENV_TXT: &str = r###"
 loadaddr=0x82000000
@@ -59,13 +60,11 @@ pub(crate) struct UBootManager {
     boot_path: Option<PathInfo>,
 }
 
-
-
 impl UBootManager {
     pub fn new() -> UBootManager {
         UBootManager {
             bootmgr_path: None,
-            boot_path: None
+            boot_path: None,
         }
     }
 
@@ -96,9 +95,10 @@ impl UBootManager {
         cmds: &EnsuredCmds,
         mig_info: &MigrateInfo,
     ) -> Result<PathInfo, MigError> {
-        //lazy_static! {
-        //    static ref BOOT_DRIVE_RE: Regex = Regex::new(UBOOT_DRIVE_REGEX).unwrap();
-        // }
+        lazy_static! {
+            // same as ab
+            static ref BOOT_DRIVE_RE: Regex = Regex::new(UBOOT_DRIVE_FILTER_REGEX).unwrap();
+        }
 
         // try our luck with /root, /boot
 
@@ -117,17 +117,21 @@ impl UBootManager {
         let mut tmp_mountpoint: Option<PathBuf> = None;
 
         for blk_device in mig_info.lsblk_info.get_blk_devices() {
-            /*if !BOOT_DRIVE_RE.is_match(&*blk_device.name) {
+            if !BOOT_DRIVE_RE.is_match(&*blk_device.name) {
                 debug!("Ignoring: '{}'", blk_device.get_path().display());
                 continue;
-            }*/
+            }
 
             debug!("Looking at: '{}'", blk_device.get_path().display());
 
             if let Some(ref partitions) = blk_device.children {
                 for partition in partitions {
                     // establish mountpoint / temporarilly mount
-                    debug!("looking at '{}' mounted on {:?}", partition.get_path().display(), partition.mountpoint);
+                    debug!(
+                        "looking at '{}' mounted on {:?}",
+                        partition.get_path().display(),
+                        partition.mountpoint
+                    );
                     let (mountpoint, mounted) = match partition.mountpoint {
                         Some(ref mountpoint) => (mountpoint, false),
                         None => {
@@ -141,19 +145,16 @@ impl UBootManager {
                                 )?;
                                 if cmd_res.status.success() {
                                     tmp_mountpoint = Some(
-                                        PathBuf::from(&cmd_res.stdout)
-                                            .canonicalize()
-                                            .context(
-                                                MigErrCtx::from_remark(
-                                                    MigErrorKind::Upstream,
-                                                    &format!(
-                                                    "Failed to canonicalize path to mountpoint '{}'",
-                                                    cmd_res.stdout
-                                                    ),
-                                                ),
-                                            )?,
+                                        PathBuf::from(&cmd_res.stdout).canonicalize().context(
+                                            MigErrCtx::from_remark(
+                                                MigErrorKind::Upstream,
+                                                &format!(
+                                                "Failed to canonicalize path to mountpoint '{}'",
+                                                cmd_res.stdout
+                                            ),
+                                            ),
+                                        )?,
                                     );
-
                                 } else {
                                     return Err(MigError::from_remark(
                                         MigErrorKind::Upstream,
@@ -177,7 +178,11 @@ impl UBootManager {
                                 NIX_NONE
                             };
 
-                            debug!("temporarilly mounting '{}' on '{}'", partition.get_path().display(), mountpoint.display());
+                            debug!(
+                                "temporarilly mounting '{}' on '{}'",
+                                partition.get_path().display(),
+                                mountpoint.display()
+                            );
 
                             mount(
                                 Some(&partition.get_path()),
@@ -199,7 +204,11 @@ impl UBootManager {
                         }
                     };
 
-                    debug!("checking '{}', mounted on {}", partition.get_path().display(), mountpoint.display());
+                    debug!(
+                        "checking '{}', mounted on {}",
+                        partition.get_path().display(),
+                        mountpoint.display()
+                    );
 
                     if file_exists(path_append(mountpoint, MLO_FILE_NAME))
                         || file_exists(path_append(mountpoint, UBOOT_FILE_NAME))
@@ -209,7 +218,11 @@ impl UBootManager {
                         )?);
                     } else {
                         if mounted {
-                            debug!("unmouting '{}', from {}", partition.get_path().display(), mountpoint.display());
+                            debug!(
+                                "unmouting '{}', from {}",
+                                partition.get_path().display(),
+                                mountpoint.display()
+                            );
                             umount(mountpoint).context(MigErrCtx::from_remark(
                                 MigErrorKind::Upstream,
                                 &format!("Failed to unmount '{}'", mountpoint.display()),
@@ -281,17 +294,32 @@ impl<'a> BootManager for UBootManager {
             return Ok(false);
         }
 
-
         if bootmgr_path.fs_free < boot_req_space {
             // find alt location for boot config
 
             if let Some(boot_path) = PathInfo::new(cmds, BOOT_PATH, &mig_info.lsblk_info)? {
                 if boot_path.fs_free > boot_req_space {
+                    info!(
+                        "Found boot '{}', mounpoint: '{}', fs type: {}, free space: {}",
+                        boot_path.device.display(),
+                        boot_path.mountpoint.display(),
+                        boot_path.fs_type,
+                        format_size_with_unit(boot_path.fs_free)
+                    );
+
                     self.boot_path = Some(boot_path);
                 }
             } else {
                 if let Some(boot_path) = PathInfo::new(cmds, ROOT_PATH, &mig_info.lsblk_info)? {
                     if boot_path.fs_free > boot_req_space {
+                        info!(
+                            "Found boot '{}', mounpoint: '{}', fs type: {}, free space: {}",
+                            boot_path.device.display(),
+                            boot_path.mountpoint.display(),
+                            boot_path.fs_type,
+                            format_size_with_unit(boot_path.fs_free)
+                        );
+
                         self.boot_path = Some(boot_path);
                     } else {
                         error!("Could not find a directory with sufficient space to store the migrate kernel, initramfs and dtb file. Required space is {}",
@@ -444,6 +472,54 @@ impl<'a> BootManager for UBootManager {
 
         // **********************************************************************
         // ** create new /uEnv.txt
+
+        // convert kernel / initrd / dtb paths to mountpoint relative paths for uEnv.txt
+        let (kernel_path, initrd_path, dtb_path) =
+            if boot_path.mountpoint != PathBuf::from(ROOT_PATH) {
+                (
+                    path_append(
+                        ROOT_PATH,
+                        kernel_path.strip_prefix(&boot_path.mountpoint).context(
+                            MigErrCtx::from_remark(
+                                MigErrorKind::Upstream,
+                                &format!(
+                                    "cannot remove prefix '{}' from '{}'",
+                                    kernel_path.display(),
+                                    boot_path.mountpoint.display()
+                                ),
+                            ),
+                        )?,
+                    ),
+                    path_append(
+                        ROOT_PATH,
+                        initrd_path.strip_prefix(&boot_path.mountpoint).context(
+                            MigErrCtx::from_remark(
+                                MigErrorKind::Upstream,
+                                &format!(
+                                    "cannot remove prefix '{}' from '{}'",
+                                    initrd_path.display(),
+                                    boot_path.mountpoint.display()
+                                ),
+                            ),
+                        )?,
+                    ),
+                    path_append(
+                        ROOT_PATH,
+                        dtb_path.strip_prefix(&boot_path.mountpoint).context(
+                            MigErrCtx::from_remark(
+                                MigErrorKind::Upstream,
+                                &format!(
+                                    "cannot remove prefix '{}' from '{}'",
+                                    dtb_path.display(),
+                                    boot_path.mountpoint.display()
+                                ),
+                            ),
+                        )?,
+                    ),
+                )
+            } else {
+                (kernel_path, initrd_path, dtb_path)
+            };
 
         let mut uenv_text = String::from(BALENA_FILE_TAG);
         uenv_text.push_str(UENV_TXT);

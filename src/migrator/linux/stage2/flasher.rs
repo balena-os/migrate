@@ -2,13 +2,13 @@
 
 use flate2::read::GzDecoder;
 use log::{debug, error, info};
+use mod_logger::Logger;
 use nix::unistd::sync;
 use std::fs::File;
 use std::io::{Read, Write};
 use std::path::Path;
 use std::process::{Command, Stdio};
 use std::time::{Duration, Instant};
-use mod_logger::{Logger};
 
 use crate::{
     common::{format_size_with_unit, stage2_config::Stage2Config},
