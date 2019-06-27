@@ -52,9 +52,14 @@ uenvcmd=run loadall; run mmcargs; echo debug: [${bootargs}] ... ; echo debug: [b
 "###;
 
 pub(crate) struct UBootManager {
+    // location of MLO / u-boot.img files, this is where we put our uEnv.txt and our kernel / initrd / dtb
+    // if sufficient space is available
     bootmgr_path: Option<PathInfo>,
+    // this is an alt location for our kernel / initrd / dtb if bootmgr is too small
     boot_path: Option<PathInfo>,
 }
+
+
 
 impl UBootManager {
     pub fn new() -> UBootManager {
@@ -86,7 +91,7 @@ impl UBootManager {
 
     */
 
-    fn find_boot_path(
+    fn find_bootmgr_path(
         &self,
         cmds: &EnsuredCmds,
         mig_info: &MigrateInfo,
@@ -243,7 +248,7 @@ impl<'a> BootManager for UBootManager {
         // find the u-boot boot device
         // this is where uEnv.txt has to go
 
-        let bootmgr_path = self.find_boot_path(cmds, mig_info)?;
+        let bootmgr_path = self.find_bootmgr_path(cmds, mig_info)?;
         info!(
             "Found boot manager '{}', mounpoint: '{}', fs type: {}, free space: {}",
             bootmgr_path.device.display(),
@@ -252,15 +257,8 @@ impl<'a> BootManager for UBootManager {
             format_size_with_unit(bootmgr_path.fs_free)
         );
 
-        /*
-                    s2_cfg.set_bootmgr_cfg(MountConfig::new(
-                        boot_path.device,
-                        boot_path.fs_type,
-                        boot_path.mountpoint,
-                    ));
-        */
-
-        let mut boot_req_space = if !file_exists(path_append(&bootmgr_path.path, MIG_KERNEL_NAME)) {
+        let mut boot_req_space: u64 = 8 * 1024; // one 8KiB extra space just in case and for uEnv.txt)
+        boot_req_space += if !file_exists(path_append(&bootmgr_path.path, MIG_KERNEL_NAME)) {
             mig_info.kernel_file.size
         } else {
             0
@@ -283,18 +281,17 @@ impl<'a> BootManager for UBootManager {
             return Ok(false);
         }
 
+
         if bootmgr_path.fs_free < boot_req_space {
             // find alt location for boot config
 
             if let Some(boot_path) = PathInfo::new(cmds, BOOT_PATH, &mig_info.lsblk_info)? {
-                if boot_path.fs_free < boot_req_space {
-                    self.bootmgr_path = Some(bootmgr_path);
+                if boot_path.fs_free > boot_req_space {
                     self.boot_path = Some(boot_path);
                 }
             } else {
                 if let Some(boot_path) = PathInfo::new(cmds, ROOT_PATH, &mig_info.lsblk_info)? {
-                    if boot_path.fs_free < boot_req_space {
-                        self.bootmgr_path = Some(bootmgr_path);
+                    if boot_path.fs_free > boot_req_space {
                         self.boot_path = Some(boot_path);
                     } else {
                         error!("Could not find a directory with sufficient space to store the migrate kernel, initramfs and dtb file. Required space is {}",
