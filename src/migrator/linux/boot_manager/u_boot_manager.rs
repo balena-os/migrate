@@ -26,6 +26,7 @@ use crate::{
         EnsuredCmds, CHMOD_CMD, MKTEMP_CMD,
     },
 };
+use crate::common::dir_exists;
 
 // TODO: this might be  a bit tight
 const UBOOT_DRIVE_REGEX: &str = r#"^/dev/mmcblk\d+$"#; //p(\d+)$"#;
@@ -51,12 +52,16 @@ uenvcmd=run loadall; run mmcargs; echo debug: [${bootargs}] ... ; echo debug: [b
 "###;
 
 pub(crate) struct UBootManager {
+    bootmgr_path: Option<PathInfo>,
     boot_path: Option<PathInfo>,
 }
 
 impl UBootManager {
     pub fn new() -> UBootManager {
-        UBootManager { boot_path: None }
+        UBootManager {
+            bootmgr_path: None,
+            boot_path: None
+        }
     }
 
     // Try to find a drive containing MLO, uEnv.txt or u-boot.bin, mount it if necessarry and return PathInfo if found
@@ -238,13 +243,13 @@ impl<'a> BootManager for UBootManager {
         // find the u-boot boot device
         // this is where uEnv.txt has to go
 
-        let boot_path = self.find_boot_path(cmds, mig_info)?;
+        let bootmgr_path = self.find_boot_path(cmds, mig_info)?;
         info!(
             "Found boot manager '{}', mounpoint: '{}', fs type: {}, free space: {}",
-            boot_path.device.display(),
-            boot_path.mountpoint.display(),
-            boot_path.fs_type,
-            format_size_with_unit(boot_path.fs_free)
+            bootmgr_path.device.display(),
+            bootmgr_path.mountpoint.display(),
+            bootmgr_path.fs_type,
+            format_size_with_unit(bootmgr_path.fs_free)
         );
 
         /*
@@ -255,20 +260,20 @@ impl<'a> BootManager for UBootManager {
                     ));
         */
 
-        let mut boot_req_space = if !file_exists(path_append(&boot_path.path, MIG_KERNEL_NAME)) {
+        let mut boot_req_space = if !file_exists(path_append(&bootmgr_path.path, MIG_KERNEL_NAME)) {
             mig_info.kernel_file.size
         } else {
             0
         };
 
-        boot_req_space += if !file_exists(path_append(&boot_path.path, MIG_INITRD_NAME)) {
+        boot_req_space += if !file_exists(path_append(&bootmgr_path.path, MIG_INITRD_NAME)) {
             mig_info.initrd_file.size
         } else {
             0
         };
 
         if let Some(ref dtb_file) = mig_info.dtb_file {
-            boot_req_space += if !file_exists(path_append(&boot_path.path, MIG_DTB_NAME)) {
+            boot_req_space += if !file_exists(path_append(&bootmgr_path.path, MIG_DTB_NAME)) {
                 dtb_file.size
             } else {
                 0
@@ -278,13 +283,33 @@ impl<'a> BootManager for UBootManager {
             return Ok(false);
         }
 
-        if boot_path.fs_free < boot_req_space {
-            error!("The boot directory '{}' does not have enough space to store the migrate kernel, initramfs and dtb file. Required space is {}",
-                   boot_path.path.display(), format_size_with_unit(boot_req_space));
-            return Ok(false);
-        }
+        if bootmgr_path.fs_free < boot_req_space {
+            // find alt location for boot config
 
-        self.boot_path = Some(boot_path);
+            if let Some(boot_path) = PathInfo::new(cmds, BOOT_PATH, &mig_info.lsblk_info)? {
+                if boot_path.fs_free < boot_req_space {
+                    self.bootmgr_path = Some(bootmgr_path);
+                    self.boot_path = Some(boot_path);
+                }
+            } else {
+                if let Some(boot_path) = PathInfo::new(cmds, ROOT_PATH, &mig_info.lsblk_info)? {
+                    if boot_path.fs_free < boot_req_space {
+                        self.bootmgr_path = Some(bootmgr_path);
+                        self.boot_path = Some(boot_path);
+                    } else {
+                        error!("Could not find a directory with sufficient space to store the migrate kernel, initramfs and dtb file. Required space is {}",
+                               format_size_with_unit(boot_req_space));
+                        return Ok(false);
+                    }
+                } else {
+                    error!("Could not find a directory with sufficient space to store the migrate kernel, initramfs and dtb file. Required space is {}",
+                           format_size_with_unit(boot_req_space));
+                    return Ok(false);
+                }
+            }
+        } else {
+            self.bootmgr_path = Some(bootmgr_path);
+        }
 
         Ok(true)
     }
@@ -298,7 +323,13 @@ impl<'a> BootManager for UBootManager {
     ) -> Result<(), MigError> {
         // **********************************************************************
         // ** read drive number & partition number from boot device
-        let boot_path = self.boot_path.as_ref().unwrap();
+        let bootmgr_path = self.bootmgr_path.as_ref().unwrap();
+        let boot_path = if let Some(ref boot_path) = self.boot_path {
+            // TODO: save to s2_cfg - only really needed if we want to delete it
+            boot_path
+        } else {
+            bootmgr_path
+        };
 
         let drive_num = {
             let dev_name = &boot_path.device;
@@ -382,7 +413,7 @@ impl<'a> BootManager for UBootManager {
             ));
         };
 
-        let uenv_path = path_append(&boot_path.path, UENV_FILE_NAME);
+        let uenv_path = path_append(&bootmgr_path.path, UENV_FILE_NAME);
 
         if file_exists(&uenv_path) {
             // **********************************************************************
@@ -424,7 +455,7 @@ impl<'a> BootManager for UBootManager {
         uenv_text = uenv_text.replace("__DTB_PATH__", &dtb_path.to_string_lossy());
         uenv_text = uenv_text.replace("__DRIVE__", &drive_num.0);
         uenv_text = uenv_text.replace("__PARTITION__", &drive_num.1);
-        uenv_text = uenv_text.replace("__ROOT_DEV__", &boot_path.get_kernel_cmd());
+        uenv_text = uenv_text.replace("__ROOT_DEV__", &bootmgr_path.get_kernel_cmd());
 
         debug!("writing uEnv.txt as:\n {}", uenv_text);
 
