@@ -8,6 +8,7 @@ use std::io::{Read, Write};
 use std::path::Path;
 use std::process::{Command, Stdio};
 use std::time::{Duration, Instant};
+use mod_logger::{Logger};
 
 use crate::{
     common::{format_size_with_unit, stage2_config::Stage2Config},
@@ -55,6 +56,8 @@ fn flash_gzip_internal(
 
     let mut dd_child = match Command::new(dd_cmd)
         .args(&[
+            "conv=fsync",
+            "oflag=direct",
             &format!("of={}", &target_path.to_string_lossy()),
             &format!("bs={}", DD_BLOCK_SIZE),
         ])
@@ -67,6 +70,8 @@ fn flash_gzip_internal(
             return FlashResult::FailRecoverable;
         }
     };
+
+    Logger::flush();
 
     let start_time = Instant::now();
     let mut last_elapsed = Duration::new(0, 0);
@@ -106,6 +111,7 @@ fn flash_gzip_internal(
                         "Read/write count mismatch, read {}, wrote {}",
                         bytes_read, bytes_written
                     );
+                    Logger::flush();
                 }
 
                 let curr_elapsed = start_time.elapsed();
@@ -119,6 +125,7 @@ fn flash_gzip_internal(
                         format_size_with_unit(write_count as u64 / secs_elapsed),
                         secs_elapsed
                     );
+                    Logger::flush();
                 }
             } else {
                 break;
@@ -129,6 +136,7 @@ fn flash_gzip_internal(
             Ok(_) => (),
             Err(why) => {
                 error!("Error while waiting for dd to terminate:{:?}", why);
+                Logger::flush();
                 return fail_res;
             }
         }
@@ -140,10 +148,12 @@ fn flash_gzip_internal(
             format_size_with_unit(write_count as u64 / secs_elapsed),
             secs_elapsed
         );
+        Logger::flush();
 
         FlashResult::Ok
     } else {
         error!("Failed to get a stdin for dd");
+        Logger::flush();
         FlashResult::FailRecoverable
     }
 }
