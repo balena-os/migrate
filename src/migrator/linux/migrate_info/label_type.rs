@@ -4,7 +4,7 @@ use std::path::Path;
 
 use crate::{
     common::{MigError, MigErrorKind},
-    linux::{EnsuredCmds, FDISK_CMD, PARTED_CMD},
+    linux::ensured_cmds::{EnsuredCmds, FDISK_CMD, PARTED_CMD},
 };
 
 const DISK_LABEL_REGEX: &str = r#"^Disklabel type:\s*(\S+)$"#;

@@ -15,21 +15,20 @@ use std::io::Write;
 pub(crate) fn partition(device: &Path, cmds: &EnsuredCmds, config: &Stage2Config, partitions: &Vec<Partition>) -> Result<(), MigError> {
     let sfdisk_path = cmds.get(SFDISK_CMD)?;
 
-    let sfdisk_cmd = Command::new(sfdisk_path)
-        .args(&[&device.to_string_lossy()])
+    let mut sfdisk_cmd = Command::new(sfdisk_path)
+        .args(&[&*device.to_string_lossy()])
         .stderr(Stdio::piped())
         .stdin(Stdio::piped())
         .spawn()
         .context(MigErrCtx::from_remark(MigErrorKind::Upstream, &format!("Failed to start command : '{}'", sfdisk_path)))?;
 
     {
-        let stdin = sfdisk_cmd.stdin;
-        if let Some(ref mut stdin) = stdin {
+        if let Some(ref mut stdin) = sfdisk_cmd.stdin {
             let _res = stdin.write("label: dos".as_bytes())
                 .context(MigErrCtx::from_remark(MigErrorKind::Upstream, "Failed to write to sfdisk stdin"))?;
 
             let mut part_idx = 0;
-            for curr_part in &partitions {
+            for curr_part in partitions {
 
                 if part_idx == 3 {
                     let _res = stdin.write("type=5".as_bytes())
@@ -48,8 +47,8 @@ pub(crate) fn partition(device: &Path, cmds: &EnsuredCmds, config: &Stage2Config
                     &format!("start={},size={},bootable={},type={:x}",
                              curr_part.start_lba,
                              curr_part.num_sectors,
-                    ,
-                    curr_part.ptype
+                             bootable,
+                             curr_part.ptype
                 ).as_bytes())
                 .context(MigErrCtx::from_remark(MigErrorKind::Upstream, "Failed to write to sfdisk stdin"))?;
 
