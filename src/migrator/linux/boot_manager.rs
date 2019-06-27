@@ -44,6 +44,7 @@ pub(crate) trait BootManager {
 
     fn restore(&self, mounts: &Mounts, config: &Stage2Config) -> Result<(), MigError>;
     // TODO: make return reference
+    fn get_bootmgr_path(&self) -> PathInfo;
     fn get_boot_path(&self) -> PathInfo;
 }
 
@@ -60,6 +61,9 @@ impl EfiBootManager {
 impl BootManager for EfiBootManager {
     fn get_boot_type(&self) -> BootType {
         BootType::Efi
+    }
+    fn get_bootmgr_path(&self) -> PathInfo {
+        unimplemented!()
     }
     fn get_boot_path(&self) -> PathInfo {
         unimplemented!()

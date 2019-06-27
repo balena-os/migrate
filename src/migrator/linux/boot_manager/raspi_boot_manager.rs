@@ -29,12 +29,12 @@ const RPI_CONFIG_TXT: &str = "config.txt";
 const RPI_CMDLINE_TXT: &str = "cmdline.txt";
 
 pub(crate) struct RaspiBootManager {
-    boot_path: Option<PathInfo>,
+    bootmgr_path: Option<PathInfo>,
 }
 
 impl RaspiBootManager {
     pub fn new() -> RaspiBootManager {
-        RaspiBootManager { boot_path: None }
+        RaspiBootManager { bootmgr_path: None }
     }
 }
 
@@ -43,9 +43,15 @@ impl BootManager for RaspiBootManager {
         BootType::Raspi
     }
 
-    fn get_boot_path(&self) -> PathInfo {
-        self.boot_path.as_ref().unwrap().clone()
+    fn get_bootmgr_path(&self) -> PathInfo {
+        self.bootmgr_path.as_ref().unwrap().clone()
     }
+
+    // TODO: do we need to distiguish like in u-boot ?
+    fn get_boot_path(&self) -> PathInfo {
+        self.bootmgr_path.as_ref().unwrap().clone()
+    }
+
 
     fn can_migrate(
         &mut self,
@@ -61,7 +67,7 @@ impl BootManager for RaspiBootManager {
             return Ok(false);
         }
 
-        self.boot_path = Some(PathInfo::new(cmds, BOOT_PATH, &mig_info.lsblk_info)?.unwrap());
+        self.bootmgr_path = Some(PathInfo::new(cmds, BOOT_PATH, &mig_info.lsblk_info)?.unwrap());
 
         Ok(true)
     }
@@ -111,7 +117,7 @@ impl BootManager for RaspiBootManager {
             RPI_MIG_INITRD_PATH
         );
 
-        let boot_path = self.boot_path.as_ref().unwrap();
+        let boot_path = self.bootmgr_path.as_ref().unwrap();
         let config_path = path_append(&boot_path.path, RPI_CONFIG_TXT);
 
         if !file_exists(&config_path) {

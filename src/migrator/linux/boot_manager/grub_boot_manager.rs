@@ -48,12 +48,12 @@ menuentry "balena-migrate" {
 
 pub(crate) struct GrubBootManager {
     // valid is just used to enforce the use of new
-    boot_path: Option<PathInfo>,
+    bootmgr_path: Option<PathInfo>,
 }
 
 impl<'a> GrubBootManager {
     pub fn new() -> GrubBootManager {
-        GrubBootManager { boot_path: None }
+        GrubBootManager { bootmgr_path: None }
     }
 
     /******************************************************************
@@ -111,8 +111,12 @@ impl<'a> BootManager for GrubBootManager {
         BootType::Grub
     }
 
+    fn get_bootmgr_path(&self) -> PathInfo {
+        self.bootmgr_path.as_ref().unwrap().clone()
+    }
+    // TODO: do we need to distiguish like in u-boot ?
     fn get_boot_path(&self) -> PathInfo {
-        self.boot_path.as_ref().unwrap().clone()
+        self.bootmgr_path.as_ref().unwrap().clone()
     }
 
     fn can_migrate(
@@ -174,7 +178,7 @@ impl<'a> BootManager for GrubBootManager {
             return Ok(false);
         }
 
-        self.boot_path = Some(boot_path);
+        self.bootmgr_path = Some(boot_path);
 
         Ok(true)
     }
@@ -193,7 +197,7 @@ impl<'a> BootManager for GrubBootManager {
         // c) call grub-reboot to enable boot once to migrate env
 
         // let install_drive = mig_info.get_installPath().drive;
-        let boot_path = self.boot_path.as_ref().unwrap();
+        let boot_path = self.bootmgr_path.as_ref().unwrap();
 
         // path to kernel & initramfs at boot time depends on how /boot is mounted
         // either / (for a /boot mount or /boot for a directory of /root file system)

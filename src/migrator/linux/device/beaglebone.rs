@@ -153,7 +153,7 @@ impl Device for BeagleboneGreen {
     }
 
     fn get_boot_device(&self) -> PathInfo {
-        self.boot_manager.get_boot_path()
+        self.boot_manager.get_bootmgr_path()
     }
 }
 
@@ -232,7 +232,7 @@ impl Device for BeagleboneBlack {
     }
 
     fn get_boot_device(&self) -> PathInfo {
-        self.boot_manager.get_boot_path()
+        self.boot_manager.get_bootmgr_path()
     }
 }
 
@@ -312,6 +312,6 @@ impl<'a> Device for BeagleboardXM {
     }
 
     fn get_boot_device(&self) -> PathInfo {
-        self.boot_manager.get_boot_path()
+        self.boot_manager.get_bootmgr_path()
     }
 }

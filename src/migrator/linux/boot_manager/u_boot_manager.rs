@@ -244,8 +244,16 @@ impl<'a> BootManager for UBootManager {
         BootType::UBoot
     }
 
+    fn get_bootmgr_path(&self) -> PathInfo {
+        self.bootmgr_path.as_ref().unwrap().clone()
+    }
+
     fn get_boot_path(&self) -> PathInfo {
-        self.boot_path.as_ref().unwrap().clone()
+        if let Some(ref boot_path) = self.boot_path {
+            boot_path.clone()
+        } else {
+            self.bootmgr_path.as_ref().unwrap().clone()
+        }
     }
 
     fn can_migrate(
