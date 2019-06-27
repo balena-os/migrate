@@ -28,7 +28,7 @@ use crate::{
 };
 
 // TODO: this might be  a bit tight
-const UBOOT_DRIVE_REGEX: &str = r#"^/dev/mmcblk(\d+)$"#; //p(\d+)$"#;
+const UBOOT_DRIVE_REGEX: &str = r#"^/dev/mmcblk\d+$"#; //p(\d+)$"#;
 
 const UENV_TXT: &str = r###"
 loadaddr=0x82000000
@@ -86,9 +86,9 @@ impl UBootManager {
         cmds: &EnsuredCmds,
         mig_info: &MigrateInfo,
     ) -> Result<PathInfo, MigError> {
-        lazy_static! {
-            static ref BOOT_DRIVE_RE: Regex = Regex::new(UBOOT_DRIVE_REGEX).unwrap();
-        }
+        //lazy_static! {
+        //    static ref BOOT_DRIVE_RE: Regex = Regex::new(UBOOT_DRIVE_REGEX).unwrap();
+        // }
 
         // try our luck with /root, /boot
 
@@ -107,10 +107,11 @@ impl UBootManager {
         let mut tmp_mountpoint: Option<PathBuf> = None;
 
         for blk_device in mig_info.lsblk_info.get_blk_devices() {
-            if !BOOT_DRIVE_RE.is_match(&*blk_device.name) {
+            /*if !BOOT_DRIVE_RE.is_match(&*blk_device.name) {
                 debug!("Ignoring: '{}'", blk_device.get_path().display());
                 continue;
-            }
+            }*/
+
             debug!("Looking at: '{}'", blk_device.get_path().display());
 
             if let Some(ref partitions) = blk_device.children {
