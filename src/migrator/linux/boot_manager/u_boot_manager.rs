@@ -27,7 +27,8 @@ use crate::{
     },
 };
 
-const UBOOT_DRIVE_REGEX: &str = r#"^/dev/mmcblk(\d+)p(\d+)$"#;
+// TODO: this might be  a bit tight
+const UBOOT_DRIVE_REGEX: &str = r#"^/dev/mmcblk(\d+)$"#; //p(\d+)$"#;
 
 const UENV_TXT: &str = r###"
 loadaddr=0x82000000
@@ -86,7 +87,7 @@ impl UBootManager {
         mig_info: &MigrateInfo,
     ) -> Result<PathInfo, MigError> {
         lazy_static! {
-            static ref BOOT_DRIVE_RE: Regex = Regex::new(r#"^mmcblk\d+p\d+$"#).unwrap();
+            static ref BOOT_DRIVE_RE: Regex = Regex::new(UBOOT_DRIVE_REGEX).unwrap();
         }
 
         // try our luck with /root, /boot
