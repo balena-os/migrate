@@ -117,6 +117,7 @@ impl UBootManager {
             if let Some(ref partitions) = blk_device.children {
                 for partition in partitions {
                     // establish mountpoint / temporarilly mount
+                    debug!("looking at '{}' mounted on {:?}", partition.get_path().display(), partition.mountpoint);
                     let (mountpoint, mounted) = match partition.mountpoint {
                         Some(ref mountpoint) => (mountpoint, false),
                         None => {
@@ -148,7 +149,8 @@ impl UBootManager {
                             }
 
                             let mountpoint = tmp_mountpoint.as_ref().unwrap();
-                            debug!("get_uboot_mgr_path: mountpoint '{}'", mountpoint.display());
+
+                            debug!(" mounting on '{}'", mountpoint.display());
 
                             let fs_type = if let Some(ref fs_type) = partition.fstype {
                                 if fs_type == "vfat" || fs_type.starts_with("ext") {
@@ -160,6 +162,8 @@ impl UBootManager {
                             } else {
                                 NIX_NONE
                             };
+
+                            debug!("temporarilly mounting '{}' on '{}'", partition.get_path().display(), mountpoint.display());
 
                             mount(
                                 Some(&partition.get_path()),
@@ -180,6 +184,8 @@ impl UBootManager {
                             (mountpoint, true)
                         }
                     };
+
+                    debug!("checking '{}', mounted on {}", partition.get_path().display(), mountpoint.display());
 
                     if file_exists(path_append(mountpoint, MLO_FILE_NAME))
                         || file_exists(path_append(mountpoint, UBOOT_FILE_NAME))
