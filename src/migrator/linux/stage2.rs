@@ -436,6 +436,8 @@ impl<'a> Stage2 {
                 }
             }
 
+            sync();
+
             info!(
                 "The Balena OS image has been written to the device '{}'",
                 target_path.display()
