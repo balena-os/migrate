@@ -307,6 +307,7 @@ impl<'a> BootManager for UBootManager {
                         format_size_with_unit(boot_path.fs_free)
                     );
 
+                    self.bootmgr_path = Some(bootmgr_path);
                     self.boot_path = Some(boot_path);
                 }
             } else {
@@ -320,6 +321,7 @@ impl<'a> BootManager for UBootManager {
                             format_size_with_unit(boot_path.fs_free)
                         );
 
+                        self.bootmgr_path = Some(bootmgr_path);
                         self.boot_path = Some(boot_path);
                     } else {
                         error!("Could not find a directory with sufficient space to store the migrate kernel, initramfs and dtb file. Required space is {}",
