@@ -17,6 +17,27 @@ pub struct Host {
 */
 
 #[derive(Debug, Deserialize)]
+pub(crate) struct PartDump {
+    pub blocks: u64,
+    pub archive: PathBuf,
+}
+
+#[derive(Debug, Deserialize)]
+pub(crate) struct FSDump {
+    pub boot: PartDump,
+    pub root_a: PartDump,
+    pub root_b: PartDump,
+    pub state: PartDump,
+    pub data: PartDump,
+}
+
+#[derive(Debug, Deserialize)]
+pub(crate) enum ImageType {
+    Flasher(PathBuf),
+    FileSystems(FSDump)
+}
+
+#[derive(Debug, Deserialize)]
 pub struct ApiInfo {
     host: Option<String>,
     port: Option<u16>,
@@ -26,7 +47,7 @@ pub struct ApiInfo {
 
 #[derive(Debug, Deserialize)]
 pub struct BalenaConfig {
-    image: Option<PathBuf>,
+    image: Option<ImageType>,
     config: Option<PathBuf>,
     app_name: Option<String>,
     api: Option<ApiInfo>,
@@ -138,12 +159,12 @@ impl<'a> BalenaConfig {
     }
 
     pub fn set_image_path(&mut self, image_path: &str) {
-        self.image = Some(PathBuf::from(image_path));
+        self.image = Some(ImageType::Flasher(PathBuf::from(image_path)));
     }
 
     // The following functions can only be safely called after check has succeeded
 
-    pub fn get_image_path(&'a self) -> &'a Path {
+    pub fn get_image_path(&'a self) -> &'a ImageType {
         if let Some(ref path) = self.image {
             path
         } else {

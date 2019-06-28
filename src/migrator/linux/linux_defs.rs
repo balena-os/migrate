@@ -31,6 +31,7 @@ pub const BALENA_DATA_FSTYPE: &str = "ext4";
 
 pub const STAGE2_MEM_THRESHOLD: u64 = 32 * 1024 * 1024; // 64 MiB
 
+// TODO: EFI support in Linux
 /*pub const BALENA_EFI_DIR: &str = r#"/EFI/balena-migrate"#;
 pub const EFI_DEFAULT_BOOTMGR32: &str = r#"/EFI/Boot/bootx32.efi"#;
 pub const EFI_DEFAULT_BOOTMGR64: &str = r#"/EFI/Boot/bootx64.efi"#;

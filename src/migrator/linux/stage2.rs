@@ -426,15 +426,19 @@ impl<'a> Stage2 {
                 FlashResult::Ok => {}
                 FlashResult::FailRecoverable => {
                     error!("Failed to flash balena OS image");
+                    Logger::flush();
                     self.recoverable_state = true;
                     return Err(MigError::displayed());
                 }
                 FlashResult::FailNonRecoverable => {
                     error!("Failed to flash balena OS image");
+                    Logger::flush();
                     self.recoverable_state = false;
                     return Err(MigError::displayed());
                 }
             }
+
+            Logger::flush();
 
             sync();
 

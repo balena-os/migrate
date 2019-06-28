@@ -1,8 +1,9 @@
 use log::{debug, error, info, trace, warn};
-use std::path::PathBuf;
+use std::path::{PathBuf. Path};
 
 use crate::{
     common::{
+        config::balena_config::{ImageType, FSDump},
         balena_cfg_json::BalenaCfgJson, wifi_config::WifiConfig, Config, FileInfo, FileType,
         MigError, MigErrorKind, MigrateWifis,
     },
@@ -28,6 +29,20 @@ use crate::linux::linux_common::to_std_device_path;
 use crate::linux::migrate_info::lsblk_info::{LsblkDevice, LsblkPartition};
 pub(crate) use path_info::PathInfo;
 
+
+#[derive(Debug)]
+pub(crate) enum CheckedImageType {
+    Flasher(PathBuf),
+    FileSystems(FSDump)
+}
+
+#[derive(Debug)]
+pub(crate) struct ImageInfo {
+    req_space: u64,
+    image: CheckedImageType,
+}
+
+
 #[derive(Debug)]
 pub(crate) struct MigrateInfo {
     pub os_name: String,
@@ -42,7 +57,7 @@ pub(crate) struct MigrateInfo {
     pub nwmgr_files: Vec<FileInfo>,
     pub wifis: Vec<WifiConfig>,
 
-    pub image_file: FileInfo,
+    pub image_file: ImageInfo,
     pub config_file: BalenaCfgJson,
     pub kernel_file: FileInfo,
     pub initrd_file: FileInfo,
@@ -107,51 +122,65 @@ impl MigrateInfo {
         let work_dir = &work_path.path;
         info!("Working directory is '{}'", work_dir.display());
 
-        let image_file = if let Some(file_info) =
-            FileInfo::new(&config.balena.get_image_path(), &work_dir)?
-        {
-            // Make sure balena image is in workdir and on its mount
 
-            if let None = file_info.rel_path {
-                error!("The balena OS image was found outside of the working directory. This setup is not supported");
-                return Err(MigError::displayed());
-            }
+        let os_image = match config.balena.get_image_path() {
+            ImageType::Flasher(ref flasher_img) => {
+                if let Some(file_info) = FileInfo::new(flasher_img, &work_dir)? {
+                    // make sure files are present and in /workdir, generate total size and partitioning config in miginfo
+                    if let None = file_info.rel_path {
+                        error!("The balena OS image was found outside of the working directory. This setup is not supported");
+                        return Err(MigError::displayed());
+                    }
 
-            let (_img_drive, img_part) = lsblk_info.get_path_info(&file_info.path)?;
-            if img_part.get_path() != work_path.device {
-                error!("The balena OS image appears to reside on a different partition from the working directory. This setup is not supported");
-                return Err(MigError::displayed());
-            }
+                    let (_img_drive, img_part) = lsblk_info.get_path_info(&file_info.path)?;
+                    if img_part.get_path() != work_path.device {
+                        error!("The balena OS image appears to reside on a different partition from the working directory. This setup is not supported");
+                        return Err(MigError::displayed());
+                    }
 
-            // ensure expected type
-            match file_info.expect_type(&cmds, &FileType::GZipOSImage) {
-                Ok(_) => {
-                    info!(
-                        "The balena OS image looks ok: '{}'",
-                        file_info.path.display()
-                    );
-                }
-                Err(_why) => {
-                    // TODO: try gzip non compressed OS image
-                    error!(
-                        "The balena OS image does not match the expected type: '{:?}'",
-                        FileType::GZipOSImage
-                    );
+                    // ensure expected type
+                    match file_info.expect_type(&cmds, &FileType::GZipOSImage) {
+                        Ok(_) => {
+                            info!(
+                                "The balena OS image looks ok: '{}'",
+                                file_info.path.display()
+                            );
+                        }
+                        Err(_why) => {
+                            // TODO: try gzip non compressed OS image
+                            error!(
+                                "The balena OS image does not match the expected type: '{:?}'",
+                                FileType::GZipOSImage
+                            );
+                            return Err(MigError::displayed());
+                        }
+                    }
+
+                    /*            // TODO: do this later, flash device will be determined by device / bootmanager
+                                let required_mem = file_info.size + APPROX_MEM_THRESHOLD;
+                                if get_mem_info()?.0 < required_mem {
+                                    error!("We have not found sufficient memory to store the balena OS image in ram. at least {} of memory is required.", format_size_with_unit(required_mem));
+                                    return Err(MigError::from(MigErrorKind::Displayed));
+                                }
+                    */
+
+                    ImageInfo{
+                        image: CheckedImageType::Flasher(file_info.path),
+                        req_space: file_info.size,
+                    }
+                } else {
+                    error!("The balena image has not been specified or cannot be accessed. Automatic download is not yet implemented, so you need to specify and supply all required files");
                     return Err(MigError::displayed());
                 }
-            }
+            },
+            ImageType::FileSystems(ref fs_dump) => {
+                // make sure all files are present and in /workdir, generate total size and partitioning config in miginfo
+                if let Some(file_info) = FileInfo::new(&fs_dump.boot.archive, &work_dir)? {
 
-            /*            // TODO: do this later, flash device will be determined by device / bootmanager
-                        let required_mem = file_info.size + APPROX_MEM_THRESHOLD;
-                        if get_mem_info()?.0 < required_mem {
-                            error!("We have not found sufficient memory to store the balena OS image in ram. at least {} of memory is required.", format_size_with_unit(required_mem));
-                            return Err(MigError::from(MigErrorKind::Displayed));
-                        }
-            */
-            file_info
-        } else {
-            error!("The balena image has not been specified or cannot be accessed. Automatic download is not yet implemented, so you need to specify and supply all required files");
-            return Err(MigError::displayed());
+                }
+
+                unimplemented!()
+            }
         };
 
         let config_file = if let Some(file_info) =
@@ -319,5 +348,45 @@ impl MigrateInfo {
         debug!("Diskinfo: {:?}", result);
 
         Ok(result)
+    }
+
+    fn check_file(path: &PathBuf, , work_dir: &Path, cmds: &EnsuredCmds, expected_type: &FileType) -> Result<(PathBuf, u64), MigError> {
+        if let Some(file_info) = FileInfo::new(path, work_dir)? {
+            // make sure files are present and in /workdir, generate total size and partitioning config in miginfo
+            if let None = file_info.rel_path {
+                error!("The file '{}' was found outside of the working directory. This setup is not supported", path.display());
+                return Err(MigError::displayed());
+            }
+
+            let (_img_drive, img_part) = lsblk_info.get_path_info(&file_info.path)?;
+            if img_part.get_path() != work_path.device {
+                error!("The file '{}' appears to reside on a different partition from the working directory. This setup is not supported", path.display());
+                return Err(MigError::displayed());
+            }
+
+            // ensure expected type
+            match file_info.expect_type(&cmds, expected_type) {
+                Ok(_) => {
+                    info!(
+                        "The balena OS image looks ok: '{}'",
+                        file_info.path.display()
+                    );
+                }
+                Err(_why) => {
+                    // TODO: try gzip non compressed OS image
+                    error!(
+                        "The file '{}' does not match the expected type: '{:?}'",
+                        path.display(),
+                        expected_type
+                    );
+                    return Err(MigError::displayed());
+                }
+            }
+
+            OK((file_info.path, file_info.size))
+        } else {
+            error!("The balena image has not been specified or cannot be accessed. Automatic download is not yet implemented, so you need to specify and supply all required files");
+            return Err(MigError::displayed());
+        }
     }
 }

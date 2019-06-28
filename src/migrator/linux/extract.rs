@@ -44,7 +44,7 @@ const PART_NAME: &[&str] = &[
     "resin-state",
     "resin-data",
 ];
-const PART_FSTYPE: &[&str] = &["vfat", "ext4", "ext4", "ext4", "ext4"];
+const PART_FSTYPE: &[&str] = &["vfat", "ext2", "ext3", "ext4"];
 
 #[repr(C, packed)]
 struct PartEntry {
