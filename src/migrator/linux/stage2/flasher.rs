@@ -9,11 +9,13 @@ use std::io::{Read, Write};
 use std::path::Path;
 use std::process::{Command, Stdio};
 use std::time::{Duration, Instant};
+use std::str;
 
 use crate::{
     common::{format_size_with_unit, stage2_config::Stage2Config},
     linux::ensured_cmds::{EnsuredCmds, DD_CMD, GZIP_CMD},
 };
+use nix::errno::errno;
 
 const DD_BLOCK_SIZE: usize = 4194304;
 
@@ -111,11 +113,15 @@ fn flash_gzip_internal(
                         "Read/write count mismatch, read {}, wrote {}",
                         bytes_read, bytes_written
                     );
-                    Logger::flush();
+                    return fail_res;
                 }
 
                 let curr_elapsed = start_time.elapsed();
-                let since_last = curr_elapsed.checked_sub(last_elapsed).unwrap();
+                let since_last = match curr_elapsed.checked_sub(last_elapsed) {
+                    Some(dur) => dur,
+                    None => Duration::from_secs(0),
+                };
+
                 if since_last.as_secs() >= 10 {
                     last_elapsed = curr_elapsed;
                     let secs_elapsed = curr_elapsed.as_secs();
@@ -133,7 +139,17 @@ fn flash_gzip_internal(
         }
 
         match dd_child.wait_with_output() {
-            Ok(_) => (),
+            Ok(cmd_res) => {
+                if !cmd_res.status.success() {
+                    let stderr =  match str::from_utf8(&cmd_res.stderr) {
+                        Ok(stderr) => stderr,
+                        Err(_) => "",
+                    };
+                    error!("dd reported an error: code: {:?}, stderr: {}", cmd_res.status.code(), stderr);
+                    // might pay to still try and finish as all input was written
+
+                }
+            },
             Err(why) => {
                 error!("Error while waiting for dd to terminate:{:?}", why);
                 Logger::flush();
@@ -148,12 +164,10 @@ fn flash_gzip_internal(
             format_size_with_unit(write_count as u64 / secs_elapsed),
             secs_elapsed
         );
-        Logger::flush();
 
         FlashResult::Ok
     } else {
         error!("Failed to get a stdin for dd");
-        Logger::flush();
         FlashResult::FailRecoverable
     }
 }
