@@ -25,6 +25,8 @@ const KERNEL_I386_FTYPE_REGEX: &str = r#"^Linux kernel i386 boot executable bzIm
 const TEXT_FTYPE_REGEX: &str = r#"^ASCII text.*$"#;
 const DTB_FTYPE_REGEX: &str = r#"^(Device Tree Blob|data).*$"#;
 
+const GZIP_TAR_FTYPE_REGEX: &str = r#"^(POSIX tar archive \(GNU\)).*\(gzip compressed data.*\)$"#;
+
 use crate::common::{file_exists, MigErrCtx, MigError, MigErrorKind};
 #[cfg(target_os = "linux")]
 use crate::linux::{EnsuredCmds, FILE_CMD};
@@ -40,6 +42,7 @@ pub(crate) enum FileType {
     Json,
     Text,
     DTB,
+    GZipTar,
 }
 
 impl FileType {
@@ -54,6 +57,7 @@ impl FileType {
             FileType::DTB => "Device Tree Blob",
             FileType::Json => "balena config.json file",
             FileType::Text => "Text file",
+            FileType::GZipTar => "Gzipped Tar file",
         }
     }
 }
@@ -158,6 +162,7 @@ impl FileInfo {
             static ref KERNEL_ARMHF_FTYPE_RE: Regex = Regex::new(KERNEL_ARMHF_FTYPE_REGEX).unwrap();
             static ref KERNEL_I386_FTYPE_RE: Regex = Regex::new(KERNEL_I386_FTYPE_REGEX).unwrap();
             static ref DTB_FTYPE_RE: Regex = Regex::new(DTB_FTYPE_REGEX).unwrap();
+            static ref GZIP_TAR_FTYPE_RE: Regex = Regex::new(GZIP_TAR_FTYPE_REGEX).unwrap();
         }
 
         debug!(
@@ -175,6 +180,7 @@ impl FileInfo {
             FileType::Json => Ok(OS_CFG_FTYPE_RE.is_match(&cmd_res.stdout)),
             FileType::Text => Ok(TEXT_FTYPE_RE.is_match(&cmd_res.stdout)),
             FileType::DTB => Ok(DTB_FTYPE_RE.is_match(&cmd_res.stdout)),
+            FileType::GZipTar => Ok(GZIP_TAR_FTYPE_RE.is_match(&cmd_res.stdout)),
         }
     }
 

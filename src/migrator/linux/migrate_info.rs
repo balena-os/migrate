@@ -1,5 +1,5 @@
 use log::{debug, error, info, trace, warn};
-use std::path::{PathBuf. Path};
+use std::path::{PathBuf};
 
 use crate::{
     common::{
@@ -28,6 +28,8 @@ pub(crate) mod path_info;
 use crate::linux::linux_common::to_std_device_path;
 use crate::linux::migrate_info::lsblk_info::{LsblkDevice, LsblkPartition};
 pub(crate) use path_info::PathInfo;
+use crate::linux::migrate_info::CheckedImageType::FileSystems;
+use crate::common::config::balena_config::PartDump;
 
 
 #[derive(Debug)]
@@ -125,61 +127,80 @@ impl MigrateInfo {
 
         let os_image = match config.balena.get_image_path() {
             ImageType::Flasher(ref flasher_img) => {
-                if let Some(file_info) = FileInfo::new(flasher_img, &work_dir)? {
-                    // make sure files are present and in /workdir, generate total size and partitioning config in miginfo
-                    if let None = file_info.rel_path {
-                        error!("The balena OS image was found outside of the working directory. This setup is not supported");
-                        return Err(MigError::displayed());
-                    }
-
-                    let (_img_drive, img_part) = lsblk_info.get_path_info(&file_info.path)?;
-                    if img_part.get_path() != work_path.device {
-                        error!("The balena OS image appears to reside on a different partition from the working directory. This setup is not supported");
-                        return Err(MigError::displayed());
-                    }
-
-                    // ensure expected type
-                    match file_info.expect_type(&cmds, &FileType::GZipOSImage) {
-                        Ok(_) => {
-                            info!(
-                                "The balena OS image looks ok: '{}'",
-                                file_info.path.display()
-                            );
-                        }
-                        Err(_why) => {
-                            // TODO: try gzip non compressed OS image
-                            error!(
-                                "The balena OS image does not match the expected type: '{:?}'",
-                                FileType::GZipOSImage
-                            );
-                            return Err(MigError::displayed());
-                        }
-                    }
-
-                    /*            // TODO: do this later, flash device will be determined by device / bootmanager
-                                let required_mem = file_info.size + APPROX_MEM_THRESHOLD;
-                                if get_mem_info()?.0 < required_mem {
-                                    error!("We have not found sufficient memory to store the balena OS image in ram. at least {} of memory is required.", format_size_with_unit(required_mem));
-                                    return Err(MigError::from(MigErrorKind::Displayed));
-                                }
-                    */
-
-                    ImageInfo{
-                        image: CheckedImageType::Flasher(file_info.path),
-                        req_space: file_info.size,
-                    }
-                } else {
-                    error!("The balena image has not been specified or cannot be accessed. Automatic download is not yet implemented, so you need to specify and supply all required files");
-                    return Err(MigError::displayed());
+                let (checked_path, req_space) = MigrateInfo::check_file(&flasher_img, &FileType::GZipOSImage, &work_path, cmds, &lsblk_info )?;
+                ImageInfo{
+                    image: CheckedImageType::Flasher(checked_path),
+                    req_space,
                 }
             },
             ImageType::FileSystems(ref fs_dump) => {
                 // make sure all files are present and in /workdir, generate total size and partitioning config in miginfo
-                if let Some(file_info) = FileInfo::new(&fs_dump.boot.archive, &work_dir)? {
+                let req_space: u64  = 0;
 
+                let boot_path = if let Some((archive,size)) = MigrateInfo::check_dump(&fs_dump.boot, &work_path, cmds, &lsblk_info)? {
+                    req_space += size;
+                    Some(archive)
+                } else {
+                    error!("The balena boot archive has not been specified. Automatic download is not yet implemented, so you need to specify and supply all required files");
+                    return Err(MigError::displayed());
+                };
+
+                let root_a_path = if let Some((archive,size)) = MigrateInfo::check_dump(&fs_dump.root_a, &work_path, cmds, &lsblk_info)? {
+                    req_space += size;
+                    Some(archive)
+                } else {
+                    error!("The balena root_a archive has not been specified. Automatic download is not yet implemented, so you need to specify and supply all required files");
+                    return Err(MigError::displayed());
+                };
+
+                let root_b_path = if let Some((archive,size)) = MigrateInfo::check_dump(&fs_dump.root_b, &work_path, cmds, &lsblk_info)? {
+                    req_space += size;
+                    Some(archive)
+                } else {
+                    None
+                };
+
+                let state_path = if let Some((archive,size)) = MigrateInfo::check_dump(&fs_dump.state, &work_path, cmds, &lsblk_info)? {
+                    req_space += size;
+                    Some(archive)
+                } else {
+                    None
+                };
+
+                let data_path = if let Some((archive,size)) = MigrateInfo::check_dump(&fs_dump.data, &work_path, cmds, &lsblk_info)? {
+                    req_space += size;
+                    Some(archive)
+                } else {
+                    error!("The balena data archive has not been specified. Automatic download is not yet implemented, so you need to specify and supply all required files");
+                    return Err(MigError::displayed());
+                };
+
+
+                ImageInfo {
+                    image: FileSystems(FSDump{
+                        boot: PartDump{
+                            archive: boot_path,
+                            blocks: fs_dump.boot.blocks
+                        },
+                        root_a: PartDump{
+                            archive: root_a_path,
+                            blocks: fs_dump.root_b.blocks
+                        },
+                        root_b: PartDump{
+                            archive: root_b_path,
+                            blocks: fs_dump.root_b.blocks
+                        },
+                        state: PartDump{
+                            archive: state_path,
+                            blocks: fs_dump.state.blocks
+                        },
+                        data: PartDump{
+                            archive: data_path,
+                            blocks: fs_dump.data.blocks
+                        },
+                    }),
+                    req_space,
                 }
-
-                unimplemented!()
             }
         };
 
@@ -336,7 +357,7 @@ impl MigrateInfo {
             lsblk_info,
             work_path,
             log_path,
-            image_file,
+            image_file: os_image,
             kernel_file,
             initrd_file,
             dtb_file,
@@ -350,8 +371,18 @@ impl MigrateInfo {
         Ok(result)
     }
 
-    fn check_file(path: &PathBuf, , work_dir: &Path, cmds: &EnsuredCmds, expected_type: &FileType) -> Result<(PathBuf, u64), MigError> {
-        if let Some(file_info) = FileInfo::new(path, work_dir)? {
+
+    fn check_dump(dump: &PartDump, work_path: &PathInfo, cmds: &EnsuredCmds, lsblk_info: &LsblkInfo) -> Result<Option<(PathBuf, u64)>, MigError> {
+        if let Some(ref archive) = dump.archive {
+            Ok(Some(MigrateInfo::check_file(archive, &FileType::GZipTar, work_path, cmds, lsblk_info)?))
+        } else {
+            Ok(None)
+        }
+    }
+
+
+    fn check_file(path: &PathBuf, expected_type: &FileType, work_path: &PathInfo, cmds: &EnsuredCmds, lsblk_info: &LsblkInfo) -> Result<(PathBuf, u64), MigError> {
+        if let Some(file_info) = FileInfo::new(path, work_path)? {
             // make sure files are present and in /workdir, generate total size and partitioning config in miginfo
             if let None = file_info.rel_path {
                 error!("The file '{}' was found outside of the working directory. This setup is not supported", path.display());
@@ -368,7 +399,7 @@ impl MigrateInfo {
             match file_info.expect_type(&cmds, expected_type) {
                 Ok(_) => {
                     info!(
-                        "The balena OS image looks ok: '{}'",
+                        "The file '{}' image looks ok",
                         file_info.path.display()
                     );
                 }
@@ -383,9 +414,9 @@ impl MigrateInfo {
                 }
             }
 
-            OK((file_info.path, file_info.size))
+            Ok((file_info.path, file_info.size))
         } else {
-            error!("The balena image has not been specified or cannot be accessed. Automatic download is not yet implemented, so you need to specify and supply all required files");
+            error!("The balena file: '{}' can not be accessed.", path.display());
             return Err(MigError::displayed());
         }
     }

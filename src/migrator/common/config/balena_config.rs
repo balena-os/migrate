@@ -19,7 +19,7 @@ pub struct Host {
 #[derive(Debug, Deserialize)]
 pub(crate) struct PartDump {
     pub blocks: u64,
-    pub archive: PathBuf,
+    pub archive: Option<PathBuf>,
 }
 
 #[derive(Debug, Deserialize)]
