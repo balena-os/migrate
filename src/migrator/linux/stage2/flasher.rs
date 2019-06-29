@@ -143,7 +143,7 @@ fn flash_gzip_internal(
                 if !cmd_res.status.success() {
                     let stderr =  match str::from_utf8(&cmd_res.stderr) {
                         Ok(stderr) => stderr,
-                        Err(_) => "",
+                        Err(_) => "- invalid utf8 -",
                     };
                     error!("dd reported an error: code: {:?}, stderr: {}", cmd_res.status.code(), stderr);
                     // might pay to still try and finish as all input was written
