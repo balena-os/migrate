@@ -1,15 +1,17 @@
 use log::{debug, error, info, trace, warn};
-use std::path::{PathBuf};
+use std::path::PathBuf;
 
 use crate::{
     common::{
-        config::balena_config::{ImageType, FSDump},
-        balena_cfg_json::BalenaCfgJson, wifi_config::WifiConfig, Config, FileInfo, FileType,
-        MigError, MigErrorKind, MigrateWifis,
+        balena_cfg_json::BalenaCfgJson,
+        config::balena_config::{FSDump, ImageType, PartDump},
+        stage2_config::{CheckedImageType, ImageInfo},
+        wifi_config::WifiConfig,
+        Config, FileInfo, FileType, MigError, MigErrorKind, MigrateWifis,
     },
     defs::OSArch,
     linux::{
-        linux_common::{get_os_arch, get_os_name},
+        linux_common::{get_os_arch, get_os_name, to_std_device_path},
         EnsuredCmds,
     },
 };
@@ -20,30 +22,14 @@ use crate::{
 // *************************************************************************************************
 
 pub(crate) mod lsblk_info;
-pub(crate) use lsblk_info::LsblkInfo;
+pub(crate) use lsblk_info::{LsblkDevice, LsblkInfo, LsblkPartition};
 
 pub(crate) mod label_type;
 
 pub(crate) mod path_info;
-use crate::linux::linux_common::to_std_device_path;
-use crate::linux::migrate_info::lsblk_info::{LsblkDevice, LsblkPartition};
 pub(crate) use path_info::PathInfo;
-use crate::linux::migrate_info::CheckedImageType::FileSystems;
-use crate::common::config::balena_config::PartDump;
 
-
-#[derive(Debug)]
-pub(crate) enum CheckedImageType {
-    Flasher(PathBuf),
-    FileSystems(FSDump)
-}
-
-#[derive(Debug)]
-pub(crate) struct ImageInfo {
-    req_space: u64,
-    image: CheckedImageType,
-}
-
+//use crate::linux::migrate_info::lsblk_info::;
 
 #[derive(Debug)]
 pub(crate) struct MigrateInfo {
@@ -124,20 +110,27 @@ impl MigrateInfo {
         let work_dir = &work_path.path;
         info!("Working directory is '{}'", work_dir.display());
 
-
         let os_image = match config.balena.get_image_path() {
             ImageType::Flasher(ref flasher_img) => {
-                let (checked_path, req_space) = MigrateInfo::check_file(&flasher_img, &FileType::GZipOSImage, &work_path, cmds, &lsblk_info )?;
-                ImageInfo{
+                let (checked_path, req_space) = MigrateInfo::check_file(
+                    &flasher_img,
+                    &FileType::GZipOSImage,
+                    &work_path,
+                    cmds,
+                    &lsblk_info,
+                )?;
+                ImageInfo {
                     image: CheckedImageType::Flasher(checked_path),
                     req_space,
                 }
-            },
+            }
             ImageType::FileSystems(ref fs_dump) => {
                 // make sure all files are present and in /workdir, generate total size and partitioning config in miginfo
-                let req_space: u64  = 0;
+                let mut req_space: u64 = 0;
 
-                let boot_path = if let Some((archive,size)) = MigrateInfo::check_dump(&fs_dump.boot, &work_path, cmds, &lsblk_info)? {
+                let boot_path = if let Some((archive, size)) =
+                    MigrateInfo::check_dump(&fs_dump.boot, &work_path, cmds, &lsblk_info)?
+                {
                     req_space += size;
                     Some(archive)
                 } else {
@@ -145,7 +138,9 @@ impl MigrateInfo {
                     return Err(MigError::displayed());
                 };
 
-                let root_a_path = if let Some((archive,size)) = MigrateInfo::check_dump(&fs_dump.root_a, &work_path, cmds, &lsblk_info)? {
+                let root_a_path = if let Some((archive, size)) =
+                    MigrateInfo::check_dump(&fs_dump.root_a, &work_path, cmds, &lsblk_info)?
+                {
                     req_space += size;
                     Some(archive)
                 } else {
@@ -153,21 +148,27 @@ impl MigrateInfo {
                     return Err(MigError::displayed());
                 };
 
-                let root_b_path = if let Some((archive,size)) = MigrateInfo::check_dump(&fs_dump.root_b, &work_path, cmds, &lsblk_info)? {
+                let root_b_path = if let Some((archive, size)) =
+                    MigrateInfo::check_dump(&fs_dump.root_b, &work_path, cmds, &lsblk_info)?
+                {
                     req_space += size;
                     Some(archive)
                 } else {
                     None
                 };
 
-                let state_path = if let Some((archive,size)) = MigrateInfo::check_dump(&fs_dump.state, &work_path, cmds, &lsblk_info)? {
+                let state_path = if let Some((archive, size)) =
+                    MigrateInfo::check_dump(&fs_dump.state, &work_path, cmds, &lsblk_info)?
+                {
                     req_space += size;
                     Some(archive)
                 } else {
                     None
                 };
 
-                let data_path = if let Some((archive,size)) = MigrateInfo::check_dump(&fs_dump.data, &work_path, cmds, &lsblk_info)? {
+                let data_path = if let Some((archive, size)) =
+                    MigrateInfo::check_dump(&fs_dump.data, &work_path, cmds, &lsblk_info)?
+                {
                     req_space += size;
                     Some(archive)
                 } else {
@@ -175,28 +176,27 @@ impl MigrateInfo {
                     return Err(MigError::displayed());
                 };
 
-
                 ImageInfo {
-                    image: FileSystems(FSDump{
-                        boot: PartDump{
+                    image: CheckedImageType::FileSystems(FSDump {
+                        boot: PartDump {
                             archive: boot_path,
-                            blocks: fs_dump.boot.blocks
+                            blocks: fs_dump.boot.blocks,
                         },
-                        root_a: PartDump{
+                        root_a: PartDump {
                             archive: root_a_path,
-                            blocks: fs_dump.root_b.blocks
+                            blocks: fs_dump.root_b.blocks,
                         },
-                        root_b: PartDump{
+                        root_b: PartDump {
                             archive: root_b_path,
-                            blocks: fs_dump.root_b.blocks
+                            blocks: fs_dump.root_b.blocks,
                         },
-                        state: PartDump{
+                        state: PartDump {
                             archive: state_path,
-                            blocks: fs_dump.state.blocks
+                            blocks: fs_dump.state.blocks,
                         },
-                        data: PartDump{
+                        data: PartDump {
                             archive: data_path,
-                            blocks: fs_dump.data.blocks
+                            blocks: fs_dump.data.blocks,
                         },
                     }),
                     req_space,
@@ -371,23 +371,40 @@ impl MigrateInfo {
         Ok(result)
     }
 
-
-    fn check_dump(dump: &PartDump, work_path: &PathInfo, cmds: &EnsuredCmds, lsblk_info: &LsblkInfo) -> Result<Option<(PathBuf, u64)>, MigError> {
+    fn check_dump(
+        dump: &PartDump,
+        work_path: &PathInfo,
+        cmds: &EnsuredCmds,
+        lsblk_info: &LsblkInfo,
+    ) -> Result<Option<(PathBuf, u64)>, MigError> {
         if let Some(ref archive) = dump.archive {
-            Ok(Some(MigrateInfo::check_file(archive, &FileType::GZipTar, work_path, cmds, lsblk_info)?))
+            Ok(Some(MigrateInfo::check_file(
+                archive,
+                &FileType::GZipTar,
+                work_path,
+                cmds,
+                lsblk_info,
+            )?))
         } else {
             Ok(None)
         }
     }
 
-
-    fn check_file(path: &PathBuf, expected_type: &FileType, work_path: &PathInfo, cmds: &EnsuredCmds, lsblk_info: &LsblkInfo) -> Result<(PathBuf, u64), MigError> {
-        if let Some(file_info) = FileInfo::new(path, work_path)? {
+    fn check_file(
+        path: &PathBuf,
+        expected_type: &FileType,
+        work_path: &PathInfo,
+        cmds: &EnsuredCmds,
+        lsblk_info: &LsblkInfo,
+    ) -> Result<(PathBuf, u64), MigError> {
+        if let Some(file_info) = FileInfo::new(path, &work_path.path)? {
             // make sure files are present and in /workdir, generate total size and partitioning config in miginfo
-            if let None = file_info.rel_path {
+            let rel_path = if let Some(ref rel_path) = file_info.rel_path {
+                rel_path.clone()
+            } else {
                 error!("The file '{}' was found outside of the working directory. This setup is not supported", path.display());
                 return Err(MigError::displayed());
-            }
+            };
 
             let (_img_drive, img_part) = lsblk_info.get_path_info(&file_info.path)?;
             if img_part.get_path() != work_path.device {
@@ -398,10 +415,7 @@ impl MigrateInfo {
             // ensure expected type
             match file_info.expect_type(&cmds, expected_type) {
                 Ok(_) => {
-                    info!(
-                        "The file '{}' image looks ok",
-                        file_info.path.display()
-                    );
+                    info!("The file '{}' image looks ok", file_info.path.display());
                 }
                 Err(_why) => {
                     // TODO: try gzip non compressed OS image
@@ -414,7 +428,7 @@ impl MigrateInfo {
                 }
             }
 
-            Ok((file_info.path, file_info.size))
+            Ok((rel_path, file_info.size))
         } else {
             error!("The balena file: '{}' can not be accessed.", path.display());
             return Err(MigError::displayed());

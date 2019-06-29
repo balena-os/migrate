@@ -14,7 +14,6 @@ pub const MIG_KERNEL_NAME: &str = "balena-migrate.zImage";
 pub const MIG_INITRD_NAME: &str = "balena-migrate.initrd";
 pub const MIG_DTB_NAME: &str = "balena-migrate.dtb";
 
-
 pub const EFI_STARTUP_FILE: &str = "startup.nsh";
 
 // where do disk labels live ?

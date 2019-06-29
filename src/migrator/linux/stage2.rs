@@ -15,7 +15,8 @@ use std::time::Duration;
 use crate::{
     common::{
         dir_exists, file_exists, file_size, format_size_with_unit, path_append,
-        stage2_config::Stage2Config, MigErrCtx, MigError, MigErrorKind,
+        stage2_config::{Stage2Config, ImageInfo, CheckedImageType}, MigErrCtx, MigError, MigErrorKind,
+
     },
     defs::{FailMode, BACKUP_FILE, SYSTEM_CONNECTIONS_DIR},
     linux::{
@@ -227,8 +228,7 @@ impl<'a> Stage2 {
                         format_size_with_unit(mem_tot)
                     );
 
-                    let mut required_size =
-                        file_size(path_append(&work_path, &self.config.get_balena_image()))?;
+                    let mut required_size = self.config.get_balena_image().req_space;
 
                     required_size +=
                         file_size(path_append(&work_path, &self.config.get_balena_config()))?;
@@ -283,18 +283,27 @@ impl<'a> Stage2 {
                 ))?;
             }
 
-            let src = path_append(&work_path, self.config.get_balena_image());
-            let tgt = path_append(mig_tmp_dir, BALENA_IMAGE_FILE);
-            copy(&src, &tgt).context(MigErrCtx::from_remark(
-                MigErrorKind::Upstream,
-                &format!(
-                    "failed to copy balena image to migrate temp directory, '{}' -> '{}'",
-                    src.display(),
-                    tgt.display()
-                ),
-            ))?;
+            match self.config.get_balena_image().image {
+                CheckedImageType::Flasher(ref image_file) => {
+                    let src = path_append(&work_path, image_file);
+                    let tgt = path_append(mig_tmp_dir, BALENA_IMAGE_FILE);
+                    copy(&src, &tgt).context(MigErrCtx::from_remark(
+                        MigErrorKind::Upstream,
+                        &format!(
+                            "failed to copy balena image to migrate temp directory, '{}' -> '{}'",
+                            src.display(),
+                            tgt.display()
+                        ),
+                    ))?;
+                    info!("copied balena OS image to '{}'", tgt.display());
+                },
+                CheckedImageType::FileSystems(ref fs_dump) => {
+                    // TODO: implement this
+                    unimplemented!()
+                }
+            };
 
-            info!("copied balena OS image to '{}'", tgt.display());
+
 
             let src = path_append(&work_path, self.config.get_balena_config());
             let tgt = path_append(mig_tmp_dir, BALENA_CONFIG_FILE);

@@ -357,7 +357,8 @@ impl<'a> LinuxMigrator {
             .set_skip_flash(self.config.debug.is_skip_flash());
 
         self.stage2_config
-            .set_balena_image(self.mig_info.image_file.rel_path.as_ref().unwrap().clone());
+            .set_balena_image(self.mig_info.image_file.clone());
+
         self.stage2_config
             .set_balena_config(self.mig_info.config_file.get_rel_path().unwrap().clone());
 

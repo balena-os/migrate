@@ -52,7 +52,6 @@ impl BootManager for RaspiBootManager {
         self.bootmgr_path.as_ref().unwrap().clone()
     }
 
-
     fn can_migrate(
         &mut self,
         cmds: &mut EnsuredCmds,

@@ -1,6 +1,6 @@
 use super::MigMode;
 use crate::common::{MigError, MigErrorKind};
-use serde::Deserialize;
+use serde::{Deserialize, Serialize};
 use std::path::{Path, PathBuf};
 
 const MODULE: &str = "common::config::balena_config";
@@ -16,13 +16,13 @@ pub struct Host {
 }
 */
 
-#[derive(Debug, Deserialize)]
+#[derive(Debug, Serialize, Deserialize, Clone)]
 pub(crate) struct PartDump {
     pub blocks: u64,
     pub archive: Option<PathBuf>,
 }
 
-#[derive(Debug, Deserialize)]
+#[derive(Debug, Serialize, Deserialize, Clone)]
 pub(crate) struct FSDump {
     pub boot: PartDump,
     pub root_a: PartDump,
@@ -34,11 +34,11 @@ pub(crate) struct FSDump {
 #[derive(Debug, Deserialize)]
 pub(crate) enum ImageType {
     Flasher(PathBuf),
-    FileSystems(FSDump)
+    FileSystems(FSDump),
 }
 
 #[derive(Debug, Deserialize)]
-pub struct ApiInfo {
+pub(crate) struct ApiInfo {
     host: Option<String>,
     port: Option<u16>,
     check: Option<bool>,
@@ -46,7 +46,7 @@ pub struct ApiInfo {
 }
 
 #[derive(Debug, Deserialize)]
-pub struct BalenaConfig {
+pub(crate) struct BalenaConfig {
     image: Option<ImageType>,
     config: Option<PathBuf>,
     app_name: Option<String>,
@@ -56,7 +56,7 @@ pub struct BalenaConfig {
 }
 
 impl<'a> BalenaConfig {
-    pub(crate) fn default() -> BalenaConfig {
+    pub fn default() -> BalenaConfig {
         BalenaConfig {
             image: None,
             config: None,
@@ -67,7 +67,7 @@ impl<'a> BalenaConfig {
         }
     }
 
-    pub(crate) fn check(&self, mig_mode: &MigMode) -> Result<(), MigError> {
+    pub fn check(&self, mig_mode: &MigMode) -> Result<(), MigError> {
         if let MigMode::IMMEDIATE = mig_mode {
             if let None = self.image {
                 return Err(MigError::from_remark(

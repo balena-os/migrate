@@ -6,9 +6,8 @@ use nix::mount::{mount, umount, MsFlags};
 use regex::Regex;
 use std::fs::{remove_file, File};
 use std::io::Write;
-use std::path::{Path, PathBuf};
+use std::path::PathBuf;
 
-use crate::common::dir_exists;
 use crate::{
     common::{
         file_exists, format_size_with_unit, is_balena_file, path_append,

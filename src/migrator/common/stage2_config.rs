@@ -13,9 +13,21 @@ pub const EMPTY_BACKUPS: &[(String, String)] = &[];
 const MODULE: &str = "stage2::stage2:config";
 
 use crate::{
-    common::{MigErrCtx, MigError, MigErrorKind},
+    common::{config::balena_config::FSDump, MigErrCtx, MigError, MigErrorKind},
     defs::{BootType, DeviceType, FailMode},
 };
+
+#[derive(Debug, Deserialize, Serialize, Clone)]
+pub(crate) enum CheckedImageType {
+    Flasher(PathBuf),
+    FileSystems(FSDump),
+}
+
+#[derive(Debug, Deserialize, Serialize, Clone)]
+pub(crate) struct ImageInfo {
+    pub req_space: u64,
+    pub image: CheckedImageType,
+}
 
 #[derive(Debug, Deserialize, Serialize, Clone)]
 pub(crate) struct Stage2LogConfig {
@@ -71,7 +83,7 @@ pub(crate) struct Stage2Config {
     flash_device: Option<PathBuf>,
     balena_config: PathBuf,
     // balena OS image file in work_path
-    balena_image: PathBuf,
+    balena_image: ImageInfo,
     // working directory  in path on root or mount partition
     work_path: PathType,
     // backed up former boot configuration (from , to) expected in boot manager
@@ -165,8 +177,8 @@ impl<'a> Stage2Config {
         &self.device_type
     }
 
-    pub fn get_balena_image(&'a self) -> &'a Path {
-        self.balena_image.as_path()
+    pub fn get_balena_image(&'a self) -> &'a ImageInfo {
+        &self.balena_image
     }
 
     pub fn get_balena_config(&'a self) -> &'a Path {
@@ -287,7 +299,7 @@ pub(crate) struct Stage2ConfigBuilder {
     skip_flash: Required<bool>,
     flash_device: Optional<PathBuf>,
     balena_config: Required<PathBuf>,
-    balena_image: Required<PathBuf>,
+    balena_image: Required<ImageInfo>,
     work_path: Required<PathType>,
     boot_bckup: Optional<Vec<(String, String)>>,
     has_backup: Required<bool>,
@@ -387,7 +399,7 @@ impl<'a> Stage2ConfigBuilder {
         self.balena_config.set(val);
     }
 
-    pub fn set_balena_image(&mut self, val: PathBuf) {
+    pub fn set_balena_image(&mut self, val: ImageInfo) {
         self.balena_image.set(val);
     }
 

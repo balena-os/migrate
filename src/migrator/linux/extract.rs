@@ -8,7 +8,8 @@ use std::path::{Path, PathBuf};
 
 use crate::{
     common::{
-        format_size_with_unit, Config, FileInfo, FileType, MigErrCtx, MigError, MigErrorKind,
+        config::balena_config::ImageType, format_size_with_unit, Config, FileInfo, FileType,
+        MigErrCtx, MigError, MigErrorKind,
     },
     linux::{
         ensured_cmds::{EnsuredCmds, FILE_CMD, MKTEMP_CMD, MOUNT_CMD, TAR_CMD},
@@ -25,6 +26,7 @@ use gzip_file::GZipFile;
 mod plain_file;
 use plain_file::PlainFile;
 
+use crate::common::config::balena_config::{FSDump, PartDump};
 use crate::common::path_append;
 
 const REQUIRED_CMDS: &[&str] = &[FILE_CMD, MOUNT_CMD, MKTEMP_CMD, TAR_CMD];
@@ -85,6 +87,9 @@ pub(crate) struct Extractor {
     image_file: Box<ImageFile>,
 }
 
+// TODO: Extractor could modify config / save new ImageType
+// TODO: Save ImageType as yml file
+
 impl Extractor {
     pub fn new(config: Config) -> Result<Extractor, MigError> {
         trace!("new: entered");
@@ -98,10 +103,14 @@ impl Extractor {
             return Err(MigError::displayed());
         }
 
-        let image_info = FileInfo::new(
-            config.balena.get_image_path(),
-            config.migrate.get_work_dir(),
-        )?;
+        let image_file = if let ImageType::Flasher(image_file) = config.balena.get_image_path() {
+            image_file
+        } else {
+            error!("The image path already points to an extracted configuration",);
+            return Err(MigError::displayed());
+        };
+
+        let image_info = FileInfo::new(image_file, config.migrate.get_work_dir())?;
 
         if let Some(image_info) = image_info {
             debug!("new: working with file '{}'", image_info.path.display());
@@ -157,13 +166,13 @@ impl Extractor {
         } else {
             error!(
                 "The image file could not be found: '{}'",
-                config.balena.get_image_path().display()
+                image_file.display()
             );
             Err(MigError::displayed())
         }
     }
 
-    pub fn extract(&mut self, output_path: Option<&Path>) -> Result<(), MigError> {
+    pub fn extract(&mut self, output_path: Option<&Path>) -> Result<ImageType, MigError> {
         trace!("extract: entered");
         let mut partitions: Vec<Partition> = Vec::new();
         // let mut part_idx: usize = 0;
@@ -258,7 +267,37 @@ impl Extractor {
         let _res = remove_dir(&mountpoint);
         let _res = remove_file(&tmp_name);
 
-        res
+        if partitions.len() == 5 {
+            Ok(ImageType::FileSystems(FSDump {
+                boot: PartDump {
+                    archive: partitions[0].archive.clone(),
+                    blocks: partitions[0].num_sectors,
+                },
+                root_a: PartDump {
+                    archive: partitions[1].archive.clone(),
+                    blocks: partitions[1].num_sectors,
+                },
+                root_b: PartDump {
+                    archive: partitions[2].archive.clone(),
+                    blocks: partitions[2].num_sectors,
+                },
+                state: PartDump {
+                    archive: partitions[3].archive.clone(),
+                    blocks: partitions[3].num_sectors,
+                },
+                data: PartDump {
+                    archive: partitions[4].archive.clone(),
+                    blocks: partitions[4].num_sectors,
+                },
+            }))
+        } else {
+            error!(
+                "Unexptected number of partitions found in image: '{}', {}",
+                self.image_file.get_path().display(),
+                partitions.len()
+            );
+            Err(MigError::displayed())
+        }
     }
 
     fn write_partition(

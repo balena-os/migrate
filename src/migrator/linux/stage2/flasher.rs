@@ -117,7 +117,7 @@ fn flash_gzip_internal(
                 let curr_elapsed = start_time.elapsed();
                 let since_last = match curr_elapsed.checked_sub(last_elapsed) {
                     Some(dur) => dur,
-                    None => Duration::from_secs(0)
+                    None => Duration::from_secs(0),
                 };
 
                 if since_last.as_secs() >= 10 {

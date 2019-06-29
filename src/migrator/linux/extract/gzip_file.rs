@@ -166,4 +166,7 @@ impl ImageFile for GZipFile {
             )),
         }
     }
+    fn get_path(&mut self) -> PathBuf {
+        self.path.clone()
+    }
 }
