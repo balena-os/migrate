@@ -437,7 +437,9 @@ impl Extractor {
             &[
                 "-czf",
                 &arch_name.to_string_lossy(),
+                "-C",
                 &mountpoint.to_string_lossy(),
+                "."
             ],
             true,
         )?;
