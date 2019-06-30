@@ -31,7 +31,7 @@ pub(crate) struct FSDump {
     pub data: PartDump,
 }
 
-#[derive(Debug, Deserialize)]
+#[derive(Debug, Serialize, Deserialize, Clone)]
 pub(crate) enum ImageType {
     Flasher(PathBuf),
     FileSystems(FSDump),

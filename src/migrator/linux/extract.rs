@@ -6,6 +6,9 @@ use std::io::Write;
 use std::mem;
 use std::path::{Path, PathBuf};
 
+// use serde::{Deserialize, Serialize};
+use serde_yaml;
+
 use crate::{
     common::{
         config::balena_config::ImageType, format_size_with_unit, Config, FileInfo, FileType,
@@ -46,7 +49,7 @@ const PART_NAME: &[&str] = &[
     "resin-state",
     "resin-data",
 ];
-const PART_FSTYPE: &[&str] = &["vfat", "ext2", "ext3", "ext4"];
+const PART_FSTYPE: &[&str] = &["vfat", "ext4", "ext4", "ext4", "ext4"];
 
 #[repr(C, packed)]
 struct PartEntry {
@@ -242,6 +245,10 @@ impl Extractor {
                 match self.write_partition(partition, &tmp_name, &mountpoint, output_path) {
                     Ok(_) => (),
                     Err(why) => {
+                        error!(
+                            "Failed to write partition {}: error: {:?}",
+                            partition.name, why
+                        );
                         res = Err(why);
                         break;
                     }
@@ -268,7 +275,7 @@ impl Extractor {
         let _res = remove_file(&tmp_name);
 
         if partitions.len() == 5 {
-            Ok(ImageType::FileSystems(FSDump {
+            let res = ImageType::FileSystems(FSDump {
                 boot: PartDump {
                     archive: partitions[0].archive.clone(),
                     blocks: partitions[0].num_sectors,
@@ -289,7 +296,20 @@ impl Extractor {
                     archive: partitions[4].archive.clone(),
                     blocks: partitions[4].num_sectors,
                 },
-            }))
+            });
+
+            debug!("res: {:?}", &res);
+
+            println!("image config:");
+            println!(
+                "{}",
+                serde_yaml::to_string(&res).context(MigErrCtx::from_remark(
+                    MigErrorKind::Upstream,
+                    &format!("Failed to serialize config to yaml")
+                ))?
+            );
+
+            Ok(res)
         } else {
             error!(
                 "Unexptected number of partitions found in image: '{}', {}",
@@ -395,7 +415,7 @@ impl Extractor {
         if !cmd_res.status.success() {
             return Err(MigError::from_remark(
                 MigErrorKind::ExecProcess,
-                "Failed to mount extracted partition",
+                &format!("Failed to mount extracted partition: {}", cmd_res.stderr),
             ));
         }
 
@@ -410,11 +430,6 @@ impl Extractor {
             )
         };
 
-        let arch_name = arch_name.canonicalize().context(MigErrCtx::from_remark(
-            MigErrorKind::Upstream,
-            &format!("Failed to canonicalize path: '{}'", arch_name.display()),
-        ))?;
-
         // TODO: Try to archive using rust builtin tar / gzip have to traverse directories myself
 
         let cmd_res = self.cmds.call(
@@ -426,6 +441,7 @@ impl Extractor {
             ],
             true,
         )?;
+
         if !cmd_res.status.success() {
             return Err(MigError::from_remark(
                 MigErrorKind::ExecProcess,
@@ -448,7 +464,10 @@ impl Extractor {
             arch_name.display()
         );
 
-        partition.archive = Some(arch_name);
+        partition.archive = Some(arch_name.canonicalize().context(MigErrCtx::from_remark(
+            MigErrorKind::Upstream,
+            &format!("Failed to canonicalize path: '{}'", arch_name.display()),
+        ))?);
 
         Ok(())
     }
@@ -485,7 +504,7 @@ impl Extractor {
         for partition in &mbr.part_tbl {
             let part_idx = table.len();
 
-            if part_idx > PART_NAME.len() || partition.num_sectors == 0 {
+            if part_idx >= PART_NAME.len() || partition.num_sectors == 0 {
                 return Ok(None);
             }
 
