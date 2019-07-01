@@ -15,7 +15,7 @@ use std::time::Duration;
 use crate::{
     common::{
         dir_exists, file_exists, file_size, format_size_with_unit, path_append,
-        stage2_config::{CheckedImageType, ImageInfo, Stage2Config},
+        stage2_config::{CheckedImageType, Stage2Config},
         MigErrCtx, MigError, MigErrorKind,
     },
     defs::{FailMode, BACKUP_FILE, SYSTEM_CONNECTIONS_DIR},
@@ -32,10 +32,10 @@ use crate::{
 // later ensure all other required commands
 
 mod fs_writer;
-use fs_writer::partition;
+use fs_writer::{write_balena_os};
 
 mod flasher;
-use flasher::{flash, FlashResult};
+use flasher::{flash_balena_os};
 
 pub(crate) mod mounts;
 use mounts::Mounts;
@@ -62,9 +62,20 @@ const BALENA_CONFIG_FILE: &str = "config.json";
 
 const PRE_PARTPROBE_WAIT_SECS: u64 = 5;
 const POST_PARTPROBE_WAIT_SECS: u64 = 5;
-const PARTPROBE_WAIT_NANOS: u32 = 0;
 
 const UDEVADM_PARAMS: &[&str] = &["settle", "-t", "10"];
+
+const BALENA_BOOT_FS_FILE: &str = "resin-boot.tgz";
+const BALENA_ROOTA_FS_FILE: &str = "resin-rootA.tgz";
+const BALENA_ROOTB_FS_FILE: &str = "resin-rootB.tgz";
+const BALENA_STATE_FS_FILE: &str = "resin-state.tgz";
+const BALENA_DATA_FS_FILE: &str = "resin-data.tgz";
+
+pub(crate) enum FlashResult {
+    Ok,
+    FailRecoverable,
+    FailNonRecoverable,
+}
 
 pub(crate) struct Stage2 {
     cmds: EnsuredCmds,
@@ -209,8 +220,6 @@ impl<'a> Stage2 {
 
         info!("migrating {:?} boot type: {:?}", device_type, boot_type);
 
-        // TODO: no copy if workdir is on separate disk
-
         let work_path = if let Some(work_path) = self.mounts.get_work_path() {
             work_path.to_path_buf()
         } else {
@@ -298,8 +307,110 @@ impl<'a> Stage2 {
                     info!("copied balena OS image to '{}'", tgt.display());
                 }
                 CheckedImageType::FileSystems(ref fs_dump) => {
-                    // TODO: implement this
-                    unimplemented!()
+                    if let Some(ref archive) = fs_dump.boot.archive {
+                        let src = path_append(&work_path, archive);
+                        let tgt = path_append(mig_tmp_dir, BALENA_BOOT_FS_FILE);
+                        copy(&src, &tgt).context(MigErrCtx::from_remark(
+                            MigErrorKind::Upstream,
+                            &format!(
+                                "failed to copy balena boot fs archive to migrate temp directory, '{}' -> '{}'",
+                                src.display(),
+                                tgt.display()
+                            ),
+                        ))?;
+                        info!(
+                            "copied balena boot archive to '{}' -> '{}'",
+                            src.display(),
+                            tgt.display()
+                        );
+                    } else {
+                        error!(
+                            "The balena boot archive was not configure - cannot partition drive"
+                        );
+                        return Err(MigError::displayed());
+                    }
+
+                    if let Some(ref archive) = fs_dump.root_a.archive {
+                        let src = path_append(&work_path, archive);
+                        let tgt = path_append(mig_tmp_dir, BALENA_ROOTA_FS_FILE);
+                        copy(&src, &tgt).context(MigErrCtx::from_remark(
+                            MigErrorKind::Upstream,
+                            &format!(
+                                "failed to copy balena root a fs archive to migrate temp directory, '{}' -> '{}'",
+                                src.display(),
+                                tgt.display()
+                            ),
+                        ))?;
+                        info!(
+                            "copied balena rootA archive to '{}' -> '{}'",
+                            src.display(),
+                            tgt.display()
+                        );
+                    } else {
+                        error!(
+                            "The balena root_a archive was not configure - cannot partition drive"
+                        );
+                        return Err(MigError::displayed());
+                    }
+
+                    if let Some(ref archive) = fs_dump.root_b.archive {
+                        let src = path_append(&work_path, archive);
+                        let tgt = path_append(mig_tmp_dir, BALENA_ROOTB_FS_FILE);
+                        copy(&src, &tgt).context(MigErrCtx::from_remark(
+                            MigErrorKind::Upstream,
+                            &format!(
+                                "failed to copy balena root b fs archive to migrate temp directory, '{}' -> '{}'",
+                                src.display(),
+                                tgt.display()
+                            ),
+                        ))?;
+                        info!(
+                            "copied balena rootB archive to '{}' -> '{}'",
+                            src.display(),
+                            tgt.display()
+                        );
+                    }
+
+                    if let Some(ref archive) = fs_dump.state.archive {
+                        let src = path_append(&work_path, archive);
+                        let tgt = path_append(mig_tmp_dir, BALENA_STATE_FS_FILE);
+                        copy(&src, &tgt).context(MigErrCtx::from_remark(
+                            MigErrorKind::Upstream,
+                            &format!(
+                                "failed to copy balena state fs archive to migrate temp directory, '{}' -> '{}'",
+                                src.display(),
+                                tgt.display()
+                            ),
+                        ))?;
+                        info!(
+                            "copied balena state archive to '{}' -> '{}'",
+                            src.display(),
+                            tgt.display()
+                        );
+                    }
+
+                    if let Some(ref archive) = fs_dump.data.archive {
+                        let src = path_append(&work_path, archive);
+                        let tgt = path_append(mig_tmp_dir, BALENA_DATA_FS_FILE);
+                        copy(&src, &tgt).context(MigErrCtx::from_remark(
+                            MigErrorKind::Upstream,
+                            &format!(
+                                "failed to copy balena data fs archive to migrate temp directory, '{}' -> '{}'",
+                                src.display(),
+                                tgt.display()
+                            ),
+                        ))?;
+                        info!(
+                            "copied balena data archive to '{}' -> '{}'",
+                            src.display(),
+                            tgt.display()
+                        );
+                    } else {
+                        error!(
+                            "The balena data archive was not configure - cannot partition drive"
+                        );
+                        return Err(MigError::displayed());
+                    }
                 }
             };
 
@@ -414,63 +525,60 @@ impl<'a> Stage2 {
             Stage2::exit(&FailMode::Reboot)?;
         }
 
-        if !self.config.is_skip_flash() {
-            let image_path = path_append(mig_tmp_dir, BALENA_IMAGE_FILE);
-            info!(
-                "attempting to flash '{}' to '{}'",
-                image_path.display(),
-                target_path.display()
-            );
+        let image_path = path_append(mig_tmp_dir, BALENA_IMAGE_FILE);
+        info!(
+            "attempting to flash '{}' to '{}'",
+            image_path.display(),
+            target_path.display()
+        );
 
-            if !file_exists(&image_path) {
-                return Err(MigError::from_remark(
-                    MigErrorKind::NotFound,
-                    &format!("Could not locate OS image: '{}'", image_path.display()),
-                ));
-            }
-
-            match flash(&target_path, &self.cmds, &self.config, &image_path) {
-                FlashResult::Ok => {}
-                FlashResult::FailRecoverable => {
-                    error!("Failed to flash balena OS image");
-                    Logger::flush();
-                    self.recoverable_state = true;
-                    return Err(MigError::displayed());
-                }
-                FlashResult::FailNonRecoverable => {
-                    error!("Failed to flash balena OS image");
-                    Logger::flush();
-                    self.recoverable_state = false;
-                    return Err(MigError::displayed());
-                }
-            }
-
-            Logger::flush();
-
-            sync();
-
-            info!(
-                "The Balena OS image has been written to the device '{}'",
-                target_path.display()
-            );
-
-            thread::sleep(Duration::new(PRE_PARTPROBE_WAIT_SECS, PARTPROBE_WAIT_NANOS));
-
-            self.cmds
-                .call(PARTPROBE_CMD, &[&target_path.to_string_lossy()], true)?;
-
-            thread::sleep(Duration::new(
-                POST_PARTPROBE_WAIT_SECS,
-                PARTPROBE_WAIT_NANOS,
+        if !file_exists(&image_path) {
+            return Err(MigError::from_remark(
+                MigErrorKind::NotFound,
+                &format!("Could not locate OS image: '{}'", image_path.display()),
             ));
-
-            let _res = self.cmds.call(UDEVADM_CMD, UDEVADM_PARAMS, true);
         }
+
+        match flash_balena_os(&target_path, &self.cmds, &self.config, &image_path) {
+            FlashResult::Ok => {}
+            FlashResult::FailRecoverable => {
+                error!("Failed to flash balena OS image");
+                Logger::flush();
+                self.recoverable_state = true;
+                return Err(MigError::displayed());
+            }
+            FlashResult::FailNonRecoverable => {
+                error!("Failed to flash balena OS image");
+                Logger::flush();
+                self.recoverable_state = false;
+                return Err(MigError::displayed());
+            }
+        }
+
+        Logger::flush();
+
+        sync();
+
+        info!(
+            "The Balena OS image has been written to the device '{}'",
+            target_path.display()
+        );
+
+        thread::sleep(Duration::from_secs(PRE_PARTPROBE_WAIT_SECS));
+
+        self.cmds
+            .call(PARTPROBE_CMD, &[&target_path.to_string_lossy()], true)?;
+
+        thread::sleep(Duration::from_secs(POST_PARTPROBE_WAIT_SECS));
+
+        let _res = self.cmds.call(UDEVADM_CMD, UDEVADM_PARAMS, true);
 
         // check existence of partitions
 
         if let Ok((_parts_ok, boot_mountpoint, data_mountpoint)) = self.mounts.mount_balena() {
             // TODO: check fingerprints ?
+
+            // TODO: honor self.mounts.is_work_no_copy() - use appropriate paths
 
             let src = path_append(mig_tmp_dir, BALENA_CONFIG_FILE);
             let tgt = path_append(&boot_mountpoint, BALENA_CONFIG_FILE);

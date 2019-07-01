@@ -62,7 +62,7 @@ impl MigrateInfo {
 
         let os_arch = get_os_arch(&cmds)?;
 
-        let lsblk_info = LsblkInfo::new(&cmds)?;
+        let lsblk_info = LsblkInfo::all(&cmds)?;
 
         let work_path = if let Some(path_info) =
             PathInfo::new(&cmds, config.migrate.get_work_dir(), &lsblk_info)?
@@ -181,22 +181,27 @@ impl MigrateInfo {
                         boot: PartDump {
                             archive: boot_path,
                             blocks: fs_dump.boot.blocks,
+                            fstype: fs_dump.boot.fstype.clone()
                         },
                         root_a: PartDump {
                             archive: root_a_path,
-                            blocks: fs_dump.root_b.blocks,
+                            blocks: fs_dump.root_a.blocks,
+                            fstype: fs_dump.root_a.fstype.clone()
                         },
                         root_b: PartDump {
                             archive: root_b_path,
                             blocks: fs_dump.root_b.blocks,
+                            fstype: fs_dump.root_b.fstype.clone()
                         },
                         state: PartDump {
                             archive: state_path,
                             blocks: fs_dump.state.blocks,
+                            fstype: fs_dump.state.fstype.clone()
                         },
                         data: PartDump {
                             archive: data_path,
                             blocks: fs_dump.data.blocks,
+                            fstype: fs_dump.data.fstype.clone()
                         },
                     }),
                     req_space,

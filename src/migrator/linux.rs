@@ -353,8 +353,10 @@ impl<'a> LinuxMigrator {
         self.stage2_config
             .set_no_flash(self.config.debug.is_no_flash());
 
-        self.stage2_config
-            .set_skip_flash(self.config.debug.is_skip_flash());
+        /*
+                self.stage2_config
+                    .set_skip_flash(self.config.debug.is_skip_flash());
+        */
 
         self.stage2_config
             .set_balena_image(self.mig_info.image_file.clone());

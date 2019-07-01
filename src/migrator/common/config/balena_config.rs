@@ -16,11 +16,14 @@ pub struct Host {
 }
 */
 
+// TODO: also store optional bootable flag, partition type and start offset ?
 #[derive(Debug, Serialize, Deserialize, Clone)]
 pub(crate) struct PartDump {
     pub blocks: u64,
+    pub fstype: Option<String>,
     pub archive: Option<PathBuf>,
 }
+
 
 #[derive(Debug, Serialize, Deserialize, Clone)]
 pub(crate) struct FSDump {

@@ -4,6 +4,7 @@ use regex::Regex;
 use serde::Deserialize;
 use serde_json;
 use std::path::{Path, PathBuf};
+use std::borrow::{Cow};
 
 use crate::{
     common::{MigErrCtx, MigError, MigErrorKind},
@@ -90,28 +91,12 @@ pub(crate) struct LsblkInfo {
 }
 
 impl<'a> LsblkInfo {
-    pub fn new(cmds: &EnsuredCmds) -> Result<LsblkInfo, MigError> {
-        let args: Vec<&str> = vec!["-b", "-O", "--json"];
-        let cmd_res = cmds.call(LSBLK_CMD, &args, true)?;
-        let mut lsblk_info = if cmd_res.status.success() {
-            LsblkInfo::from_json(&cmd_res.stdout)?
-        } else {
-            let args: Vec<&str> = vec![
-                "-b",
-                "-P",
-                "-o",
-                "NAME,KNAME,MAJ:MIN,FSTYPE,MOUNTPOINT,LABEL,UUID,RO,SIZE,TYPE",
-            ];
-            let cmd_res = cmds.call(LSBLK_CMD, &args, true)?;
-            if cmd_res.status.success() {
-                LsblkInfo::from_list(&cmd_res.stdout)?
-            } else {
-                return Err(MigError::from_remark(
-                    MigErrorKind::ExecProcess,
-                    "new: failed to determine block device attributes for",
-                ));
-            }
-        };
+    pub fn for_device(device: &Path, cmds: &EnsuredCmds) -> Result<LsblkInfo, MigError> {
+        Ok(LsblkInfo::call_lsblk(Some(device), cmds)?)
+    }
+
+    pub fn all(cmds: &EnsuredCmds) -> Result<LsblkInfo, MigError> {
+        let mut lsblk_info = LsblkInfo::call_lsblk(None, cmds)?;
 
         // filter by maj block device numbers from https://www.kernel.org/doc/Documentation/admin-guide/devices.txt
         // other candidates:
@@ -237,6 +222,38 @@ impl<'a> LsblkInfo {
             ))
         }
     }
+
+    fn call_lsblk(device: Option<&Path>, cmds: &EnsuredCmds) -> Result<LsblkInfo, MigError> {
+        let mut _tmp_path: Option<String> = None;
+        let args: Vec<&str> = if let Some(device) = device {
+            _tmp_path = Some(String::from(&*device.to_string_lossy()));
+            vec!["-b", "-O", "--json", _tmp_path.as_ref().unwrap()]
+        } else {
+            vec!["-b", "-O", "--json"]
+        };
+
+        let cmd_res = cmds.call(LSBLK_CMD, &args, true)?;
+        if cmd_res.status.success() {
+            Ok(LsblkInfo::from_json(&cmd_res.stdout)?)
+        } else {
+            let args: Vec<&str> = vec![
+                "-b",
+                "-P",
+                "-o",
+                "NAME,KNAME,MAJ:MIN,FSTYPE,MOUNTPOINT,LABEL,UUID,RO,SIZE,TYPE",
+            ];
+            let cmd_res = cmds.call(LSBLK_CMD, &args, true)?;
+            if cmd_res.status.success() {
+                Ok(LsblkInfo::from_list(&cmd_res.stdout)?)
+            } else {
+                return Err(MigError::from_remark(
+                    MigErrorKind::ExecProcess,
+                    "new: failed to determine block device attributes for",
+                ));
+            }
+        }
+    }
+
 
     fn from_list(list: &str) -> Result<LsblkInfo, MigError> {
         let param_re = Regex::new(r#"^([^=]+)="([^"]*)"$"#).unwrap();

@@ -150,7 +150,7 @@ impl<'a> Mounts {
             }
         }
 
-        match LsblkInfo::new(cmds) {
+        match LsblkInfo::all(cmds) {
             Ok(lsblk_info) => {
                 for blk_device in lsblk_info.get_blk_devices() {
                     if let Some(ref children) = blk_device.children {

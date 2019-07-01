@@ -174,11 +174,11 @@ pub(crate) fn mktemp<P: AsRef<Path>>(
 ) -> Result<PathBuf, MigError> {
     let mut cmd_args: Vec<&str> = Vec::new();
 
-    let mut dir_path: Option<String> = None;
+    let mut _dir_path: Option<String> = None;
     if let Some(path) = path {
-        dir_path = Some(String::from(path.as_ref().to_string_lossy()));
+        _dir_path = Some(String::from(path.as_ref().to_string_lossy()));
         cmd_args.push("-p");
-        cmd_args.push(dir_path.as_ref().unwrap());
+        cmd_args.push(_dir_path.as_ref().unwrap());
     }
 
     if dir {

@@ -11,8 +11,6 @@ pub(crate) struct DebugConfig {
     fake_admin: Option<bool>,
     // flash on this device instead of / device
     force_flash_device: Option<PathBuf>,
-    // skip the flashing (only makes sense with force_flash_device)
-    skip_flash: Option<bool>,
     // pretend mode, stop after unmounting former root
     no_flash: Option<bool>,
 }
@@ -22,7 +20,6 @@ impl<'a> DebugConfig {
         DebugConfig {
             fake_admin: None,
             force_flash_device: None,
-            skip_flash: None,
             // TODO: default to false when project is mature
             no_flash: None,
         }
@@ -51,18 +48,6 @@ impl<'a> DebugConfig {
             Some(val)
         } else {
             None
-        }
-    }
-
-    pub fn is_skip_flash(&self) -> bool {
-        if let Some(val) = self.skip_flash {
-            if let Some(ref _ffd) = self.force_flash_device {
-                val
-            } else {
-                false
-            }
-        } else {
-            false
         }
     }
 

@@ -14,6 +14,7 @@ use crate::{
         config::balena_config::ImageType, format_size_with_unit, Config, FileInfo, FileType,
         MigErrCtx, MigError, MigErrorKind,
     },
+    defs::{PART_NAME, PART_FSTYPE},
     linux::{
         ensured_cmds::{EnsuredCmds, FILE_CMD, MKTEMP_CMD, MOUNT_CMD, TAR_CMD},
         linux_common::mktemp,
@@ -42,14 +43,6 @@ const MOUNTPOINT_TEMPLATE: &str = "mountpoint.XXXXXXXXXX";
 
 const BUFFER_SIZE: usize = 1024 * 1024; // 1Mb
 
-const PART_NAME: &[&str] = &[
-    "resin-boot",
-    "resin-rootA",
-    "resin-rootB",
-    "resin-state",
-    "resin-data",
-];
-const PART_FSTYPE: &[&str] = &["vfat", "ext4", "ext4", "ext4", "ext4"];
 
 #[repr(C, packed)]
 struct PartEntry {
@@ -86,7 +79,7 @@ pub(crate) struct Partition {
 pub(crate) struct Extractor {
     cmds: EnsuredCmds,
     config: Config,
-    gzipped: bool,
+    // gzipped: bool,
     image_file: Box<ImageFile>,
 }
 
@@ -124,7 +117,6 @@ impl Extractor {
                         return Ok(Extractor {
                             cmds,
                             config,
-                            gzipped: true,
                             image_file: Box::new(gzip_file),
                         });
                     }
@@ -145,7 +137,6 @@ impl Extractor {
                             return Ok(Extractor {
                                 cmds,
                                 config,
-                                gzipped: true,
                                 image_file: Box::new(plain_file),
                             });
                         }
@@ -181,8 +172,6 @@ impl Extractor {
         // let mut part_idx: usize = 0;
         let mut curr_offset: u64 = 0;
 
-        let mut res = Ok(());
-
         // make temp mountpoint name
         let mountpoint = match mktemp(
             &self.cmds,
@@ -217,12 +206,13 @@ impl Extractor {
             }
         };
 
+        let mut extract_err: Option<MigError> = None;
         let mut part_extract_idx: usize = 0;
         loop {
             let next_offset = match self.read_part_tbl(curr_offset, &mut partitions) {
                 Ok(offset) => offset,
                 Err(why) => {
-                    res = Err(why);
+                    extract_err = Some(why);
                     break;
                 }
             };
@@ -243,22 +233,26 @@ impl Extractor {
                 );
 
                 match self.write_partition(partition, &tmp_name, &mountpoint, output_path) {
-                    Ok(_) => (),
+                    Ok(_) => {
+                        info!(
+                            "extracted partition: {}: to '{}'",
+                            partition.name,
+                            partition.archive.as_ref().unwrap().display()
+                        );
+                    }
                     Err(why) => {
                         error!(
                             "Failed to write partition {}: error: {:?}",
                             partition.name, why
                         );
-                        res = Err(why);
+                        extract_err = Some(why);
                         break;
                     }
                 }
+            }
 
-                info!(
-                    "extracted partition: {}: to '{}'",
-                    partition.name,
-                    partition.archive.as_ref().unwrap().display()
-                );
+            if let Some(_) = extract_err {
+                break;
             }
 
             part_extract_idx = partitions.len();
@@ -274,27 +268,37 @@ impl Extractor {
         let _res = remove_dir(&mountpoint);
         let _res = remove_file(&tmp_name);
 
+        // late error exit after cleanup
+        if let Some(why) = extract_err {
+            return Err(why);
+        }
+
         if partitions.len() == 5 {
             let res = ImageType::FileSystems(FSDump {
                 boot: PartDump {
                     archive: partitions[0].archive.clone(),
                     blocks: partitions[0].num_sectors,
+                    fstype: Some(String::from(partitions[0].fstype)),
                 },
                 root_a: PartDump {
                     archive: partitions[1].archive.clone(),
                     blocks: partitions[1].num_sectors,
+                    fstype: Some(String::from(partitions[1].fstype)),
                 },
                 root_b: PartDump {
                     archive: partitions[2].archive.clone(),
                     blocks: partitions[2].num_sectors,
+                    fstype: Some(String::from(partitions[2].fstype)),
                 },
                 state: PartDump {
                     archive: partitions[3].archive.clone(),
                     blocks: partitions[3].num_sectors,
+                    fstype: Some(String::from(partitions[3].fstype)),
                 },
                 data: PartDump {
                     archive: partitions[4].archive.clone(),
                     blocks: partitions[4].num_sectors,
+                    fstype: Some(String::from(partitions[4].fstype)),
                 },
             });
 
@@ -439,7 +443,7 @@ impl Extractor {
                 &arch_name.to_string_lossy(),
                 "-C",
                 &mountpoint.to_string_lossy(),
-                "."
+                ".",
             ],
             true,
         )?;

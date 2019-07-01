@@ -77,10 +77,9 @@ pub(crate) struct Stage2Config {
     fail_mode: FailMode,
     // no_flash mode - stop after unmounting root if true
     no_flash: bool,
-    // skip the flashing, only makes sense with fake / forced flash device
-    skip_flash: bool,
     // which device to flash - derive from /root partition if not set (windows)
     flash_device: Option<PathBuf>,
+    // balena config file
     balena_config: PathBuf,
     // balena OS image file in work_path
     balena_image: ImageInfo,
@@ -133,10 +132,6 @@ impl<'a> Stage2Config {
         Stage2Config::from_str(&config_str)
     }
 
-    /*    pub fn get_boot_mount(&'a self) -> &'a PathType {
-            &self.boot_mount
-        }
-    */
     pub fn get_log_level(&self) -> Level {
         if let Ok(level) = Level::from_str(&self.log_level) {
             level
@@ -165,8 +160,12 @@ impl<'a> Stage2Config {
         self.gzip_internal
     }
 
-    pub fn is_skip_flash(&self) -> bool {
-        self.skip_flash
+    pub fn get_flash_device(&'a self) -> Option<&'a PathBuf> {
+        if let Some(ref flash_device) = self.flash_device {
+            Some(flash_device)
+        } else {
+            None
+        }
     }
 
     pub fn get_boot_type(&'a self) -> &'a BootType {
@@ -236,16 +235,6 @@ impl<T: Clone> Required<T> {
     fn set_ref(&mut self, val: &T) {
         self.data = Some(val.clone());
     }
-
-    /*
-        fn is_set(&self) -> bool {
-            if let Some(ref _val) = self.data {
-                true
-            } else {
-                false
-            }
-        }
-    */
 }
 
 pub(crate) struct Optional<T> {
@@ -270,33 +259,15 @@ impl<T: Clone> Optional<T> {
     fn set(&mut self, val: T) {
         self.data = Some(val);
     }
+
     fn set_ref(&mut self, val: &T) {
         self.data = Some(val.clone());
     }
-
-    /*
-        fn set_ref(&mut self, val: &T) {
-            self.data = Some(val.clone());
-        }
-
-        fn set_empty(&mut self) {
-            self.data = None;
-        }
-
-        fn is_set(&self) -> bool {
-            if let Some(ref _val) = self.data {
-                true
-            } else {
-                false
-            }
-        }
-    */
 }
 
 pub(crate) struct Stage2ConfigBuilder {
     fail_mode: Required<FailMode>,
     no_flash: Required<bool>,
-    skip_flash: Required<bool>,
     flash_device: Optional<PathBuf>,
     balena_config: Required<PathBuf>,
     balena_image: Required<ImageInfo>,
@@ -315,7 +286,6 @@ impl<'a> Stage2ConfigBuilder {
         Stage2ConfigBuilder {
             fail_mode: Required::new("fail_mode", Some(&FailMode::Reboot)),
             no_flash: Required::new("no_flash", Some(&true)),
-            skip_flash: Required::new("skip_flash", Some(&false)),
             flash_device: Optional::new(None),
             balena_config: Required::new("balena_config", None),
             balena_image: Required::new("balena_image", None),
@@ -334,9 +304,7 @@ impl<'a> Stage2ConfigBuilder {
         let result = Stage2Config {
             fail_mode: self.fail_mode.get()?.clone(),
             no_flash: self.no_flash.get()?.clone(),
-            skip_flash: *self.skip_flash.get()?,
             flash_device: self.flash_device.get().clone(),
-            // boot_mount: self.boot_mount.get()?.clone(),
             balena_config: self.balena_config.get()?.clone(),
             balena_image: self.balena_image.get()?.clone(),
             work_path: self.work_path.get()?.clone(),
@@ -387,12 +355,8 @@ impl<'a> Stage2ConfigBuilder {
         self.no_flash.set(val);
     }
 
-    pub fn set_skip_flash(&mut self, val: bool) {
-        self.skip_flash.set(val);
-    }
-
-    pub fn set_flash_device(&mut self, val: &PathBuf) {
-        self.flash_device.set_ref(val);
+    pub fn set_flash_device(&mut self, val: PathBuf) {
+        self.flash_device.set(val);
     }
 
     pub fn set_balena_config(&mut self, val: PathBuf) {

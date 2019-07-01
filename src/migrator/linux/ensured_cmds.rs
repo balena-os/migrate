@@ -27,6 +27,9 @@ pub const TAR_CMD: &str = "tar";
 pub const UDEVADM_CMD: &str = "udevadm";
 pub const UNAME_CMD: &str = "uname";
 
+pub const EXT_FMT_CMD: &str = "mke2fs";
+pub const FAT_FMT_CMD: &str = "mkdosfs";
+
 #[derive(Debug)]
 pub(crate) struct EnsuredCmds {
     cmd_table: HashMap<String, String>,

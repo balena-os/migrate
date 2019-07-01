@@ -12,7 +12,11 @@ use std::time::{Duration, Instant};
 
 use crate::{
     common::{format_size_with_unit, stage2_config::Stage2Config},
-    linux::ensured_cmds::{EnsuredCmds, DD_CMD, GZIP_CMD},
+    linux::{
+        stage2::FlashResult,
+        ensured_cmds::{
+            EnsuredCmds, DD_CMD, GZIP_CMD},
+    },
 };
 
 const DD_BLOCK_SIZE: usize = 4194304;
@@ -21,11 +25,6 @@ const DD_BLOCK_SIZE: usize = 4194304;
 
 // TODO: return something else instead (success, (recoverable / not recoverable))
 
-pub(crate) enum FlashResult {
-    Ok,
-    FailRecoverable,
-    FailNonRecoverable,
-}
 
 fn flash_gzip_internal(
     dd_cmd: &str,
@@ -218,7 +217,7 @@ fn flash_gzip_external(
     }
 }
 
-pub(crate) fn flash(
+pub(crate) fn flash_balena_os(
     target_path: &Path,
     cmds: &EnsuredCmds,
     config: &Stage2Config,

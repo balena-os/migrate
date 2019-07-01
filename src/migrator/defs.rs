@@ -38,6 +38,17 @@ pub const APPROX_MEM_THRESHOLD: u64 = 64 * 1024 * 1024; // 64 MiB
 
 pub const MIN_DISK_SIZE: u64 = 2 * 1024 * 1024 * 1024; // 2 GiB
 
+pub const PART_NAME: &[&str] = &[
+    "resin-boot",
+    "resin-rootA",
+    "resin-rootB",
+    "resin-state",
+    "resin-data",
+];
+pub const PART_FSTYPE: &[&str] = &["vfat", "ext4", "ext4", "ext4", "ext4"];
+
+
+
 #[derive(Debug, Deserialize, Serialize, Clone)]
 pub(crate) enum BootType {
     UBoot,
