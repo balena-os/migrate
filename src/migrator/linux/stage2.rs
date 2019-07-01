@@ -145,7 +145,7 @@ impl<'a> Stage2 {
         Logger::set_default_level(&stage2_cfg.get_log_level());
 
         // Mount all remaining drives - work and log
-        match mounts.mount_all(&stage2_cfg) {
+        match mounts.mount_from_config(&stage2_cfg) {
             Ok(_) => {
                 info!("mounted all configured drives");
             }
@@ -575,13 +575,21 @@ impl<'a> Stage2 {
 
         // check existence of partitions
 
-        if let Ok((_parts_ok, boot_mountpoint, data_mountpoint)) = self.mounts.mount_balena() {
+        if let Ok(_parts_ok) = self.mounts.mount_balena(false) {
             // TODO: check fingerprints ?
 
             // TODO: honor self.mounts.is_work_no_copy() - use appropriate paths
 
+            let boot_mountpoint = if let Some(mountpoint) = self.mounts.get_balena_boot_mountpoint() {
+                mountpoint.clone()
+            } else {
+                error!("Unable to retrieve balena boot mountpoint");
+                return Err(MigError::displayed());
+            };
+
+
             let src = path_append(mig_tmp_dir, BALENA_CONFIG_FILE);
-            let tgt = path_append(&boot_mountpoint, BALENA_CONFIG_FILE);
+            let tgt = path_append(boot_mountpoint, BALENA_CONFIG_FILE);
 
             copy(&src, &tgt).context(MigErrCtx::from_remark(
                 MigErrorKind::Upstream,
@@ -624,7 +632,7 @@ impl<'a> Stage2 {
             // we can hope to successfully reboot again after writing config.json and system-connections
             self.recoverable_state = true;
 
-            if let Some(data_mountpoint) = data_mountpoint {
+            if let Some(data_mountpoint) = self.mounts.get_balena_data_mountpoint() {
                 // TODO: copy log, backup to data_path
                 if self.config.has_backup() {
                     // TODO: check available disk space

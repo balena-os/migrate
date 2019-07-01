@@ -20,13 +20,19 @@ pub struct Host {
 #[derive(Debug, Serialize, Deserialize, Clone)]
 pub(crate) struct PartDump {
     pub blocks: u64,
-    pub fstype: Option<String>,
     pub archive: Option<PathBuf>,
 }
 
+#[derive(Debug, Serialize, Deserialize, Clone)]
+pub(crate) enum PartCheck {
+    None,
+    Read,
+    ReadWrite
+}
 
 #[derive(Debug, Serialize, Deserialize, Clone)]
 pub(crate) struct FSDump {
+    pub check: Option<PartCheck>,
     pub boot: PartDump,
     pub root_a: PartDump,
     pub root_b: PartDump,

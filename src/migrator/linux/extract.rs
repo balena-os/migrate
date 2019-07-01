@@ -275,30 +275,26 @@ impl Extractor {
 
         if partitions.len() == 5 {
             let res = ImageType::FileSystems(FSDump {
+                check: None,
                 boot: PartDump {
                     archive: partitions[0].archive.clone(),
                     blocks: partitions[0].num_sectors,
-                    fstype: Some(String::from(partitions[0].fstype)),
                 },
                 root_a: PartDump {
                     archive: partitions[1].archive.clone(),
                     blocks: partitions[1].num_sectors,
-                    fstype: Some(String::from(partitions[1].fstype)),
                 },
                 root_b: PartDump {
                     archive: partitions[2].archive.clone(),
                     blocks: partitions[2].num_sectors,
-                    fstype: Some(String::from(partitions[2].fstype)),
                 },
                 state: PartDump {
                     archive: partitions[3].archive.clone(),
                     blocks: partitions[3].num_sectors,
-                    fstype: Some(String::from(partitions[3].fstype)),
                 },
                 data: PartDump {
                     archive: partitions[4].archive.clone(),
                     blocks: partitions[4].num_sectors,
-                    fstype: Some(String::from(partitions[4].fstype)),
                 },
             });
 

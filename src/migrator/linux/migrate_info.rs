@@ -178,30 +178,26 @@ impl MigrateInfo {
 
                 ImageInfo {
                     image: CheckedImageType::FileSystems(FSDump {
+                        check: fs_dump.check.clone(),
                         boot: PartDump {
                             archive: boot_path,
                             blocks: fs_dump.boot.blocks,
-                            fstype: fs_dump.boot.fstype.clone()
                         },
                         root_a: PartDump {
                             archive: root_a_path,
                             blocks: fs_dump.root_a.blocks,
-                            fstype: fs_dump.root_a.fstype.clone()
                         },
                         root_b: PartDump {
                             archive: root_b_path,
                             blocks: fs_dump.root_b.blocks,
-                            fstype: fs_dump.root_b.fstype.clone()
                         },
                         state: PartDump {
                             archive: state_path,
                             blocks: fs_dump.state.blocks,
-                            fstype: fs_dump.state.fstype.clone()
                         },
                         data: PartDump {
                             archive: data_path,
                             blocks: fs_dump.data.blocks,
-                            fstype: fs_dump.data.fstype.clone()
                         },
                     }),
                     req_space,

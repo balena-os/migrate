@@ -4,7 +4,7 @@ use regex::Regex;
 use serde::Deserialize;
 use serde_json;
 use std::path::{Path, PathBuf};
-use std::borrow::{Cow};
+
 
 use crate::{
     common::{MigErrCtx, MigError, MigErrorKind},
@@ -91,8 +91,13 @@ pub(crate) struct LsblkInfo {
 }
 
 impl<'a> LsblkInfo {
-    pub fn for_device(device: &Path, cmds: &EnsuredCmds) -> Result<LsblkInfo, MigError> {
-        Ok(LsblkInfo::call_lsblk(Some(device), cmds)?)
+    pub fn for_device(device: &Path, cmds: &EnsuredCmds) -> Result<LsblkDevice, MigError> {
+        let lsblk_info = LsblkInfo::call_lsblk(Some(device), cmds)?;
+        if lsblk_info.blockdevices.len() == 1 {
+            Ok(lsblk_info.blockdevices[0].clone())
+        } else {
+            Err(MigError::from_remark(MigErrorKind::InvState, &format!("Invalid number of devices found for device query: {}", lsblk_info.blockdevices.len())))
+        }
     }
 
     pub fn all(cmds: &EnsuredCmds) -> Result<LsblkInfo, MigError> {
@@ -236,12 +241,24 @@ impl<'a> LsblkInfo {
         if cmd_res.status.success() {
             Ok(LsblkInfo::from_json(&cmd_res.stdout)?)
         } else {
-            let args: Vec<&str> = vec![
-                "-b",
-                "-P",
-                "-o",
-                "NAME,KNAME,MAJ:MIN,FSTYPE,MOUNTPOINT,LABEL,UUID,RO,SIZE,TYPE",
-            ];
+            let args: Vec<&str> = if let Some(device) = device {
+                _tmp_path = Some(String::from(&*device.to_string_lossy()));
+                vec![
+                    "-b",
+                    "-P",
+                    "-o",
+                    "NAME,KNAME,MAJ:MIN,FSTYPE,MOUNTPOINT,LABEL,UUID,RO,SIZE,TYPE",
+                    _tmp_path.as_ref().unwrap()
+                ]
+            } else {
+                vec![
+                    "-b",
+                    "-P",
+                    "-o",
+                    "NAME,KNAME,MAJ:MIN,FSTYPE,MOUNTPOINT,LABEL,UUID,RO,SIZE,TYPE",
+                ]
+            };
+
             let cmd_res = cmds.call(LSBLK_CMD, &args, true)?;
             if cmd_res.status.success() {
                 Ok(LsblkInfo::from_list(&cmd_res.stdout)?)
