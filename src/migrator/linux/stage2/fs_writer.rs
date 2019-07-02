@@ -111,22 +111,47 @@ pub(crate) fn write_balena_os(
 }
 
 fn sub_write(tar_path: &str, device: &Path, base_path: &Path, archive: &Option<PathBuf>) -> bool {
-    let tar_args: &[&str] = &[];
-    match Command::new(tar_path)
-        .stdin(Stdio::piped())
-        .stdout(Stdio::piped())
-        .stderr(Stdio::piped())
-        .args(tar_args)
-        .spawn()
-    {
-        Ok(cmd_res) => true,
-        Err(why) => {
-            error!(
-                "format: failed to untar archive with {} {:?}, error: {:?}",
-                tar_path, tar_args, why
-            );
-            false
+    if let Some(archive) = archive {
+        let arch_path = path_append(base_path, archive);
+        let tar_args: &[&str] = &[
+            "-xzf",
+            &arch_path.to_string_lossy(),
+            "-C",
+            &device.to_string_lossy(),
+        ];
+
+        match Command::new(tar_path)
+            .stdin(Stdio::piped())
+            .stdout(Stdio::piped())
+            .stderr(Stdio::piped())
+            .args(tar_args)
+            .output()
+        {
+            Ok(cmd_res) => {
+                if cmd_res.status.success() {
+                    true
+                } else {
+                    error!(
+                        "sub_write: failed to untar archive with {} {:?}, code: {:?} stderr: {:?}",
+                        tar_path,
+                        tar_args,
+                        cmd_res.status.code(),
+                        str::from_utf8(&cmd_res.stderr)
+                    );
+                    false
+                }
+            }
+            Err(why) => {
+                error!(
+                    "sub_write: failed to untar archive with {} {:?}, error: {:?}",
+                    tar_path, tar_args, why
+                );
+                false
+            }
         }
+    } else {
+        error!("sub_write: a required archive was not found",);
+        false
     }
 }
 

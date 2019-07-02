@@ -620,8 +620,6 @@ impl<'a> Stage2 {
             }
         }
 
-        // check existence of partitions
-
         // TODO: check fingerprints ?
 
         let boot_mountpoint =
