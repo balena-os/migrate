@@ -88,6 +88,7 @@ pub(crate) struct MigrateConfig {
     require_nwmgr_config: Option<bool>,
     gzip_internal: Option<bool>,
     flash_device: Option<PathBuf>,
+    extract_device: Option<String>,
     // COPY_NMGR_FILES="eth0_static enp2s0_static enp3s0_static"
 }
 
@@ -112,6 +113,7 @@ impl<'a> MigrateConfig {
             require_nwmgr_config: None,
             gzip_internal: None,
             flash_device: None,
+            extract_device: None
         }
     }
 
@@ -219,7 +221,18 @@ impl<'a> MigrateConfig {
         }
     }
 
-    // The following functions can only be safely called after check has succeeded
+    pub fn set_extract_device(&mut self, device: &str) {
+        self.extract_device = Some(String::from(device));
+    }
+
+    pub fn get_extract_device(&'a self) -> Option<&'a str> {
+        if let Some(ref device) = self.extract_device {
+            Some(device)
+        } else {
+            None
+        }
+    }
+
 
     pub fn set_work_dir(&mut self, work_dir: PathBuf) {
         self.work_dir = Some(work_dir);
@@ -232,6 +245,9 @@ impl<'a> MigrateConfig {
             false
         }
     }
+
+    // The following functions can only be safely called after check has succeeded
+
 
     pub fn get_work_dir(&'a self) -> &'a Path {
         if let Some(ref dir) = self.work_dir {

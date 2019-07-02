@@ -93,6 +93,13 @@ impl<'a> Config {
                     .multiple(true)
                     .help("Sets the level of verbosity"),
             )
+            .arg(
+                Arg::with_name("device-type")
+                    .short("d")
+                    .long("device-type")
+                    .value_name("type")
+                    .help("specify image device slug for extraction"),
+            )
             .get_matches();
 
         match arg_matches.occurrences_of("verbose") {
@@ -219,6 +226,17 @@ impl<'a> Config {
         if arg_matches.is_present("image") {
             if let Some(image) = arg_matches.value_of("image") {
                 config.balena.set_image_path(image);
+            }
+        }
+
+        if let MigMode::EXTRACT = config.migrate.get_mig_mode() {
+            if arg_matches.is_present("device-type") {
+                if let Some(dev_type) = arg_matches.value_of("device-type") {
+                    config.migrate.set_extract_device(dev_type);
+                }
+            } else {
+                error!("device-type option is mandatory for mode EXTRACT. Please specify a device type using the --device-type or -d option");
+                return Err(MigError::displayed());
             }
         }
 

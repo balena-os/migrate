@@ -89,6 +89,26 @@ impl Extractor {
     pub fn new(config: Config) -> Result<Extractor, MigError> {
         trace!("new: entered");
 
+        // TODO: support more devices
+        let extract_device = if let Some(extract_device) = config.migrate.get_extract_device() {
+            match extract_device {
+                "beaglebone-black" => extract_device,
+                "beaglebone-green" => extract_device,
+                _ => {
+                    error!(
+                        "Unsupported device type for extract: {}", extract_device
+                    );
+                    return Err(MigError::displayed());
+                }
+            }
+        } else {
+            error!(
+                "Missing the mandatory parameter extract-device",
+            );
+            return Err(MigError::displayed());
+        };
+
+
         let mut cmds = EnsuredCmds::new();
         if let Err(why) = cmds.ensure_cmds(REQUIRED_CMDS) {
             error!(

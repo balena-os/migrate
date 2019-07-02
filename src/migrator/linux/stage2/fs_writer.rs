@@ -18,7 +18,7 @@ use crate::{
     defs::{PART_FSTYPE, PART_NAME},
     linux::{
         ensured_cmds::{
-            EnsuredCmds, EXT_FMT_CMD, FAT_FMT_CMD, LSBLK_CMD, PARTPROBE_CMD, SFDISK_CMD, TAR_CMD,
+            EnsuredCmds, EXT_FMT_CMD, FAT_FMT_CMD, LSBLK_CMD, PARTPROBE_CMD, SFDISK_CMD, FDISK_CMD, TAR_CMD,
         },
         extract::Partition,
         linux_defs::PRE_PARTPROBE_WAIT_SECS,
@@ -27,8 +27,8 @@ use crate::{
     },
 };
 
+pub const OPTIONAL_CMDS: &[&str] = &[SFDISK_CMD, FDISK_CMD];
 pub const REQUIRED_CMDS: &[&str] = &[
-    SFDISK_CMD,
     EXT_FMT_CMD,
     FAT_FMT_CMD,
     TAR_CMD,
@@ -47,7 +47,18 @@ pub(crate) fn write_balena_os(
 ) -> FlashResult {
     // make sure we have allrequired commands
     if let CheckedImageType::FileSystems(ref fs_dump) = config.get_balena_image().image {
-        let res = partition(device, cmds.get(SFDISK_CMD).unwrap(), fs_dump);
+        let res = if let Ok(command) = cmds.get(SFDISK_CMD) {
+            sfdisk_part(device, command , fs_dump)
+        } else {
+            if let Ok(command) = cmds.get(FDISK_CMD) {
+                fdisk_part(device, command, fs_dump)
+            } else {
+                error!(
+                    "write_balena_os: no partitioning command was found",
+                );
+                return FlashResult::FailRecoverable;
+            }
+        };
 
         if let FlashResult::Ok = res {
             let lsblk_dev = match LsblkInfo::for_device(device, cmds) {
@@ -303,7 +314,121 @@ fn format(
     }
 }
 
-fn partition(device: &Path, sfdisk_path: &str, fs_dump: &FSDump) -> FlashResult {
+fn fdisk_part(device: &Path, fdisk_path: &str, fs_dump: &FSDump) -> FlashResult {
+    let mut fdisk_cmd = match Command::new(fdisk_path)
+        .args(&[&*device.to_string_lossy()])
+        .stderr(Stdio::piped())
+        .stdout(Stdio::piped())
+        .stdin(Stdio::piped())
+        .spawn()
+        {
+            Ok(child) => child,
+            Err(why) => {
+                error!(
+                    "Failed to start command : '{}', error: {:?}",
+                    fdisk_path, why
+                );
+                return FlashResult::FailRecoverable;
+            }
+        };
+    {
+        if let Some(ref mut stdin) = fdisk_cmd.stdin {
+            debug!("Writing a new partition table to '{}'", device.display());
+            let mut buffer: String = String::from("o\n");
+
+            debug!(
+                "Writing resin-boot as 'size={},bootable,type=e' to '{}'",
+                fs_dump.boot.blocks,
+                device.display()
+            );
+
+            buffer.push_str(&format!("n\np\n\n\n+{}\na\n1\n", fs_dump.boot.blocks));
+
+            debug!(
+                "Writing resin-rootA as 'size={},type=83' to '{}'",
+                fs_dump.root_a.blocks,
+                device.display()
+            );
+            buffer.push_str(&format!("n\np\n\n\n+{}\n", fs_dump.root_a.blocks));
+
+            debug!(
+                "Writing resin-rootB as 'size={},type=83' to '{}'",
+                fs_dump.root_b.blocks,
+                device.display()
+            );
+            buffer.push_str(&format!("n\np\n\n\n+{}\n", fs_dump.root_b.blocks));
+
+            // extended partition
+            debug!(
+                "Writing extended partition as 'type=5' to '{}'",
+                device.display()
+            );
+            buffer.push_str("n\ne\n\n\n");
+
+            debug!(
+                "Writing resin-state as 'size={},type=83' to '{}'",
+                fs_dump.state.blocks,
+                device.display()
+            );
+
+            buffer.push_str(&format!("n\n\n+{}\n", fs_dump.state.blocks));
+
+            debug!(
+                "Writing resin-data as 'size={},type=83' to '{}'",
+                fs_dump.state.blocks,
+                device.display()
+            );
+            buffer.push_str("n\n\n\nw\n");
+
+            let data = buffer.as_bytes();
+            let count = data.len();
+            match stdin.write(data) {
+                Ok(bytes_written) => {
+                    if bytes_written != count {
+                        error!(
+                            "Failed to write some bytes to command stdin: {}  != {}",
+                            bytes_written, count
+                        );
+                        return FlashResult::FailNonRecoverable;
+                    }
+                }
+                Err(why) => {
+                    error!("Failed to write to command stdin, error: {:?}", why);
+                    return FlashResult::FailNonRecoverable;
+                }
+            }
+        } else {
+            error!("partition: fdisk stdin could not be found");
+            return FlashResult::FailRecoverable;
+        }
+    }
+
+    debug!("done writing to fdisk stdin - command should terminate now");
+
+    // TODO: wait with timeout, terminate
+
+    let cmd_res = match fdisk_cmd.wait_with_output() {
+        Ok(cmd_res) => cmd_res,
+        Err(why) => {
+            error!("failure waiting for fdisk to terminate, error: {:?}", why);
+            return FlashResult::FailNonRecoverable;
+        }
+    };
+
+    if !cmd_res.status.success() {
+        error!(
+            "fdisk returned an error status: code: {:?}, stderr: {:?}",
+            cmd_res.status.code(),
+            str::from_utf8(&cmd_res.stderr)
+        );
+        return FlashResult::FailNonRecoverable;
+    }
+
+    debug!("fdisk stdout: {:?}", str::from_utf8(&cmd_res.stdout));
+    FlashResult::Ok
+}
+
+fn sfdisk_part(device: &Path, sfdisk_path: &str, fs_dump: &FSDump) -> FlashResult {
     let mut sfdisk_cmd = match Command::new(sfdisk_path)
         .args(&["-f", &*device.to_string_lossy()])
         .stderr(Stdio::piped())
