@@ -18,8 +18,10 @@ pub const SYS_UEFI_DIR: &str = "/sys/firmware/efi";
 
 pub const NIX_NONE: Option<&'static [u8]> = None;
 
-
 pub const STAGE2_MEM_THRESHOLD: u64 = 32 * 1024 * 1024; // 64 MiB
+
+pub const PRE_PARTPROBE_WAIT_SECS: u64 = 5;
+pub const POST_PARTPROBE_WAIT_SECS: u64 = 5;
 
 // TODO: EFI support in Linux
 /*pub const BALENA_EFI_DIR: &str = r#"/EFI/balena-migrate"#;

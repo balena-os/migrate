@@ -13,19 +13,15 @@ use crate::{
         stage2_config::{PathType, Stage2Config},
         MigErrCtx, MigError, MigErrorKind,
     },
-    defs::{DISK_BY_LABEL_PATH, STAGE2_CFG_FILE,
-           BALENA_BOOT_PART, BALENA_BOOT_FSTYPE,
-           BALENA_ROOTA_PART, BALENA_ROOTA_FSTYPE,
-           BALENA_ROOTB_PART, BALENA_ROOTB_FSTYPE,
-           BALENA_STATE_PART, BALENA_STATE_FSTYPE,
-           BALENA_DATA_PART, BALENA_DATA_FSTYPE,
+    defs::{
+        BALENA_BOOT_FSTYPE, BALENA_BOOT_PART, BALENA_DATA_FSTYPE, BALENA_DATA_PART,
+        BALENA_ROOTA_FSTYPE, BALENA_ROOTA_PART, BALENA_ROOTB_FSTYPE, BALENA_ROOTB_PART,
+        BALENA_STATE_FSTYPE, BALENA_STATE_PART, DISK_BY_LABEL_PATH, STAGE2_CFG_FILE,
     },
     linux::{
         ensured_cmds::{EnsuredCmds, UDEVADM_CMD},
         linux_common::{drive_from_partition, get_kernel_root_info, to_std_device_path},
-        linux_defs::{
-            NIX_NONE,
-        },
+        linux_defs::NIX_NONE,
         migrate_info::LsblkInfo,
     },
 };
@@ -426,17 +422,18 @@ impl<'a> Mounts {
 
         let part_label = path_append(DISK_BY_LABEL_PATH, BALENA_ROOTA_PART);
         if mount_all {
-            self.balena_root_a_mp = match Mounts::mount(ROOTA_MNT_DIR, &part_label, BALENA_ROOTA_FSTYPE) {
-                Ok(mountpoint) => Some(mountpoint),
-                Err(why) => {
-                    error!(
-                        "Failed to mount balena device: '{}', error: {:?}",
-                        part_label.display(),
-                        why
-                    );
-                    return Err(MigError::displayed());
-                }
-            };
+            self.balena_root_a_mp =
+                match Mounts::mount(ROOTA_MNT_DIR, &part_label, BALENA_ROOTA_FSTYPE) {
+                    Ok(mountpoint) => Some(mountpoint),
+                    Err(why) => {
+                        error!(
+                            "Failed to mount balena device: '{}', error: {:?}",
+                            part_label.display(),
+                            why
+                        );
+                        return Err(MigError::displayed());
+                    }
+                };
         } else {
             if !file_exists(&part_label) {
                 warn!(
@@ -449,17 +446,18 @@ impl<'a> Mounts {
 
         let part_label = path_append(DISK_BY_LABEL_PATH, BALENA_ROOTB_PART);
         if mount_all {
-            self.balena_root_b_mp = match Mounts::mount(ROOTB_MNT_DIR, &part_label, BALENA_ROOTB_FSTYPE) {
-                Ok(mountpoint) => Some(mountpoint),
-                Err(why) => {
-                    error!(
-                        "Failed to mount balena device: '{}', error: {:?}",
-                        part_label.display(),
-                        why
-                    );
-                    return Err(MigError::displayed());
-                }
-            };
+            self.balena_root_b_mp =
+                match Mounts::mount(ROOTB_MNT_DIR, &part_label, BALENA_ROOTB_FSTYPE) {
+                    Ok(mountpoint) => Some(mountpoint),
+                    Err(why) => {
+                        error!(
+                            "Failed to mount balena device: '{}', error: {:?}",
+                            part_label.display(),
+                            why
+                        );
+                        return Err(MigError::displayed());
+                    }
+                };
         } else {
             if !file_exists(&part_label) {
                 warn!(
@@ -472,17 +470,18 @@ impl<'a> Mounts {
 
         let part_label = path_append(DISK_BY_LABEL_PATH, BALENA_STATE_PART);
         if mount_all {
-            self.balena_state_mp = match Mounts::mount(STATE_MNT_DIR, &part_label, BALENA_STATE_FSTYPE) {
-                Ok(mountpoint) => Some(mountpoint),
-                Err(why) => {
-                    error!(
-                        "Failed to mount balena device: '{}', error: {:?}",
-                        part_label.display(),
-                        why
-                    );
-                    return Err(MigError::displayed());
-                }
-            };
+            self.balena_state_mp =
+                match Mounts::mount(STATE_MNT_DIR, &part_label, BALENA_STATE_FSTYPE) {
+                    Ok(mountpoint) => Some(mountpoint),
+                    Err(why) => {
+                        error!(
+                            "Failed to mount balena device: '{}', error: {:?}",
+                            part_label.display(),
+                            why
+                        );
+                        return Err(MigError::displayed());
+                    }
+                };
         } else {
             if !file_exists(&part_label) {
                 warn!(
@@ -515,14 +514,16 @@ impl<'a> Mounts {
         Ok(parts_found)
     }
 
-    pub fn unmount_balena(&mut self, mount_all: bool) -> bool {
+    pub fn unmount_balena(&mut self) -> bool {
         let mut success = true;
 
         if let Some(ref mountpoint) = self.balena_boot_mp {
             if let Err(why) = umount(mountpoint) {
                 error!(
                     "Failed to unmount device from mountpoint '{}', error: {:?}",
-                    mountpoint.display(), why);
+                    mountpoint.display(),
+                    why
+                );
                 success = false;
             }
         }
@@ -531,7 +532,9 @@ impl<'a> Mounts {
             if let Err(why) = umount(mountpoint) {
                 error!(
                     "Failed to unmount device from mountpoint '{}', error: {:?}",
-                    mountpoint.display(), why);
+                    mountpoint.display(),
+                    why
+                );
                 success = false;
             }
         }
@@ -540,7 +543,9 @@ impl<'a> Mounts {
             if let Err(why) = umount(mountpoint) {
                 error!(
                     "Failed to unmount device from mountpoint '{}', error: {:?}",
-                    mountpoint.display(), why);
+                    mountpoint.display(),
+                    why
+                );
                 success = false;
             }
         }
@@ -549,7 +554,9 @@ impl<'a> Mounts {
             if let Err(why) = umount(mountpoint) {
                 error!(
                     "Failed to unmount device from mountpoint '{}', error: {:?}",
-                    mountpoint.display(), why);
+                    mountpoint.display(),
+                    why
+                );
                 success = false;
             }
         }
@@ -558,14 +565,15 @@ impl<'a> Mounts {
             if let Err(why) = umount(mountpoint) {
                 error!(
                     "Failed to unmount device from mountpoint '{}', error: {:?}",
-                    mountpoint.display(), why);
+                    mountpoint.display(),
+                    why
+                );
                 success = false;
             }
         }
 
         success
     }
-
 
     // this could be the function used to mount other drives too (boot, work)
     fn mount<P1: AsRef<Path>, P2: AsRef<Path>>(

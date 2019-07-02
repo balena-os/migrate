@@ -27,7 +27,7 @@ pub(crate) struct PartDump {
 pub(crate) enum PartCheck {
     None,
     Read,
-    ReadWrite
+    ReadWrite,
 }
 
 #[derive(Debug, Serialize, Deserialize, Clone)]

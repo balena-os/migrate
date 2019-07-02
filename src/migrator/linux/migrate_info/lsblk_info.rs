@@ -5,7 +5,6 @@ use serde::Deserialize;
 use serde_json;
 use std::path::{Path, PathBuf};
 
-
 use crate::{
     common::{MigErrCtx, MigError, MigErrorKind},
     linux::{EnsuredCmds, LSBLK_CMD},
@@ -96,7 +95,13 @@ impl<'a> LsblkInfo {
         if lsblk_info.blockdevices.len() == 1 {
             Ok(lsblk_info.blockdevices[0].clone())
         } else {
-            Err(MigError::from_remark(MigErrorKind::InvState, &format!("Invalid number of devices found for device query: {}", lsblk_info.blockdevices.len())))
+            Err(MigError::from_remark(
+                MigErrorKind::InvState,
+                &format!(
+                    "Invalid number of devices found for device query: {}",
+                    lsblk_info.blockdevices.len()
+                ),
+            ))
         }
     }
 
@@ -248,7 +253,7 @@ impl<'a> LsblkInfo {
                     "-P",
                     "-o",
                     "NAME,KNAME,MAJ:MIN,FSTYPE,MOUNTPOINT,LABEL,UUID,RO,SIZE,TYPE",
-                    _tmp_path.as_ref().unwrap()
+                    _tmp_path.as_ref().unwrap(),
                 ]
             } else {
                 vec![
@@ -270,7 +275,6 @@ impl<'a> LsblkInfo {
             }
         }
     }
-
 
     fn from_list(list: &str) -> Result<LsblkInfo, MigError> {
         let param_re = Regex::new(r#"^([^=]+)="([^"]*)"$"#).unwrap();

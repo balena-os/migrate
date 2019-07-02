@@ -14,7 +14,7 @@ use crate::{
         config::balena_config::ImageType, format_size_with_unit, Config, FileInfo, FileType,
         MigErrCtx, MigError, MigErrorKind,
     },
-    defs::{PART_NAME, PART_FSTYPE},
+    defs::{PART_FSTYPE, PART_NAME},
     linux::{
         ensured_cmds::{EnsuredCmds, FILE_CMD, MKTEMP_CMD, MOUNT_CMD, TAR_CMD},
         linux_common::mktemp,
@@ -42,7 +42,6 @@ const EXTRACT_FILE_TEMPLATE: &str = "extract.XXXXXXXXXX";
 const MOUNTPOINT_TEMPLATE: &str = "mountpoint.XXXXXXXXXX";
 
 const BUFFER_SIZE: usize = 1024 * 1024; // 1Mb
-
 
 #[repr(C, packed)]
 struct PartEntry {

@@ -8,23 +8,26 @@ use std::fs::File;
 use std::io::{Read, Write};
 use std::path::Path;
 use std::process::{Command, Stdio};
+use std::thread;
 use std::time::{Duration, Instant};
 
 use crate::{
     common::{format_size_with_unit, stage2_config::Stage2Config},
     linux::{
-        stage2::FlashResult,
-        ensured_cmds::{
-            EnsuredCmds, DD_CMD, GZIP_CMD},
+        ensured_cmds::{EnsuredCmds, DD_CMD, GZIP_CMD, LSBLK_CMD, PARTPROBE_CMD, UDEVADM_CMD},
+        linux_defs::{POST_PARTPROBE_WAIT_SECS, PRE_PARTPROBE_WAIT_SECS},
+        stage2::{mounts::Mounts, FlashResult},
     },
 };
 
 const DD_BLOCK_SIZE: usize = 4194304;
+const UDEVADM_PARAMS: &[&str] = &["settle", "-t", "10"];
+
+pub const REQUIRED_CMDS: &[&str] = &[DD_CMD, PARTPROBE_CMD, UDEVADM_CMD, LSBLK_CMD];
 
 // TODO: partition & untar balena to drive
 
 // TODO: return something else instead (success, (recoverable / not recoverable))
-
 
 fn flash_gzip_internal(
     dd_cmd: &str,
@@ -43,14 +46,7 @@ fn flash_gzip_internal(
             return FlashResult::FailRecoverable;
         }
     });
-    /*    {
-            Ok(decoder) => decoder,
-            Err(why) => {
-                error!("Failed to create gzip decoder from image file '{}', error: {:?}", image_path.display(), why);
-                return FlashResult::FailRecoverable;
-            }
-        };
-    */
+
     debug!("invoking dd");
 
     let mut dd_child = match Command::new(dd_cmd)
@@ -220,6 +216,7 @@ fn flash_gzip_external(
 pub(crate) fn flash_balena_os(
     target_path: &Path,
     cmds: &EnsuredCmds,
+    mounts: &mut Mounts,
     config: &Stage2Config,
     image_path: &Path,
 ) -> FlashResult {
@@ -232,6 +229,26 @@ pub(crate) fn flash_balena_os(
         };
 
         sync();
+
+        info!(
+            "The Balena OS image has been written to the device '{}'",
+            target_path.display()
+        );
+
+        thread::sleep(Duration::from_secs(PRE_PARTPROBE_WAIT_SECS));
+
+        let _res = cmds.call(PARTPROBE_CMD, &[&target_path.to_string_lossy()], true);
+
+        thread::sleep(Duration::from_secs(POST_PARTPROBE_WAIT_SECS));
+
+        let _res = cmds.call(UDEVADM_CMD, UDEVADM_PARAMS, true);
+
+        if let Err(why) = mounts.mount_balena(false) {
+            error!("Failed to mount balena partitions, error: {:?}", why);
+            return FlashResult::FailNonRecoverable;
+        }
+
+        // TODO:
 
         res
     } else {

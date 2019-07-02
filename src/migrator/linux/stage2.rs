@@ -21,7 +21,7 @@ use crate::{
     defs::{FailMode, BACKUP_FILE, SYSTEM_CONNECTIONS_DIR},
     linux::{
         device,
-        ensured_cmds::{EnsuredCmds, DD_CMD, LSBLK_CMD, PARTPROBE_CMD, REBOOT_CMD, UDEVADM_CMD},
+        ensured_cmds::{EnsuredCmds, REBOOT_CMD},
         linux_common::get_mem_info,
         linux_defs::{MIGRATE_LOG_FILE, STAGE2_MEM_THRESHOLD},
     },
@@ -32,13 +32,13 @@ use crate::{
 // later ensure all other required commands
 
 mod fs_writer;
-use fs_writer::{write_balena_os};
 
 mod flasher;
-use flasher::{flash_balena_os};
 
 pub(crate) mod mounts;
+use core::borrow::BorrowMut;
 use mounts::Mounts;
+use std::cell::RefCell;
 
 const REBOOT_DELAY: u64 = 3;
 const S2_REV: u32 = 4;
@@ -54,16 +54,10 @@ const DATA_MNT_DIR: &str = "mnt_data";
 
 const DD_BLOCK_SIZE: usize = 4194304;
 
-const MIG_REQUIRED_CMDS: &'static [&'static str] =
-    &[DD_CMD, PARTPROBE_CMD, REBOOT_CMD, UDEVADM_CMD, LSBLK_CMD];
+const MIG_REQUIRED_CMDS: &[&str] = &[REBOOT_CMD];
 
 const BALENA_IMAGE_FILE: &str = "balenaOS.img.gz";
 const BALENA_CONFIG_FILE: &str = "config.json";
-
-const PRE_PARTPROBE_WAIT_SECS: u64 = 5;
-const POST_PARTPROBE_WAIT_SECS: u64 = 5;
-
-const UDEVADM_PARAMS: &[&str] = &["settle", "-t", "10"];
 
 const BALENA_BOOT_FS_FILE: &str = "resin-boot.tgz";
 const BALENA_ROOTA_FS_FILE: &str = "resin-rootA.tgz";
@@ -78,10 +72,10 @@ pub(crate) enum FlashResult {
 }
 
 pub(crate) struct Stage2 {
-    cmds: EnsuredCmds,
-    mounts: Mounts,
+    pub cmds: RefCell<EnsuredCmds>,
+    pub mounts: RefCell<Mounts>,
     config: Stage2Config,
-    recoverable_state: bool,
+    pub recoverable_state: bool,
 }
 
 impl<'a> Stage2 {
@@ -186,8 +180,8 @@ impl<'a> Stage2 {
         }
 
         return Ok(Stage2 {
-            cmds,
-            mounts,
+            cmds: RefCell::new(cmds),
+            mounts: RefCell::new(mounts),
             config: stage2_cfg,
             recoverable_state: false,
         });
@@ -204,7 +198,7 @@ impl<'a> Stage2 {
         // Recover device type and restore original boot configuration
 
         let device = device::from_config(device_type, boot_type)?;
-        match device.restore_boot(&self.mounts, &self.config) {
+        match device.restore_boot(&self.mounts.borrow(), &self.config) {
             Ok(_) => {
                 info!("Boot configuration was restored sucessfully");
                 // boot config restored can reboot
@@ -220,14 +214,29 @@ impl<'a> Stage2 {
 
         info!("migrating {:?} boot type: {:?}", device_type, boot_type);
 
-        let work_path = if let Some(work_path) = self.mounts.get_work_path() {
+        match self.cmds.borrow_mut().ensure_cmds(
+            if let CheckedImageType::Flasher(ref _image_path) = self.config.get_balena_image().image
+            {
+                flasher::REQUIRED_CMDS
+            } else {
+                fs_writer::REQUIRED_CMDS
+            },
+        ) {
+            Ok(_) => (),
+            Err(why) => {
+                error!("Could not ensure required commands, error: {:?}", why);
+                return Err(MigError::displayed());
+            }
+        }
+
+        let work_path = if let Some(work_path) = self.mounts.borrow().get_work_path() {
             work_path.to_path_buf()
         } else {
             error!("The working directory was not mounted - aborting migration");
             return Err(MigError::displayed());
         };
 
-        let mig_tmp_dir = if !self.mounts.is_work_no_copy() {
+        let mig_tmp_dir = if !self.mounts.borrow().is_work_no_copy() {
             // check if we have enough space to copy files to initramfs
             let mig_tmp_dir = match get_mem_info() {
                 Ok((mem_tot, mem_avail)) => {
@@ -499,7 +508,7 @@ impl<'a> Stage2 {
             let _res = Logger::set_log_dest(&LogDestination::StreamStderr, NO_STREAM);
         }
 
-        let _res = self.mounts.unmount_all();
+        let _res = self.mounts.borrow_mut().unmount_all();
 
         info!("Unmounted root file system");
 
@@ -508,9 +517,9 @@ impl<'a> Stage2 {
         // * from migrate:
         // * gzip -d -c "${MIGRATE_TMP}/${IMAGE_FILE}" | dd of=${BOOT_DEV} bs=4194304 || fail  "failed with gzip -d -c ${MIGRATE_TMP}/${IMAGE_FILE} | dd of=${BOOT_DEV} bs=4194304"
 
-        let target_path = self.mounts.get_flash_device();
+        let target_path = self.mounts.borrow().get_flash_device().to_path_buf();
 
-        if !file_exists(target_path) {
+        if !file_exists(&target_path) {
             return Err(MigError::from_remark(
                 MigErrorKind::NotFound,
                 &format!(
@@ -525,159 +534,193 @@ impl<'a> Stage2 {
             Stage2::exit(&FailMode::Reboot)?;
         }
 
-        let image_path = path_append(mig_tmp_dir, BALENA_IMAGE_FILE);
-        info!(
-            "attempting to flash '{}' to '{}'",
-            image_path.display(),
-            target_path.display()
-        );
+        match self.config.get_balena_image().image {
+            CheckedImageType::Flasher(ref image_file) => {
+                // TODO: move some, if not most of this into flasher
 
-        if !file_exists(&image_path) {
-            return Err(MigError::from_remark(
-                MigErrorKind::NotFound,
-                &format!("Could not locate OS image: '{}'", image_path.display()),
-            ));
-        }
+                let image_path = if self.mounts.borrow().is_work_no_copy() {
+                    if let Some(work_dir) = self.mounts.borrow().get_work_path() {
+                        path_append(work_dir, image_file)
+                    } else {
+                        warn!("Work path not found in no_copy mode, trying mig temp");
+                        path_append(mig_tmp_dir, BALENA_IMAGE_FILE)
+                    }
+                } else {
+                    path_append(mig_tmp_dir, BALENA_IMAGE_FILE)
+                };
 
-        match flash_balena_os(&target_path, &self.cmds, &self.config, &image_path) {
-            FlashResult::Ok => {}
-            FlashResult::FailRecoverable => {
-                error!("Failed to flash balena OS image");
+                info!(
+                    "attempting to flash '{}' to '{}'",
+                    image_path.display(),
+                    target_path.display()
+                );
+
+                if !file_exists(&image_path) {
+                    return Err(MigError::from_remark(
+                        MigErrorKind::NotFound,
+                        &format!("Could not locate OS image: '{}'", image_path.display()),
+                    ));
+                }
+
+                match flasher::flash_balena_os(
+                    &target_path,
+                    &self.cmds.borrow(),
+                    &mut self.mounts.borrow_mut(),
+                    &self.config,
+                    &image_path,
+                ) {
+                    FlashResult::Ok => {}
+                    FlashResult::FailRecoverable => {
+                        error!("Failed to flash balena OS image");
+                        Logger::flush();
+                        self.recoverable_state = true;
+                        return Err(MigError::displayed());
+                    }
+                    FlashResult::FailNonRecoverable => {
+                        error!("Failed to flash balena OS image");
+                        Logger::flush();
+                        self.recoverable_state = false;
+                        return Err(MigError::displayed());
+                    }
+                }
+
                 Logger::flush();
-                self.recoverable_state = true;
-                return Err(MigError::displayed());
             }
-            FlashResult::FailNonRecoverable => {
-                error!("Failed to flash balena OS image");
-                Logger::flush();
-                self.recoverable_state = false;
-                return Err(MigError::displayed());
+            CheckedImageType::FileSystems(ref fs_dump) => {
+                let base_path = if self.mounts.borrow().is_work_no_copy() {
+                    if let Some(work_dir) = self.mounts.borrow().get_work_path() {
+                        work_dir.to_path_buf()
+                    } else {
+                        warn!("Work path not found in no_copy mode, trying mig temp");
+                        mig_tmp_dir.to_path_buf()
+                    }
+                } else {
+                    mig_tmp_dir.to_path_buf()
+                };
+
+                match fs_writer::write_balena_os(
+                    &target_path,
+                    &self.cmds.borrow(),
+                    &mut self.mounts.borrow_mut(),
+                    &self.config,
+                    &base_path,
+                ) {
+                    FlashResult::Ok => (),
+                    FlashResult::FailNonRecoverable => {
+                        self.recoverable_state = false;
+                        error!("Failed to write balena os image");
+                        return Err(MigError::displayed());
+                    }
+                    FlashResult::FailRecoverable => {
+                        self.recoverable_state = true;
+                        error!("Failed to write balena os image");
+                        return Err(MigError::displayed());
+                    }
+                }
             }
         }
-
-        Logger::flush();
-
-        sync();
-
-        info!(
-            "The Balena OS image has been written to the device '{}'",
-            target_path.display()
-        );
-
-        thread::sleep(Duration::from_secs(PRE_PARTPROBE_WAIT_SECS));
-
-        self.cmds
-            .call(PARTPROBE_CMD, &[&target_path.to_string_lossy()], true)?;
-
-        thread::sleep(Duration::from_secs(POST_PARTPROBE_WAIT_SECS));
-
-        let _res = self.cmds.call(UDEVADM_CMD, UDEVADM_PARAMS, true);
 
         // check existence of partitions
 
-        if let Ok(_parts_ok) = self.mounts.mount_balena(false) {
-            // TODO: check fingerprints ?
+        // TODO: check fingerprints ?
 
-            // TODO: honor self.mounts.is_work_no_copy() - use appropriate paths
-
-            let boot_mountpoint = if let Some(mountpoint) = self.mounts.get_balena_boot_mountpoint() {
-                mountpoint.clone()
+        let boot_mountpoint =
+            if let Some(mountpoint) = self.mounts.borrow().get_balena_boot_mountpoint() {
+                mountpoint.to_path_buf()
             } else {
+                self.recoverable_state = false;
                 error!("Unable to retrieve balena boot mountpoint");
                 return Err(MigError::displayed());
             };
 
+        let src = path_append(mig_tmp_dir, BALENA_CONFIG_FILE);
+        let tgt = path_append(&boot_mountpoint, BALENA_CONFIG_FILE);
 
-            let src = path_append(mig_tmp_dir, BALENA_CONFIG_FILE);
-            let tgt = path_append(boot_mountpoint, BALENA_CONFIG_FILE);
+        copy(&src, &tgt).context(MigErrCtx::from_remark(
+            MigErrorKind::Upstream,
+            &format!(
+                "failed to copy balena config to boot mount dir, '{}' -> '{}'",
+                src.display(),
+                tgt.display()
+            ),
+        ))?;
 
-            copy(&src, &tgt).context(MigErrCtx::from_remark(
+        info!("copied balena OS config to '{}'", tgt.display());
+
+        // copy system connections
+        let nwmgr_dir = path_append(mig_tmp_dir, SYSTEM_CONNECTIONS_DIR);
+        if dir_exists(&nwmgr_dir)? {
+            let tgt_path = path_append(&boot_mountpoint, SYSTEM_CONNECTIONS_DIR);
+            for path in read_dir(&nwmgr_dir).context(MigErrCtx::from_remark(
                 MigErrorKind::Upstream,
-                &format!(
-                    "failed to copy balena config to boot mount dir, '{}' -> '{}'",
-                    src.display(),
-                    tgt.display()
-                ),
-            ))?;
-
-            info!("copied balena OS config to '{}'", tgt.display());
-
-            // copy system connections
-            let nwmgr_dir = path_append(mig_tmp_dir, SYSTEM_CONNECTIONS_DIR);
-            if dir_exists(&nwmgr_dir)? {
-                let tgt_path = path_append(&boot_mountpoint, SYSTEM_CONNECTIONS_DIR);
-                for path in read_dir(&nwmgr_dir).context(MigErrCtx::from_remark(
-                    MigErrorKind::Upstream,
-                    &format!("Failed to read directory: '{}'", nwmgr_dir.display()),
-                ))? {
-                    if let Ok(ref path) = path {
-                        let tgt = path_append(&tgt_path, path.file_name());
-                        copy(path.path(), &tgt).context(MigErrCtx::from_remark(
-                            MigErrorKind::Upstream,
-                            &format!(
-                                "Failed to copy '{}' to '{}'",
-                                path.path().display(),
-                                tgt.display()
-                            ),
-                        ))?;
-                        info!("copied '{}' to '{}'", path.path().display(), tgt.display());
-                    } else {
-                        error!("failed to read path element: {:?}", path);
-                    }
-                }
-            } else {
-                warn!("No network manager configurations were copied");
-            }
-
-            // we can hope to successfully reboot again after writing config.json and system-connections
-            self.recoverable_state = true;
-
-            if let Some(data_mountpoint) = self.mounts.get_balena_data_mountpoint() {
-                // TODO: copy log, backup to data_path
-                if self.config.has_backup() {
-                    // TODO: check available disk space
-                    let source_path = path_append(&mig_tmp_dir, BACKUP_FILE);
-                    let target_path = path_append(&data_mountpoint, BACKUP_FILE);
-
-                    copy(&source_path, &target_path).context(MigErrCtx::from_remark(
+                &format!("Failed to read directory: '{}'", nwmgr_dir.display()),
+            ))? {
+                if let Ok(ref path) = path {
+                    let tgt = path_append(&tgt_path, path.file_name());
+                    copy(path.path(), &tgt).context(MigErrCtx::from_remark(
                         MigErrorKind::Upstream,
                         &format!(
-                            "Failed copy backup file to data partition '{}' -> '{}'",
-                            source_path.display(),
-                            target_path.display()
+                            "Failed to copy '{}' to '{}'",
+                            path.path().display(),
+                            tgt.display()
                         ),
                     ))?;
-                    info!("copied backup  to '{}'", target_path.display());
-                }
-
-                if Logger::get_log_dest().is_buffer_dest() {
-                    let log_path = path_append(&data_mountpoint, MIGRATE_LOG_FILE);
-                    match Logger::set_log_file(&LogDestination::Stderr, &log_path) {
-                        Ok(_) => {
-                            info!("Set log file to '{}'", log_path.display());
-                            Logger::flush();
-                        }
-                        Err(why) => {
-                            warn!(
-                                "Failed to set log file to '{}', error: {:?}",
-                                log_path.display(),
-                                why
-                            );
-                        }
-                    }
+                    info!("copied '{}' to '{}'", path.path().display(), tgt.display());
+                } else {
+                    error!("failed to read path element: {:?}", path);
                 }
             }
         } else {
-            error!("Failed to mount balena partitions - cannot transfer configuration. Giving up");
-            return Err(MigError::displayed());
+            warn!("No network manager configurations were copied");
         }
+
+        // we can hope to successfully reboot again after writing config.json and system-connections
+        self.recoverable_state = true;
+
+        if let Some(data_mountpoint) = self.mounts.borrow().get_balena_data_mountpoint() {
+            // TODO: copy log, backup to data_path
+            if self.config.has_backup() {
+                // TODO: check available disk space
+                let source_path = path_append(&mig_tmp_dir, BACKUP_FILE);
+                let target_path = path_append(&data_mountpoint, BACKUP_FILE);
+
+                copy(&source_path, &target_path).context(MigErrCtx::from_remark(
+                    MigErrorKind::Upstream,
+                    &format!(
+                        "Failed copy backup file to data partition '{}' -> '{}'",
+                        source_path.display(),
+                        target_path.display()
+                    ),
+                ))?;
+                info!("copied backup  to '{}'", target_path.display());
+            }
+
+            if Logger::get_log_dest().is_buffer_dest() {
+                let log_path = path_append(&data_mountpoint, MIGRATE_LOG_FILE);
+                match Logger::set_log_file(&LogDestination::Stderr, &log_path) {
+                    Ok(_) => {
+                        info!("Set log file to '{}'", log_path.display());
+                        Logger::flush();
+                    }
+                    Err(why) => {
+                        warn!(
+                            "Failed to set log file to '{}', error: {:?}",
+                            log_path.display(),
+                            why
+                        );
+                    }
+                }
+            }
+        }
+
+        let _res = self.mounts.borrow_mut().unmount_balena();
 
         info!(
             "Migration stage 2 was successful, rebooting in {} seconds!",
             REBOOT_DELAY
         );
 
-        let _res = self.mounts.unmount_log();
+        let _res = self.mounts.borrow_mut().unmount_log();
 
         thread::sleep(Duration::new(REBOOT_DELAY, 0));
 
