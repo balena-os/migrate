@@ -11,6 +11,7 @@ use crate::{
         backup, dir_exists, format_size_with_unit, path_append,
         stage2_config::{PathType, Stage2ConfigBuilder, Stage2LogConfig},
         Config, MigErrCtx, MigError, MigErrorKind, MigMode,
+        config::balena_config::{ImageType, FSDump},
     },
     defs::{BACKUP_FILE, MIN_DISK_SIZE, SYSTEM_CONNECTIONS_DIR},
 };
@@ -213,6 +214,17 @@ impl<'a> LinuxMigrator {
             boot_info.drive.display(),
             format_size_with_unit(flash_dev_size)
         );
+
+        if let ImageType::FileSystems(ref fs_dump) = config.balena.get_image_path() {
+            if fs_dump.device_slug != device.get_device_slug() {
+                error!(
+                    "The device-slug of the image dump configuration differs from the detect device slug '{}' != '{}'",
+                    fs_dump.device_slug,
+                    device.get_device_slug()
+                );
+                return Err(MigError::from(MigErrorKind::Displayed));
+            }
+        }
 
         // TODO: check available space for work files here if work is not on a distinct partition
 

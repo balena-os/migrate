@@ -78,12 +78,13 @@ pub(crate) struct Partition {
 pub(crate) struct Extractor {
     cmds: EnsuredCmds,
     config: Config,
-    // gzipped: bool,
+    device_slug: String,
     image_file: Box<ImageFile>,
 }
 
 // TODO: Extractor could modify config / save new ImageType
 // TODO: Save ImageType as yml file
+
 
 impl Extractor {
     pub fn new(config: Config) -> Result<Extractor, MigError> {
@@ -92,8 +93,8 @@ impl Extractor {
         // TODO: support more devices
         let extract_device = if let Some(extract_device) = config.migrate.get_extract_device() {
             match extract_device {
-                "beaglebone-black" => extract_device,
-                "beaglebone-green" => extract_device,
+                "beaglebone-black" => String::from(extract_device),
+                "beaglebone-green" => String::from(extract_device),
                 _ => {
                     error!(
                         "Unsupported device type for extract: {}", extract_device
@@ -137,6 +138,7 @@ impl Extractor {
                             cmds,
                             config,
                             image_file: Box::new(gzip_file),
+                            device_slug: String::from(extract_device),
                         });
                     }
                     Err(why) => {
@@ -157,6 +159,7 @@ impl Extractor {
                                 cmds,
                                 config,
                                 image_file: Box::new(plain_file),
+                                device_slug: extract_device,
                             });
                         }
                         Err(why) => {
@@ -294,6 +297,7 @@ impl Extractor {
 
         if partitions.len() == 5 {
             let res = ImageType::FileSystems(FSDump {
+                device_slug: self.device_slug.clone(),
                 check: None,
                 boot: PartDump {
                     archive: partitions[0].archive.clone(),

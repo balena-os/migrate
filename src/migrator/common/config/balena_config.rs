@@ -32,6 +32,7 @@ pub(crate) enum PartCheck {
 
 #[derive(Debug, Serialize, Deserialize, Clone)]
 pub(crate) struct FSDump {
+    pub device_slug: String,
     pub check: Option<PartCheck>,
     pub boot: PartDump,
     pub root_a: PartDump,
