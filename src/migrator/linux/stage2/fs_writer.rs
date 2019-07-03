@@ -27,16 +27,19 @@ use crate::{
     },
 };
 
-pub const OPTIONAL_CMDS: &[&str] = &[SFDISK_CMD, FDISK_CMD];
+// pub const OPTIONAL_CMDS: &[&str] = &[SFDISK_CMD, FDISK_CMD];
 pub const REQUIRED_CMDS: &[&str] = &[
     EXT_FMT_CMD,
     FAT_FMT_CMD,
     TAR_CMD,
     LSBLK_CMD,
     PARTPROBE_CMD,
+    FDISK_CMD
 ];
 
-// TODO: partition & untar balena to drive
+pub(crate) fn check_commands(cmds: &mut EnsuredCmds) -> Result<(),MigError> {
+    Ok(cmds.ensure_cmds(REQUIRED_CMDS)?)
+}
 
 pub(crate) fn write_balena_os(
     device: &Path,
@@ -47,17 +50,13 @@ pub(crate) fn write_balena_os(
 ) -> FlashResult {
     // make sure we have allrequired commands
     if let CheckedImageType::FileSystems(ref fs_dump) = config.get_balena_image().image {
-        let res = if let Ok(command) = cmds.get(SFDISK_CMD) {
-            sfdisk_part(device, command , fs_dump)
+        let res = if let Ok(command) = cmds.get(FDISK_CMD) {
+            fdisk_part(device, command, fs_dump)
         } else {
-            if let Ok(command) = cmds.get(FDISK_CMD) {
-                fdisk_part(device, command, fs_dump)
-            } else {
-                error!(
-                    "write_balena_os: no partitioning command was found",
-                );
-                return FlashResult::FailRecoverable;
-            }
+            error!(
+                "write_balena_os: no partitioning command was found",
+            );
+            return FlashResult::FailRecoverable;
         };
 
         if let FlashResult::Ok = res {
@@ -314,6 +313,10 @@ fn format(
     }
 }
 
+// TODO: partition manually instead of using fdisk
+// thus make partitioning recoverable
+// optionally write extracted boot sectors in the process
+
 fn fdisk_part(device: &Path, fdisk_path: &str, fs_dump: &FSDump) -> FlashResult {
     let mut fdisk_cmd = match Command::new(fdisk_path)
         .args(&[&*device.to_string_lossy()])
@@ -428,6 +431,7 @@ fn fdisk_part(device: &Path, fdisk_path: &str, fs_dump: &FSDump) -> FlashResult 
     FlashResult::Ok
 }
 
+/*
 fn sfdisk_part(device: &Path, sfdisk_path: &str, fs_dump: &FSDump) -> FlashResult {
     let mut sfdisk_cmd = match Command::new(sfdisk_path)
         .args(&["-f", &*device.to_string_lossy()])
@@ -546,3 +550,4 @@ fn sfdisk_part(device: &Path, sfdisk_path: &str, fs_dump: &FSDump) -> FlashResul
     debug!("sfdisk stdout: {:?}", str::from_utf8(&cmd_res.stdout));
     FlashResult::Ok
 }
+*/

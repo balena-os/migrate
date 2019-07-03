@@ -214,19 +214,13 @@ impl<'a> Stage2 {
 
         info!("migrating {:?} boot type: {:?}", device_type, boot_type);
 
-        match self.cmds.borrow_mut().ensure_cmds(
-            if let CheckedImageType::Flasher(ref _image_path) = self.config.get_balena_image().image
-            {
-                flasher::REQUIRED_CMDS
-            } else {
-                fs_writer::REQUIRED_CMDS
-            },
-        ) {
-            Ok(_) => (),
-            Err(why) => {
-                error!("Could not ensure required commands, error: {:?}", why);
-                return Err(MigError::displayed());
-            }
+        if let Err(why) = if let CheckedImageType::Flasher(ref _image_path) = self.config.get_balena_image().image {
+            flasher::check_commands(&mut self.cmds.borrow_mut())
+        } else {
+            fs_writer::check_commands(&mut self.cmds.borrow_mut())
+        } {
+            error!("Some programs required to write the OS image to disk could not be located, error: '{:?}", why);
+            return Err(MigError::displayed());
         }
 
         let work_path = if let Some(work_path) = self.mounts.borrow().get_work_path() {

@@ -323,19 +323,25 @@ impl Extractor {
 
             debug!("res: {:?}", &res);
 
+            let yaml_config = serde_yaml::to_string(&res).context(MigErrCtx::from_remark(
+                MigErrorKind::Upstream,
+                &format!("Failed to serialize config to yaml")
+            ))?;
+
+
+            let mut entabbed_cfg = String::new();
+            let lines = yaml_config.lines();
+            for line in lines {
+                entabbed_cfg.push_str(&format("    {}\n", line));
+            }
+
             println!("image config:");
-            println!(
-                "{}",
-                serde_yaml::to_string(&res).context(MigErrCtx::from_remark(
-                    MigErrorKind::Upstream,
-                    &format!("Failed to serialize config to yaml")
-                ))?
-            );
+            println!("{}", entabbed_cfg);
 
             Ok(res)
         } else {
             error!(
-                "Unexptected number of partitions found in image: '{}', {}",
+                "Unexpected number of partitions found in image: '{}', {}",
                 self.image_file.get_path().display(),
                 partitions.len()
             );
