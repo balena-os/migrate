@@ -332,7 +332,7 @@ impl Extractor {
             let mut entabbed_cfg = String::new();
             let lines = yaml_config.lines();
             for line in lines {
-                entabbed_cfg.push_str(&format("    {}\n", line));
+                entabbed_cfg.push_str(&format!("    {}\n", line));
             }
 
             println!("image config:");

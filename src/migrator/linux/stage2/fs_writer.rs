@@ -218,6 +218,7 @@ fn balena_write(mounts: &Mounts, tar_path: &str, fs_dump: &FSDump, base_path: &P
 
 fn sub_format(device: &Path, label: &str, command: &str, check: &PartCheck) -> bool {
     let mut args: Vec<&str> = vec!["-n", label];
+
     match check {
         PartCheck::None => (),
         PartCheck::Read => {
@@ -227,6 +228,7 @@ fn sub_format(device: &Path, label: &str, command: &str, check: &PartCheck) -> b
             args.push("-cc");
         }
     }
+
     let dev_path = String::from(&*device.to_string_lossy());
     args.push(&dev_path);
 
@@ -267,8 +269,9 @@ fn format(
             let check = if let Some(ref check) = fs_dump.check {
                 check
             } else {
-                // TODO: default to read check ?
-                &PartCheck::Read
+                // TODO: default to None until checks are supported in mke2fs ?
+                &PartCheck::None
+                // &PartCheck::Read
             };
 
             let fat_check = if let PartCheck::ReadWrite = check {
