@@ -54,6 +54,7 @@ fn flash_gzip_internal(
             }
         };
     */
+
     debug!("invoking dd");
 
     let mut dd_child = match Command::new(dd_cmd)
@@ -69,6 +70,7 @@ fn flash_gzip_internal(
         Ok(dd_child) => dd_child,
         Err(why) => {
             error!("failed to execute command {}, error: {:?}", dd_cmd, why);
+            Logger::flush();
             return FlashResult::FailRecoverable;
         }
     };
@@ -101,7 +103,7 @@ fn flash_gzip_internal(
                 let bytes_written = match stdin.write(&buffer[0..bytes_read]) {
                     Ok(bytes_written) => bytes_written,
                     Err(why) => {
-                        error!("Failed to write uncopressed data to dd, error {:?}", why);
+                        error!("Failed to write uncompressed data to dd, error {:?}", why);
                         return fail_res;
                     }
                 };
