@@ -384,10 +384,10 @@ fn fdisk_part(device: &Path, fdisk_path: &str, fs_dump: &FSDump) -> FlashResult 
                 fs_dump.state.blocks,
                 device.display()
             );
-            buffer.push_str("n\n\n\nw\n");
+            buffer.push_str("n\n\n\nw\nq\n");
 
             debug!("fdisk sdtin command string: {:?}", buffer);
-            
+
             let data = buffer.as_bytes();
             let count = data.len();
             match stdin.write(data) {
