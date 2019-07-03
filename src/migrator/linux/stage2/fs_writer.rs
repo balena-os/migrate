@@ -348,21 +348,21 @@ fn fdisk_part(device: &Path, fdisk_path: &str, fs_dump: &FSDump) -> FlashResult 
                 device.display()
             );
 
-            buffer.push_str(&format!("n\np\n\n\n+{}\na\n1\n", fs_dump.boot.blocks));
+            buffer.push_str(&format!("n\np\n1\n\n+{}\na\n1\n", fs_dump.boot.blocks));
 
             debug!(
                 "Writing resin-rootA as 'size={},type=83' to '{}'",
                 fs_dump.root_a.blocks,
                 device.display()
             );
-            buffer.push_str(&format!("n\np\n\n\n+{}\n", fs_dump.root_a.blocks));
+            buffer.push_str(&format!("n\np\n2\n\n+{}\n", fs_dump.root_a.blocks));
 
             debug!(
                 "Writing resin-rootB as 'size={},type=83' to '{}'",
                 fs_dump.root_b.blocks,
                 device.display()
             );
-            buffer.push_str(&format!("n\np\n\n\n+{}\n", fs_dump.root_b.blocks));
+            buffer.push_str(&format!("n\np\n3\n\n+{}\n", fs_dump.root_b.blocks));
 
             // extended partition
             debug!(
@@ -386,7 +386,7 @@ fn fdisk_part(device: &Path, fdisk_path: &str, fs_dump: &FSDump) -> FlashResult 
             );
             buffer.push_str("n\n\n\nw\nq\n");
 
-            debug!("fdisk sdtin command string: {:?}", buffer);
+            debug!("fdisk stdin command string: {:?}", buffer);
 
             let data = buffer.as_bytes();
             let count = data.len();
