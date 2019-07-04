@@ -10,6 +10,7 @@ use std::path::Path;
 use std::process::{Command, Stdio};
 use std::thread;
 use std::time::{Duration, Instant};
+use std::str;
 
 use crate::{
     common::{format_size_with_unit, stage2_config::Stage2Config, MigError},
@@ -19,6 +20,7 @@ use crate::{
         stage2::{mounts::Mounts, FlashResult},
     },
 };
+use nix::errno::errno;
 
 const DD_BLOCK_SIZE: usize = 4194304;
 const UDEVADM_PARAMS: &[&str] = &["settle", "-t", "10"];
@@ -75,13 +77,15 @@ pub(crate) fn flash_balena_os(
     }
 }
 
-
 fn flash_gzip_internal(
     dd_cmd: &str,
     target_path: &Path,
     // cmds: &EnsuredCmds,
     image_path: &Path,
 ) -> FlashResult {
+
+    debug!("opening: '{}'", image_path.display());
+
     let mut decoder = GzDecoder::new(match File::open(&image_path) {
         Ok(file) => file,
         Err(why) => {
@@ -109,6 +113,7 @@ fn flash_gzip_internal(
         Ok(dd_child) => dd_child,
         Err(why) => {
             error!("failed to execute command {}, error: {:?}", dd_cmd, why);
+            Logger::flush();
             return FlashResult::FailRecoverable;
         }
     };
@@ -141,7 +146,7 @@ fn flash_gzip_internal(
                 let bytes_written = match stdin.write(&buffer[0..bytes_read]) {
                     Ok(bytes_written) => bytes_written,
                     Err(why) => {
-                        error!("Failed to write uncopressed data to dd, error {:?}", why);
+                        error!("Failed to write uncompressed data to dd, error {:?}", why);
                         return fail_res;
                     }
                 };
@@ -153,7 +158,7 @@ fn flash_gzip_internal(
                         "Read/write count mismatch, read {}, wrote {}",
                         bytes_read, bytes_written
                     );
-                    Logger::flush();
+                    return fail_res;
                 }
 
                 let curr_elapsed = start_time.elapsed();
@@ -179,7 +184,17 @@ fn flash_gzip_internal(
         }
 
         match dd_child.wait_with_output() {
-            Ok(_) => (),
+            Ok(cmd_res) => {
+                if !cmd_res.status.success() {
+                    let stderr =  match str::from_utf8(&cmd_res.stderr) {
+                        Ok(stderr) => stderr,
+                        Err(_) => "- invalid utf8 -",
+                    };
+                    error!("dd reported an error: code: {:?}, stderr: {}", cmd_res.status.code(), stderr);
+                    // might pay to still try and finish as all input was written
+
+                }
+            },
             Err(why) => {
                 error!("Error while waiting for dd to terminate:{:?}", why);
                 Logger::flush();
@@ -194,12 +209,10 @@ fn flash_gzip_internal(
             format_size_with_unit(write_count as u64 / secs_elapsed),
             secs_elapsed
         );
-        Logger::flush();
 
         FlashResult::Ok
     } else {
         error!("Failed to get a stdin for dd");
-        Logger::flush();
         FlashResult::FailRecoverable
     }
 }
@@ -259,4 +272,3 @@ fn flash_gzip_external(
         return FlashResult::FailRecoverable;
     }
 }
-
