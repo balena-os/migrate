@@ -215,7 +215,7 @@ impl<'a> Stage2 {
         info!("migrating {:?} boot type: {:?}", device_type, boot_type);
 
         if let Err(why) = if let CheckedImageType::Flasher(ref _image_path) = self.config.get_balena_image().image {
-            flasher::check_commands(&mut self.cmds.borrow_mut())
+            flasher::check_commands(&mut self.cmds.borrow_mut(), &self.config)
         } else {
             fs_writer::check_commands(&mut self.cmds.borrow_mut())
         } {

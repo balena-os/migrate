@@ -29,7 +29,11 @@ const REQUIRED_CMDS: &[&str] = &[DD_CMD, PARTPROBE_CMD, UDEVADM_CMD, LSBLK_CMD];
 
 // TODO: return something else instead (success, (recoverable / not recoverable))
 
-pub(crate) fn check_commands(cmds: &mut EnsuredCmds) -> Result<(),MigError> {
+pub(crate) fn check_commands(cmds: &mut EnsuredCmds, config: &Stage2Config, ) -> Result<(),MigError> {
+    if !config.is_gzip_internal(){
+        cmds.ensure(GZIP_CMD)?;
+    }
+
     Ok(cmds.ensure_cmds(REQUIRED_CMDS)?)
 }
 
