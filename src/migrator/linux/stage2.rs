@@ -164,10 +164,10 @@ impl<'a> Stage2 {
         };
 
         if let Some(log_path) = log_path {
-            match Logger::set_log_file(&LogDestination::Stderr, &log_path) {
+            match Logger::set_log_file(&LogDestination::Stderr, &log_path, false) {
                 Ok(_) => {
                     info!("Set log file to '{}'", log_path.display());
-                    Logger::flush();
+                    // Logger::flush();
                 }
                 Err(why) => {
                     warn!(
@@ -498,7 +498,7 @@ impl<'a> Stage2 {
         // Write our buffered log to workdir before unmounting if we are not flashing anyway
 
         if self.config.is_no_flash() {
-            Logger::flush();
+            // Logger::flush();
             let _res = Logger::set_log_dest(&LogDestination::StreamStderr, NO_STREAM);
         }
 
@@ -566,19 +566,19 @@ impl<'a> Stage2 {
                     FlashResult::Ok => {}
                     FlashResult::FailRecoverable => {
                         error!("Failed to flash balena OS image");
-                        Logger::flush();
+                        // Logger::flush();
                         self.recoverable_state = true;
                         return Err(MigError::displayed());
                     }
                     FlashResult::FailNonRecoverable => {
                         error!("Failed to flash balena OS image");
-                        Logger::flush();
+                        // Logger::flush();
                         self.recoverable_state = false;
                         return Err(MigError::displayed());
                     }
                 }
 
-                Logger::flush();
+                // Logger::flush();
             }
             CheckedImageType::FileSystems(ref fs_dump) => {
                 let base_path = if self.mounts.borrow().is_work_no_copy() {
@@ -689,10 +689,10 @@ impl<'a> Stage2 {
 
             if Logger::get_log_dest().is_buffer_dest() {
                 let log_path = path_append(&data_mountpoint, MIGRATE_LOG_FILE);
-                match Logger::set_log_file(&LogDestination::Stderr, &log_path) {
+                match Logger::set_log_file(&LogDestination::Stderr, &log_path, false) {
                     Ok(_) => {
                         info!("Set log file to '{}'", log_path.display());
-                        Logger::flush();
+                        //Logger::flush();
                     }
                     Err(why) => {
                         warn!(

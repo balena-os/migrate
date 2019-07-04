@@ -273,7 +273,7 @@ impl<'a> LinuxMigrator {
         let work_dir = &self.mig_info.work_path.path;
         let log_file = path_append(work_dir, "stage1.log");
 
-        Logger::set_log_file(&LogDestination::Stderr, &log_file).context(
+        Logger::set_log_file(&LogDestination::Stderr, &log_file, true).context(
             MigErrCtx::from_remark(
                 MigErrorKind::Upstream,
                 &format!("Failed to set logging to '{}'", log_file.display()),
