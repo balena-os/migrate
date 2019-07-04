@@ -35,6 +35,9 @@ fn flash_gzip_internal(
     // cmds: &EnsuredCmds,
     image_path: &Path,
 ) -> FlashResult {
+
+    debug!("opening: '{}'", image_path.display());
+
     let mut decoder = GzDecoder::new(match File::open(&image_path) {
         Ok(file) => file,
         Err(why) => {
@@ -46,14 +49,6 @@ fn flash_gzip_internal(
             return FlashResult::FailRecoverable;
         }
     });
-    /*    {
-            Ok(decoder) => decoder,
-            Err(why) => {
-                error!("Failed to create gzip decoder from image file '{}', error: {:?}", image_path.display(), why);
-                return FlashResult::FailRecoverable;
-            }
-        };
-    */
 
     debug!("invoking dd");
 
@@ -239,8 +234,10 @@ pub(crate) fn flash(
     if let Ok(ref dd_cmd) = cmds.get(DD_CMD) {
         debug!("dd found at: {}", dd_cmd);
         let res = if config.is_gzip_internal() {
+            debug!("using internal gzip");
             flash_gzip_internal(dd_cmd, target_path, image_path)
         } else {
+            debug!("using external gzip");
             flash_gzip_external(dd_cmd, target_path, cmds, image_path)
         };
 
