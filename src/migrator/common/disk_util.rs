@@ -3,7 +3,7 @@ use std::path::{Path};
 use std::fs::{OpenOptions};
 use std::io::{Read,Seek, SeekFrom};
 use std::mem;
-use log::{error, warn, debug};
+use log::{error, warn, debug, trace};
 
 use crate::{
     common::{
@@ -21,6 +21,8 @@ mod plain_file;
 pub(crate) use plain_file::PlainFile;
 
 const DEF_BLOCK_SIZE: usize = 512;
+
+// TODO: create test with gzipped partition file
 
 #[repr(C, packed)]
 struct PartEntry {
@@ -149,7 +151,7 @@ impl<'a> Iterator for PartitionIterator<'a> {
     type Item = Partition;
 
     fn next(&mut self) -> Option<Self::Item> {
-
+        trace!("PartitionIterator::next: entered" );
         // TODO: check for 0 size partition ?
 
         enum SetMbr {
@@ -161,6 +163,8 @@ impl<'a> Iterator for PartitionIterator<'a> {
 
         let (res, mbr) = if let Some(ref mbr) = self.mbr {
             if self.offset == 0 {
+                debug!("PartitionIterator::next: offset: {}, index: {}, part_idx: {}, mbr: present",
+                       self.offset, self.index, self.part_idx);
                 // we are on the first partition table
                 if self.index > 3 {
                     // end of regular partition table reached
@@ -246,6 +250,8 @@ impl<'a> Iterator for PartitionIterator<'a> {
             }
         } else {
             // this only happens after the first extended partition has been reported
+            debug!("PartitionIterator::next: offset: {}, index: {}, part_idx: {}, mbr: absent",
+                    self.offset, self.index, self.part_idx);
             match self.disk.read_mbr(self.offset) {
                 Ok(mbr) => {
                     let part = &mbr.part_tbl[self.index];
@@ -284,41 +290,6 @@ impl<'a> Iterator for PartitionIterator<'a> {
 
         res
     }
-/*
-            else {
-
-        }
-
-                let part = &mbr.part_tbl[self.index];
-                match part.ptype {
-                    0x00 => None,
-                    0x05 | 0x0F => { // extended
-                        if self.offset == 0 {
-                            // return extended partition
-                            self.offset = part.first_lba as u64;
-                            self.mbr = None;
-                            self.part_idx += 1;
-                            Some(Partition {
-                                    index: self.part_idx,
-                                    ptype: part.ptype,
-                                    status: part.status,
-                                    start_lba: part.first_lba as u64,
-                                    num_sectors: part.num_sectors as u64, })
-                        } else {
-                            // return next data partition
-                            }
-                        }
-                    },
-                    _ => { // return regular partition
-                    }
-                }
-            }
-        } else {
-            // first partition in extended partition
-            }
-        }
-    }
-*/
 }
 
 
