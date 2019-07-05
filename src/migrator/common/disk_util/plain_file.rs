@@ -4,8 +4,10 @@ use std::io::{Read, Seek, SeekFrom};
 use std::path::{Path, PathBuf};
 
 use crate::{
-    common::{MigErrCtx, MigError, MigErrorKind},
-    linux::extract::image_file::ImageFile,
+    common::{
+        MigErrCtx, MigError, MigErrorKind,
+        disk_util::image_file::ImageFile,
+    },
 };
 
 pub(crate) struct PlainFile {

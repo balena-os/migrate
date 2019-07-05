@@ -15,13 +15,7 @@ use linux::stage2::Stage2;
 
 pub(crate) mod defs;
 
-//pub(crate) use common::config::{Config, YamlConfig};
-// use crate::linux_common::{ensure_cmds, FDISK_CMD, LSBLK_CMD};
 use common::mig_error::MigError;
-//pub(crate) use common::os_release::OSRelease;
-//pub(crate) use common::OSArch;
-
-//pub(crate) const MODULE: &str = "balena_migrate";
 
 #[cfg(target_os = "windows")]
 pub fn migrate() -> Result<(), MigError> {

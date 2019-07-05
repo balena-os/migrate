@@ -12,6 +12,7 @@ use serde_yaml;
 use crate::{
     common::{
         config::balena_config::ImageType, format_size_with_unit, Config, FileInfo, FileType,
+        disk_util::{Disk, LabelType, ImageFile, GZipFile, PlainFile },
         MigErrCtx, MigError, MigErrorKind,
     },
     defs::{PART_FSTYPE, PART_NAME},
@@ -21,14 +22,14 @@ use crate::{
     },
 };
 
-mod image_file;
-use image_file::ImageFile;
+// mod image_file;
+// use image_file::ImageFile;
 
-mod gzip_file;
-use gzip_file::GZipFile;
+// mod gzip_file;
+// use gzip_file::GZipFile;
 
-mod plain_file;
-use plain_file::PlainFile;
+// mod plain_file;
+// use plain_file::PlainFile;
 
 use crate::common::config::balena_config::{FSDump, PartDump};
 use crate::common::path_append;
