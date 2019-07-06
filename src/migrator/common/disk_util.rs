@@ -1,7 +1,7 @@
 use failure::ResultExt;
 use std::path::{Path};
 use std::fs::{OpenOptions};
-use std::io::{Read,Seek, SeekFrom};
+use std::io::{Read,Seek, SeekFrom, Error, ErrorKind};
 use std::mem;
 use log::{error, warn, debug, trace};
 
@@ -72,6 +72,7 @@ struct MasterBootRecord {
     boot_sig2: u8,
 }
 
+#[derive(Debug, Clone)]
 pub(crate) struct Partition {
     pub index: usize,
     pub ptype: u8,
@@ -152,7 +153,56 @@ impl Disk {
         Ok(PartitionIterator::new(self)?)
     }
 
+    pub fn read_partition(&mut self, partition: &Partition) -> PartitionReader {
+        PartitionReader::new(partition, self)
+    }
+
 }
+
+pub(crate) struct PartitionReader<'a> {
+    disk: &'a mut Disk,
+    offset: u64,
+    bytes_left: u64,
+}
+
+impl<'a> PartitionReader<'a> {
+    pub fn new(part: &Partition, disk: &'a mut Disk) -> PartitionReader<'a> {
+        let block_size = disk.block_size;
+        PartitionReader {
+            disk,
+            offset: part.start_lba * block_size,
+            bytes_left: part.num_sectors * block_size,
+        }
+    }
+}
+
+impl<'a> Read for PartitionReader<'a> {
+    fn read(&mut self, buf: &mut [u8]) -> Result<usize, Error> {
+        if self.bytes_left == 0 {
+            return Ok (0)
+        } else {
+            let (res, size) =
+                if self.bytes_left < buf.len() as u64 {
+                    (self.disk.disk.fill(self.offset, &mut buf[0..self.bytes_left as usize]), self.bytes_left as usize)
+                } else {
+                    (self.disk.disk.fill(self.offset, buf), buf.len())
+                };
+
+            match res {
+                Ok(_) => {
+                    self.offset += size as u64;
+                    self.bytes_left -= size as u64;
+                    Ok(size)
+                },
+                Err(why) => {
+                    Err(Error::new(ErrorKind::UnexpectedEof, why.to_string()))
+                }
+            }
+        }
+    }
+}
+
+
 
 pub(crate) struct PartitionIterator<'a> {
     disk: &'a mut Disk,
