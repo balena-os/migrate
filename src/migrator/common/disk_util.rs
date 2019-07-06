@@ -259,21 +259,29 @@ impl<'a> Iterator for PartitionIterator<'a> {
                             // // warn!("Empty partition on index 1 of extended partition is unexpected");
                             (None, SetMbr::Leave)
                         }, // weird though
-                        PartitionType::Fat| PartitionType::Linux => { // we are expecting a regular partition here
+                        PartitionType::Container => { // we are expecting a container partition here
                             self.offset += part.first_lba as u64;
                             match self.disk.read_mbr(self.offset) {
                                 Ok(mbr) => {
                                     let part = &mbr.part_tbl[0];
-                                    // self.mbr = Some(mbr);
-                                    self.index = 1;
-                                    self.part_idx += 1;
-                                    (Some(Partition {
-                                        index: self.part_idx,
-                                        ptype: part.ptype,
-                                        status: part.status,
-                                        start_lba: self.offset + part.first_lba as u64,
-                                        num_sectors: part.num_sectors as u64,
-                                    }), SetMbr::ToMbr(mbr))
+                                    // self.mbr = Some(mbr)
+                                    match part.part_type() {
+                                        PartitionType::Linux| PartitionType::Fat => {
+                                            self.index = 1;
+                                            self.part_idx += 1;
+                                            (Some(Partition {
+                                                index: self.part_idx,
+                                                ptype: part.ptype,
+                                                status: part.status,
+                                                start_lba: self.offset + part.first_lba as u64,
+                                                num_sectors: part.num_sectors as u64,
+                                            }), SetMbr::ToMbr(mbr))
+                                        },
+                                        _ => {
+                                            error!("Unexpected partition type {:x} on index 0 of extended partition", part.ptype);
+                                            (None, SetMbr::Leave)
+                                        }
+                                    }
                                 },
                                 Err(why) => {
                                     error!("Failed to read mbr, error:{:?}", why);
@@ -294,14 +302,19 @@ impl<'a> Iterator for PartitionIterator<'a> {
                     self.offset, self.index, self.part_idx);
             match self.disk.read_mbr(self.offset) {
                 Ok(mbr) => {
-                    let part = &mbr.part_tbl[self.index];
+                    debug!("PartitionIterator::next: got mbr");
+                    let part = &mbr.part_tbl[0];
                     // self.mbr = Some(mbr);
-                    match part.part_type() {
+                    let part_type= part.part_type();
+                    debug!("PartitionIterator::next: got partition type: {:?}", part_type);
+                    match part_type {
                         PartitionType::Empty => {
+                            debug!("PartitionIterator::next: got empty partition");
                             // looks like the extended partition is empty
                             (None, SetMbr::ToMbr(mbr))
                         },
                         PartitionType::Fat| PartitionType::Linux => {
+                            debug!("PartitionIterator::next: got partition data partition");
                             self.index = 1;
                             self.part_idx += 1;
                             (Some(Partition {
@@ -325,12 +338,18 @@ impl<'a> Iterator for PartitionIterator<'a> {
             }
         };
 
+        debug!("PartitionIterator::next Res: {}", if let Some(_) = res { "some" } else { "none" });
+
         match mbr {
             SetMbr::ToMbr(mbr) => {
+                debug!("PartitionIterator::next set mbr");
                 self.mbr = Some(mbr);
             },
-            SetMbr::Leave => (),
+            SetMbr::Leave => {
+                debug!("PartitionIterator::next leave mbr");
+            },
             SetMbr::ToNone => {
+                debug!("PartitionIterator::next reset mbr");
                 self.mbr = None;
             },
         }
@@ -339,6 +358,43 @@ impl<'a> Iterator for PartitionIterator<'a> {
     }
 }
 
+#[cfg(test)]
+mod test {
 
+    use mod_logger::{Logger, Level};
 
+    use crate::{
 
+        common::{
+            disk_util::{ Disk, LabelType, },
+            MigError,
+        }
+    };
+
+    #[test]
+    fn read_gzipped_part() {
+        Logger::set_default_level(&Level::Debug);
+        let mut disk = Disk::from_gzip_img("./test_data/part.img.gz").unwrap();
+        if let LabelType::Dos = disk.get_label().unwrap() {
+            let mut count = 0;
+            for partition in disk.get_partition_iterator().unwrap() {
+                match partition.index {
+                    1 => {
+                        assert_eq!(partition.ptype, 0x0e)
+                    },
+                    4 => {
+                        assert_eq!(partition.ptype, 0x05)
+                    }
+                    _ => {
+                        assert_eq!(partition.ptype, 0x83)
+                    }
+                }
+                count += 1;
+            }
+                assert_eq!(count , 6);
+        } else {
+            panic!("Invalid label type - not Dos");
+        }
+
+    }
+}

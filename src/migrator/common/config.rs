@@ -347,7 +347,7 @@ mod tests {
         assert_eq!(bckup_vols.len(), 3);
         assert_eq!(bckup_vols.get(0).unwrap().volume, "test volume 1");
 
-        assert_eq!(config.balena.get_image_path(), Path::new("image.gz"));
+        // assert_eq!(config.balena.get_image_path(), Path::new("image.gz"));
         assert_eq!(config.balena.get_config_path(), Path::new("config.json"));
         /*
         assert_eq!(config.balena.get_app_name(), Some("test"));
@@ -469,7 +469,8 @@ balena:
   ## the balena image version to download (not yet implemented)
   version:
   ## the balena image to flash
-  image: image.gz
+  image:
+    Flasher: image.gz
   ## the balena config file to use (can be auto generated in future versions)
   config: config.json
   ## The balena app name - needed for download (not yet implemented) checked against present config.json
