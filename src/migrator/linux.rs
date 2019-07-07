@@ -8,10 +8,11 @@ use std::time::Duration;
 
 use crate::{
     common::{
-        backup, dir_exists, format_size_with_unit, path_append,
+        backup,
+        config::balena_config::{FSDump, ImageType},
+        dir_exists, format_size_with_unit, path_append,
         stage2_config::{PathType, Stage2ConfigBuilder, Stage2LogConfig},
         Config, MigErrCtx, MigError, MigErrorKind, MigMode,
-        config::balena_config::{ImageType, FSDump},
     },
     defs::{BACKUP_FILE, MIN_DISK_SIZE, SYSTEM_CONNECTIONS_DIR},
 };

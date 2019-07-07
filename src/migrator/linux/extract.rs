@@ -11,9 +11,15 @@ use serde_yaml;
 
 use crate::{
     common::{
-        config::balena_config::ImageType, format_size_with_unit, Config, FileInfo, FileType,
-        disk_util::{Disk, LabelType, ImageFile, GZipFile, PlainFile },
-        MigErrCtx, MigError, MigErrorKind,
+        config::balena_config::ImageType,
+        disk_util::{Disk, LabelType, PartInfo}, //  , ImageFile, GZipFile, PlainFile },
+        format_size_with_unit,
+        Config,
+        FileInfo,
+        FileType,
+        MigErrCtx,
+        MigError,
+        MigErrorKind,
     },
     defs::{PART_FSTYPE, PART_NAME},
     linux::{
@@ -44,28 +50,6 @@ const MOUNTPOINT_TEMPLATE: &str = "mountpoint.XXXXXXXXXX";
 
 const BUFFER_SIZE: usize = 1024 * 1024; // 1Mb
 
-#[repr(C, packed)]
-struct PartEntry {
-    status: u8,
-    first_head: u8,
-    first_comb: u8,
-    first_cyl: u8,
-    ptype: u8,
-    last_head: u8,
-    last_comb: u8,
-    last_cyl: u8,
-    first_lba: u32,
-    num_sectors: u32,
-}
-
-#[repr(C, packed)]
-struct MasterBootRecord {
-    fill0: [u8; 446],
-    part_tbl: [PartEntry; 4],
-    boot_sig1: u8,
-    boot_sig2: u8,
-}
-
 pub(crate) struct Partition {
     pub name: &'static str,
     pub fstype: &'static str,
@@ -80,12 +64,11 @@ pub(crate) struct Extractor {
     cmds: EnsuredCmds,
     config: Config,
     device_slug: String,
-    image_file: Box<ImageFile>,
+    disk: Disk,
 }
 
 // TODO: Extractor could modify config / save new ImageType
 // TODO: Save ImageType as yml file
-
 
 impl Extractor {
     pub fn new(config: Config) -> Result<Extractor, MigError> {
@@ -97,19 +80,14 @@ impl Extractor {
                 "beaglebone-black" => String::from(extract_device),
                 "beaglebone-green" => String::from(extract_device),
                 _ => {
-                    error!(
-                        "Unsupported device type for extract: {}", extract_device
-                    );
+                    error!("Unsupported device type for extract: {}", extract_device);
                     return Err(MigError::displayed());
                 }
             }
         } else {
-            error!(
-                "Missing the mandatory parameter extract-device",
-            );
+            error!("Missing the mandatory parameter extract-device",);
             return Err(MigError::displayed());
         };
-
 
         let mut cmds = EnsuredCmds::new();
         if let Err(why) = cmds.ensure_cmds(REQUIRED_CMDS) {
@@ -132,13 +110,13 @@ impl Extractor {
         if let Some(image_info) = image_info {
             debug!("new: working with file '{}'", image_info.path.display());
             if image_info.is_type(&cmds, &FileType::GZipOSImage)? {
-                match GZipFile::new(&image_info.path) {
-                    Ok(gzip_file) => {
+                match Disk::from_gzip_img(&image_info.path) {
+                    Ok(gzip_img) => {
                         debug!("new: is gzipped image '{}'", image_info.path.display());
                         return Ok(Extractor {
                             cmds,
                             config,
-                            image_file: Box::new(gzip_file),
+                            disk: gzip_img,
                             device_slug: String::from(extract_device),
                         });
                     }
@@ -153,13 +131,13 @@ impl Extractor {
                 }
             } else {
                 if image_info.is_type(&cmds, &FileType::OSImage)? {
-                    match PlainFile::new(&image_info.path) {
-                        Ok(plain_file) => {
+                    match Disk::from_file(&image_info.path, false) {
+                        Ok(plain_img) => {
                             debug!("new: is plain image '{}'", image_info.path.display());
                             return Ok(Extractor {
                                 cmds,
                                 config,
-                                image_file: Box::new(plain_file),
+                                disk: plain_img,
                                 device_slug: extract_device,
                             });
                         }
@@ -231,6 +209,9 @@ impl Extractor {
 
         let mut extract_err: Option<MigError> = None;
         let mut part_extract_idx: usize = 0;
+
+        for raw_part in self.disk.get_partition_iterator()? {}
+
         loop {
             let next_offset = match self.read_part_tbl(curr_offset, &mut partitions) {
                 Ok(offset) => offset,
@@ -239,7 +220,6 @@ impl Extractor {
                     break;
                 }
             };
-
             debug!("extract: got {} partitions", partitions.len());
 
             for idx in part_extract_idx..partitions.len() {
@@ -326,9 +306,8 @@ impl Extractor {
 
             let yaml_config = serde_yaml::to_string(&res).context(MigErrCtx::from_remark(
                 MigErrorKind::Upstream,
-                &format!("Failed to serialize config to yaml")
+                &format!("Failed to serialize config to yaml"),
             ))?;
-
 
             let mut entabbed_cfg = String::new();
             let lines = yaml_config.lines();
@@ -504,73 +483,76 @@ impl Extractor {
         Ok(())
     }
 
-    // Read partition table at offset up to the first empty or extended partition
-    // return offset of next partition table for extended partition or None for end of table
+    /*
+        // Read partition table at offset up to the first empty or extended partition
+        // return offset of next partition table for extended partition or None for end of table
 
-    // TODO: ensure that about using 0 size partition as
+        // TODO: ensure that about using 0 size partition as
 
-    fn read_part_tbl(
-        &mut self,
-        offset: u64,
-        table: &mut Vec<Partition>,
-    ) -> Result<Option<u64>, MigError> {
-        trace!("read_part_tbl: entered with offset {}", offset);
-        let mut buffer: [u8; DEF_BLOCK_SIZE] = [0; DEF_BLOCK_SIZE];
+        fn read_part_tbl(
+            &mut self,
+            offset: u64,
+            table: &mut Vec<Partition>,
+        ) -> Result<Option<u64>, MigError> {
+            trace!("read_part_tbl: entered with offset {}", offset);
+            let mut buffer: [u8; DEF_BLOCK_SIZE] = [0; DEF_BLOCK_SIZE];
 
-        self.image_file
-            .fill(offset * DEF_BLOCK_SIZE as u64, &mut buffer)?;
+            self.image_file
+                .fill(offset * DEF_BLOCK_SIZE as u64, &mut buffer)?;
 
-        let mbr: MasterBootRecord = unsafe { mem::transmute(buffer) };
+            let mbr: MasterBootRecord = unsafe { mem::transmute(buffer) };
 
-        if (mbr.boot_sig1 != 0x55) || (mbr.boot_sig2 != 0xAA) {
-            error!(
-                "invalid mbr sig1: {:x}, sig2: {:x}",
-                mbr.boot_sig1, mbr.boot_sig2
-            );
-            return Err(MigError::from_remark(
-                MigErrorKind::InvParam,
-                "unexpeted signatures found in partition table",
-            ));
-        }
-
-        for partition in &mbr.part_tbl {
-            let part_idx = table.len();
-
-            if part_idx >= PART_NAME.len() || partition.num_sectors == 0 {
-                return Ok(None);
+            if (mbr.boot_sig1 != 0x55) || (mbr.boot_sig2 != 0xAA) {
+                error!(
+                    "invalid mbr sig1: {:x}, sig2: {:x}",
+                    mbr.boot_sig1, mbr.boot_sig2
+                );
+                return Err(MigError::from_remark(
+                    MigErrorKind::InvParam,
+                    "unexpeted signatures found in partition table",
+                ));
             }
 
-            if (partition.ptype == 0xF) || (partition.ptype == 0x5) {
-                debug!(
-                    "return extended partition offset: {}",
-                    offset + partition.first_lba as u64
-                );
-                return Ok(Some(offset + partition.first_lba as u64));
-            } else {
-                let part_info = Partition {
-                    name: PART_NAME[part_idx],
-                    fstype: PART_FSTYPE[part_idx],
-                    start_lba: offset + partition.first_lba as u64,
-                    num_sectors: partition.num_sectors as u64,
-                    ptype: partition.ptype,
-                    status: partition.status,
-                    archive: None,
-                };
+            for partition in &mbr.part_tbl {
+                let part_idx = table.len();
 
-                debug!(
-                    "partition name: {}, fstype: {}, status: {:x}, type: {:x}, start: {}, size: {}",
-                    part_info.name,
-                    part_info.fstype,
-                    part_info.status,
-                    part_info.ptype,
-                    part_info.start_lba,
-                    part_info.num_sectors
-                );
+                if part_idx >= PART_NAME.len() || partition.num_sectors == 0 {
+                    return Ok(None);
+                }
 
-                table.push(part_info);
+                if (partition.ptype == 0xF) || (partition.ptype == 0x5) {
+                    debug!(
+                        "return extended partition offset: {}",
+                        offset + partition.first_lba as u64
+                    );
+                    return Ok(Some(offset + partition.first_lba as u64));
+                } else {
+                    let part_info = Partition {
+                        name: PART_NAME[part_idx],
+                        fstype: PART_FSTYPE[part_idx],
+                        start_lba: offset + partition.first_lba as u64,
+                        num_sectors: partition.num_sectors as u64,
+                        ptype: partition.ptype,
+                        status: partition.status,
+                        archive: None,
+                    };
+
+                    debug!(
+                        "partition name: {}, fstype: {}, status: {:x}, type: {:x}, start: {}, size: {}",
+                        part_info.name,
+                        part_info.fstype,
+                        part_info.status,
+                        part_info.ptype,
+                        part_info.start_lba,
+                        part_info.num_sectors
+                    );
+
+                    table.push(part_info);
+                }
             }
+            debug!("return no further offset");
+            Ok(None)
         }
-        debug!("return no further offset");
-        Ok(None)
-    }
+
+    */
 }

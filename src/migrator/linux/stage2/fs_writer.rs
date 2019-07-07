@@ -34,10 +34,10 @@ pub const REQUIRED_CMDS: &[&str] = &[
     TAR_CMD,
     LSBLK_CMD,
     PARTPROBE_CMD,
-    SFDISK_CMD
+    SFDISK_CMD,
 ];
 
-pub(crate) fn check_commands(cmds: &mut EnsuredCmds) -> Result<(),MigError> {
+pub(crate) fn check_commands(cmds: &mut EnsuredCmds) -> Result<(), MigError> {
     Ok(cmds.ensure_cmds(REQUIRED_CMDS)?)
 }
 
@@ -50,14 +50,10 @@ pub(crate) fn write_balena_os(
 ) -> FlashResult {
     // make sure we have allrequired commands
     if let CheckedImageType::FileSystems(ref fs_dump) = config.get_balena_image().image {
-
-
         let res = if let Ok(command) = cmds.get(SFDISK_CMD) {
             sfdisk_part(device, command, fs_dump)
         } else {
-            error!(
-                "write_balena_os: no partitioning command was found",
-            );
+            error!("write_balena_os: no partitioning command was found",);
             return FlashResult::FailRecoverable;
         };
 
@@ -329,16 +325,16 @@ fn fdisk_part(device: &Path, fdisk_path: &str, fs_dump: &FSDump) -> FlashResult 
         .stdout(Stdio::piped())
         .stdin(Stdio::piped())
         .spawn()
-        {
-            Ok(child) => child,
-            Err(why) => {
-                error!(
-                    "Failed to start command : '{}', error: {:?}",
-                    fdisk_path, why
-                );
-                return FlashResult::FailRecoverable;
-            }
-        };
+    {
+        Ok(child) => child,
+        Err(why) => {
+            error!(
+                "Failed to start command : '{}', error: {:?}",
+                fdisk_path, why
+            );
+            return FlashResult::FailRecoverable;
+        }
+    };
     {
         if let Some(ref mut stdin) = fdisk_cmd.stdin {
             debug!("Writing a new partition table to '{}'", device.display());
@@ -437,7 +433,6 @@ fn fdisk_part(device: &Path, fdisk_path: &str, fs_dump: &FSDump) -> FlashResult 
     debug!("fdisk stdout: {:?}", str::from_utf8(&cmd_res.stdout));
     FlashResult::Ok
 }
-
 
 fn sfdisk_part(device: &Path, sfdisk_path: &str, fs_dump: &FSDump) -> FlashResult {
     let mut sfdisk_cmd = match Command::new(sfdisk_path)

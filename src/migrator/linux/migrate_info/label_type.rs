@@ -18,7 +18,6 @@ pub(crate) enum LabelType {
 
 // TODO: Try for parted if fdisk does not supply label info
 
-
 impl LabelType {
     pub fn from_device<P: AsRef<Path>>(
         cmds: &EnsuredCmds,
