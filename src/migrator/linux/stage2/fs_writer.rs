@@ -69,11 +69,7 @@ pub(crate) fn write_balena_os(
                 }
             };
 
-            if format(
-                &lsblk_dev,
-                cmds,
-                fs_dump,
-            ) {
+            if format(&lsblk_dev, cmds, fs_dump) {
                 // TODO: need partprobe ?
 
                 thread::sleep(Duration::from_secs(PRE_PARTPROBE_WAIT_SECS));
@@ -117,14 +113,14 @@ pub(crate) fn write_balena_os(
     }
 }
 
-fn sub_write(tar_path: &str, device: &Path, base_path: &Path, archive: &Option<PathBuf>) -> bool {
+fn sub_write(tar_path: &str, mountpoint: &Path, base_path: &Path, archive: &Option<PathBuf>) -> bool {
     if let Some(archive) = archive {
         let arch_path = path_append(base_path, archive);
         let tar_args: &[&str] = &[
             "-xzf",
             &arch_path.to_string_lossy(),
             "-C",
-            &device.to_string_lossy(),
+            &mountpoint.to_string_lossy(),
         ];
 
         match Command::new(tar_path)
@@ -213,12 +209,13 @@ fn balena_write(mounts: &Mounts, tar_path: &str, fs_dump: &FSDump, base_path: &P
     }
 }
 
-fn sub_format(device: &Path,
-              label: &str,
-              cmds: &EnsuredCmds,
-              is_fat: bool,
-              check: &PartCheck) -> bool {
-
+fn sub_format(
+    device: &Path,
+    label: &str,
+    cmds: &EnsuredCmds,
+    is_fat: bool,
+    check: &PartCheck,
+) -> bool {
     let dev_path = String::from(&*device.to_string_lossy());
     let mut args: Vec<&str> = Vec::new();
 
@@ -231,7 +228,7 @@ fn sub_format(device: &Path,
                     "format: the format command was not found  {}, error: {:?}",
                     FAT_FMT_CMD, why
                 );
-                return false
+                return false;
             }
         }
     } else {
@@ -243,7 +240,7 @@ fn sub_format(device: &Path,
                     "format: the format command was not found  {}, error: {:?}",
                     EXT_FMT_CMD, why
                 );
-                return false
+                return false;
             }
         }
     };
@@ -261,7 +258,7 @@ fn sub_format(device: &Path,
     args.push(&dev_path);
 
     debug!("calling {} with args {:?}", command, args);
-    let cmd_res = match Command::new(command).args(args).output() {
+    let cmd_res = match Command::new(command).args(&args).output() {
         Ok(cmd_res) => cmd_res,
         Err(why) => {
             error!(
@@ -276,9 +273,9 @@ fn sub_format(device: &Path,
         true
     } else {
         error!(
-            "format: failed to format drive with {}: '{}', code: {:?}, stderr: {:?}",
+            "format: failed to format drive with {}: '{:?}', code: {:?}, stderr: {:?}",
             command,
-            dev_path,
+            args,
             cmd_res.status.code(),
             str::from_utf8(&cmd_res.stderr)
         );
@@ -286,11 +283,7 @@ fn sub_format(device: &Path,
     }
 }
 
-fn format(
-    lsblk_dev: &LsblkDevice,
-    cmds: &EnsuredCmds,
-    fs_dump: &FSDump,
-) -> bool {
+fn format(lsblk_dev: &LsblkDevice, cmds: &EnsuredCmds, fs_dump: &FSDump) -> bool {
     if let Some(ref children) = lsblk_dev.children {
         if children.len() == 6 {
             let check = if let Some(ref check) = fs_dump.check {
@@ -308,22 +301,11 @@ fn format(
                 check
             };
 
-            if !sub_format(
-                &children[0].get_path(),
-                PART_NAME[0],
-                cmds,
-                true,
-                fat_check,
-            ) {
+            if !sub_format(&children[0].get_path(), PART_NAME[0], cmds, true, fat_check) {
                 return false;
             }
 
-            if !sub_format(
-                &children[1].get_path(),
-                PART_NAME[1],
-                cmds,
-                false,
-                check) {
+            if !sub_format(&children[1].get_path(), PART_NAME[1], cmds, false, check) {
                 return false;
             }
 
@@ -348,128 +330,6 @@ fn format(
         false
     }
 }
-
-/*
-// TODO: partition manually instead of using fdisk
-// thus make partitioning recoverable
-// optionally write extracted boot sectors in the process
-
-fn fdisk_part(device: &Path, fdisk_path: &str, fs_dump: &FSDump) -> FlashResult {
-    let mut fdisk_cmd = match Command::new(fdisk_path)
-        .args(&[&*device.to_string_lossy()])
-        .stderr(Stdio::piped())
-        .stdout(Stdio::piped())
-        .stdin(Stdio::piped())
-        .spawn()
-        {
-            Ok(child) => child,
-            Err(why) => {
-                error!(
-                    "Failed to start command : '{}', error: {:?}",
-                    fdisk_path, why
-                );
-                return FlashResult::FailRecoverable;
-            }
-        };
-    {
-        if let Some(ref mut stdin) = fdisk_cmd.stdin {
-            debug!("Writing a new partition table to '{}'", device.display());
-            let mut buffer: String = String::from("o\n");
-
-            debug!(
-                "Writing resin-boot as 'size={},bootable,type=e' to '{}'",
-                fs_dump.boot.blocks,
-                device.display()
-            );
-
-            buffer.push_str(&format!("n\np\n1\n\n+{}\na\n1\n", fs_dump.boot.blocks));
-
-            debug!(
-                "Writing resin-rootA as 'size={},type=83' to '{}'",
-                fs_dump.root_a.blocks,
-                device.display()
-            );
-            buffer.push_str(&format!("n\np\n2\n\n+{}\n", fs_dump.root_a.blocks));
-
-            debug!(
-                "Writing resin-rootB as 'size={},type=83' to '{}'",
-                fs_dump.root_b.blocks,
-                device.display()
-            );
-            buffer.push_str(&format!("n\np\n3\n\n+{}\n", fs_dump.root_b.blocks));
-
-            // extended partition
-            debug!(
-                "Writing extended partition as 'type=5' to '{}'",
-                device.display()
-            );
-            buffer.push_str("n\ne\n\n\n");
-
-            debug!(
-                "Writing resin-state as 'size={},type=83' to '{}'",
-                fs_dump.state.blocks,
-                device.display()
-            );
-
-            buffer.push_str(&format!("n\n\n+{}\n", fs_dump.state.blocks));
-
-            debug!(
-                "Writing resin-data as 'size={},type=83' to '{}'",
-                fs_dump.state.blocks,
-                device.display()
-            );
-            buffer.push_str("n\n\n\nw\nq\n");
-
-            debug!("fdisk stdin command string: {:?}", buffer);
-
-            let data = buffer.as_bytes();
-            let count = data.len();
-            match stdin.write(data) {
-                Ok(bytes_written) => {
-                    if bytes_written != count {
-                        error!(
-                            "Failed to write some bytes to command stdin: {}  != {}",
-                            bytes_written, count
-                        );
-                        return FlashResult::FailNonRecoverable;
-                    }
-                }
-                Err(why) => {
-                    error!("Failed to write to command stdin, error: {:?}", why);
-                    return FlashResult::FailNonRecoverable;
-                }
-            }
-        } else {
-            error!("partition: fdisk stdin could not be found");
-            return FlashResult::FailRecoverable;
-        }
-    }
-
-    debug!("done writing to fdisk stdin - command should terminate now");
-
-    // TODO: wait with timeout, terminate
-
-    let cmd_res = match fdisk_cmd.wait_with_output() {
-        Ok(cmd_res) => cmd_res,
-        Err(why) => {
-            error!("failure waiting for fdisk to terminate, error: {:?}", why);
-            return FlashResult::FailNonRecoverable;
-        }
-    };
-
-    if !cmd_res.status.success() {
-        error!(
-            "fdisk returned an error status: code: {:?}, stderr: {:?}",
-            cmd_res.status.code(),
-            str::from_utf8(&cmd_res.stderr)
-        );
-        return FlashResult::FailNonRecoverable;
-    }
-
-    debug!("fdisk stdout: {:?}", str::from_utf8(&cmd_res.stdout));
-    FlashResult::Ok
-}
-*/
 
 fn sfdisk_part(device: &Path, sfdisk_path: &str, fs_dump: &FSDump) -> FlashResult {
     let mut sfdisk_cmd = match Command::new(sfdisk_path)
@@ -533,12 +393,8 @@ fn sfdisk_part(device: &Path, sfdisk_path: &str, fs_dump: &FSDump) -> FlashResul
 
             buffer.push_str(&format!("size={},type=83\n", fs_dump.state.blocks));
 
-            debug!(
-                "Writing resin-state as 'size={},type=83' to '{}'",
-                fs_dump.state.blocks,
-                device.display()
-            );
-            buffer.push_str(&format!("size={},type=83\n", fs_dump.data.blocks));
+            debug!("Writing resin-state as 'type=83' to '{}'", device.display());
+            buffer.push_str(&format!("type=83\n"));
 
             debug!("writing partitioning as: \n{}", buffer);
 
