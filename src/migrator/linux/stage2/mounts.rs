@@ -259,7 +259,7 @@ impl<'a> Mounts {
     }
 
     pub fn get_balena_data_mountpoint(&'a self) -> Option<&'a Path> {
-        if let Some(ref mountpoint) = self.balena_state_mp {
+        if let Some(ref mountpoint) = self.balena_data_mp {
             Some(mountpoint)
         } else {
             None
