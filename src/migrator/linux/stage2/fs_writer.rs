@@ -71,8 +71,7 @@ pub(crate) fn write_balena_os(
 
             if format(
                 &lsblk_dev,
-                cmds.get(FAT_FMT_CMD).unwrap(),
-                cmds.get(EXT_FMT_CMD).unwrap(),
+                cmds,
                 fs_dump,
             ) {
                 // TODO: need partprobe ?
@@ -214,8 +213,40 @@ fn balena_write(mounts: &Mounts, tar_path: &str, fs_dump: &FSDump, base_path: &P
     }
 }
 
-fn sub_format(device: &Path, label: &str, command: &str, check: &PartCheck) -> bool {
-    let mut args: Vec<&str> = vec!["-n", label];
+fn sub_format(device: &Path,
+              label: &str,
+              cmds: &EnsuredCmds,
+              is_fat: bool,
+              check: &PartCheck) -> bool {
+
+    let dev_path = String::from(&*device.to_string_lossy());
+    let mut args: Vec<&str> = Vec::new();
+
+    let command = if is_fat {
+        args.append(&mut vec!["-n", label]);
+        match cmds.get(FAT_FMT_CMD) {
+            Ok(command) => command,
+            Err(why) => {
+                error!(
+                    "format: the format command was not found  {}, error: {:?}",
+                    FAT_FMT_CMD, why
+                );
+                return false
+            }
+        }
+    } else {
+        args.append(&mut vec!["-L", label]);
+        match cmds.get(EXT_FMT_CMD) {
+            Ok(command) => command,
+            Err(why) => {
+                error!(
+                    "format: the format command was not found  {}, error: {:?}",
+                    EXT_FMT_CMD, why
+                );
+                return false
+            }
+        }
+    };
 
     match check {
         PartCheck::None => (),
@@ -227,7 +258,6 @@ fn sub_format(device: &Path, label: &str, command: &str, check: &PartCheck) -> b
         }
     }
 
-    let dev_path = String::from(&*device.to_string_lossy());
     args.push(&dev_path);
 
     debug!("calling {} with args {:?}", command, args);
@@ -258,8 +288,7 @@ fn sub_format(device: &Path, label: &str, command: &str, check: &PartCheck) -> b
 
 fn format(
     lsblk_dev: &LsblkDevice,
-    fat_fmt_path: &str,
-    ext_fmt_path: &str,
+    cmds: &EnsuredCmds,
     fs_dump: &FSDump,
 ) -> bool {
     if let Some(ref children) = lsblk_dev.children {
@@ -282,25 +311,31 @@ fn format(
             if !sub_format(
                 &children[0].get_path(),
                 PART_NAME[0],
-                fat_fmt_path,
+                cmds,
+                true,
                 fat_check,
             ) {
                 return false;
             }
 
-            if !sub_format(&children[1].get_path(), PART_NAME[1], ext_fmt_path, check) {
+            if !sub_format(
+                &children[1].get_path(),
+                PART_NAME[1],
+                cmds,
+                false,
+                check) {
                 return false;
             }
 
-            if !sub_format(&children[2].get_path(), PART_NAME[2], ext_fmt_path, check) {
+            if !sub_format(&children[2].get_path(), PART_NAME[2], cmds, false, check) {
                 return false;
             }
 
-            if !sub_format(&children[4].get_path(), PART_NAME[3], ext_fmt_path, check) {
+            if !sub_format(&children[4].get_path(), PART_NAME[3], cmds, false, check) {
                 return false;
             }
 
-            sub_format(&children[5].get_path(), PART_NAME[4], ext_fmt_path, &check)
+            sub_format(&children[5].get_path(), PART_NAME[4], cmds, false, &check)
         } else {
             error!(
                 "format: encountered an in valid number of partitions {} != 6",
