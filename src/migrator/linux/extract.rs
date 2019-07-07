@@ -85,7 +85,6 @@ pub(crate) struct Extractor {
 // TODO: Extractor could modify config / save new ImageType
 // TODO: Save ImageType as yml file
 
-
 impl Extractor {
     pub fn new(config: Config) -> Result<Extractor, MigError> {
         trace!("new: entered");
@@ -96,19 +95,14 @@ impl Extractor {
                 "beaglebone-black" => String::from(extract_device),
                 "beaglebone-green" => String::from(extract_device),
                 _ => {
-                    error!(
-                        "Unsupported device type for extract: {}", extract_device
-                    );
+                    error!("Unsupported device type for extract: {}", extract_device);
                     return Err(MigError::displayed());
                 }
             }
         } else {
-            error!(
-                "Missing the mandatory parameter extract-device",
-            );
+            error!("Missing the mandatory parameter extract-device",);
             return Err(MigError::displayed());
         };
-
 
         let mut cmds = EnsuredCmds::new();
         if let Err(why) = cmds.ensure_cmds(REQUIRED_CMDS) {
@@ -325,9 +319,8 @@ impl Extractor {
 
             let yaml_config = serde_yaml::to_string(&res).context(MigErrCtx::from_remark(
                 MigErrorKind::Upstream,
-                &format!("Failed to serialize config to yaml")
+                &format!("Failed to serialize config to yaml"),
             ))?;
-
 
             let mut entabbed_cfg = String::new();
             let lines = yaml_config.lines();

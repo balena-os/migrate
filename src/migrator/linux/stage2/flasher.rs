@@ -8,9 +8,9 @@ use std::fs::File;
 use std::io::{Read, Write};
 use std::path::Path;
 use std::process::{Command, Stdio};
+use std::str;
 use std::thread;
 use std::time::{Duration, Instant};
-use std::str;
 
 use crate::{
     common::{format_size_with_unit, stage2_config::Stage2Config, MigError},
@@ -29,8 +29,11 @@ const REQUIRED_CMDS: &[&str] = &[DD_CMD, PARTPROBE_CMD, UDEVADM_CMD, LSBLK_CMD];
 
 // TODO: return something else instead (success, (recoverable / not recoverable))
 
-pub(crate) fn check_commands(cmds: &mut EnsuredCmds, config: &Stage2Config, ) -> Result<(),MigError> {
-    if !config.is_gzip_internal(){
+pub(crate) fn check_commands(
+    cmds: &mut EnsuredCmds,
+    config: &Stage2Config,
+) -> Result<(), MigError> {
+    if !config.is_gzip_internal() {
         cmds.ensure(GZIP_CMD)?;
     }
 
@@ -87,7 +90,6 @@ fn flash_gzip_internal(
     // cmds: &EnsuredCmds,
     image_path: &Path,
 ) -> FlashResult {
-
     debug!("opening: '{}'", image_path.display());
 
     let mut decoder = GzDecoder::new(match File::open(&image_path) {
@@ -190,15 +192,18 @@ fn flash_gzip_internal(
         match dd_child.wait_with_output() {
             Ok(cmd_res) => {
                 if !cmd_res.status.success() {
-                    let stderr =  match str::from_utf8(&cmd_res.stderr) {
+                    let stderr = match str::from_utf8(&cmd_res.stderr) {
                         Ok(stderr) => stderr,
                         Err(_) => "- invalid utf8 -",
                     };
-                    error!("dd reported an error: code: {:?}, stderr: {}", cmd_res.status.code(), stderr);
+                    error!(
+                        "dd reported an error: code: {:?}, stderr: {}",
+                        cmd_res.status.code(),
+                        stderr
+                    );
                     // might pay to still try and finish as all input was written
-
                 }
-            },
+            }
             Err(why) => {
                 error!("Error while waiting for dd to terminate:{:?}", why);
                 Logger::flush();

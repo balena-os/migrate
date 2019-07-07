@@ -113,7 +113,7 @@ impl<'a> MigrateConfig {
             require_nwmgr_config: None,
             gzip_internal: None,
             flash_device: None,
-            extract_device: None
+            extract_device: None,
         }
     }
 
@@ -233,7 +233,6 @@ impl<'a> MigrateConfig {
         }
     }
 
-
     pub fn set_work_dir(&mut self, work_dir: PathBuf) {
         self.work_dir = Some(work_dir);
     }
@@ -247,7 +246,6 @@ impl<'a> MigrateConfig {
     }
 
     // The following functions can only be safely called after check has succeeded
-
 
     pub fn get_work_dir(&'a self) -> &'a Path {
         if let Some(ref dir) = self.work_dir {

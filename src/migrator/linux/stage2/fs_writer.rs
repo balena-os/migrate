@@ -18,7 +18,7 @@ use crate::{
     defs::{PART_FSTYPE, PART_NAME},
     linux::{
         ensured_cmds::{
-            EnsuredCmds, EXT_FMT_CMD, FAT_FMT_CMD, LSBLK_CMD, PARTPROBE_CMD, SFDISK_CMD, FDISK_CMD, TAR_CMD,
+            EnsuredCmds, EXT_FMT_CMD, FAT_FMT_CMD, LSBLK_CMD, PARTPROBE_CMD, SFDISK_CMD, TAR_CMD,
         },
         extract::Partition,
         linux_defs::PRE_PARTPROBE_WAIT_SECS,
@@ -34,10 +34,10 @@ pub const REQUIRED_CMDS: &[&str] = &[
     TAR_CMD,
     LSBLK_CMD,
     PARTPROBE_CMD,
-    FDISK_CMD
+    SFDISK_CMD,
 ];
 
-pub(crate) fn check_commands(cmds: &mut EnsuredCmds) -> Result<(),MigError> {
+pub(crate) fn check_commands(cmds: &mut EnsuredCmds) -> Result<(), MigError> {
     Ok(cmds.ensure_cmds(REQUIRED_CMDS)?)
 }
 
@@ -50,12 +50,10 @@ pub(crate) fn write_balena_os(
 ) -> FlashResult {
     // make sure we have allrequired commands
     if let CheckedImageType::FileSystems(ref fs_dump) = config.get_balena_image().image {
-        let res = if let Ok(command) = cmds.get(FDISK_CMD) {
-            fdisk_part(device, command, fs_dump)
+        let res = if let Ok(command) = cmds.get(SFDISK_CMD) {
+            sfdisk_part(device, command, fs_dump)
         } else {
-            error!(
-                "write_balena_os: no partitioning command was found",
-            );
+            error!("write_balena_os: no partitioning command was found",);
             return FlashResult::FailRecoverable;
         };
 
@@ -316,6 +314,7 @@ fn format(
     }
 }
 
+/*
 // TODO: partition manually instead of using fdisk
 // thus make partitioning recoverable
 // optionally write extracted boot sectors in the process
@@ -435,8 +434,8 @@ fn fdisk_part(device: &Path, fdisk_path: &str, fs_dump: &FSDump) -> FlashResult 
     debug!("fdisk stdout: {:?}", str::from_utf8(&cmd_res.stdout));
     FlashResult::Ok
 }
+*/
 
-/*
 fn sfdisk_part(device: &Path, sfdisk_path: &str, fs_dump: &FSDump) -> FlashResult {
     let mut sfdisk_cmd = match Command::new(sfdisk_path)
         .args(&["-f", &*device.to_string_lossy()])
@@ -555,4 +554,3 @@ fn sfdisk_part(device: &Path, sfdisk_path: &str, fs_dump: &FSDump) -> FlashResul
     debug!("sfdisk stdout: {:?}", str::from_utf8(&cmd_res.stdout));
     FlashResult::Ok
 }
-*/
