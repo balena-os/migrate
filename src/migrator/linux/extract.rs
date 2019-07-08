@@ -129,7 +129,7 @@ impl Extractor {
                 }
             } else {
                 if image_info.is_type(&cmds, &FileType::OSImage)? {
-                    match Disk::from_drive_file(&image_info.path, false, None) {
+                    match Disk::from_drive_file(&image_info.path, None) {
                         Ok(plain_img) => {
                             debug!("new: is plain image '{}'", image_info.path.display());
                             return Ok(Extractor {

@@ -85,13 +85,13 @@ impl LabelType {
     pub fn from_device<P: AsRef<Path>>(device_path: P) -> Result<LabelType, MigError> {
         let device_path = device_path.as_ref();
         // TODO: provide propper device block size
-        Ok(Disk::from_drive_file(device_path, false, None)?.get_label()?)
+        Ok(Disk::from_drive_file(device_path, None)?.get_label()?)
     }
 }
 
 pub(crate) struct Disk {
     disk: Box<ImageFile>,
-    writable: bool,
+    // writable: bool,
     block_size: u64,
 }
 
@@ -99,19 +99,19 @@ impl Disk {
     pub fn from_gzip_img<P: AsRef<Path>>(image: P) -> Result<Disk, MigError> {
         Ok(Disk {
             disk: Box::new(GZipFile::new(image.as_ref())?),
-            writable: false,
+            // writable: false,
             block_size: DEF_BLOCK_SIZE as u64,
         })
     }
 
     pub fn from_drive_file<P: AsRef<Path>>(
         drive: P,
-        writable: bool,
+        // writable: bool,
         block_size: Option<u64>,
     ) -> Result<Disk, MigError> {
         Ok(Disk {
             disk: Box::new(PlainFile::new(drive.as_ref())?),
-            writable,
+            // writable,
             block_size: if let Some(block_size) = block_size {
                 block_size
             } else {
