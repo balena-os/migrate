@@ -1,3 +1,4 @@
+use failure::ResultExt;
 use log::{debug, error, warn};
 use std::io::Write;
 use std::path::Path;
@@ -7,12 +8,14 @@ use std::str;
 use std::thread;
 use std::time::{Duration, SystemTime};
 
+use nix::unistd::sync;
+
 use crate::{
     common::{
         config::balena_config::{FSDump, PartCheck},
         path_append,
         stage2_config::{CheckedImageType, Stage2Config},
-        MigError,
+        MigError,MigErrCtx, MigErrorKind,
     },
     defs::PART_NAME,
     linux::{
