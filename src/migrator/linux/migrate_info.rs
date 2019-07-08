@@ -24,8 +24,6 @@ use crate::{
 pub(crate) mod lsblk_info;
 pub(crate) use lsblk_info::{LsblkDevice, LsblkInfo, LsblkPartition};
 
-pub(crate) mod label_type;
-
 pub(crate) mod path_info;
 pub(crate) use path_info::PathInfo;
 

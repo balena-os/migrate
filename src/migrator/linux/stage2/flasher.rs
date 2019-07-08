@@ -20,7 +20,6 @@ use crate::{
         stage2::{mounts::Mounts, FlashResult},
     },
 };
-use nix::errno::errno;
 
 const DD_BLOCK_SIZE: usize = 4194304;
 const UDEVADM_PARAMS: &[&str] = &["settle", "-t", "10"];

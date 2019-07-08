@@ -2,8 +2,7 @@ use failure::ResultExt;
 use log::{debug, error, info, trace};
 use nix::mount::umount;
 use std::fs::{remove_dir, remove_file, OpenOptions};
-use std::io::Write;
-use std::mem;
+use std::io::{Read, Write};
 use std::path::{Path, PathBuf};
 
 // use serde::{Deserialize, Serialize};
@@ -12,8 +11,7 @@ use serde_yaml;
 use crate::{
     common::{
         config::balena_config::ImageType,
-        disk_util::{Disk, LabelType, PartInfo}, //  , ImageFile, GZipFile, PlainFile },
-        format_size_with_unit,
+        disk_util::{Disk, PartitionIterator, PartitionReader}, //  , ImageFile, GZipFile, PlainFile },
         Config,
         FileInfo,
         FileType,
@@ -131,7 +129,7 @@ impl Extractor {
                 }
             } else {
                 if image_info.is_type(&cmds, &FileType::OSImage)? {
-                    match Disk::from_file(&image_info.path, false) {
+                    match Disk::from_drive_file(&image_info.path, false, None) {
                         Ok(plain_img) => {
                             debug!("new: is plain image '{}'", image_info.path.display());
                             return Ok(Extractor {
@@ -169,11 +167,7 @@ impl Extractor {
 
     pub fn extract(&mut self, output_path: Option<&Path>) -> Result<ImageType, MigError> {
         trace!("extract: entered");
-        let mut partitions: Vec<Partition> = Vec::new();
-        // let mut part_idx: usize = 0;
-        let mut curr_offset: u64 = 0;
 
-        // make temp mountpoint name
         let mountpoint = match mktemp(
             &self.cmds,
             true,
@@ -208,49 +202,56 @@ impl Extractor {
         };
 
         let mut extract_err: Option<MigError> = None;
-        let mut part_extract_idx: usize = 0;
+        // let mut part_extract_idx: usize = 0;
 
-        for raw_part in self.disk.get_partition_iterator()? {}
+        let mut partitions: Vec<Partition> = Vec::new();
+
+        let mut part_iterator = PartitionIterator::new(&mut self.disk)?;
 
         loop {
-            let next_offset = match self.read_part_tbl(curr_offset, &mut partitions) {
-                Ok(offset) => offset,
+            let raw_part = if let Some(raw_part) = part_iterator.next() {
+                raw_part
+            } else {
+                break;
+            };
+
+            let part_idx = partitions.len();
+            let mut partition = Partition {
+                name: PART_NAME[part_idx],
+                fstype: PART_FSTYPE[part_idx],
+                status: raw_part.status,
+                ptype: raw_part.ptype,
+                start_lba: raw_part.start_lba,
+                num_sectors: raw_part.num_sectors,
+                archive: None,
+            };
+
+            let mut part_reader =
+                PartitionReader::from_part_iterator(&raw_part, &mut part_iterator);
+
+            match Extractor::write_partition(
+                &self.cmds,
+                &self.config,
+                &mut part_reader,
+                &mut partition,
+                &tmp_name,
+                &mountpoint,
+                output_path,
+            ) {
+                Ok(_) => {
+                    info!(
+                        "extracted partition: {}: to '{}'",
+                        partition.name,
+                        partition.archive.as_ref().unwrap().display()
+                    );
+                }
                 Err(why) => {
+                    error!(
+                        "Failed to write partition {}: error: {:?}",
+                        partition.name, why
+                    );
                     extract_err = Some(why);
                     break;
-                }
-            };
-            debug!("extract: got {} partitions", partitions.len());
-
-            for idx in part_extract_idx..partitions.len() {
-                let partition = &mut partitions[idx];
-                info!(
-                    "extracting partition: {}: fstype: {}, status: {:x}, type: {:x}, start: {}, length: {}, size: {}",
-                    partition.name,
-                    partition.fstype,
-                    partition.status,
-                    partition.ptype,
-                    partition.start_lba,
-                    partition.num_sectors,
-                    format_size_with_unit(partition.num_sectors * DEF_BLOCK_SIZE as u64),
-                );
-
-                match self.write_partition(partition, &tmp_name, &mountpoint, output_path) {
-                    Ok(_) => {
-                        info!(
-                            "extracted partition: {}: to '{}'",
-                            partition.name,
-                            partition.archive.as_ref().unwrap().display()
-                        );
-                    }
-                    Err(why) => {
-                        error!(
-                            "Failed to write partition {}: error: {:?}",
-                            partition.name, why
-                        );
-                        extract_err = Some(why);
-                        break;
-                    }
                 }
             }
 
@@ -258,13 +259,7 @@ impl Extractor {
                 break;
             }
 
-            part_extract_idx = partitions.len();
-
-            if let Some(next_offset) = next_offset {
-                curr_offset = next_offset;
-            } else {
-                break;
-            }
+            partitions.push(partition);
         }
 
         // TODO: try to umount
@@ -322,7 +317,7 @@ impl Extractor {
         } else {
             error!(
                 "Unexpected number of partitions found in image: '{}', {}",
-                self.image_file.get_path().display(),
+                self.disk.get_image_file().display(),
                 partitions.len()
             );
             Err(MigError::displayed())
@@ -330,15 +325,16 @@ impl Extractor {
     }
 
     fn write_partition(
-        &mut self,
+        cmds: &EnsuredCmds,
+        config: &Config,
+        part_reader: &mut PartitionReader,
         partition: &mut Partition,
         tmp_name: &Path,
         mountpoint: &Path,
         output_path: Option<&Path>,
     ) -> Result<(), MigError> {
         trace!(
-            "write_partition: entered with '{}', tmp_name: '{}', mountpoint: '{}'",
-            partition.name,
+            "write_partition: entered with tmp_name: '{}', mountpoint: '{}'",
             tmp_name.display(),
             mountpoint.display()
         );
@@ -358,43 +354,37 @@ impl Extractor {
                 ))?;
 
             // TODO: check free disk space
+
             let mut buffer: [u8; DEF_BUFFER_SIZE] = [0; DEF_BUFFER_SIZE];
-            let mut offset: u64 = partition.start_lba * DEF_BLOCK_SIZE as u64;
-            let mut to_read: u64 = partition.num_sectors * DEF_BLOCK_SIZE as u64;
-
-            while to_read > DEF_BUFFER_SIZE as u64 {
-                self.image_file.fill(offset, &mut buffer)?;
-                let bytes_written = tmp_file.write(&buffer).context(MigErrCtx::from_remark(
-                    MigErrorKind::Upstream,
-                    &format!("Failed to write to temp file: '{}'", tmp_name.display()),
-                ))?;
-
-                if bytes_written < DEF_BUFFER_SIZE {
-                    return Err(MigError::from_remark(
-                        MigErrorKind::InvParam,
-                        "read / wite size mismatch on copy",
-                    ));
-                }
-
-                offset += bytes_written as u64;
-                to_read -= bytes_written as u64;
-            }
-
-            self.image_file
-                .fill(offset, &mut buffer[0..to_read as usize])?;
-            let bytes_written =
-                tmp_file
-                    .write(&buffer[0..to_read as usize])
+            loop {
+                let bytes_read = part_reader
+                    .read(&mut buffer)
                     .context(MigErrCtx::from_remark(
                         MigErrorKind::Upstream,
-                        &format!("Failed to write to temp file: '{}'", tmp_name.display()),
+                        "Failed to read",
                     ))?;
 
-            if bytes_written < DEF_BUFFER_SIZE {
-                return Err(MigError::from_remark(
-                    MigErrorKind::InvParam,
-                    "read / wite size mismatch on copy",
-                ));
+                if bytes_read == 0 {
+                    break;
+                }
+
+                let bytes_written =
+                    tmp_file
+                        .write(&buffer[0..bytes_read])
+                        .context(MigErrCtx::from_remark(
+                            MigErrorKind::Upstream,
+                            &format!("Failed to write to '{}'", tmp_name.display()),
+                        ))?;
+
+                if bytes_read != bytes_written {
+                    return Err(MigError::from_remark(
+                        MigErrorKind::InvParam,
+                        &format!(
+                            "Read write bytes mismatch witing to '{}'",
+                            tmp_name.display()
+                        ),
+                    ));
+                }
             }
 
             debug!(
@@ -409,7 +399,7 @@ impl Extractor {
             mountpoint.display()
         );
 
-        let cmd_res = self.cmds.call(
+        let cmd_res = cmds.call(
             MOUNT_CMD,
             &[
                 "-t",
@@ -434,14 +424,14 @@ impl Extractor {
             path_append(output_path, &format!("{}.tgz", partition.name))
         } else {
             path_append(
-                self.config.migrate.get_work_dir(),
+                config.migrate.get_work_dir(),
                 &format!("{}.tgz", partition.name),
             )
         };
 
         // TODO: Try to archive using rust builtin tar / gzip have to traverse directories myself
 
-        let cmd_res = self.cmds.call(
+        let cmd_res = cmds.call(
             TAR_CMD,
             &[
                 "-czf",

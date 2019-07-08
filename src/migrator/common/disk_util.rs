@@ -1,11 +1,9 @@
-use failure::ResultExt;
-use log::{debug, error, trace, warn};
-use std::fs::OpenOptions;
-use std::io::{Error, ErrorKind, Read, Seek, SeekFrom};
+use log::{debug, error, trace};
+use std::io::{Error, ErrorKind, Read};
 use std::mem;
-use std::path::Path;
+use std::path::{Path, PathBuf};
 
-use crate::common::{MigErrCtx, MigError, MigErrorKind};
+use crate::common::{MigError, MigErrorKind};
 
 mod image_file;
 pub(crate) use image_file::ImageFile;
@@ -83,6 +81,14 @@ pub(crate) enum LabelType {
     Other,
 }
 
+impl LabelType {
+    pub fn from_device<P: AsRef<Path>>(device_path: P) -> Result<LabelType, MigError> {
+        let device_path = device_path.as_ref();
+        // TODO: provide propper device block size
+        Ok(Disk::from_drive_file(device_path, false, None)?.get_label()?)
+    }
+}
+
 pub(crate) struct Disk {
     disk: Box<ImageFile>,
     writable: bool,
@@ -112,6 +118,10 @@ impl Disk {
                 DEF_BLOCK_SIZE as u64
             },
         })
+    }
+
+    pub fn get_image_file(&self) -> PathBuf {
+        self.disk.get_path()
     }
 
     pub fn get_label(&mut self) -> Result<LabelType, MigError> {
@@ -151,64 +161,21 @@ impl Disk {
         Ok(mbr)
     }
 
-    pub fn get_partition_iterator(&mut self) -> Result<PartitionIterator, MigError> {
-        Ok(PartitionIterator::new(self)?)
-    }
-
-    // TODO: allow reading partitions while holding PartitionIterator
-    // PartitionIterator must supply partitionReader as it holds a mut ref to Disk
-
-    pub fn get_partition_reader(
-        &mut self,
-        partition: &PartInfo,
-    ) -> Result<PartitionReader, MigError> {
-        Ok(PartitionReader::new(partition, self)?)
-    }
-}
-
-pub(crate) struct PartitionReader<'a> {
-    disk: &'a mut Disk,
-    offset: u64,
-    bytes_left: u64,
-}
-
-impl<'a> PartitionReader<'a> {
-    pub fn new(part: &PartInfo, disk: &'a mut Disk) -> PartitionReader<'a> {
-        let block_size = disk.block_size;
-        PartitionReader {
-            disk,
-            offset: part.start_lba * block_size,
-            bytes_left: part.num_sectors * block_size,
+    /*
+        pub fn get_partition_iterator(&mut self) -> Result<PartitionIterator, MigError> {
+            Ok(PartitionIterator::new(self)?)
         }
-    }
-}
 
-impl<'a> Read for PartitionReader<'a> {
-    fn read(&mut self, buf: &mut [u8]) -> Result<usize, Error> {
-        if self.bytes_left == 0 {
-            return Ok(0);
-        } else {
-            let (res, size) = if self.bytes_left < buf.len() as u64 {
-                (
-                    self.disk
-                        .disk
-                        .fill(self.offset, &mut buf[0..self.bytes_left as usize]),
-                    self.bytes_left as usize,
-                )
-            } else {
-                (self.disk.disk.fill(self.offset, buf), buf.len())
-            };
+        // TODO: allow reading partitions while holding PartitionIterator
+        // PartitionIterator must supply partitionReader as it holds a mut ref to Disk
 
-            match res {
-                Ok(_) => {
-                    self.offset += size as u64;
-                    self.bytes_left -= size as u64;
-                    Ok(size)
-                }
-                Err(why) => Err(Error::new(ErrorKind::UnexpectedEof, why.to_string())),
-            }
+        pub fn get_partition_reader(
+            &mut self,
+            partition: &PartInfo,
+        ) -> Result<PartitionReader, MigError> {
+            Ok(PartitionReader::from_disk(partition, self)?)
         }
-    }
+    */
 }
 
 pub(crate) struct PartitionIterator<'a> {
@@ -228,7 +195,6 @@ impl<'a> PartitionIterator<'a> {
             disk,
             mbr: Some(mbr),
             offset,
-            curr_part: None,
             index: 0,
             part_idx: 0,
         })
@@ -444,6 +410,63 @@ impl<'a> Iterator for PartitionIterator<'a> {
         }
 
         res
+    }
+}
+
+pub(crate) struct PartitionReader<'a> {
+    disk: &'a mut Disk,
+    offset: u64,
+    bytes_left: u64,
+}
+
+impl<'a> PartitionReader<'a> {
+    pub fn from_disk(part: &PartInfo, disk: &'a mut Disk) -> PartitionReader<'a> {
+        let block_size = disk.block_size;
+        PartitionReader {
+            disk,
+            offset: part.start_lba * block_size,
+            bytes_left: part.num_sectors * block_size,
+        }
+    }
+
+    pub fn from_part_iterator(
+        part: &PartInfo,
+        iterator: &'a mut PartitionIterator,
+    ) -> PartitionReader<'a> {
+        let block_size = iterator.disk.block_size;
+        PartitionReader {
+            disk: iterator.disk,
+            offset: part.start_lba * block_size,
+            bytes_left: part.num_sectors * block_size,
+        }
+    }
+}
+
+impl<'a> Read for PartitionReader<'a> {
+    fn read(&mut self, buf: &mut [u8]) -> Result<usize, Error> {
+        if self.bytes_left == 0 {
+            return Ok(0);
+        } else {
+            let (res, size) = if self.bytes_left < buf.len() as u64 {
+                (
+                    self.disk
+                        .disk
+                        .fill(self.offset, &mut buf[0..self.bytes_left as usize]),
+                    self.bytes_left as usize,
+                )
+            } else {
+                (self.disk.disk.fill(self.offset, buf), buf.len())
+            };
+
+            match res {
+                Ok(_) => {
+                    self.offset += size as u64;
+                    self.bytes_left -= size as u64;
+                    Ok(size)
+                }
+                Err(why) => Err(Error::new(ErrorKind::UnexpectedEof, why.to_string())),
+            }
+        }
     }
 }
 
