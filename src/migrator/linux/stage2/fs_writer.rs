@@ -26,6 +26,7 @@ use crate::{
         stage2::{mounts::Mounts, FlashResult},
     },
 };
+use nix::unistd::sync;
 
 // pub const OPTIONAL_CMDS: &[&str] = &[SFDISK_CMD, FDISK_CMD];
 pub const REQUIRED_CMDS: &[&str] = &[
@@ -69,21 +70,22 @@ pub(crate) fn write_balena_os(
                 }
             };
 
+            thread::sleep(Duration::from_secs(PRE_PARTPROBE_WAIT_SECS));
+
+            if let Err(why) = cmds.call(
+                PARTPROBE_CMD,
+                &[&lsblk_dev.get_path().to_string_lossy()],
+                true,
+            ) {
+                warn!(
+                    "write_balena_os: partprobe command failed, ignoring,  error: {:?}",
+                    why
+                );
+            }
+
             if format(&lsblk_dev, cmds, fs_dump) {
                 // TODO: need partprobe ?
 
-                thread::sleep(Duration::from_secs(PRE_PARTPROBE_WAIT_SECS));
-
-                if let Err(why) = cmds.call(
-                    PARTPROBE_CMD,
-                    &[&lsblk_dev.get_path().to_string_lossy()],
-                    true,
-                ) {
-                    warn!(
-                        "write_balena_os: partprobe command failed, ignoring,  error: {:?}",
-                        why
-                    );
-                }
 
                 if let Err(why) = mounts.mount_balena(true) {
                     error!(
