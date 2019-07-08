@@ -28,6 +28,22 @@ pub(crate) enum PartitionType {
     Other,
 }
 
+impl PartitionType {
+    pub fn from_ptype(ptype: u8) -> PartitionType {
+        // TODO: to be completed - currently only contains common, known partition types occurring in
+        // encountered systems
+        match ptype {
+            0x00 => PartitionType::Empty,
+            0x05 | 0x0f => PartitionType::Container,
+            0xee => PartitionType::GPT,
+            0x0c | 0x0e => PartitionType::Fat,
+            0x83 => PartitionType::Linux,
+            _ => PartitionType::Other,
+        }
+    }
+}
+
+
 #[repr(C, packed)]
 struct PartEntry {
     status: u8,
@@ -40,21 +56,6 @@ struct PartEntry {
     last_cyl: u8,
     first_lba: u32,
     num_sectors: u32,
-}
-
-impl PartEntry {
-    pub fn part_type(&self) -> PartitionType {
-        // TODO: to be completed - currently only contains common, known partition types occurring in
-        // encountered systems
-        match self.ptype {
-            0x00 => PartitionType::Empty,
-            0x05 | 0x0f => PartitionType::Container,
-            0xee => PartitionType::GPT,
-            0x0c | 0x0e => PartitionType::Fat,
-            0x83 => PartitionType::Linux,
-            _ => PartitionType::Other,
-        }
-    }
 }
 
 #[repr(C, packed)]
@@ -126,7 +127,7 @@ impl Disk {
 
     pub fn get_label(&mut self) -> Result<LabelType, MigError> {
         match self.read_mbr(0) {
-            Ok(mbr) => match mbr.part_tbl[0].part_type() {
+            Ok(mbr) => match PartitionType::from_ptype(mbr.part_tbl[0].ptype) {
                 PartitionType::GPT => Ok(LabelType::GPT),
                 _ => Ok(LabelType::Dos),
             },
@@ -232,7 +233,7 @@ impl<'a> Iterator for PartitionIterator<'a> {
                 } else {
                     // read regular partition
                     let part = &mbr.part_tbl[self.index];
-                    match part.part_type() {
+                    match PartitionType::from_ptype(part.ptype) {
                         PartitionType::Empty =>
                         // empty partition - Assume End of Table
                         {
@@ -287,7 +288,7 @@ impl<'a> Iterator for PartitionIterator<'a> {
                     // to the next extended partition which we would be looking at here
 
                     let part = &mbr.part_tbl[self.index];
-                    match part.part_type() {
+                    match PartitionType::from_ptype(part.ptype) {
                         PartitionType::Empty => {
                             // regular end  of extended partitions
                             // // warn!("Empty partition on index 1 of extended partition is unexpected");
@@ -300,7 +301,7 @@ impl<'a> Iterator for PartitionIterator<'a> {
                                 Ok(mbr) => {
                                     let part = &mbr.part_tbl[0];
                                     // self.mbr = Some(mbr)
-                                    match part.part_type() {
+                                    match PartitionType::from_ptype(part.ptype) {
                                         PartitionType::Linux | PartitionType::Fat => {
                                             self.index = 1;
                                             self.part_idx += 1;
@@ -348,7 +349,7 @@ impl<'a> Iterator for PartitionIterator<'a> {
                     debug!("PartitionIterator::next: got mbr");
                     let part = &mbr.part_tbl[0];
                     // self.mbr = Some(mbr);
-                    let part_type = part.part_type();
+                    let part_type = PartitionType::from_ptype(part.ptype);
                     debug!(
                         "PartitionIterator::next: got partition type: {:?}",
                         part_type
@@ -422,6 +423,9 @@ pub(crate) struct PartitionReader<'a> {
 impl<'a> PartitionReader<'a> {
     pub fn from_disk(part: &PartInfo, disk: &'a mut Disk) -> PartitionReader<'a> {
         let block_size = disk.block_size;
+
+        debug!("from_disk: start_lba: {}, num_sectors: {}, sector_size: {}", part.start_lba, part.num_sectors, block_size);
+
         PartitionReader {
             disk,
             offset: part.start_lba * block_size,
@@ -434,6 +438,9 @@ impl<'a> PartitionReader<'a> {
         iterator: &'a mut PartitionIterator,
     ) -> PartitionReader<'a> {
         let block_size = iterator.disk.block_size;
+
+        debug!("from_part_iterator: start_lba: {}, num_sectors: {}, sector_size: {}", part.start_lba, part.num_sectors, block_size);
+
         PartitionReader {
             disk: iterator.disk,
             offset: part.start_lba * block_size,
