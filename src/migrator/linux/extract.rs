@@ -399,6 +399,8 @@ impl Extractor {
             mountpoint.display()
         );
 
+        // TODO: use losetup and then mount, mount -o loop seems to not work in ubuntu-14
+
         let cmd_res = cmds.call(
             MOUNT_CMD,
             &[
