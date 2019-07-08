@@ -63,7 +63,7 @@ pub(crate) fn write_balena_os(
 
             if let Err(why) = cmds.call(
                 PARTPROBE_CMD,
-                &[&lsblk_dev.get_path().to_string_lossy()],
+                &[&device.to_string_lossy()],
                 true,
             ) {
                 warn!(
@@ -86,8 +86,6 @@ pub(crate) fn write_balena_os(
 
             if format(&lsblk_dev, cmds, fs_dump) {
                 // TODO: need partprobe ?
-
-
                 if let Err(why) = mounts.mount_balena(true) {
                     error!(
                         "write_balena_os: failed mount balena partitions, error: {:?}",
