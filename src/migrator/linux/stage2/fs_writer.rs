@@ -59,17 +59,6 @@ pub(crate) fn write_balena_os(
         };
 
         if let FlashResult::Ok = res {
-            let lsblk_dev = match LsblkInfo::for_device(device, cmds) {
-                Ok(lsblk_dev) => lsblk_dev,
-                Err(why) => {
-                    error!(
-                        "write_balena_os: failed get updated device info (2), error: {:?}",
-                        why
-                    );
-                    return FlashResult::FailNonRecoverable;
-                }
-            };
-
             thread::sleep(Duration::from_secs(PRE_PARTPROBE_WAIT_SECS));
 
             if let Err(why) = cmds.call(
@@ -82,6 +71,18 @@ pub(crate) fn write_balena_os(
                     why
                 );
             }
+
+            let lsblk_dev = match LsblkInfo::for_device(device, cmds) {
+                Ok(lsblk_dev) => lsblk_dev,
+                Err(why) => {
+                    error!(
+                        "write_balena_os: failed get updated device info (2), error: {:?}",
+                        why
+                    );
+                    return FlashResult::FailNonRecoverable;
+                }
+            };
+
 
             if format(&lsblk_dev, cmds, fs_dump) {
                 // TODO: need partprobe ?
