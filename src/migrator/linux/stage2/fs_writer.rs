@@ -58,6 +58,8 @@ pub(crate) fn write_balena_os(
             return FlashResult::FailRecoverable;
         };
 
+        sync();
+
         if let FlashResult::Ok = res {
             thread::sleep(Duration::from_secs(PRE_PARTPROBE_WAIT_SECS));
 
@@ -72,6 +74,8 @@ pub(crate) fn write_balena_os(
                 );
             }
 
+            sync();
+
             let lsblk_dev = match LsblkInfo::for_device(device, cmds) {
                 Ok(lsblk_dev) => lsblk_dev,
                 Err(why) => {
@@ -83,6 +87,9 @@ pub(crate) fn write_balena_os(
                 }
             };
 
+            debug!("write_balena_os: lsblk_dev: {:?}", lsblk_dev);
+
+            sync();
 
             if format(&lsblk_dev, cmds, fs_dump) {
                 // TODO: need partprobe ?
