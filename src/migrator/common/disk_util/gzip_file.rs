@@ -6,8 +6,7 @@ use std::path::{Path, PathBuf};
 
 const DEF_READ_BUFFER: usize = 1024 * 1024;
 
-use crate::common::MigErrorKind;
-use crate::{common::MigError, linux::extract::image_file::ImageFile};
+use crate::common::{disk_util::image_file::ImageFile, MigError, MigErrorKind};
 
 pub(crate) struct GZipFile {
     path: PathBuf,
@@ -166,7 +165,7 @@ impl ImageFile for GZipFile {
             )),
         }
     }
-    fn get_path(&mut self) -> PathBuf {
+    fn get_path(&self) -> PathBuf {
         self.path.clone()
     }
 }

@@ -1,9 +1,8 @@
-use failure::ResultExt;
 use log::{debug, error, warn};
 use std::io::Write;
 use std::path::Path;
 use std::path::PathBuf;
-use std::process::{ChildStdin, Command, Stdio};
+use std::process::{Command, Stdio};
 use std::str;
 use std::thread;
 use std::time::{Duration, SystemTime};
@@ -13,20 +12,18 @@ use crate::{
         config::balena_config::{FSDump, PartCheck},
         path_append,
         stage2_config::{CheckedImageType, Stage2Config},
-        MigErrCtx, MigError, MigErrorKind,
+        MigError,
     },
-    defs::{PART_FSTYPE, PART_NAME},
+    defs::PART_NAME,
     linux::{
         ensured_cmds::{
             EnsuredCmds, EXT_FMT_CMD, FAT_FMT_CMD, LSBLK_CMD, PARTPROBE_CMD, SFDISK_CMD, TAR_CMD,
         },
-        extract::Partition,
         linux_defs::PRE_PARTPROBE_WAIT_SECS,
         migrate_info::{LsblkDevice, LsblkInfo},
         stage2::{mounts::Mounts, FlashResult},
     },
 };
-use nix::unistd::sync;
 
 // pub const OPTIONAL_CMDS: &[&str] = &[SFDISK_CMD, FDISK_CMD];
 pub const REQUIRED_CMDS: &[&str] = &[
@@ -321,6 +318,7 @@ fn format(lsblk_dev: &LsblkDevice, cmds: &EnsuredCmds, fs_dump: &FSDump) -> bool
         false
     }
 }
+
 
 fn sfdisk_part(device: &Path, sfdisk_path: &str, fs_dump: &FSDump) -> FlashResult {
     let mut sfdisk_cmd = match Command::new(sfdisk_path)

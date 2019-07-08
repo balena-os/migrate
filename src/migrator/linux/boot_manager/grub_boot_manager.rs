@@ -8,7 +8,9 @@ use std::path::Path;
 use crate::linux::migrate_info::PathInfo;
 use crate::{
     common::{
-        dir_exists, file_exists, format_size_with_unit, path_append,
+        dir_exists,
+        disk_util::LabelType,
+        file_exists, format_size_with_unit, path_append,
         stage2_config::{Stage2Config, Stage2ConfigBuilder},
         Config, MigErrCtx, MigError, MigErrorKind,
     },
@@ -19,7 +21,7 @@ use crate::{
             BOOT_PATH, GRUB_CONFIG_DIR, GRUB_CONFIG_FILE, GRUB_MIN_VERSION, KERNEL_CMDLINE_PATH,
             ROOT_PATH,
         },
-        migrate_info::{label_type::LabelType, MigrateInfo},
+        migrate_info::MigrateInfo,
         stage2::mounts::Mounts,
         EnsuredCmds, CHMOD_CMD, GRUB_REBOOT_CMD, GRUB_UPDT_CMD,
     },
@@ -209,9 +211,9 @@ impl<'a> BootManager for GrubBootManager {
             &boot_path.path
         };
 
-        let part_type = match LabelType::from_device(cmds, &boot_path.drive)? {
+        let part_type = match LabelType::from_device(&boot_path.drive)? {
             LabelType::GPT => "gpt",
-            LabelType::DOS => "msdos",
+            LabelType::Dos => "msdos",
             _ => {
                 return Err(MigError::from_remark(
                     MigErrorKind::InvParam,

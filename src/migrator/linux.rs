@@ -9,7 +9,7 @@ use std::time::Duration;
 use crate::{
     common::{
         backup,
-        config::balena_config::{FSDump, ImageType},
+        config::balena_config::ImageType,
         dir_exists, format_size_with_unit, path_append,
         stage2_config::{PathType, Stage2ConfigBuilder, Stage2LogConfig},
         Config, MigErrCtx, MigError, MigErrorKind, MigMode,

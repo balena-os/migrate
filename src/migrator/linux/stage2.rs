@@ -36,8 +36,8 @@ mod fs_writer;
 mod flasher;
 
 pub(crate) mod mounts;
-use core::borrow::BorrowMut;
 use mounts::Mounts;
+
 use std::cell::RefCell;
 
 const REBOOT_DELAY: u64 = 3;
@@ -582,7 +582,7 @@ impl<'a> Stage2 {
 
                 // Logger::flush();
             }
-            CheckedImageType::FileSystems(ref fs_dump) => {
+            CheckedImageType::FileSystems(ref _fs_dump) => {
                 let base_path = if self.mounts.borrow().is_work_no_copy() {
                     if let Some(work_dir) = self.mounts.borrow().get_work_path() {
                         work_dir.to_path_buf()

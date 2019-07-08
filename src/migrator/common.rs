@@ -15,6 +15,8 @@ pub(crate) mod mig_error;
 #[cfg(target_os = "windows")]
 pub(crate) mod os_release;
 
+pub(crate) mod disk_util;
+
 pub(crate) mod backup;
 
 pub(crate) mod balena_cfg_json;
