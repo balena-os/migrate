@@ -28,6 +28,8 @@ use crate::{
     },
 };
 
+// TODO: ensure support for GPT partition tables
+
 // pub const OPTIONAL_CMDS: &[&str] = &[SFDISK_CMD, FDISK_CMD];
 pub const REQUIRED_CMDS: &[&str] = &[
     EXT_FMT_CMD,
