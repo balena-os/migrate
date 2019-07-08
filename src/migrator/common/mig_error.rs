@@ -41,7 +41,10 @@ pub enum MigErrorKind {
     MutAccess,
     #[fail(display = "No Match")]
     NoMatch,
-    // errors that have had teir messages displayed elsewhere
+    #[fail(display = "Timeout waiting for event")]
+    Timeout,
+
+    // errors that have had their messages displayed elsewhere
     #[fail(display = "Displayed")]
     Displayed,
 }

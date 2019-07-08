@@ -6,7 +6,7 @@ use std::path::PathBuf;
 use std::process::{ChildStdin, Command, Stdio};
 use std::str;
 use std::thread;
-use std::time::Duration;
+use std::time::{Duration, SystemTime};
 
 use crate::{
     common::{
@@ -61,33 +61,16 @@ pub(crate) fn write_balena_os(
         sync();
 
         if let FlashResult::Ok = res {
-            thread::sleep(Duration::from_secs(PRE_PARTPROBE_WAIT_SECS));
-
-            if let Err(why) = cmds.call(
-                PARTPROBE_CMD,
-                &[&device.to_string_lossy()],
-                true,
-            ) {
-                warn!(
-                    "write_balena_os: partprobe command failed, ignoring,  error: {:?}",
-                    why
-                );
-            }
-
-            sync();
-
-            let lsblk_dev = match LsblkInfo::for_device(device, cmds) {
-                Ok(lsblk_dev) => lsblk_dev,
+            let lsblk_dev = match part_reread(device, 30, 6, cmds) {
+                Ok(lsblk_device) => lsblk_device,
                 Err(why) => {
                     error!(
-                        "write_balena_os: failed get updated device info (2), error: {:?}",
-                        why
+                        "write_balena_os: The newly written partitions on '{}' did not show up as expected , error: {:?}",
+                        device.display(),why
                     );
                     return FlashResult::FailNonRecoverable;
                 }
             };
-
-            debug!("write_balena_os: lsblk_dev: {:?}", lsblk_dev);
 
             sync();
 
@@ -452,4 +435,50 @@ fn sfdisk_part(device: &Path, sfdisk_path: &str, fs_dump: &FSDump) -> FlashResul
 
     debug!("sfdisk stdout: {:?}", str::from_utf8(&cmd_res.stdout));
     FlashResult::Ok
+}
+
+
+fn part_reread(device: &Path, timeout: u64, num_partitions: usize, cmds: &EnsuredCmds) -> Result<LsblkDevice, MigError> {
+    debug!("part_reread: entered with: '{}', timeout: {}, num_partitions: {}", device.display(), timeout, num_partitions);
+
+    let start = SystemTime::now();
+    thread::sleep(Duration::from_secs(1));
+
+    match cmds.call(
+        PARTPROBE_CMD,
+        &[&device.to_string_lossy()],
+        true,
+    ) {
+        Ok(cmd_res) => {
+            debug!("part_reread: partprobe returned: stdout '{}', stderr: '{}'",
+                cmd_res.stdout, cmd_res.stderr
+            );
+        },
+        Err(why) => {
+            warn!(
+                "write_balena_os: partprobe command failed, ignoring,  error: {:?}",
+                why
+            );
+        }
+     }
+
+    loop {
+        thread::sleep(Duration::from_secs(1));
+        debug!("part_reread: calling LsblkInfo::for_device('{}')", device.display());
+        let lsblk_dev = LsblkInfo::for_device(device, cmds)?;
+        if let Some(children) = &lsblk_dev.children {
+            if children.len() == num_partitions {
+                debug!("part_reread: LsblkInfo::for_device('{}') : {:?}", device.display(), lsblk_dev);
+                return Ok(lsblk_dev);
+            } else {
+                debug!("part_reread: not accepting LsblkInfo::for_device('{}') : {:?}", device.display(), lsblk_dev);
+            }
+        } else {
+            debug!("part_reread: not accepting LsblkInfo::for_device('{}') : {:?}", device.display(), lsblk_dev);
+            let elapsed = SystemTime::now().duration_since(start).context(MigErrCtx::from_remark(MigErrorKind::Upstream, "Failed to conpute elapsed time"))?;
+            if elapsed.as_secs() > timeout {
+                return Err(MigError::from_remark(MigErrorKind::Timeout, "The partitioned devices did not show up as expected"));
+            }
+        }
+    }
 }
