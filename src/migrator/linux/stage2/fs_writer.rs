@@ -62,7 +62,7 @@ pub(crate) fn write_balena_os(
         sync();
 
         if let FlashResult::Ok = res {
-            let lsblk_dev = match part_reread(device, 30, 6, cmds) {
+            let lsblk_dev = match part_reread(device, 30, 5, cmds) {
                 Ok(lsblk_device) => lsblk_device,
                 Err(why) => {
                     error!(
@@ -282,64 +282,62 @@ fn sub_format(
 
 fn format(lsblk_dev: &LsblkDevice, cmds: &EnsuredCmds, fs_dump: &FSDump) -> bool {
     if let Some(ref children) = lsblk_dev.children {
-        if children.len() == 6 {
-            let check = if let Some(ref check) = fs_dump.check {
-                check
-            } else {
-                // TODO: default to None until checks are supported in mke2fs ?
-                &PartCheck::None
-                // &PartCheck::Read
-            };
 
-            let fat_check = if let PartCheck::ReadWrite = check {
-                // mkdosfs does not know about ReadWrite checks
-                &PartCheck::Read
-            } else {
-                check
-            };
+        let check = if let Some(ref check) = fs_dump.check {
+            check
+        } else {
+            // TODO: default to None until checks are supported in mke2fs ?
+            &PartCheck::None
+            // &PartCheck::Read
+        };
 
-            let mut dev_idx: usize  = 0;
-            let mut part_idx: usize  = 0;
+        let fat_check = if let PartCheck::ReadWrite = check {
+            // mkdosfs does not know about ReadWrite checks
+            &PartCheck::Read
+        } else {
+            check
+        };
 
-            while (part_idx < children.len()) && (part_idx < PART_NAME.len()) {
-                if let Some(ref part_type) = children[dev_idx].parttype {
-                    match part_type.as_ref() {
-                        "0xe" => {
-                            debug!("Formatting fat partition at index {}/{}", dev_idx, part_idx);
-                            if !sub_format(&children[dev_idx].get_path(), PART_NAME[part_idx], cmds, true, fat_check) {
-                                return false;
-                            } else {
-                                part_idx += 1;
-                            }
-                        },
-                        "0x83" => {
-                            debug!("Formatting linux partition at index {}/{}", dev_idx, part_idx);
-                            if !sub_format(&children[dev_idx].get_path(), PART_NAME[part_idx], cmds, false, check) {
-                                return false;
-                            } else {
-                                part_idx += 1;
-                            }
-                        },
-                        "0x5"|"0xf" => {
-                            debug!("Skipping extended partition at index {}/{}", dev_idx, part_idx);
-                        },
-                        _ => {
-                            error!("Invalid partition, type: {} found at index {}/{}", part_type, dev_idx, part_idx);
+        let mut dev_idx: usize  = 0;
+        let mut part_idx: usize  = 0;
+
+        while (part_idx < children.len()) && (part_idx < PART_NAME.len()) {
+            if let Some(ref part_type) = children[dev_idx].parttype {
+                match part_type.as_ref() {
+                    "0xe" => {
+                        debug!("Formatting fat partition at index {}/{}", dev_idx, part_idx);
+                        if !sub_format(&children[dev_idx].get_path(), PART_NAME[part_idx], cmds, true, fat_check) {
                             return false;
+                        } else {
+                            part_idx += 1;
                         }
+                    },
+                    "0x83" => {
+                        debug!("Formatting linux partition at index {}/{}", dev_idx, part_idx);
+                        if !sub_format(&children[dev_idx].get_path(), PART_NAME[part_idx], cmds, false, check) {
+                            return false;
+                        } else {
+                            part_idx += 1;
+                        }
+                    },
+                    "0x5"|"0xf" => {
+                        debug!("Skipping extended partition at index {}/{}", dev_idx, part_idx);
+                    },
+                    _ => {
+                        error!("Invalid partition, type: {} found at index {}/{}", part_type, dev_idx, part_idx);
+                        return false;
                     }
                 }
-
-                dev_idx += 1;
             }
 
-            true
-        } else {
-            error!(
-                "format: encountered an in valid number of partitions {} != 6",
-                children.len()
-            );
+            dev_idx += 1;
+        }
+
+        if part_idx < PART_NAME.len() {
+            error!("format: not all partitions were formatted: {}/{}", part_idx, PART_NAME.len());
             false
+        } else {
+            true
         }
     } else {
         error!("format: no partitions found to format");
