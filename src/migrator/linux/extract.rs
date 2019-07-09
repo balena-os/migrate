@@ -36,8 +36,8 @@ use crate::{
 // use plain_file::PlainFile;
 
 use crate::common::config::balena_config::{FSDump, PartDump};
-use crate::common::path_append;
 use crate::common::disk_util::PartitionType;
+use crate::common::path_append;
 
 const REQUIRED_CMDS: &[&str] = &[FILE_CMD, MOUNT_CMD, MKTEMP_CMD, TAR_CMD];
 
@@ -219,11 +219,16 @@ impl Extractor {
             let part_idx = partitions.len();
 
             match PartitionType::from_ptype(raw_part.ptype) {
-                PartitionType::Container => { continue; }, // skip extended partition
-                PartitionType::Fat| PartitionType::Linux => (), // expected partition
+                PartitionType::Container => {
+                    continue;
+                } // skip extended partition
+                PartitionType::Fat | PartitionType::Linux => (), // expected partition
                 _ => {
-                    return Err(MigError::from_remark(MigErrorKind::InvParam, &format!("Encountered unexpected partition type {:x}", raw_part.ptype)));
-                },
+                    return Err(MigError::from_remark(
+                        MigErrorKind::InvParam,
+                        &format!("Encountered unexpected partition type {:x}", raw_part.ptype),
+                    ));
+                }
             }
 
             let mut partition = Partition {

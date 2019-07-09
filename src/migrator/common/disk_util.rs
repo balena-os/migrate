@@ -43,7 +43,6 @@ impl PartitionType {
     }
 }
 
-
 #[repr(C, packed)]
 struct PartEntry {
     status: u8,
@@ -424,7 +423,10 @@ impl<'a> PartitionReader<'a> {
     pub fn from_disk(part: &PartInfo, disk: &'a mut Disk) -> PartitionReader<'a> {
         let block_size = disk.block_size;
 
-        debug!("from_disk: start_lba: {}, num_sectors: {}, sector_size: {}", part.start_lba, part.num_sectors, block_size);
+        debug!(
+            "from_disk: start_lba: {}, num_sectors: {}, sector_size: {}",
+            part.start_lba, part.num_sectors, block_size
+        );
 
         PartitionReader {
             disk,
@@ -439,7 +441,10 @@ impl<'a> PartitionReader<'a> {
     ) -> PartitionReader<'a> {
         let block_size = iterator.disk.block_size;
 
-        debug!("from_part_iterator: start_lba: {}, num_sectors: {}, sector_size: {}", part.start_lba, part.num_sectors, block_size);
+        debug!(
+            "from_part_iterator: start_lba: {}, num_sectors: {}, sector_size: {}",
+            part.start_lba, part.num_sectors, block_size
+        );
 
         PartitionReader {
             disk: iterator.disk,

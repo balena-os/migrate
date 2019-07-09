@@ -15,7 +15,7 @@ use crate::{
         config::balena_config::{FSDump, PartCheck},
         path_append,
         stage2_config::{CheckedImageType, Stage2Config},
-        MigError,MigErrCtx, MigErrorKind,
+        MigErrCtx, MigError, MigErrorKind,
     },
     defs::PART_NAME,
     linux::{
@@ -106,7 +106,12 @@ pub(crate) fn write_balena_os(
     }
 }
 
-fn sub_write(tar_path: &str, mountpoint: &Path, base_path: &Path, archive: &Option<PathBuf>) -> bool {
+fn sub_write(
+    tar_path: &str,
+    mountpoint: &Path,
+    base_path: &Path,
+    archive: &Option<PathBuf>,
+) -> bool {
     if let Some(archive) = archive {
         let arch_path = path_append(base_path, archive);
         let tar_args: &[&str] = &[
@@ -324,7 +329,6 @@ fn format(lsblk_dev: &LsblkDevice, cmds: &EnsuredCmds, fs_dump: &FSDump) -> bool
     }
 }
 
-
 fn sfdisk_part(device: &Path, sfdisk_path: &str, fs_dump: &FSDump) -> FlashResult {
     let mut sfdisk_cmd = match Command::new(sfdisk_path)
         .args(&["-f", &*device.to_string_lossy()])
@@ -440,48 +444,82 @@ fn sfdisk_part(device: &Path, sfdisk_path: &str, fs_dump: &FSDump) -> FlashResul
     FlashResult::Ok
 }
 
-
-fn part_reread(device: &Path, timeout: u64, num_partitions: usize, cmds: &EnsuredCmds) -> Result<LsblkDevice, MigError> {
-    debug!("part_reread: entered with: '{}', timeout: {}, num_partitions: {}", device.display(), timeout, num_partitions);
+fn part_reread(
+    device: &Path,
+    timeout: u64,
+    num_partitions: usize,
+    cmds: &EnsuredCmds,
+) -> Result<LsblkDevice, MigError> {
+    debug!(
+        "part_reread: entered with: '{}', timeout: {}, num_partitions: {}",
+        device.display(),
+        timeout,
+        num_partitions
+    );
 
     let start = SystemTime::now();
     thread::sleep(Duration::from_secs(1));
 
-    match cmds.call(
-        PARTPROBE_CMD,
-        &[&device.to_string_lossy()],
-        true,
-    ) {
+    match cmds.call(PARTPROBE_CMD, &[&device.to_string_lossy()], true) {
         Ok(cmd_res) => {
-            debug!("part_reread: partprobe returned: stdout '{}', stderr: '{}'",
+            debug!(
+                "part_reread: partprobe returned: stdout '{}', stderr: '{}'",
                 cmd_res.stdout, cmd_res.stderr
             );
-        },
+        }
         Err(why) => {
             warn!(
                 "write_balena_os: partprobe command failed, ignoring,  error: {:?}",
                 why
             );
         }
-     }
+    }
 
     loop {
         thread::sleep(Duration::from_secs(1));
-        debug!("part_reread: calling LsblkInfo::for_device('{}')", device.display());
+        debug!(
+            "part_reread: calling LsblkInfo::for_device('{}')",
+            device.display()
+        );
         let lsblk_dev = LsblkInfo::for_device(device, cmds)?;
         if let Some(children) = &lsblk_dev.children {
             if children.len() == num_partitions {
-                debug!("part_reread: LsblkInfo::for_device('{}') : {:?}", device.display(), lsblk_dev);
+                debug!(
+                    "part_reread: LsblkInfo::for_device('{}') : {:?}",
+                    device.display(),
+                    lsblk_dev
+                );
                 return Ok(lsblk_dev);
             } else {
-                debug!("part_reread: not accepting LsblkInfo::for_device('{}') : {:?}", device.display(), lsblk_dev);
+                debug!(
+                    "part_reread: not accepting LsblkInfo::for_device('{}') : {:?}",
+                    device.display(),
+                    lsblk_dev
+                );
             }
         } else {
-            debug!("part_reread: not accepting LsblkInfo::for_device('{}') : {:?}", device.display(), lsblk_dev);
-            let elapsed = SystemTime::now().duration_since(start).context(MigErrCtx::from_remark(MigErrorKind::Upstream, "Failed to conpute elapsed time"))?;
-            if elapsed.as_secs() > timeout {
-                return Err(MigError::from_remark(MigErrorKind::Timeout, "The partitioned devices did not show up as expected"));
-            }
+            debug!(
+                "part_reread: not accepting LsblkInfo::for_device('{}') : {:?}",
+                device.display(),
+                lsblk_dev
+            );
+        }
+
+        let elapsed = SystemTime::now()
+            .duration_since(start)
+            .context(MigErrCtx::from_remark(
+                MigErrorKind::Upstream,
+                "Failed to conpute elapsed time",
+            ))?;
+
+        if elapsed.as_secs() > timeout {
+            return Err(MigError::from_remark(
+                MigErrorKind::Timeout,
+                &format!(
+                    "The partitioned devices did not show up as expected after {} secs",
+                    elapsed.as_secs()
+                ),
+            ));
         }
     }
 }
