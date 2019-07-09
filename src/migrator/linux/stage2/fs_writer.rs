@@ -22,7 +22,6 @@ use crate::{
         ensured_cmds::{
             EnsuredCmds, EXT_FMT_CMD, FAT_FMT_CMD, LSBLK_CMD, PARTPROBE_CMD, SFDISK_CMD, TAR_CMD,
         },
-        linux_defs::PRE_PARTPROBE_WAIT_SECS,
         migrate_info::{LsblkDevice, LsblkInfo},
         stage2::{mounts::Mounts, FlashResult},
     },
@@ -299,23 +298,42 @@ fn format(lsblk_dev: &LsblkDevice, cmds: &EnsuredCmds, fs_dump: &FSDump) -> bool
                 check
             };
 
-            if !sub_format(&children[0].get_path(), PART_NAME[0], cmds, true, fat_check) {
-                return false;
+            let mut dev_idx: usize  = 0;
+            let mut part_idx: usize  = 0;
+
+            while (part_idx < children.len()) && (part_idx < PART_NAME.len()) {
+                if let Some(ref part_type) = children[dev_idx].parttype {
+                    match part_type.as_ref() {
+                        "0xe" => {
+                            debug!("Formatting fat partition at index {}/{}", dev_idx, part_idx);
+                            if !sub_format(&children[dev_idx].get_path(), PART_NAME[part_idx], cmds, true, fat_check) {
+                                return false;
+                            } else {
+                                part_idx += 1;
+                            }
+                        },
+                        "0x83" => {
+                            debug!("Formatting linux partition at index {}/{}", dev_idx, part_idx);
+                            if !sub_format(&children[dev_idx].get_path(), PART_NAME[part_idx], cmds, false, check) {
+                                return false;
+                            } else {
+                                part_idx += 1;
+                            }
+                        },
+                        "0x5"|"0xf" => {
+                            debug!("Skipping extended partition at index {}/{}", dev_idx, part_idx);
+                        },
+                        _ => {
+                            error!("Invalid partition, type: {} found at index {}/{}", part_type, dev_idx, part_idx);
+                            return false;
+                        }
+                    }
+                }
+
+                dev_idx += 1;
             }
 
-            if !sub_format(&children[1].get_path(), PART_NAME[1], cmds, false, check) {
-                return false;
-            }
-
-            if !sub_format(&children[2].get_path(), PART_NAME[2], cmds, false, check) {
-                return false;
-            }
-
-            if !sub_format(&children[4].get_path(), PART_NAME[3], cmds, false, check) {
-                return false;
-            }
-
-            sub_format(&children[5].get_path(), PART_NAME[4], cmds, false, &check)
+            true
         } else {
             error!(
                 "format: encountered an in valid number of partitions {} != 6",
@@ -483,7 +501,7 @@ fn part_reread(
         );
         let lsblk_dev = LsblkInfo::for_device(device, cmds)?;
         if let Some(children) = &lsblk_dev.children {
-            if children.len() == num_partitions {
+            if children.len() >= num_partitions {
                 debug!(
                     "part_reread: LsblkInfo::for_device('{}') : {:?}",
                     device.display(),
