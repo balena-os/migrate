@@ -62,7 +62,7 @@ pub(crate) fn write_balena_os(
         sync();
 
         if let FlashResult::Ok = res {
-            let lsblk_dev = match part_reread(device, 30, 5, cmds) {
+            let lsblk_dev = match part_reread(device, 30, PART_NAME.len(), cmds) {
                 Ok(lsblk_device) => lsblk_device,
                 Err(why) => {
                     error!(
