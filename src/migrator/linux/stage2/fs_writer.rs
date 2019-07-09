@@ -218,6 +218,8 @@ fn sub_format(
     is_fat: bool,
     check: &PartCheck,
 ) -> bool {
+
+    debug!("sub_format: entered with: '{}' is_fat: {}, check: {:?}", device.display(), is_fat, check);
     let dev_path = String::from(&*device.to_string_lossy());
     let mut args: Vec<&str> = Vec::new();
 
@@ -234,7 +236,8 @@ fn sub_format(
             }
         }
     } else {
-        args.append(&mut vec!["-L", label]);
+        // TODO: sort this out. -O ^64bit is no good on big filesystems +16TB
+        args.append(&mut vec!["-O", "^64bit", "-F", "-L", label]);
         match cmds.get(EXT_FMT_CMD) {
             Ok(command) => command,
             Err(why) => {
@@ -260,6 +263,7 @@ fn sub_format(
     args.push(&dev_path);
 
     debug!("calling {} with args {:?}", command, args);
+    sync();
     let cmd_res = match Command::new(command).args(&args).output() {
         Ok(cmd_res) => cmd_res,
         Err(why) => {
@@ -267,6 +271,7 @@ fn sub_format(
                 "format: failed to format drive with {}: '{}', error: {:?}",
                 command, dev_path, why
             );
+            sync();
             return false;
         }
     };

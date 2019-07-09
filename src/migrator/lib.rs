@@ -1,4 +1,6 @@
 use log::error;
+use std::panic;
+use nix::unistd::sync;
 
 use mod_logger::{Level, Logger};
 
@@ -11,7 +13,7 @@ mod mswin;
 mod linux;
 
 #[cfg(target_os = "linux")]
-use linux::stage2::Stage2;
+use linux::stage2::{ Stage2, };
 
 pub(crate) mod defs;
 
@@ -29,30 +31,46 @@ pub fn migrate() -> Result<(), MigError> {
 
 #[cfg(target_os = "linux")]
 pub fn stage2() -> Result<(), MigError> {
-    let mut stage2 = match Stage2::try_init() {
-        Ok(res) => res,
-        Err(why) => {
-            error!("Failed to initialize stage2: Error: {}", why);
-            Logger::flush();
-            Stage2::default_exit()?;
-            // should not be getting here
-            return Ok(());
-        }
-    };
+    let res = panic::catch_unwind(|| -> Result<(), MigError> {
+        let mut stage2 = match Stage2::try_init() {
+            Ok(res) => res,
+            Err(why) => {
+                error!("Failed to initialize stage2: Error: {}", why);
+                Logger::flush();
+                sync();
+                Stage2::default_exit()?;
+                // should not be getting here
+                return Ok(());
+            }
+        };
 
-    match stage2.migrate() {
-        Ok(_res) => {
-            error!("stage2::migrate() is not expected to return on success");
+        match stage2.migrate() {
+            Ok(res) => {
+                error!("stage2::migrate() is not expected to return on success");
+            }
+            Err(why) => {
+                error!("Failed to complete stage2::migrate Error: {}", why);
+            }
         }
-        Err(why) => {
-            error!("Failed to complete stage2::migrate Error: {}", why);
-        }
+
+        Logger::flush();
+        sync();
+        stage2.error_exit()?;
+        // should not be getting here
+        Ok(())
+    });
+
+
+    if let Err(_) = res {
+        error!("A panic occurred in stage2");
+        Logger::flush();
+        sync();
+        let _res = Stage2::default_exit();
+        ()
     }
 
-    Logger::flush();
-    stage2.error_exit()?;
-    // should not be getting here
     Ok(())
+
 }
 
 pub fn test() -> Result<(), MigError> {
