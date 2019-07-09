@@ -82,6 +82,7 @@ pub(crate) fn write_balena_os(
                         "write_balena_os: failed mount balena partitions, error: {:?}",
                         why
                     );
+                    sync();
                     return FlashResult::FailNonRecoverable;
                 }
 
@@ -89,18 +90,22 @@ pub(crate) fn write_balena_os(
                     FlashResult::Ok
                 } else {
                     error!("write_balena_os: failed initialise devices");
+                    sync();
                     FlashResult::FailNonRecoverable
                 }
             } else {
                 error!("write_balena_os: failed to format devices");
+                sync();
                 FlashResult::FailNonRecoverable
             }
         } else {
             error!("write_balena_os: failed to partition device");
+            sync();
             res
         }
     } else {
         error!("write_balena_os: encountered invalid image type");
+        sync();
         FlashResult::FailRecoverable
     }
 }
