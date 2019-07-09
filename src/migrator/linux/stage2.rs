@@ -616,6 +616,9 @@ impl<'a> Stage2 {
             }
         }
 
+        info!("Mounting balena file systems");
+        sync();
+
         // TODO: check fingerprints ?
 
         let boot_mountpoint =
@@ -717,6 +720,9 @@ impl<'a> Stage2 {
         let _res = self.mounts.borrow_mut().unmount_log();
 
         thread::sleep(Duration::new(REBOOT_DELAY, 0));
+
+        Logger::flush(); // superfluous
+        sync();
 
         Stage2::exit(&FailMode::Reboot)?;
 

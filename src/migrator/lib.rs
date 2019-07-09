@@ -67,6 +67,8 @@ pub fn stage2() -> Result<(), MigError> {
         sync();
         let _res = Stage2::default_exit();
         ()
+    } else {
+
     }
 
     Ok(())
