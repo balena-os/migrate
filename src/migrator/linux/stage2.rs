@@ -536,9 +536,9 @@ impl<'a> Stage2 {
             let _res = Logger::set_log_dest(&log_dest, NO_STREAM);
         }
 
-        let _res = self.mounts.borrow_mut().unmount_all();
+        self.mounts.borrow_mut().unmount_all()?;
 
-        info!("Unmounted root file system");
+        info!("Unmounted file systems");
 
         // ************************************************************************************
         // * write the gzipped image to disk
