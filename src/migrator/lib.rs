@@ -45,7 +45,7 @@ pub fn stage2() -> Result<(), MigError> {
         };
 
         match stage2.migrate() {
-            Ok(res) => {
+            Ok(_res) => {
                 error!("stage2::migrate() is not expected to return on success");
             }
             Err(why) => {

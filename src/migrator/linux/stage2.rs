@@ -102,7 +102,7 @@ impl<'a> Stage2 {
         }
 
         // mount boot device containing BALENA_STAGE2_CFG for starters
-        let mut mounts = match Mounts::new(&mut cmds) {
+        let mut mounts = match Mounts::new(&mut cmds ) {
             Ok(mounts) => {
                 debug!("Successfully mounted file system");
                 mounts
@@ -134,6 +134,11 @@ impl<'a> Stage2 {
                 return Err(MigError::displayed());
             }
         };
+
+        if let Some(device) = stage2_cfg.get_force_flash_device() {
+            warn!("Forcibly setting flash devive to '{}'", device.display());
+            mounts.set_force_flash_device(device);
+        }
 
         info!("Setting log level to {:?}", stage2_cfg.get_log_level());
         Logger::set_default_level(&stage2_cfg.get_log_level());

@@ -87,11 +87,19 @@ impl<'a> Mounts {
         trace!("new: entered");
 
         // obtain boot device from kernel cmdline
-        let (kernel_root_device, kernel_root_fs_type) = get_kernel_root_info()?;
+        let (kernel_root_device, kernel_root_fs_type) = match get_kernel_root_info() {
+            Ok((device,fstype)) => {
+                (Some(device), fstype)
+            },
+            Err(why) => {
+                error!("Failed to retrieve root path from kernel command line, error {:?}", why);
+                (None,None)
+            }
+        };
 
         debug!(
-            "Kernel cmd line points to root device '{}' with fs-type: '{:?}'",
-            kernel_root_device.display(),
+            "Kernel cmd line points to root device '{:?}' with fs-type: '{:?}'",
+            kernel_root_device,
             kernel_root_fs_type,
         );
 
@@ -115,54 +123,64 @@ impl<'a> Mounts {
 
         // try mount root from kernel cmd line
 
-        let mut fstypes: Vec<String> = Vec::new();
-        if let Some(ref fstype) = kernel_root_fs_type {
-            fstypes.push(fstype.clone());
-        } else {
-            TRY_FS_TYPES
-                .iter()
-                .for_each(|s| fstypes.push(String::from(*s)));
-        }
+        if let Some(kernel_root_device) = kernel_root_device {
+            let mut fstypes: Vec<String> = Vec::new();
+            if let Some(ref fstype) = kernel_root_fs_type {
+                fstypes.push(fstype.clone());
+            } else {
+                TRY_FS_TYPES
+                    .iter()
+                    .for_each(|s| fstypes.push(String::from(*s)));
+            }
 
-        for fstype in &fstypes {
-            match Mounts::mount(BOOTFS_DIR, &kernel_root_device, fstype) {
-                Ok(boot_mountpoint) => {
-                    let stage2_config = path_append(&boot_mountpoint, STAGE2_CFG_FILE);
-                    if file_exists(&stage2_config) {
-                        return Ok(Mounts {
-                            flash_device: match drive_from_partition(&kernel_root_device) {
-                                Ok(flash_device) => flash_device,
-                                Err(why) => {
-                                    error!(
-                                        "Failed to extract drive from partition: '{}', error: {:?}",
-                                        kernel_root_device.display(),
-                                        why
-                                    );
-                                    return Err(MigError::displayed());
-                                }
-                            },
-                            boot_part: to_std_device_path(&kernel_root_device)?,
-                            boot_mountpoint,
-                            stage2_config,
-                            work_no_copy: false,
-                            work_path: None,
-                            work_mountpoint: None,
-                            log_path: None,
-                            balena_boot_mp: None,
-                            balena_root_a_mp: None,
-                            balena_root_b_mp: None,
-                            balena_state_mp: None,
-                            balena_data_mp: None,
-                        });
-                    } else {
-                        let _res = umount(&boot_mountpoint);
+            for fstype in &fstypes {
+                match Mounts::mount(BOOTFS_DIR, &kernel_root_device, fstype) {
+                    Ok(boot_mountpoint) => {
+                        let stage2_config = path_append(&boot_mountpoint, STAGE2_CFG_FILE);
+                        if file_exists(&stage2_config) {
+                            return Ok(Mounts {
+                                flash_device: match drive_from_partition(&kernel_root_device) {
+                                    Ok(flash_device) => flash_device,
+                                    Err(why) => {
+                                        error!(
+                                            "Failed to extract drive from partition: '{}', error: {:?}",
+                                            kernel_root_device.display(),
+                                            why
+                                        );
+                                        return Err(MigError::displayed());
+                                    }
+                                },
+                                boot_part: to_std_device_path(&kernel_root_device)?,
+                                boot_mountpoint,
+                                stage2_config,
+                                work_no_copy: false,
+                                work_path: None,
+                                work_mountpoint: None,
+                                log_path: None,
+                                balena_boot_mp: None,
+                                balena_root_a_mp: None,
+                                balena_root_b_mp: None,
+                                balena_state_mp: None,
+                                balena_data_mp: None,
+                            });
+                        } else {
+                            let _res = umount(&boot_mountpoint);
+                        }
                     }
-                }
-                Err(why) => {
-                    error!("Mount failed: {:?}", why);
+                    Err(why) => {
+                        error!("Mount failed for {} on {} wth fstype: {}, error {:?}",
+                               kernel_root_device.display(),
+                               BOOTFS_DIR,
+                               fstype,
+                               why);
+                    }
                 }
             }
         }
+
+
+        // if mount from kernel cmdline failed, try others
+
 
         match LsblkInfo::all(cmds) {
             Ok(lsblk_info) => {
@@ -224,6 +242,10 @@ impl<'a> Mounts {
             STAGE2_CFG_FILE
         );
         Err(MigError::displayed())
+    }
+
+    pub fn set_force_flash_device(&mut self, device: &Path) {
+        self.flash_device = device.to_path_buf();
     }
 
     pub fn get_balena_boot_mountpoint(&'a self) -> Option<&'a Path> {

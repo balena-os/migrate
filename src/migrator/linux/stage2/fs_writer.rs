@@ -1,5 +1,5 @@
 use failure::ResultExt;
-use log::{debug, error, warn};
+use log::{debug, error, warn, info};
 use std::io::Write;
 use std::path::Path;
 use std::path::PathBuf;
@@ -265,7 +265,9 @@ fn sub_format(
     debug!("calling {} with args {:?}", command, args);
     sync();
     let cmd_res = match Command::new(command).args(&args).output() {
-        Ok(cmd_res) => cmd_res,
+        Ok(cmd_res) => {
+            cmd_res
+        },
         Err(why) => {
             error!(
                 "format: failed to format drive with {}: '{}', error: {:?}",
@@ -277,10 +279,15 @@ fn sub_format(
     };
 
     if cmd_res.status.success() {
+        info!(
+            "successfully formatted drive '{}'",
+            dev_path
+        );
+        sync();
         true
     } else {
         error!(
-            "format: failed to format drive with {}: '{:?}', code: {:?}, stderr: {:?}",
+            "sub_format: failed to format drive with {}: '{:?}', code: {:?}, stderr: {:?}",
             command,
             args,
             cmd_res.status.code(),

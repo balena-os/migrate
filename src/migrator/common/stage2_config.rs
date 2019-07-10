@@ -78,7 +78,7 @@ pub(crate) struct Stage2Config {
     // no_flash mode - stop after unmounting root if true
     no_flash: bool,
     // which device to flash - derive from /root partition if not set (windows)
-    flash_device: Option<PathBuf>,
+    force_flash_device: Option<PathBuf>,
     // balena config file
     balena_config: PathBuf,
     // balena OS image file in work_path
@@ -160,8 +160,8 @@ impl<'a> Stage2Config {
         self.gzip_internal
     }
 
-    pub fn get_flash_device(&'a self) -> Option<&'a PathBuf> {
-        if let Some(ref flash_device) = self.flash_device {
+    pub fn get_force_flash_device(&'a self) -> Option<&'a PathBuf> {
+        if let Some(ref flash_device) = self.force_flash_device {
             Some(flash_device)
         } else {
             None
@@ -268,7 +268,7 @@ impl<T: Clone> Optional<T> {
 pub(crate) struct Stage2ConfigBuilder {
     fail_mode: Required<FailMode>,
     no_flash: Required<bool>,
-    flash_device: Optional<PathBuf>,
+    force_flash_device: Optional<PathBuf>,
     balena_config: Required<PathBuf>,
     balena_image: Required<ImageInfo>,
     work_path: Required<PathType>,
@@ -286,7 +286,7 @@ impl<'a> Stage2ConfigBuilder {
         Stage2ConfigBuilder {
             fail_mode: Required::new("fail_mode", Some(&FailMode::Reboot)),
             no_flash: Required::new("no_flash", Some(&true)),
-            flash_device: Optional::new(None),
+            force_flash_device: Optional::new(None),
             balena_config: Required::new("balena_config", None),
             balena_image: Required::new("balena_image", None),
             work_path: Required::new("work_path", None),
@@ -304,7 +304,7 @@ impl<'a> Stage2ConfigBuilder {
         let result = Stage2Config {
             fail_mode: self.fail_mode.get()?.clone(),
             no_flash: self.no_flash.get()?.clone(),
-            flash_device: self.flash_device.get().clone(),
+            force_flash_device: self.force_flash_device.get().clone(),
             balena_config: self.balena_config.get()?.clone(),
             balena_image: self.balena_image.get()?.clone(),
             work_path: self.work_path.get()?.clone(),
@@ -355,8 +355,8 @@ impl<'a> Stage2ConfigBuilder {
         self.no_flash.set(val);
     }
 
-    pub fn set_flash_device(&mut self, val: PathBuf) {
-        self.flash_device.set(val);
+    pub fn set_force_flash_device(&mut self, val: PathBuf) {
+        self.force_flash_device.set(val);
     }
 
     pub fn set_balena_config(&mut self, val: PathBuf) {
