@@ -360,6 +360,12 @@ impl<'a> LinuxMigrator {
         // *****************************************************************************************
         // Finish Stage2ConfigBuilder & create stage2 config file
 
+        if let Some(device) = self.config.debug.get_force_flash_device() {
+            warn!("Forcing flash device to '{}'", device.display());
+            self.stage2_config
+                .set_force_flash_device(device.to_path_buf());
+        }
+        
         self.stage2_config
             .set_failmode(self.config.migrate.get_fail_mode());
 
