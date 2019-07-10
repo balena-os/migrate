@@ -125,6 +125,8 @@ fn sub_write(
             &mountpoint.to_string_lossy(),
         ];
 
+        debug!("sub_write: invoking '{}' with {:?}", tar_path, tar_args);
+
         match Command::new(tar_path)
             .stdin(Stdio::piped())
             .stdout(Stdio::piped())
@@ -134,6 +136,7 @@ fn sub_write(
         {
             Ok(cmd_res) => {
                 if cmd_res.status.success() {
+                    info!("Successfully wrote '{}' to '{}'", arch_path.display(), mountpoint.display());
                     true
                 } else {
                     error!(
@@ -162,6 +165,8 @@ fn sub_write(
 
 fn balena_write(mounts: &Mounts, tar_path: &str, fs_dump: &FSDump, base_path: &Path) -> bool {
     // TODO: try use device labels instead
+
+    debug!("Attempting to write file systems, base path: '{}'", base_path.display());
 
     if let Some(mountpoint) = mounts.get_balena_boot_mountpoint() {
         if !sub_write(tar_path, mountpoint, base_path, &fs_dump.boot.archive) {
@@ -237,7 +242,7 @@ fn sub_format(
         }
     } else {
         // TODO: sort this out. -O ^64bit is no good on big filesystems +16TB
-        args.append(&mut vec!["-O", "^64bit", "-F", "-L", label]);
+        args.append(&mut vec!["-O", "^64bit,^metadata_csum", "-F", "-L", label]);
         match cmds.get(EXT_FMT_CMD) {
             Ok(command) => command,
             Err(why) => {
