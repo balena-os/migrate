@@ -555,6 +555,7 @@ impl<'a> Mounts {
         let mut success = true;
 
         if let Some(ref mountpoint) = self.balena_boot_mp {
+            debug!("unmounting '{}'", mountpoint.display());
             if let Err(why) = umount(mountpoint) {
                 error!(
                     "Failed to unmount device from mountpoint '{}', error: {:?}",
@@ -562,10 +563,13 @@ impl<'a> Mounts {
                     why
                 );
                 success = false;
+            } else {
+                self.balena_boot_mp = None;
             }
         }
 
         if let Some(ref mountpoint) = self.balena_root_a_mp {
+            debug!("unmounting '{}'", mountpoint.display());
             if let Err(why) = umount(mountpoint) {
                 error!(
                     "Failed to unmount device from mountpoint '{}', error: {:?}",
@@ -573,10 +577,13 @@ impl<'a> Mounts {
                     why
                 );
                 success = false;
+            } else {
+                self.balena_root_a_mp = None;
             }
         }
 
         if let Some(ref mountpoint) = self.balena_root_b_mp {
+            debug!("unmounting '{}'", mountpoint.display());
             if let Err(why) = umount(mountpoint) {
                 error!(
                     "Failed to unmount device from mountpoint '{}', error: {:?}",
@@ -584,10 +591,14 @@ impl<'a> Mounts {
                     why
                 );
                 success = false;
+            } else {
+                self.balena_root_b_mp = None;
             }
+
         }
 
         if let Some(ref mountpoint) = self.balena_state_mp {
+            debug!("unmounting '{}'", mountpoint.display());
             if let Err(why) = umount(mountpoint) {
                 error!(
                     "Failed to unmount device from mountpoint '{}', error: {:?}",
@@ -595,10 +606,13 @@ impl<'a> Mounts {
                     why
                 );
                 success = false;
+            } else {
+                self.balena_state_mp = None;
             }
         }
 
         if let Some(ref mountpoint) = self.balena_data_mp {
+            debug!("unmounting '{}'", mountpoint.display());
             if let Err(why) = umount(mountpoint) {
                 error!(
                     "Failed to unmount device from mountpoint '{}', error: {:?}",
@@ -607,6 +621,7 @@ impl<'a> Mounts {
                 );
                 success = false;
             }
+            self.balena_data_mp = None;
         }
 
         success
