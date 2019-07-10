@@ -66,6 +66,7 @@ pub(crate) enum MigrateWifis {
 
 #[derive(Debug, Deserialize)]
 pub struct LogConfig {
+    pub console: Option<bool>,
     pub level: Option<String>,
     pub drive: Option<PathBuf>,
 }
@@ -293,5 +294,14 @@ impl<'a> MigrateConfig {
             }
         }
         return "warn";
+    }
+
+    pub fn get_log_console(&self) -> bool {
+        if let Some(ref log_info) = self.log {
+            if let Some(console) = log_info.console {
+                return console;
+            }
+        }
+        return false;
     }
 }

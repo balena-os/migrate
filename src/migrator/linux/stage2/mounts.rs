@@ -328,6 +328,8 @@ impl<'a> Mounts {
     pub fn mount_from_config(&mut self, stage2_config: &Stage2Config) -> Result<(), MigError> {
         trace!("mount_all: entered");
 
+        // TODO: ensure nothing is mounted twice, eg: work_mount == log_mount
+
         if let Some((log_dev, log_fs)) = stage2_config.get_log_device() {
             self.log_path = match Mounts::mount(LOGFS_DIR, log_dev, log_fs) {
                 Ok(mountpoint) => Some(mountpoint),
@@ -403,17 +405,11 @@ impl<'a> Mounts {
     // unmount all mounted drives except log
     // which is expected to be on a separate drive
     pub fn unmount_all(&mut self) -> Result<(), MigError> {
-        if self.work_no_copy {
-            debug!("Not unmounting work_dir as it is separate from flash_device");
-        } else {
-            if let Some(ref mountpoint) = self.work_mountpoint {
-                match umount(mountpoint).context(MigErrCtx::from_remark(
-                    MigErrorKind::Upstream,
-                    &format!(
-                        "Failed to unmount former work device: '{}'",
-                        mountpoint.display()
-                    ),
-                )) {
+        if let Some(ref mountpoint) = self.work_mountpoint {
+            if self.work_no_copy {
+                debug!("Not unmounting work_dir as it is separate from flash_device");
+            } else {
+                match umount(mountpoint) {
                     Ok(_) => {
                         self.work_mountpoint = None;
                         self.work_path = None;
@@ -427,13 +423,18 @@ impl<'a> Mounts {
         }
 
         // TODO: make boot mount optional ?
-        umount(&self.boot_mountpoint).context(MigErrCtx::from_remark(
-            MigErrorKind::Upstream,
-            &format!(
-                "Failed to unmount former boot device: '{}'",
-                self.boot_mountpoint.display()
-            ),
-        ))?;
+        if self.boot_device != self.flash_device {
+            debug!("Unmounting boot device: '{}'", self.boot_device.display());
+            umount(&self.boot_mountpoint).context(MigErrCtx::from_remark(
+                MigErrorKind::Upstream,
+                &format!(
+                    "Failed to unmount former boot device: '{}'",
+                    self.boot_mountpoint.display()
+                ),
+            ))?;
+        } else {
+            debug!("Not unmounting boot device: '{}' as it is different from flash_device: '{}'", self.boot_device.display(), self.flash_device.display());
+        }
 
         Ok(())
     }

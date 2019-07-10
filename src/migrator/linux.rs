@@ -389,6 +389,9 @@ impl<'a> LinuxMigrator {
             .set_gzip_internal(self.config.migrate.is_gzip_internal());
 
         self.stage2_config
+            .set_log_console(self.config.migrate.get_log_console());
+
+        self.stage2_config
             .set_log_level(String::from(self.config.migrate.get_log_level()));
 
         if let Some((ref log_path, ref log_drive, ref log_part)) = self.mig_info.log_path {

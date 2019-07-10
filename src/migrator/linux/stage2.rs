@@ -39,6 +39,7 @@ pub(crate) mod mounts;
 use mounts::Mounts;
 
 use std::cell::RefCell;
+use crate::linux::ensured_cmds::UDEVADM_CMD;
 
 const REBOOT_DELAY: u64 = 3;
 const S2_REV: u32 = 4;
@@ -54,7 +55,7 @@ const DATA_MNT_DIR: &str = "mnt_data";
 
 const DD_BLOCK_SIZE: usize = 4194304;
 
-const MIG_REQUIRED_CMDS: &[&str] = &[REBOOT_CMD];
+const MIG_REQUIRED_CMDS: &[&str] = &[REBOOT_CMD, UDEVADM_CMD];
 
 const BALENA_IMAGE_FILE: &str = "balenaOS.img.gz";
 const BALENA_CONFIG_FILE: &str = "config.json";
@@ -64,6 +65,8 @@ const BALENA_ROOTA_FS_FILE: &str = "resin-rootA.tgz";
 const BALENA_ROOTB_FS_FILE: &str = "resin-rootB.tgz";
 const BALENA_STATE_FS_FILE: &str = "resin-state.tgz";
 const BALENA_DATA_FS_FILE: &str = "resin-data.tgz";
+
+const LOG_STDERR: bool = false;
 
 pub(crate) enum FlashResult {
     Ok,
@@ -87,7 +90,14 @@ impl<'a> Stage2 {
 
         // log to stderr & memory buffer - so it can be saved to a persistent log later
         // match Logger::set_log_dest(&LogDestination::BufferStderr, NO_STREAM) {
-        match Logger::set_log_dest(&LogDestination::Buffer, NO_STREAM) {
+
+
+        let log_dest = if LOG_STDERR {
+            LogDestination::BufferStderr
+        } else {
+            LogDestination::Buffer
+        };
+        match Logger::set_log_dest(&log_dest, NO_STREAM) {
             Ok(_s) => {
                 info!("Balena Migrate Stage 2 rev {} initializing", S2_REV);
             }
@@ -173,7 +183,13 @@ impl<'a> Stage2 {
 
         if let Some(log_path) = log_path {
             // match Logger::set_log_file(&LogDestination::Stderr, &log_path, false) {
-            match Logger::set_log_file(&LogDestination::Stream, &log_path, false) {
+            let log_dest = if stage2_cfg.is_log_console() {
+                LogDestination::StreamStderr
+            } else {
+                LogDestination::Stream
+            };
+
+            match Logger::set_log_file(&log_dest, &log_path, false) {
                 Ok(_) => {
                     info!("Set log file to '{}'", log_path.display());
                     // Logger::flush();
@@ -511,7 +527,13 @@ impl<'a> Stage2 {
         if self.config.is_no_flash() {
             // Logger::flush();
             // let _res = Logger::set_log_dest(&LogDestination::StreamStderr, NO_STREAM);
-            let _res = Logger::set_log_dest(&LogDestination::Stream, NO_STREAM);
+            let log_dest = if self.config.is_log_console() {
+                LogDestination::Stderr
+            } else {
+                LogDestination::Buffer
+            };
+
+            let _res = Logger::set_log_dest(&log_dest, NO_STREAM);
         }
 
         let _res = self.mounts.borrow_mut().unmount_all();

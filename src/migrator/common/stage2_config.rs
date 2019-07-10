@@ -95,6 +95,8 @@ pub(crate) struct Stage2Config {
     log_level: String,
     // stage 2 log destination
     log_to: Option<Stage2LogConfig>,
+    // log also to console
+    log_console: bool,
     // device type
     device_type: DeviceType,
     // boot type
@@ -130,6 +132,10 @@ impl<'a> Stage2Config {
         ))?;
 
         Stage2Config::from_str(&config_str)
+    }
+
+    pub fn is_log_console(&self) -> bool {
+        self.log_console
     }
 
     pub fn get_log_level(&self) -> Level {
@@ -277,6 +283,7 @@ pub(crate) struct Stage2ConfigBuilder {
     gzip_internal: Required<bool>,
     log_level: Required<String>,
     log_to: Optional<Stage2LogConfig>,
+    log_console: Required<bool>,
     device_type: Required<DeviceType>,
     boot_type: Required<BootType>,
 }
@@ -295,6 +302,7 @@ impl<'a> Stage2ConfigBuilder {
             gzip_internal: Required::new("gzip_internal", Some(&true)),
             log_level: Required::new("log_level", Some(&String::from("warn"))),
             log_to: Optional::new(None),
+            log_console: Required::new("log_console", Some(&false)),
             device_type: Required::new("device_type", None),
             boot_type: Required::new("boot_type", None),
         }
@@ -313,6 +321,7 @@ impl<'a> Stage2ConfigBuilder {
             gzip_internal: *self.gzip_internal.get()?,
             log_level: self.log_level.get()?.clone(),
             log_to: self.log_to.get().clone(),
+            log_console: self.log_console.get()?.clone(),
             device_type: self.device_type.get()?.clone(),
             boot_type: self.boot_type.get()?.clone(),
         };
@@ -393,6 +402,10 @@ impl<'a> Stage2ConfigBuilder {
 
     pub fn set_log_to(&mut self, val: Stage2LogConfig) {
         self.log_to.set(val);
+    }
+
+    pub fn set_log_console(&mut self, val: bool) {
+        self.log_console.set(val);
     }
 
     pub fn set_boot_type(&mut self, val: &BootType) {
