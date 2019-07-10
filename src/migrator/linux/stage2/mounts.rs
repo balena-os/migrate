@@ -423,7 +423,7 @@ impl<'a> Mounts {
         }
 
         // TODO: make boot mount optional ?
-        if self.boot_device != self.flash_device {
+        if self.boot_device == self.flash_device {
             debug!("Unmounting boot device: '{}' from '{}'", self.boot_device.display(), self.boot_mountpoint.display());
             match umount(&self.boot_mountpoint) {
                 Ok(_) => Ok(()),
