@@ -424,19 +424,21 @@ impl<'a> Mounts {
 
         // TODO: make boot mount optional ?
         if self.boot_device != self.flash_device {
-            debug!("Unmounting boot device: '{}'", self.boot_device.display());
-            umount(&self.boot_mountpoint).context(MigErrCtx::from_remark(
-                MigErrorKind::Upstream,
-                &format!(
-                    "Failed to unmount former boot device: '{}'",
-                    self.boot_mountpoint.display()
-                ),
-            ))?;
+            debug!("Unmounting boot device: '{}' from '{}'", self.boot_device.display(), self.boot_mountpoint.display());
+            match umount(&self.boot_mountpoint) {
+                Ok(_) => Ok(()),
+                Err(why) => {
+                    error!(
+                        "Failed to unmount former boot device: '{}', error: {:?}",
+                        self.boot_mountpoint.display(), why
+                    );
+                    Err(MigError::displayed())
+                }
+            }
         } else {
             debug!("Not unmounting boot device: '{}' as it is different from flash_device: '{}'", self.boot_device.display(), self.flash_device.display());
+            Ok(())
         }
-
-        Ok(())
     }
 
     pub fn mount_balena(&mut self, mount_all: bool) -> Result<bool, MigError> {
