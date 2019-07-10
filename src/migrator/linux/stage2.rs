@@ -86,7 +86,8 @@ impl<'a> Stage2 {
         Logger::set_default_level(&INIT_LOG_LEVEL);
 
         // log to stderr & memory buffer - so it can be saved to a persistent log later
-        match Logger::set_log_dest(&LogDestination::BufferStderr, NO_STREAM) {
+        // match Logger::set_log_dest(&LogDestination::BufferStderr, NO_STREAM) {
+        match Logger::set_log_dest(&LogDestination::Buffer, NO_STREAM) {
             Ok(_s) => {
                 info!("Balena Migrate Stage 2 rev {} initializing", S2_REV);
             }
@@ -169,7 +170,8 @@ impl<'a> Stage2 {
         };
 
         if let Some(log_path) = log_path {
-            match Logger::set_log_file(&LogDestination::Stderr, &log_path, false) {
+            // match Logger::set_log_file(&LogDestination::Stderr, &log_path, false) {
+            match Logger::set_log_file(&LogDestination::Stream, &log_path, false) {
                 Ok(_) => {
                     info!("Set log file to '{}'", log_path.display());
                     // Logger::flush();
