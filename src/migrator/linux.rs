@@ -365,7 +365,7 @@ impl<'a> LinuxMigrator {
             self.stage2_config
                 .set_force_flash_device(device.to_path_buf());
         }
-        
+
         self.stage2_config
             .set_failmode(self.config.migrate.get_fail_mode());
 

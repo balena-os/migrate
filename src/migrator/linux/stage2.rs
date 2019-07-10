@@ -137,8 +137,10 @@ impl<'a> Stage2 {
         };
 
         if let Some(device) = stage2_cfg.get_force_flash_device() {
-            warn!("Forcibly setting flash devive to '{}'", device.display());
-            mounts.set_force_flash_device(device);
+            if device != mounts.get_flash_device() {
+                warn!("Forcibly setting flash device to '{}'", device.display());
+                mounts.set_force_flash_device(device);
+            }
         }
 
         info!("Setting log level to {:?}", stage2_cfg.get_log_level());
@@ -158,7 +160,7 @@ impl<'a> Stage2 {
         let log_path = if let Some(log_path) = mounts.get_log_path() {
             Some(path_append(log_path, MIGRATE_LOG_FILE))
         } else {
-            if stage2_cfg.is_no_flash() {
+            if stage2_cfg.is_no_flash() || mounts.is_work_no_copy() {
                 if let Some(work_path) = mounts.get_work_path() {
                     Some(path_append(work_path, MIGRATE_LOG_FILE))
                 } else {
@@ -508,7 +510,8 @@ impl<'a> Stage2 {
 
         if self.config.is_no_flash() {
             // Logger::flush();
-            let _res = Logger::set_log_dest(&LogDestination::StreamStderr, NO_STREAM);
+            // let _res = Logger::set_log_dest(&LogDestination::StreamStderr, NO_STREAM);
+            let _res = Logger::set_log_dest(&LogDestination::Stream, NO_STREAM);
         }
 
         let _res = self.mounts.borrow_mut().unmount_all();

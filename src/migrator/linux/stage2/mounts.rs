@@ -57,6 +57,7 @@ This device will be used to flash:
 #[derive(Debug)]
 pub(crate) struct Mounts {
     stage2_config: PathBuf,
+    boot_device: PathBuf,
     flash_device: PathBuf,
     boot_part: PathBuf,
     boot_mountpoint: PathBuf,
@@ -138,18 +139,21 @@ impl<'a> Mounts {
                     Ok(boot_mountpoint) => {
                         let stage2_config = path_append(&boot_mountpoint, STAGE2_CFG_FILE);
                         if file_exists(&stage2_config) {
+                            let init_device = match drive_from_partition(&kernel_root_device) {
+                                Ok(flash_device) => flash_device,
+                                Err(why) => {
+                                    error!(
+                                        "Failed to extract drive from partition: '{}', error: {:?}",
+                                        kernel_root_device.display(),
+                                        why
+                                    );
+                                    return Err(MigError::displayed());
+                                }
+                            };
+
                             return Ok(Mounts {
-                                flash_device: match drive_from_partition(&kernel_root_device) {
-                                    Ok(flash_device) => flash_device,
-                                    Err(why) => {
-                                        error!(
-                                            "Failed to extract drive from partition: '{}', error: {:?}",
-                                            kernel_root_device.display(),
-                                            why
-                                        );
-                                        return Err(MigError::displayed());
-                                    }
-                                },
+                                boot_device: init_device.clone(),
+                                flash_device: init_device,
                                 boot_part: to_std_device_path(&kernel_root_device)?,
                                 boot_mountpoint,
                                 stage2_config,
@@ -204,6 +208,7 @@ impl<'a> Mounts {
                                             path_append(&boot_mountpoint, STAGE2_CFG_FILE);
                                         if file_exists(&stage2_config) {
                                             return Ok(Mounts {
+                                                boot_device: blk_device.get_path(),
                                                 flash_device: blk_device.get_path(),
                                                 boot_part: device,
                                                 boot_mountpoint,
@@ -242,10 +247,6 @@ impl<'a> Mounts {
             STAGE2_CFG_FILE
         );
         Err(MigError::displayed())
-    }
-
-    pub fn set_force_flash_device(&mut self, device: &Path) {
-        self.flash_device = device.to_path_buf();
     }
 
     pub fn get_balena_boot_mountpoint(&'a self) -> Option<&'a Path> {
@@ -296,6 +297,10 @@ impl<'a> Mounts {
         &self.stage2_config
     }
 
+    pub fn set_force_flash_device(&mut self, device: &Path) {
+        self.flash_device = device.to_path_buf();
+    }
+
     pub fn get_flash_device(&'a self) -> &'a Path {
         &self.flash_device
     }
@@ -343,6 +348,8 @@ impl<'a> Mounts {
             PathType::Path(work_path) => {
                 self.work_path = Some(path_append(&self.boot_mountpoint, work_path));
                 debug!("Work mountpoint is a path: {:?}", self.work_path);
+                self.work_no_copy = self.boot_device != self.flash_device;
+                debug!("work_no_copy set to {}", self.work_no_copy);
             }
             PathType::Mount(mount_cfg) => {
                 let device = to_std_device_path(mount_cfg.get_device())?;
@@ -352,7 +359,10 @@ impl<'a> Mounts {
                     match Mounts::mount(WORKFS_DIR, &device, mount_cfg.get_fstype()) {
                         Ok(mountpoint) => {
                             match drive_from_partition(&device) {
-                                Ok(drive) => self.work_no_copy = drive != self.flash_device,
+                                Ok(drive) => {
+                                    self.work_no_copy = drive != self.flash_device;
+                                    debug!("work_no_copy set to {}", self.work_no_copy);
+                                },
                                 Err(why) => {
                                     warn!("Failed to derive drive from work partition: '{}', error: {:?}", device.display(), why);
                                 }
@@ -393,32 +403,34 @@ impl<'a> Mounts {
     // unmount all mounted drives except log
     // which is expected to be on a separate drive
     pub fn unmount_all(&mut self) -> Result<(), MigError> {
-        // TODO: unmount work_dir if necessarry
-
-        if let Some(ref mountpoint) = self.work_mountpoint {
-            match umount(mountpoint).context(MigErrCtx::from_remark(
-                MigErrorKind::Upstream,
-                &format!(
-                    "Failed to unmount former work device: '{}'",
-                    mountpoint.display()
-                ),
-            )) {
-                Ok(_) => {
-                    self.work_mountpoint = None;
-                    self.work_path = None;
-                    self.work_no_copy = false;
-                }
-                Err(why) => {
-                    error!("Failed to unmount work mountpoint, error: {:?}", why);
+        if self.work_no_copy {
+            debug!("Not unmounting work_dir as it is separate from flash_device");
+        } else {
+            if let Some(ref mountpoint) = self.work_mountpoint {
+                match umount(mountpoint).context(MigErrCtx::from_remark(
+                    MigErrorKind::Upstream,
+                    &format!(
+                        "Failed to unmount former work device: '{}'",
+                        mountpoint.display()
+                    ),
+                )) {
+                    Ok(_) => {
+                        self.work_mountpoint = None;
+                        self.work_path = None;
+                        self.work_no_copy = false;
+                    }
+                    Err(why) => {
+                        error!("Failed to unmount work mountpoint, error: {:?}", why);
+                    }
                 }
             }
         }
 
-        // TODO: make boot moun optional ?
+        // TODO: make boot mount optional ?
         umount(&self.boot_mountpoint).context(MigErrCtx::from_remark(
             MigErrorKind::Upstream,
             &format!(
-                "Failed to unmount former root device: '{}'",
+                "Failed to unmount former boot device: '{}'",
                 self.boot_mountpoint.display()
             ),
         ))?;
