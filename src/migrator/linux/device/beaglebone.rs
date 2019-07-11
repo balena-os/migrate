@@ -3,14 +3,14 @@ use regex::Regex;
 
 use crate::{
     common::{
-        stage2_config::{Stage2Config, Stage2ConfigBuilder, CheckedImageType},
+        stage2_config::{CheckedImageType, Stage2Config, Stage2ConfigBuilder},
         Config, MigError, MigErrorKind,
     },
     defs::{BootType, DeviceType},
     linux::{
         boot_manager::{from_boot_type, BootManager, UBootManager},
         device::Device,
-        migrate_info::{PathInfo},
+        migrate_info::PathInfo,
         stage2::mounts::Mounts,
         EnsuredCmds, MigrateInfo,
     },
@@ -147,7 +147,7 @@ impl Device for BeagleboneGreen {
     ) -> Result<(), MigError> {
         // TODO: remove when XM is debugged
 
-        if let CheckedImageType::FileSystems(ref mut fs_dump) =  dev_info.image_file.image {
+        if let CheckedImageType::FileSystems(ref mut fs_dump) = dev_info.image_file.image {
             fs_dump.mkfs_direct = Some(true);
             fs_dump.max_data = Some(false);
         }
@@ -315,8 +315,7 @@ impl<'a> Device for BeagleboardXM {
         config: &Config,
         s2_cfg: &mut Stage2ConfigBuilder,
     ) -> Result<(), MigError> {
-
-        if let CheckedImageType::FileSystems(ref mut fs_dump) =  dev_info.image_file.image {
+        if let CheckedImageType::FileSystems(ref mut fs_dump) = dev_info.image_file.image {
             fs_dump.mkfs_direct = Some(true);
             fs_dump.max_data = Some(false);
         }

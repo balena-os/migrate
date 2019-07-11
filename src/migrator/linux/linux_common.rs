@@ -33,8 +33,6 @@ const BIN_DIRS: &[&str] = &["/bin", "/usr/bin", "/sbin", "/usr/sbin"];
 const OS_RELEASE_FILE: &str = "/etc/os-release";
 const OS_NAME_REGEX: &str = r#"^PRETTY_NAME="([^"]+)"$"#;
 
-
-
 #[cfg(not(debug_assertions))]
 pub(crate) fn is_admin(_config: &Config) -> Result<bool, MigError> {
     trace!("LinuxMigrator::is_admin: entered");
@@ -357,7 +355,6 @@ pub(crate) fn to_std_device_path(device: &Path) -> Result<PathBuf, MigError> {
     }
 }
 
-
 pub(crate) fn drive_to_partition(drive: &Path, part_num: usize) -> Result<PathBuf, MigError> {
     const PART2DRIVE_REGEX: &str = r#"^(/dev/(([hs]d[a-z])|(nvme\d+n\d+|mmcblk\d+)))$"#;
     lazy_static! {
@@ -390,7 +387,6 @@ pub(crate) fn drive_to_partition(drive: &Path, part_num: usize) -> Result<PathBu
         ))
     }
 }
-
 
 pub(crate) fn drive_from_partition(partition: &Path) -> Result<PathBuf, MigError> {
     const DRIVE2PART_REGEX: &str = r#"^(/dev/([hs]d[a-z]|nvme\d+n\d+|mmcblk\d+))(p?\d+)$"#;

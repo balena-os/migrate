@@ -1,6 +1,6 @@
 use log::error;
-use std::panic;
 use nix::unistd::sync;
+use std::panic;
 
 use mod_logger::{Level, Logger};
 
@@ -13,7 +13,7 @@ mod mswin;
 mod linux;
 
 #[cfg(target_os = "linux")]
-use linux::stage2::{ Stage2, };
+use linux::stage2::Stage2;
 
 pub(crate) mod defs;
 
@@ -60,7 +60,6 @@ pub fn stage2() -> Result<(), MigError> {
         Ok(())
     });
 
-
     if let Err(_) = res {
         error!("A panic occurred in stage2");
         Logger::flush();
@@ -72,7 +71,6 @@ pub fn stage2() -> Result<(), MigError> {
     }
 
     Ok(())
-
 }
 
 pub fn test() -> Result<(), MigError> {

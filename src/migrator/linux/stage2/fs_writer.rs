@@ -1,6 +1,6 @@
 use failure::ResultExt;
-use log::{debug, error, warn, info};
-use std::fs::{OpenOptions};
+use log::{debug, error, info, warn};
+use std::fs::OpenOptions;
 use std::io::Write;
 use std::path::Path;
 use std::path::PathBuf;
@@ -11,6 +11,7 @@ use std::time::{Duration, SystemTime};
 
 use nix::unistd::sync;
 
+use crate::common::file_exists;
 use crate::{
     common::{
         config::balena_config::{FSDump, PartCheck},
@@ -18,7 +19,7 @@ use crate::{
         stage2_config::{CheckedImageType, Stage2Config},
         MigErrCtx, MigError, MigErrorKind,
     },
-    defs::{PART_NAME, DEF_BLOCK_SIZE},
+    defs::{DEF_BLOCK_SIZE, PART_NAME},
     linux::{
         ensured_cmds::{
             EnsuredCmds, EXT_FMT_CMD, FAT_FMT_CMD, LSBLK_CMD, PARTPROBE_CMD, SFDISK_CMD, TAR_CMD,
@@ -27,14 +28,13 @@ use crate::{
         stage2::{mounts::Mounts, FlashResult},
     },
 };
-use crate::common::file_exists;
 
 // TODO: ensure support for GPT partition tables
 
 const FORMAT_WITH_LABEL: bool = true;
 const DEFAULT_PARTITION_ALIGNMENT_KIB: u64 = 4096; // KiB
-// should we maximize data partition to fill disk
-// TODO: true might be the better default but can be very slow in combination with mkfs_direct_io
+                                                   // should we maximize data partition to fill disk
+                                                   // TODO: true might be the better default but can be very slow in combination with mkfs_direct_io
 const DEFAULT_MAX_DATA: bool = false;
 
 pub const REQUIRED_CMDS: &[&str] = &[
@@ -143,7 +143,11 @@ fn sub_write(
         {
             Ok(cmd_res) => {
                 if cmd_res.status.success() {
-                    info!("Successfully wrote '{}' to '{}'", arch_path.display(), mountpoint.display());
+                    info!(
+                        "Successfully wrote '{}' to '{}'",
+                        arch_path.display(),
+                        mountpoint.display()
+                    );
                     true
                 } else {
                     error!(
@@ -173,7 +177,10 @@ fn sub_write(
 fn balena_write(mounts: &Mounts, tar_path: &str, fs_dump: &FSDump, base_path: &Path) -> bool {
     // TODO: try use device labels instead
 
-    debug!("Attempting to write file systems, base path: '{}'", base_path.display());
+    debug!(
+        "Attempting to write file systems, base path: '{}'",
+        base_path.display()
+    );
 
     if let Some(mountpoint) = mounts.get_balena_boot_mountpoint() {
         if !sub_write(tar_path, mountpoint, base_path, &fs_dump.boot.archive) {
@@ -231,8 +238,12 @@ fn sub_format(
     check: &PartCheck,
     direct_io: bool,
 ) -> bool {
-
-    debug!("sub_format: entered with: '{}' is_fat: {}, check: {:?}", device.display(), is_fat, check);
+    debug!(
+        "sub_format: entered with: '{}' is_fat: {}, check: {:?}",
+        device.display(),
+        is_fat,
+        check
+    );
     let dev_path = String::from(&*device.to_string_lossy());
     let mut args: Vec<&str> = Vec::new();
 
@@ -257,13 +268,19 @@ fn sub_format(
         // TODO: Default opts for balena -E lazy_itable_init=0,lazy_journal_init=0 -i 8192 -v
 
         args.append(&mut vec![
-        "-O", "^64bit",
-        "-E" , "lazy_itable_init=0,lazy_journal_init=0",
-        "-i" , "8192",
-        "-v",
-        "-F", "-F",         // don't let anything get in our way
-        // "-n",            // Pretend
-        "-e" , "continue"]);// Try remount-ro, anything but panic
+            "-O",
+            "^64bit",
+            "-E",
+            "lazy_itable_init=0,lazy_journal_init=0",
+            "-i",
+            "8192",
+            "-v",
+            "-F",
+            "-F", // don't let anything get in our way
+            // "-n",            // Pretend
+            "-e",
+            "continue",
+        ]); // Try remount-ro, anything but panic
 
         if direct_io {
             args.push("-D"); // Do direct I/O - very slow
@@ -302,10 +319,10 @@ fn sub_format(
     let cmd_res = match Command::new(command)
         .stdout(Stdio::inherit())
         .stderr(Stdio::inherit())
-        .args(&args).output() {
-        Ok(cmd_res) => {
-            cmd_res
-        },
+        .args(&args)
+        .output()
+    {
+        Ok(cmd_res) => cmd_res,
         Err(why) => {
             error!(
                 "format: failed to format drive with {}: '{}', error: {:?}",
@@ -317,10 +334,7 @@ fn sub_format(
     };
 
     if cmd_res.status.success() {
-        info!(
-            "successfully formatted drive '{}'",
-            dev_path
-        );
+        info!("successfully formatted drive '{}'", dev_path);
         sync();
         true
     } else {
@@ -335,21 +349,19 @@ fn sub_format(
     }
 }
 
-fn format(lsblk_dev: &LsblkDevice,
-          cmds: &EnsuredCmds,
-          fs_dump: &FSDump) -> bool {
+fn format(lsblk_dev: &LsblkDevice, cmds: &EnsuredCmds, fs_dump: &FSDump) -> bool {
     if let Some(ref children) = lsblk_dev.children {
-
         // write an empty /etc/mtab to make mkfs happy
         let mtab_path = PathBuf::from("/etc/mtab");
         if !file_exists(&mtab_path) {
-            match OpenOptions::new()
-                .create(true)
-                .write(true)
-                .open(&mtab_path) {
+            match OpenOptions::new().create(true).write(true).open(&mtab_path) {
                 Ok(_) => (),
                 Err(why) => {
-                    error!("failed to create an empty '{}', error: {:?}", mtab_path.display(), why);
+                    error!(
+                        "failed to create an empty '{}', error: {:?}",
+                        mtab_path.display(),
+                        why
+                    );
                 }
             }
         }
@@ -369,39 +381,62 @@ fn format(lsblk_dev: &LsblkDevice,
             check
         };
 
-        let mut dev_idx: usize  = 0;
-        let mut part_idx: usize  = 0;
+        let mut dev_idx: usize = 0;
+        let mut part_idx: usize = 0;
 
         while (part_idx < children.len()) && (part_idx < PART_NAME.len()) {
             if let Some(ref part_type) = children[dev_idx].parttype {
                 match part_type.as_ref() {
                     "0xc|0xe" => {
                         debug!("Formatting fat partition at index {}/{}", dev_idx, part_idx);
-                        if !sub_format(&children[dev_idx].get_path(), PART_NAME[part_idx], cmds, true, fat_check, false) {
+                        if !sub_format(
+                            &children[dev_idx].get_path(),
+                            PART_NAME[part_idx],
+                            cmds,
+                            true,
+                            fat_check,
+                            false,
+                        ) {
                             return false;
                         } else {
                             part_idx += 1;
                         }
-                    },
+                    }
                     "0x83" => {
-                        debug!("Formatting linux partition at index {}/{}", dev_idx, part_idx);
+                        debug!(
+                            "Formatting linux partition at index {}/{}",
+                            dev_idx, part_idx
+                        );
                         let direct_io = if let Some(mkfs_direct) = fs_dump.mkfs_direct {
                             mkfs_direct
                         } else {
                             false
                         };
 
-                        if !sub_format(&children[dev_idx].get_path(), PART_NAME[part_idx], cmds, false, check, direct_io) {
+                        if !sub_format(
+                            &children[dev_idx].get_path(),
+                            PART_NAME[part_idx],
+                            cmds,
+                            false,
+                            check,
+                            direct_io,
+                        ) {
                             return false;
                         } else {
                             part_idx += 1;
                         }
-                    },
-                    "0x5"|"0xf" => {
-                        debug!("Skipping extended partition at index {}/{}", dev_idx, part_idx);
-                    },
+                    }
+                    "0x5" | "0xf" => {
+                        debug!(
+                            "Skipping extended partition at index {}/{}",
+                            dev_idx, part_idx
+                        );
+                    }
                     _ => {
-                        error!("Invalid partition, type: {} found at index {}/{}", part_type, dev_idx, part_idx);
+                        error!(
+                            "Invalid partition, type: {} found at index {}/{}",
+                            part_type, dev_idx, part_idx
+                        );
                         return false;
                     }
                 }
@@ -411,7 +446,11 @@ fn format(lsblk_dev: &LsblkDevice,
         }
 
         if part_idx < PART_NAME.len() {
-            error!("format: not all partitions were formatted: {}/{}", part_idx, PART_NAME.len());
+            error!(
+                "format: not all partitions were formatted: {}/{}",
+                part_idx,
+                PART_NAME.len()
+            );
             false
         } else {
             true
@@ -443,9 +482,11 @@ fn sfdisk_part(device: &Path, sfdisk_path: &str, fs_dump: &FSDump) -> FlashResul
     // TODO: configure partition type
 
     {
-
         let alignment_blocks: u64 = DEFAULT_PARTITION_ALIGNMENT_KIB * 1024 / DEF_BLOCK_SIZE as u64;
-        debug!("Alignment '{}'KiB, {} blocks", DEFAULT_PARTITION_ALIGNMENT_KIB, alignment_blocks);
+        debug!(
+            "Alignment '{}'KiB, {} blocks",
+            DEFAULT_PARTITION_ALIGNMENT_KIB, alignment_blocks
+        );
 
         if let Some(ref mut stdin) = sfdisk_cmd.stdin {
             debug!("Writing a new partition table to '{}'", device.display());
@@ -458,34 +499,45 @@ fn sfdisk_part(device: &Path, sfdisk_path: &str, fs_dump: &FSDump) -> FlashResul
             );
 
             let mut start_block: u64 = alignment_blocks;
-            buffer.push_str(&format!("start={},size={},bootable,type=c\n", start_block, fs_dump.boot.blocks));
+            buffer.push_str(&format!(
+                "start={},size={},bootable,type=c\n",
+                start_block, fs_dump.boot.blocks
+            ));
 
             start_block += fs_dump.boot.blocks;
             if (start_block % alignment_blocks) != 0 {
                 start_block = (start_block / alignment_blocks + 1) * alignment_blocks;
             }
 
-            buffer.push_str(&format!("start={},size={},type=83\n", start_block, fs_dump.root_a.blocks));
+            buffer.push_str(&format!(
+                "start={},size={},type=83\n",
+                start_block, fs_dump.root_a.blocks
+            ));
 
             start_block += fs_dump.root_a.blocks;
             if (start_block % alignment_blocks) != 0 {
                 start_block = (start_block / alignment_blocks + 1) * alignment_blocks;
             }
 
-            buffer.push_str(&format!("start={},size={},type=83\n", start_block, fs_dump.root_b.blocks));
+            buffer.push_str(&format!(
+                "start={},size={},type=83\n",
+                start_block, fs_dump.root_b.blocks
+            ));
 
             start_block += fs_dump.root_b.blocks;
             if (start_block % alignment_blocks) != 0 {
                 start_block = (start_block / alignment_blocks + 1) * alignment_blocks;
             }
 
-
             // TODO: make ext part type configurable
-            buffer.push_str(&format!("start={},type=f\n", start_block ));
+            buffer.push_str(&format!("start={},type=f\n", start_block));
 
             start_block += alignment_blocks;
 
-            buffer.push_str(&format!("start={},size={},type=83\n", start_block, fs_dump.state.blocks));
+            buffer.push_str(&format!(
+                "start={},size={},type=83\n",
+                start_block, fs_dump.state.blocks
+            ));
 
             // in dos extended partition at least 1 block offset is needed for the next extended entry
             // so align to next and add an extra alignment block
@@ -506,7 +558,10 @@ fn sfdisk_part(device: &Path, sfdisk_path: &str, fs_dump: &FSDump) -> FlashResul
             if max_data {
                 buffer.push_str(&format!("start={},type=83", start_block));
             } else {
-                buffer.push_str(&format!("start={},size={},type=83", start_block, fs_dump.data.blocks));
+                buffer.push_str(&format!(
+                    "start={},size={},type=83",
+                    start_block, fs_dump.data.blocks
+                ));
             }
 
             debug!("writing partitioning as: \n{}", buffer);

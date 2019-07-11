@@ -20,7 +20,9 @@ use crate::{
     },
     linux::{
         ensured_cmds::{EnsuredCmds, UDEVADM_CMD},
-        linux_common::{drive_from_partition, drive_to_partition, get_kernel_root_info, to_std_device_path},
+        linux_common::{
+            drive_from_partition, drive_to_partition, get_kernel_root_info, to_std_device_path,
+        },
         linux_defs::NIX_NONE,
         migrate_info::LsblkInfo,
     },
@@ -89,19 +91,19 @@ impl<'a> Mounts {
 
         // obtain boot device from kernel cmdline
         let (kernel_root_device, kernel_root_fs_type) = match get_kernel_root_info() {
-            Ok((device,fstype)) => {
-                (Some(device), fstype)
-            },
+            Ok((device, fstype)) => (Some(device), fstype),
             Err(why) => {
-                error!("Failed to retrieve root path from kernel command line, error {:?}", why);
-                (None,None)
+                error!(
+                    "Failed to retrieve root path from kernel command line, error {:?}",
+                    why
+                );
+                (None, None)
             }
         };
 
         debug!(
             "Kernel cmd line points to root device '{:?}' with fs-type: '{:?}'",
-            kernel_root_device,
-            kernel_root_fs_type,
+            kernel_root_device, kernel_root_fs_type,
         );
 
         // Not sure if this is needed but can't hurt to be patient
@@ -121,7 +123,6 @@ impl<'a> Mounts {
                 warn!("{} {:?} failed with {:?}", UDEVADM_CMD, UDEVADM_PARAMS, why);
             }
         }
-
 
         // try mount root from kernel cmd line
 
@@ -173,11 +174,13 @@ impl<'a> Mounts {
                         }
                     }
                     Err(why) => {
-                        error!("Mount failed for {} on {} wth fstype: {}, error {:?}",
-                               kernel_root_device.display(),
-                               BOOTFS_DIR,
-                               fstype,
-                               why);
+                        error!(
+                            "Mount failed for {} on {} wth fstype: {}, error {:?}",
+                            kernel_root_device.display(),
+                            BOOTFS_DIR,
+                            fstype,
+                            why
+                        );
                     }
                 }
             }
@@ -185,9 +188,7 @@ impl<'a> Mounts {
 
         // if mount from kernel cmdline failed, try others
 
-        debug!(
-            "Looking for boot device in all block devices",
-        );
+        debug!("Looking for boot device in all block devices",);
 
         match LsblkInfo::all(cmds) {
             Ok(lsblk_info) => {
@@ -379,7 +380,7 @@ impl<'a> Mounts {
                                 Ok(drive) => {
                                     self.work_no_copy = drive != self.flash_device;
                                     debug!("work_no_copy set to {}", self.work_no_copy);
-                                },
+                                }
                                 Err(why) => {
                                     warn!("Failed to derive drive from work partition: '{}', error: {:?}", device.display(), why);
                                 }
@@ -439,19 +440,28 @@ impl<'a> Mounts {
 
         // TODO: make boot mount optional ?
         if self.boot_device == self.flash_device {
-            debug!("Unmounting boot device: '{}' from '{}'", self.boot_device.display(), self.boot_mountpoint.display());
+            debug!(
+                "Unmounting boot device: '{}' from '{}'",
+                self.boot_device.display(),
+                self.boot_mountpoint.display()
+            );
             match umount(&self.boot_mountpoint) {
                 Ok(_) => Ok(()),
                 Err(why) => {
                     error!(
                         "Failed to unmount former boot device: '{}', error: {:?}",
-                        self.boot_mountpoint.display(), why
+                        self.boot_mountpoint.display(),
+                        why
                     );
                     Err(MigError::displayed())
                 }
             }
         } else {
-            debug!("Not unmounting boot device: '{}' as it is different from flash_device: '{}'", self.boot_device.display(), self.flash_device.display());
+            debug!(
+                "Not unmounting boot device: '{}' as it is different from flash_device: '{}'",
+                self.boot_device.display(),
+                self.flash_device.display()
+            );
             Ok(())
         }
     }
@@ -460,7 +470,7 @@ impl<'a> Mounts {
         let mut parts_found = true;
         let mut part_label = path_append(DISK_BY_LABEL_PATH, BALENA_BOOT_PART);
         if !file_exists(&part_label) {
-            part_label = drive_to_partition(&self.flash_device, 1 )?;
+            part_label = drive_to_partition(&self.flash_device, 1)?;
         }
 
         self.balena_boot_mp = match Mounts::mount(BOOT_MNT_DIR, &part_label, BALENA_BOOT_FSTYPE) {
@@ -477,7 +487,7 @@ impl<'a> Mounts {
 
         let mut part_label = path_append(DISK_BY_LABEL_PATH, BALENA_ROOTA_PART);
         if !file_exists(&part_label) {
-            part_label = drive_to_partition(&self.flash_device, 2 )?;
+            part_label = drive_to_partition(&self.flash_device, 2)?;
         }
 
         if mount_all {
@@ -505,7 +515,7 @@ impl<'a> Mounts {
 
         let mut part_label = path_append(DISK_BY_LABEL_PATH, BALENA_ROOTB_PART);
         if !file_exists(&part_label) {
-            part_label = drive_to_partition(&self.flash_device, 3 )?;
+            part_label = drive_to_partition(&self.flash_device, 3)?;
         }
 
         if mount_all {
@@ -533,9 +543,8 @@ impl<'a> Mounts {
 
         let mut part_label = path_append(DISK_BY_LABEL_PATH, BALENA_STATE_PART);
         if !file_exists(&part_label) {
-            part_label = drive_to_partition(&self.flash_device, 5 )?;
+            part_label = drive_to_partition(&self.flash_device, 5)?;
         }
-
 
         if mount_all {
             self.balena_state_mp =
@@ -562,7 +571,7 @@ impl<'a> Mounts {
 
         let mut part_label = path_append(DISK_BY_LABEL_PATH, BALENA_DATA_PART);
         if !file_exists(&part_label) {
-            part_label = drive_to_partition(&self.flash_device, 6 )?;
+            part_label = drive_to_partition(&self.flash_device, 6)?;
         }
 
         self.balena_data_mp = match Mounts::mount(DATA_MNT_DIR, &part_label, BALENA_DATA_FSTYPE) {
@@ -629,7 +638,6 @@ impl<'a> Mounts {
             } else {
                 self.balena_root_b_mp = None;
             }
-
         }
 
         if let Some(ref mountpoint) = self.balena_state_mp {

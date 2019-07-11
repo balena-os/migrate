@@ -38,8 +38,8 @@ mod flasher;
 pub(crate) mod mounts;
 use mounts::Mounts;
 
-use std::cell::RefCell;
 use crate::linux::ensured_cmds::UDEVADM_CMD;
+use std::cell::RefCell;
 
 const REBOOT_DELAY: u64 = 3;
 const S2_REV: u32 = 5;
@@ -111,11 +111,13 @@ impl<'a> Stage2 {
         }
 
         // mount boot device containing BALENA_STAGE2_CFG for starters
-        let mut mounts = match Mounts::new(&mut cmds ) {
+        let mut mounts = match Mounts::new(&mut cmds) {
             Ok(mounts) => {
-                debug!("Successfully mounted boot file system: '{}' on '{:?}'",
-                       mounts.get_flash_device().display(),
-                       mounts.get_balena_boot_mountpoint());
+                debug!(
+                    "Successfully mounted boot file system: '{}' on '{:?}'",
+                    mounts.get_flash_device().display(),
+                    mounts.get_balena_boot_mountpoint()
+                );
                 mounts
             }
             Err(why) => {
