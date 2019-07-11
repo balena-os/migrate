@@ -66,7 +66,7 @@ const BALENA_ROOTB_FS_FILE: &str = "resin-rootB.tgz";
 const BALENA_STATE_FS_FILE: &str = "resin-state.tgz";
 const BALENA_DATA_FS_FILE: &str = "resin-data.tgz";
 
-const LOG_STDERR: bool = false; // mute / unmute the start until config is read
+const LOG_STDERR: bool = true; // mute / unmute the start until config is read
 
 pub(crate) enum FlashResult {
     Ok,
