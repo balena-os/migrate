@@ -1,5 +1,6 @@
 use failure::ResultExt;
 use log::{debug, error, warn, info};
+use std::fs::{OpenOptions};
 use std::io::Write;
 use std::path::Path;
 use std::path::PathBuf;
@@ -26,6 +27,7 @@ use crate::{
         stage2::{mounts::Mounts, FlashResult},
     },
 };
+use crate::common::file_exists;
 
 // TODO: ensure support for GPT partition tables
 
@@ -329,7 +331,18 @@ fn sub_format(
 fn format(lsblk_dev: &LsblkDevice, cmds: &EnsuredCmds, fs_dump: &FSDump) -> bool {
     if let Some(ref children) = lsblk_dev.children {
 
-        // TODO: write an empty /etc/mtab to make mkfs happy
+        // write an empty /etc/mtab to make mkfs happy
+        let mtab_path = PathBuf::from("/etc/mtab");
+        if !file_exists(&mtab_path) {
+            match OpenOptions::new()
+                .create(true)
+                .open(&mtab_path) {
+                Ok(_) => (),
+                Err(why) => {
+                    error!("failed to create an empty '{}', error: {:?}", mtab_path.display(), why);
+                }
+            }
+        }
 
         let check = if let Some(ref check) = fs_dump.check {
             check
@@ -414,7 +427,9 @@ fn sfdisk_part(device: &Path, sfdisk_path: &str, fs_dump: &FSDump) -> FlashResul
     // TODO: configure partition type
 
     {
-        let start_block_mod = DEFAULT_PARTITION_ALIGNMENT * 1024 / DEF_BLOCK_SIZE as u64;
+
+        let alignment_blocks: u64 = DEFAULT_PARTITION_ALIGNMENT * 1024 / DEF_BLOCK_SIZE as u64;
+        debug!("Alignment '{}'KiB, {} blocks", DEFAULT_PARTITION_ALIGNMENT, alignment_blocks);
 
         if let Some(ref mut stdin) = sfdisk_cmd.stdin {
             debug!("Writing a new partition table to '{}'", device.display());
@@ -426,39 +441,39 @@ fn sfdisk_part(device: &Path, sfdisk_path: &str, fs_dump: &FSDump) -> FlashResul
                 device.display()
             );
 
-            let mut start_block: u64 = DEFAULT_PARTITION_ALIGNMENT;
+            let mut start_block: u64 = alignment_blocks;
             buffer.push_str(&format!("start={},size={},bootable,type=c\n", start_block, fs_dump.boot.blocks));
 
             start_block += fs_dump.boot.blocks;
-            if (start_block % DEFAULT_PARTITION_ALIGNMENT) != 0 {
-                start_block = (start_block / DEFAULT_PARTITION_ALIGNMENT + 1) * DEFAULT_PARTITION_ALIGNMENT;
+            if (start_block % alignment_blocks) != 0 {
+                start_block = (start_block / alignment_blocks + 1) * alignment_blocks;
             }
 
             buffer.push_str(&format!("start={},size={},type=83\n", start_block, fs_dump.root_a.blocks));
 
             start_block += fs_dump.root_a.blocks;
-            if (start_block % DEFAULT_PARTITION_ALIGNMENT) != 0 {
-                start_block = (start_block / DEFAULT_PARTITION_ALIGNMENT + 1) * DEFAULT_PARTITION_ALIGNMENT;
+            if (start_block % alignment_blocks) != 0 {
+                start_block = (start_block / alignment_blocks + 1) * alignment_blocks;
             }
 
             buffer.push_str(&format!("start={},size={},type=83\n", start_block, fs_dump.root_b.blocks));
 
             start_block += fs_dump.root_b.blocks;
-            if (start_block % DEFAULT_PARTITION_ALIGNMENT) != 0 {
-                start_block = (start_block / DEFAULT_PARTITION_ALIGNMENT + 1) * DEFAULT_PARTITION_ALIGNMENT;
+            if (start_block % alignment_blocks) != 0 {
+                start_block = (start_block / alignment_blocks + 1) * alignment_blocks;
             }
 
 
             // TODO: make ext part type configurable
             buffer.push_str(&format!("start={},type=f\n", start_block ));
 
-            start_block += DEFAULT_PARTITION_ALIGNMENT;
+            start_block += alignment_blocks;
 
             buffer.push_str(&format!("start={},size={},type=83\n", start_block, fs_dump.state.blocks));
 
             start_block += fs_dump.state.blocks;
-            if (start_block % DEFAULT_PARTITION_ALIGNMENT) != 0 {
-                start_block = (start_block / DEFAULT_PARTITION_ALIGNMENT + 1) * DEFAULT_PARTITION_ALIGNMENT;
+            if (start_block % alignment_blocks) != 0 {
+                start_block = (start_block / alignment_blocks + 1) * alignment_blocks;
             }
 
             buffer.push_str(&format!("start={},type=83", start_block));
