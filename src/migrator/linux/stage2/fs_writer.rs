@@ -336,6 +336,7 @@ fn format(lsblk_dev: &LsblkDevice, cmds: &EnsuredCmds, fs_dump: &FSDump) -> bool
         if !file_exists(&mtab_path) {
             match OpenOptions::new()
                 .create(true)
+                .write(true)
                 .open(&mtab_path) {
                 Ok(_) => (),
                 Err(why) => {
