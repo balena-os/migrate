@@ -29,6 +29,8 @@ use crate::{
 
 // TODO: ensure support for GPT partition tables
 
+const FORMAT_WITH_LABEL: bool = false;
+
 // pub const OPTIONAL_CMDS: &[&str] = &[SFDISK_CMD, FDISK_CMD];
 pub const REQUIRED_CMDS: &[&str] = &[
     EXT_FMT_CMD,
@@ -229,7 +231,11 @@ fn sub_format(
     let mut args: Vec<&str> = Vec::new();
 
     let command = if is_fat {
-        args.append(&mut vec!["-n", label]);
+
+        if FORMAT_WITH_LABEL {
+            args.append(&mut vec!["-n", label]);
+        }
+
         match cmds.get(FAT_FMT_CMD) {
             Ok(command) => command,
             Err(why) => {
@@ -242,7 +248,13 @@ fn sub_format(
         }
     } else {
         // TODO: sort this out. -O ^64bit is no good on big filesystems +16TB
-        args.append(&mut vec!["-O", "^64bit,^metadata_csum", "-F", "-L", label]);
+
+        if FORMAT_WITH_LABEL {
+            args.append(&mut vec!["-O", "^64bit,^metadata_csum", "-F", "-L", label]);
+        } else {
+            args.append(&mut vec!["-O", "^64bit,^metadata_csum", "-F"]);
+        }
+
         match cmds.get(EXT_FMT_CMD) {
             Ok(command) => command,
             Err(why) => {
@@ -398,7 +410,7 @@ fn sfdisk_part(device: &Path, sfdisk_path: &str, fs_dump: &FSDump) -> FlashResul
                 device.display()
             );
 
-            buffer.push_str(&format!("size={},bootable,type=e\n", fs_dump.boot.blocks));
+            buffer.push_str(&format!("size={},bootable,type=c\n", fs_dump.boot.blocks));
 
             debug!(
                 "Writing resin-rootA as 'size={},type=83' to '{}'",
@@ -430,7 +442,7 @@ fn sfdisk_part(device: &Path, sfdisk_path: &str, fs_dump: &FSDump) -> FlashResul
             buffer.push_str(&format!("size={},type=83\n", fs_dump.state.blocks));
 
             debug!("Writing resin-state as 'type=83' to '{}'", device.display());
-            buffer.push_str(&format!("type=83\n"));
+            buffer.push_str(&format!("type=83"));
 
             debug!("writing partitioning as: \n{}", buffer);
 

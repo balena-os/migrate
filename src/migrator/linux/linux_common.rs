@@ -33,7 +33,7 @@ const BIN_DIRS: &[&str] = &["/bin", "/usr/bin", "/sbin", "/usr/sbin"];
 const OS_RELEASE_FILE: &str = "/etc/os-release";
 const OS_NAME_REGEX: &str = r#"^PRETTY_NAME="([^"]+)"$"#;
 
-const DRIVE2PART_REGEX: &str = r#"^(/dev/([hs]d[a-z]|nvme\d+n\d+|mmcblk\d+))(p?\d+)$"#;
+
 
 #[cfg(not(debug_assertions))]
 pub(crate) fn is_admin(_config: &Config) -> Result<bool, MigError> {
@@ -357,7 +357,43 @@ pub(crate) fn to_std_device_path(device: &Path) -> Result<PathBuf, MigError> {
     }
 }
 
+
+pub(crate) fn drive_to_partition(drive: &Path, part_num: usize) -> Result<PathBuf, MigError> {
+    const PART2DRIVE_REGEX: &str = r#"^(/dev/(([hs]d[a-z])|(nvme\d+n\d+|mmcblk\d+)))$"#;
+    lazy_static! {
+        static ref PART2DRIVE_RE: Regex = Regex::new(PART2DRIVE_REGEX).unwrap();
+    }
+    let path_str = String::from(&*drive.to_string_lossy());
+    if let Some(ref captures) = PART2DRIVE_RE.captures(&path_str) {
+        if let Some(_) = captures.get(3) {
+            Ok(PathBuf::from(format!("{}{}", path_str, part_num)))
+        } else {
+            if let Some(_) = captures.get(4) {
+                Ok(PathBuf::from(format!("{}p{}", path_str, part_num)))
+            } else {
+                Err(MigError::from_remark(
+                    MigErrorKind::InvParam,
+                    &format!(
+                        "Failed to derive partition name from drive name: '{}'",
+                        drive.display()
+                    ),
+                ))
+            }
+        }
+    } else {
+        Err(MigError::from_remark(
+            MigErrorKind::InvParam,
+            &format!(
+                "Failed to derive partition name from drive name: '{}'",
+                drive.display()
+            ),
+        ))
+    }
+}
+
+
 pub(crate) fn drive_from_partition(partition: &Path) -> Result<PathBuf, MigError> {
+    const DRIVE2PART_REGEX: &str = r#"^(/dev/([hs]d[a-z]|nvme\d+n\d+|mmcblk\d+))(p?\d+)$"#;
     lazy_static! {
         static ref DRIVE2PART_RE: Regex = Regex::new(DRIVE2PART_REGEX).unwrap();
     }

@@ -20,7 +20,7 @@ use crate::{
     },
     linux::{
         ensured_cmds::{EnsuredCmds, UDEVADM_CMD},
-        linux_common::{drive_from_partition, get_kernel_root_info, to_std_device_path},
+        linux_common::{drive_from_partition, drive_to_partition, get_kernel_root_info, to_std_device_path},
         linux_defs::NIX_NONE,
         migrate_info::LsblkInfo,
     },
@@ -404,7 +404,7 @@ impl<'a> Mounts {
 
     // unmount all mounted drives except log
     // which is expected to be on a separate drive
-    pub fn unmount_all(&mut self) -> Result<(), MigError> {
+    pub fn unmount_boot_devs(&mut self) -> Result<(), MigError> {
         if let Some(ref mountpoint) = self.work_mountpoint {
             if self.work_no_copy {
                 debug!("Not unmounting work_dir as it is separate from flash_device");
@@ -443,7 +443,10 @@ impl<'a> Mounts {
 
     pub fn mount_balena(&mut self, mount_all: bool) -> Result<bool, MigError> {
         let mut parts_found = true;
-        let part_label = path_append(DISK_BY_LABEL_PATH, BALENA_BOOT_PART);
+        let mut part_label = path_append(DISK_BY_LABEL_PATH, BALENA_BOOT_PART);
+        if !file_exists(&part_label) {
+            part_label = drive_to_partition(&self.flash_device, 1 )?;
+        }
 
         self.balena_boot_mp = match Mounts::mount(BOOT_MNT_DIR, &part_label, BALENA_BOOT_FSTYPE) {
             Ok(mountpoint) => Some(mountpoint),
@@ -457,7 +460,11 @@ impl<'a> Mounts {
             }
         };
 
-        let part_label = path_append(DISK_BY_LABEL_PATH, BALENA_ROOTA_PART);
+        let mut part_label = path_append(DISK_BY_LABEL_PATH, BALENA_ROOTA_PART);
+        if !file_exists(&part_label) {
+            part_label = drive_to_partition(&self.flash_device, 2 )?;
+        }
+
         if mount_all {
             self.balena_root_a_mp =
                 match Mounts::mount(ROOTA_MNT_DIR, &part_label, BALENA_ROOTA_FSTYPE) {
@@ -481,7 +488,11 @@ impl<'a> Mounts {
             }
         }
 
-        let part_label = path_append(DISK_BY_LABEL_PATH, BALENA_ROOTB_PART);
+        let mut part_label = path_append(DISK_BY_LABEL_PATH, BALENA_ROOTB_PART);
+        if !file_exists(&part_label) {
+            part_label = drive_to_partition(&self.flash_device, 3 )?;
+        }
+
         if mount_all {
             self.balena_root_b_mp =
                 match Mounts::mount(ROOTB_MNT_DIR, &part_label, BALENA_ROOTB_FSTYPE) {
@@ -505,7 +516,12 @@ impl<'a> Mounts {
             }
         }
 
-        let part_label = path_append(DISK_BY_LABEL_PATH, BALENA_STATE_PART);
+        let mut part_label = path_append(DISK_BY_LABEL_PATH, BALENA_STATE_PART);
+        if !file_exists(&part_label) {
+            part_label = drive_to_partition(&self.flash_device, 5 )?;
+        }
+
+
         if mount_all {
             self.balena_state_mp =
                 match Mounts::mount(STATE_MNT_DIR, &part_label, BALENA_STATE_FSTYPE) {
@@ -529,7 +545,11 @@ impl<'a> Mounts {
             }
         }
 
-        let part_label = path_append(DISK_BY_LABEL_PATH, BALENA_DATA_PART);
+        let mut part_label = path_append(DISK_BY_LABEL_PATH, BALENA_DATA_PART);
+        if !file_exists(&part_label) {
+            part_label = drive_to_partition(&self.flash_device, 6 )?;
+        }
+
         self.balena_data_mp = match Mounts::mount(DATA_MNT_DIR, &part_label, BALENA_DATA_FSTYPE) {
             Ok(mountpoint) => Some(mountpoint),
             Err(why) => {

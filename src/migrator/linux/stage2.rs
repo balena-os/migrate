@@ -42,7 +42,7 @@ use std::cell::RefCell;
 use crate::linux::ensured_cmds::UDEVADM_CMD;
 
 const REBOOT_DELAY: u64 = 3;
-const S2_REV: u32 = 4;
+const S2_REV: u32 = 5;
 
 // TODO: set this to Info once mature
 const INIT_LOG_LEVEL: Level = Level::Trace;
@@ -88,15 +88,13 @@ impl<'a> Stage2 {
     pub fn try_init() -> Result<Stage2, MigError> {
         Logger::set_default_level(&INIT_LOG_LEVEL);
 
-        // log to stderr & memory buffer - so it can be saved to a persistent log later
-        // match Logger::set_log_dest(&LogDestination::BufferStderr, NO_STREAM) {
-
-
+        // make not logging to console at all configurable
         let log_dest = if LOG_STDERR {
             LogDestination::BufferStderr
         } else {
             LogDestination::Buffer
         };
+
         match Logger::set_log_dest(&log_dest, NO_STREAM) {
             Ok(_s) => {
                 info!("Balena Migrate Stage 2 rev {} initializing", S2_REV);
@@ -115,7 +113,9 @@ impl<'a> Stage2 {
         // mount boot device containing BALENA_STAGE2_CFG for starters
         let mut mounts = match Mounts::new(&mut cmds ) {
             Ok(mounts) => {
-                debug!("Successfully mounted file system");
+                debug!("Successfully mounted boot file system: '{}' on '{:?}'",
+                       mounts.get_flash_device().display(),
+                       mounts.get_balena_boot_mountpoint());
                 mounts
             }
             Err(why) => {
@@ -181,7 +181,7 @@ impl<'a> Stage2 {
             }
         };
 
-        if let Some(log_path) = log_path {
+        if let Some(ref log_path) = log_path {
             // match Logger::set_log_file(&LogDestination::Stderr, &log_path, false) {
             let log_dest = if stage2_cfg.is_log_console() {
                 LogDestination::StreamStderr
@@ -192,7 +192,6 @@ impl<'a> Stage2 {
             match Logger::set_log_file(&log_dest, &log_path, false) {
                 Ok(_) => {
                     info!("Set log file to '{}'", log_path.display());
-                    // Logger::flush();
                 }
                 Err(why) => {
                     warn!(
@@ -536,7 +535,7 @@ impl<'a> Stage2 {
             let _res = Logger::set_log_dest(&log_dest, NO_STREAM);
         }
 
-        self.mounts.borrow_mut().unmount_all()?;
+        self.mounts.borrow_mut().unmount_boot_devs()?;
 
         info!("Unmounted file systems");
 
