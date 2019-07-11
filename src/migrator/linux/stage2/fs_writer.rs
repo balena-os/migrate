@@ -33,6 +33,9 @@ use crate::common::file_exists;
 
 const FORMAT_WITH_LABEL: bool = true;
 const DEFAULT_PARTITION_ALIGNMENT_KIB: u64 = 4096; // KiB
+// should we maximize data partition to fill disk
+// TODO: true might be the better default but can be very slow in combination with mkfs_direct_io
+const DEFAULT_MAX_DATA: bool = false;
 
 pub const REQUIRED_CMDS: &[&str] = &[
     EXT_FMT_CMD,
@@ -226,6 +229,7 @@ fn sub_format(
     cmds: &EnsuredCmds,
     is_fat: bool,
     check: &PartCheck,
+    direct_io: bool,
 ) -> bool {
 
     debug!("sub_format: entered with: '{}' is_fat: {}, check: {:?}", device.display(), is_fat, check);
@@ -258,9 +262,12 @@ fn sub_format(
         "-i" , "8192",
         "-v",
         "-F", "-F",         // don't let anything get in our way
-        "-D",               // Do direct I/O
         // "-n",            // Pretend
         "-e" , "continue"]);// Try remount-ro, anything but panic
+
+        if direct_io {
+            args.push("-D"); // Do direct I/O - very slow
+        }
 
         if FORMAT_WITH_LABEL {
             args.append(&mut vec!["-L", label]);
@@ -328,7 +335,9 @@ fn sub_format(
     }
 }
 
-fn format(lsblk_dev: &LsblkDevice, cmds: &EnsuredCmds, fs_dump: &FSDump) -> bool {
+fn format(lsblk_dev: &LsblkDevice,
+          cmds: &EnsuredCmds,
+          fs_dump: &FSDump) -> bool {
     if let Some(ref children) = lsblk_dev.children {
 
         // write an empty /etc/mtab to make mkfs happy
@@ -366,9 +375,9 @@ fn format(lsblk_dev: &LsblkDevice, cmds: &EnsuredCmds, fs_dump: &FSDump) -> bool
         while (part_idx < children.len()) && (part_idx < PART_NAME.len()) {
             if let Some(ref part_type) = children[dev_idx].parttype {
                 match part_type.as_ref() {
-                    "0xc" => {
+                    "0xc|0xe" => {
                         debug!("Formatting fat partition at index {}/{}", dev_idx, part_idx);
-                        if !sub_format(&children[dev_idx].get_path(), PART_NAME[part_idx], cmds, true, fat_check) {
+                        if !sub_format(&children[dev_idx].get_path(), PART_NAME[part_idx], cmds, true, fat_check, false) {
                             return false;
                         } else {
                             part_idx += 1;
@@ -376,7 +385,13 @@ fn format(lsblk_dev: &LsblkDevice, cmds: &EnsuredCmds, fs_dump: &FSDump) -> bool
                     },
                     "0x83" => {
                         debug!("Formatting linux partition at index {}/{}", dev_idx, part_idx);
-                        if !sub_format(&children[dev_idx].get_path(), PART_NAME[part_idx], cmds, false, check) {
+                        let direct_io = if let Some(mkfs_direct) = fs_dump.mkfs_direct {
+                            mkfs_direct
+                        } else {
+                            false
+                        };
+
+                        if !sub_format(&children[dev_idx].get_path(), PART_NAME[part_idx], cmds, false, check, direct_io) {
                             return false;
                         } else {
                             part_idx += 1;
@@ -474,14 +489,25 @@ fn sfdisk_part(device: &Path, sfdisk_path: &str, fs_dump: &FSDump) -> FlashResul
 
             // in dos extended partition at least 1 block offset is needed for the next extended entry
             // so align to next and add an extra alignment block
-            start_block += fs_dump.root_b.blocks;
+            start_block += fs_dump.state.blocks;
             if (start_block % alignment_blocks) != 0 {
+                // TODO: clarify if this is right
                 start_block = (start_block / alignment_blocks + 2) * alignment_blocks;
             } else {
                 start_block += alignment_blocks;
             }
 
-            buffer.push_str(&format!("start={},type=83", start_block));
+            let max_data = if let Some(max_data) = fs_dump.max_data {
+                max_data
+            } else {
+                DEFAULT_MAX_DATA
+            };
+
+            if max_data {
+                buffer.push_str(&format!("start={},type=83", start_block));
+            } else {
+                buffer.push_str(&format!("start={},size={},type=83", start_block, fs_dump.data.blocks));
+            }
 
             debug!("writing partitioning as: \n{}", buffer);
 

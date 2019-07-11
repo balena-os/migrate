@@ -34,6 +34,8 @@ pub(crate) enum PartCheck {
 pub(crate) struct FSDump {
     pub device_slug: String,
     pub check: Option<PartCheck>,
+    pub max_data: Option<bool>,
+    pub mkfs_direct: Option<bool>,
     pub boot: PartDump,
     pub root_a: PartDump,
     pub root_b: PartDump,

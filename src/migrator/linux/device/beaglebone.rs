@@ -3,14 +3,14 @@ use regex::Regex;
 
 use crate::{
     common::{
-        stage2_config::{Stage2Config, Stage2ConfigBuilder},
+        stage2_config::{Stage2Config, Stage2ConfigBuilder, CheckedImageType},
         Config, MigError, MigErrorKind,
     },
     defs::{BootType, DeviceType},
     linux::{
         boot_manager::{from_boot_type, BootManager, UBootManager},
         device::Device,
-        migrate_info::PathInfo,
+        migrate_info::{PathInfo},
         stage2::mounts::Mounts,
         EnsuredCmds, MigrateInfo,
     },
@@ -141,10 +141,17 @@ impl Device for BeagleboneGreen {
     fn setup(
         &self,
         cmds: &EnsuredCmds,
-        dev_info: &MigrateInfo,
+        dev_info: &mut MigrateInfo,
         config: &Config,
         s2_cfg: &mut Stage2ConfigBuilder,
     ) -> Result<(), MigError> {
+        // TODO: remove when XM is debugged
+
+        if let CheckedImageType::FileSystems(ref mut fs_dump) =  dev_info.image_file.image {
+            fs_dump.mkfs_direct = Some(true);
+            fs_dump.max_data = Some(false);
+        }
+
         self.boot_manager.setup(cmds, dev_info, config, s2_cfg)
     }
 
@@ -220,7 +227,7 @@ impl Device for BeagleboneBlack {
     fn setup(
         &self,
         cmds: &EnsuredCmds,
-        dev_info: &MigrateInfo,
+        dev_info: &mut MigrateInfo,
         config: &Config,
         s2_cfg: &mut Stage2ConfigBuilder,
     ) -> Result<(), MigError> {
@@ -304,10 +311,17 @@ impl<'a> Device for BeagleboardXM {
     fn setup(
         &self,
         cmds: &EnsuredCmds,
-        dev_info: &MigrateInfo,
+        dev_info: &mut MigrateInfo,
         config: &Config,
         s2_cfg: &mut Stage2ConfigBuilder,
     ) -> Result<(), MigError> {
+
+        if let CheckedImageType::FileSystems(ref mut fs_dump) =  dev_info.image_file.image {
+            fs_dump.mkfs_direct = Some(true);
+            fs_dump.max_data = Some(false);
+        }
+        //dev_info.image_file.image.
+
         self.boot_manager.setup(cmds, dev_info, config, s2_cfg)
     }
 

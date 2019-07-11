@@ -27,7 +27,7 @@ pub(crate) trait Device {
     fn setup(
         &self,
         cmds: &EnsuredCmds,
-        dev_info: &MigrateInfo,
+        dev_info: &mut MigrateInfo,
         config: &Config,
         s2_cfg: &mut Stage2ConfigBuilder,
     ) -> Result<(), MigError>;

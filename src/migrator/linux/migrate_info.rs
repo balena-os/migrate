@@ -178,6 +178,8 @@ impl MigrateInfo {
                     image: CheckedImageType::FileSystems(FSDump {
                         device_slug: fs_dump.device_slug.clone(),
                         check: fs_dump.check.clone(),
+                        max_data: fs_dump.max_data.clone(),
+                        mkfs_direct: fs_dump.mkfs_direct.clone(),
                         boot: PartDump {
                             archive: boot_path,
                             blocks: fs_dump.boot.blocks,

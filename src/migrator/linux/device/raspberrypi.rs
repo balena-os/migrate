@@ -112,7 +112,7 @@ impl<'a> Device for RaspberryPi3 {
     fn setup(
         &self,
         cmds: &EnsuredCmds,
-        dev_info: &MigrateInfo,
+        dev_info: &mut MigrateInfo,
         config: &Config,
         s2_cfg: &mut Stage2ConfigBuilder,
     ) -> Result<(), MigError> {

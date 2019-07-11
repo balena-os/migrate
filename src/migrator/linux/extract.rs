@@ -290,6 +290,8 @@ impl Extractor {
             let res = ImageType::FileSystems(FSDump {
                 device_slug: self.device_slug.clone(),
                 check: None,
+                max_data: None,
+                mkfs_direct: None,
                 boot: PartDump {
                     archive: partitions[0].archive.clone(),
                     blocks: partitions[0].num_sectors,
