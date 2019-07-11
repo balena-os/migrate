@@ -354,6 +354,19 @@ impl<'a> LinuxMigrator {
             }
         }
 
+
+        trace!("device setup");
+
+        // We need this before s2 config as it might still modify migrate_info
+        // TODO: make setup take no s2_cfg or immutable s2_cfg and return boot_backup instead
+        // TODO: make setup undoable in case something bad happens later on
+        self.device.setup(
+            &self.cmds,
+            &mut self.mig_info,
+            &self.config,
+            &mut self.stage2_config,
+        )?;
+
         trace!("stage2 config");
 
         // dbg!("setting up stage2_cfg");
@@ -421,14 +434,6 @@ impl<'a> LinuxMigrator {
         self.stage2_config
             .set_gzip_internal(self.config.migrate.is_gzip_internal());
 
-        trace!("device setup");
-
-        self.device.setup(
-            &self.cmds,
-            &mut self.mig_info,
-            &self.config,
-            &mut self.stage2_config,
-        )?;
 
         trace!("write stage 2 config");
         let s2_path = path_append(&boot_device.mountpoint, STAGE2_CFG_FILE);
