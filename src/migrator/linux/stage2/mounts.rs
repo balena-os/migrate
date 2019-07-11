@@ -122,6 +122,7 @@ impl<'a> Mounts {
             }
         }
 
+
         // try mount root from kernel cmd line
 
         if let Some(kernel_root_device) = kernel_root_device {
@@ -182,15 +183,22 @@ impl<'a> Mounts {
             }
         }
 
-
         // if mount from kernel cmdline failed, try others
 
+        debug!(
+            "Looking for boot device in all block devices",
+        );
 
         match LsblkInfo::all(cmds) {
             Ok(lsblk_info) => {
                 for blk_device in lsblk_info.get_blk_devices() {
                     if let Some(ref children) = blk_device.children {
                         for blk_part in children {
+                            debug!(
+                                "Looking for boot device in all '{}'",
+                                blk_part.get_path().display()
+                            );
+
                             let mut fstypes: Vec<String> = Vec::new();
                             if let Some(ref fstype) = blk_part.fstype {
                                 fstypes.push(fstype.clone());
@@ -202,6 +210,13 @@ impl<'a> Mounts {
 
                             for fstype in fstypes {
                                 let device = blk_part.get_path();
+
+                                debug!(
+                                    "Attempting to mount '{}' with {}",
+                                    device.display(),
+                                    fstype
+                                );
+                                
                                 match Mounts::mount(BOOTFS_DIR, &device, &fstype) {
                                     Ok(boot_mountpoint) => {
                                         let stage2_config =
