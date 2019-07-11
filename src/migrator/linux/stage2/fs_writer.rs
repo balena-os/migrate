@@ -32,7 +32,7 @@ use crate::common::file_exists;
 // TODO: ensure support for GPT partition tables
 
 const FORMAT_WITH_LABEL: bool = true;
-const DEFAULT_PARTITION_ALIGNMENT: u64 = 4096; // KiB
+const DEFAULT_PARTITION_ALIGNMENT_KIB: u64 = 4096; // KiB
 
 pub const REQUIRED_CMDS: &[&str] = &[
     EXT_FMT_CMD,
@@ -428,8 +428,8 @@ fn sfdisk_part(device: &Path, sfdisk_path: &str, fs_dump: &FSDump) -> FlashResul
 
     {
 
-        let alignment_blocks: u64 = DEFAULT_PARTITION_ALIGNMENT * 1024 / DEF_BLOCK_SIZE as u64;
-        debug!("Alignment '{}'KiB, {} blocks", DEFAULT_PARTITION_ALIGNMENT, alignment_blocks);
+        let alignment_blocks: u64 = DEFAULT_PARTITION_ALIGNMENT_KIB * 1024 / DEF_BLOCK_SIZE as u64;
+        debug!("Alignment '{}'KiB, {} blocks", DEFAULT_PARTITION_ALIGNMENT_KIB, alignment_blocks);
 
         if let Some(ref mut stdin) = sfdisk_cmd.stdin {
             debug!("Writing a new partition table to '{}'", device.display());
@@ -471,9 +471,13 @@ fn sfdisk_part(device: &Path, sfdisk_path: &str, fs_dump: &FSDump) -> FlashResul
 
             buffer.push_str(&format!("start={},size={},type=83\n", start_block, fs_dump.state.blocks));
 
-            start_block += fs_dump.state.blocks;
+            // in dos extended partition at least 1 block offset is needed for the next extended entry
+            // so align to next and add an extra alignment block
+            start_block += fs_dump.root_b.blocks;
             if (start_block % alignment_blocks) != 0 {
-                start_block = (start_block / alignment_blocks + 1) * alignment_blocks;
+                start_block = (start_block / alignment_blocks + 2) * alignment_blocks;
+            } else {
+                start_block += alignment_blocks;
             }
 
             buffer.push_str(&format!("start={},type=83", start_block));
