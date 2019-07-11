@@ -216,7 +216,7 @@ impl<'a> Mounts {
                                     device.display(),
                                     fstype
                                 );
-                                
+
                                 match Mounts::mount(BOOTFS_DIR, &device, &fstype) {
                                     Ok(boot_mountpoint) => {
                                         let stage2_config =

@@ -3,7 +3,10 @@ use std::io::{Error, ErrorKind, Read};
 use std::mem;
 use std::path::{Path, PathBuf};
 
-use crate::common::{MigError, MigErrorKind};
+use crate::{
+    defs::DEF_BLOCK_SIZE,
+    common::{MigError, MigErrorKind}
+};
 
 mod image_file;
 pub(crate) use image_file::ImageFile;
@@ -14,7 +17,7 @@ pub(crate) use gzip_file::GZipFile;
 mod plain_file;
 pub(crate) use plain_file::PlainFile;
 
-const DEF_BLOCK_SIZE: usize = 512;
+
 
 // TODO: implement GPT partition
 

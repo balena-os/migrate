@@ -17,7 +17,7 @@ use crate::{
         stage2_config::{CheckedImageType, Stage2Config},
         MigErrCtx, MigError, MigErrorKind,
     },
-    defs::PART_NAME,
+    defs::{PART_NAME, DEF_BLOCK_SIZE},
     linux::{
         ensured_cmds::{
             EnsuredCmds, EXT_FMT_CMD, FAT_FMT_CMD, LSBLK_CMD, PARTPROBE_CMD, SFDISK_CMD, TAR_CMD,
@@ -29,9 +29,9 @@ use crate::{
 
 // TODO: ensure support for GPT partition tables
 
-const FORMAT_WITH_LABEL: bool = false;
+const FORMAT_WITH_LABEL: bool = true;
+const DEFAULT_PARTITION_ALIGNMENT: u64 = 4096; // KiB
 
-// pub const OPTIONAL_CMDS: &[&str] = &[SFDISK_CMD, FDISK_CMD];
 pub const REQUIRED_CMDS: &[&str] = &[
     EXT_FMT_CMD,
     FAT_FMT_CMD,
@@ -231,7 +231,6 @@ fn sub_format(
     let mut args: Vec<&str> = Vec::new();
 
     let command = if is_fat {
-
         if FORMAT_WITH_LABEL {
             args.append(&mut vec!["-n", label]);
         }
@@ -249,10 +248,20 @@ fn sub_format(
     } else {
         // TODO: sort this out. -O ^64bit is no good on big filesystems +16TB
 
+        // TODO: Default opts for balena -E lazy_itable_init=0,lazy_journal_init=0 -i 8192 -v
+
+        args.append(&mut vec![
+        "-O", "^64bit",
+        "-E" , "lazy_itable_init=0,lazy_journal_init=0",
+        "-i" , "8192",
+        "-v",
+        "-F", "-F",         // don't let anything get in our way
+        "-D",               // Do direct I/O
+        // "-n",            // Pretend
+        "-e" , "continue"]);// Try remount-ro, anything but panic
+
         if FORMAT_WITH_LABEL {
-            args.append(&mut vec!["-O", "^64bit,^metadata_csum", "-F", "-L", label]);
-        } else {
-            args.append(&mut vec!["-O", "^64bit,^metadata_csum", "-F"]);
+            args.append(&mut vec!["-L", label]);
         }
 
         match cmds.get(EXT_FMT_CMD) {
@@ -281,7 +290,10 @@ fn sub_format(
 
     debug!("calling {} with args {:?}", command, args);
     sync();
-    let cmd_res = match Command::new(command).args(&args).output() {
+    let cmd_res = match Command::new(command)
+        .stdout(Stdio::inherit())
+        .stderr(Stdio::inherit())
+        .args(&args).output() {
         Ok(cmd_res) => {
             cmd_res
         },
@@ -316,6 +328,8 @@ fn sub_format(
 
 fn format(lsblk_dev: &LsblkDevice, cmds: &EnsuredCmds, fs_dump: &FSDump) -> bool {
     if let Some(ref children) = lsblk_dev.children {
+
+        // TODO: write an empty /etc/mtab to make mkfs happy
 
         let check = if let Some(ref check) = fs_dump.check {
             check
@@ -400,6 +414,8 @@ fn sfdisk_part(device: &Path, sfdisk_path: &str, fs_dump: &FSDump) -> FlashResul
     // TODO: configure partition type
 
     {
+        let start_block_mod = DEFAULT_PARTITION_ALIGNMENT * 1024 / DEF_BLOCK_SIZE as u64;
+
         if let Some(ref mut stdin) = sfdisk_cmd.stdin {
             debug!("Writing a new partition table to '{}'", device.display());
             let mut buffer: String = String::from("label: dos\n");
@@ -410,39 +426,42 @@ fn sfdisk_part(device: &Path, sfdisk_path: &str, fs_dump: &FSDump) -> FlashResul
                 device.display()
             );
 
-            buffer.push_str(&format!("size={},bootable,type=c\n", fs_dump.boot.blocks));
+            let mut start_block: u64 = DEFAULT_PARTITION_ALIGNMENT;
+            buffer.push_str(&format!("start={},size={},bootable,type=c\n", start_block, fs_dump.boot.blocks));
 
-            debug!(
-                "Writing resin-rootA as 'size={},type=83' to '{}'",
-                fs_dump.root_a.blocks,
-                device.display()
-            );
-            buffer.push_str(&format!("size={},type=83\n", fs_dump.root_a.blocks));
+            start_block += fs_dump.boot.blocks;
+            if (start_block % DEFAULT_PARTITION_ALIGNMENT) != 0 {
+                start_block = (start_block / DEFAULT_PARTITION_ALIGNMENT + 1) * DEFAULT_PARTITION_ALIGNMENT;
+            }
 
-            debug!(
-                "Writing resin-rootB as 'size={},type=83' to '{}'",
-                fs_dump.root_b.blocks,
-                device.display()
-            );
-            buffer.push_str(&format!("size={},type=83\n", fs_dump.root_b.blocks));
+            buffer.push_str(&format!("start={},size={},type=83\n", start_block, fs_dump.root_a.blocks));
 
-            // extended partition
-            debug!(
-                "Writing extended partition as 'type=5' to '{}'",
-                device.display()
-            );
-            buffer.push_str("type=5\n");
+            start_block += fs_dump.root_a.blocks;
+            if (start_block % DEFAULT_PARTITION_ALIGNMENT) != 0 {
+                start_block = (start_block / DEFAULT_PARTITION_ALIGNMENT + 1) * DEFAULT_PARTITION_ALIGNMENT;
+            }
 
-            debug!(
-                "Writing resin-state as 'size={},type=83' to '{}'",
-                fs_dump.state.blocks,
-                device.display()
-            );
+            buffer.push_str(&format!("start={},size={},type=83\n", start_block, fs_dump.root_b.blocks));
 
-            buffer.push_str(&format!("size={},type=83\n", fs_dump.state.blocks));
+            start_block += fs_dump.root_b.blocks;
+            if (start_block % DEFAULT_PARTITION_ALIGNMENT) != 0 {
+                start_block = (start_block / DEFAULT_PARTITION_ALIGNMENT + 1) * DEFAULT_PARTITION_ALIGNMENT;
+            }
 
-            debug!("Writing resin-state as 'type=83' to '{}'", device.display());
-            buffer.push_str(&format!("type=83"));
+
+            // TODO: make ext part type configurable
+            buffer.push_str(&format!("start={},type=f\n", start_block ));
+
+            start_block += DEFAULT_PARTITION_ALIGNMENT;
+
+            buffer.push_str(&format!("start={},size={},type=83\n", start_block, fs_dump.state.blocks));
+
+            start_block += fs_dump.state.blocks;
+            if (start_block % DEFAULT_PARTITION_ALIGNMENT) != 0 {
+                start_block = (start_block / DEFAULT_PARTITION_ALIGNMENT + 1) * DEFAULT_PARTITION_ALIGNMENT;
+            }
+
+            buffer.push_str(&format!("start={},type=83", start_block));
 
             debug!("writing partitioning as: \n{}", buffer);
 
