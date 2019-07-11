@@ -338,7 +338,7 @@ fn format(lsblk_dev: &LsblkDevice, cmds: &EnsuredCmds, fs_dump: &FSDump) -> bool
         while (part_idx < children.len()) && (part_idx < PART_NAME.len()) {
             if let Some(ref part_type) = children[dev_idx].parttype {
                 match part_type.as_ref() {
-                    "0xe" => {
+                    "0xc" => {
                         debug!("Formatting fat partition at index {}/{}", dev_idx, part_idx);
                         if !sub_format(&children[dev_idx].get_path(), PART_NAME[part_idx], cmds, true, fat_check) {
                             return false;
