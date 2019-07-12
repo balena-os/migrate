@@ -316,6 +316,7 @@ fn sub_format(
     debug!("calling {} with args {:?}", command, args);
     sync();
     let cmd_res = match Command::new(command)
+        .stdin(Stdio::inherit()) // test, test
         .stdout(Stdio::inherit())
         .stderr(Stdio::inherit())
         .args(&args)

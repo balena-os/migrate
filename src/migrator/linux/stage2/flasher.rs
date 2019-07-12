@@ -113,6 +113,8 @@ fn flash_gzip_internal(
             &format!("bs={}", DD_BLOCK_SIZE),
         ])
         .stdin(Stdio::piped())
+        .stdout(Stdio::inherit()) // test 
+        .stderr(Stdio::inherit())
         .spawn()
     {
         Ok(dd_child) => dd_child,
