@@ -25,7 +25,7 @@ use crate::{
             EnsuredCmds, EXT_FMT_CMD, FAT_FMT_CMD, LSBLK_CMD, PARTPROBE_CMD, SFDISK_CMD, TAR_CMD,
         },
         migrate_info::{LsblkDevice, LsblkInfo},
-        stage2::{mounts::Mounts, FlashResult},
+        stage2::{mounts::Mounts, scripted_exec::ScriptedExec, FlashResult},
     },
 };
 
@@ -56,11 +56,13 @@ pub(crate) fn write_balena_os(
     mounts: &mut Mounts,
     config: &Stage2Config,
     base_path: &Path,
+    executor: &mut ScriptedExec,
 ) -> FlashResult {
     // make sure we have allrequired commands
+
     if let CheckedImageType::FileSystems(ref fs_dump) = config.get_balena_image().image {
         let res = if let Ok(command) = cmds.get(SFDISK_CMD) {
-            sfdisk_part(device, command, fs_dump)
+            sfdisk_part(device, command, fs_dump, executor)
         } else {
             error!("write_balena_os: no partitioning command was found",);
             return FlashResult::FailRecoverable;
@@ -278,7 +280,8 @@ fn sub_format(
             "-F",
             "-F", // don't let anything get in our way
             // "-n",            // Pretend
-            "-e", "remount-ro", // "continue" | "remount-ro" | "panic"
+            "-e",
+            "remount-ro", // "continue" | "remount-ro" | "panic"
         ]); // Try remount-ro, anything but panic
 
         if direct_io {
@@ -386,7 +389,7 @@ fn format(lsblk_dev: &LsblkDevice, cmds: &EnsuredCmds, fs_dump: &FSDump) -> bool
         while (part_idx < children.len()) && (part_idx < PART_NAME.len()) {
             if let Some(ref part_type) = children[dev_idx].parttype {
                 match part_type.as_ref() {
-                    "0xc"|"0xe" => {
+                    "0xc" | "0xe" => {
                         debug!("Formatting fat partition at index {}/{}", dev_idx, part_idx);
                         if !sub_format(
                             &children[dev_idx].get_path(),
@@ -460,157 +463,131 @@ fn format(lsblk_dev: &LsblkDevice, cmds: &EnsuredCmds, fs_dump: &FSDump) -> bool
     }
 }
 
-fn sfdisk_part(device: &Path, sfdisk_path: &str, fs_dump: &FSDump) -> FlashResult {
-    let mut sfdisk_cmd = match Command::new(sfdisk_path)
-        .args(&["-f", &*device.to_string_lossy()])
-        .stderr(Stdio::piped())
-        .stdout(Stdio::piped())
-        .stdin(Stdio::piped())
-        .spawn()
-    {
-        Ok(child) => child,
-        Err(why) => {
-            error!(
-                "Failed to start command : '{}', error: {:?}",
-                sfdisk_path, why
-            );
-            return FlashResult::FailRecoverable;
-        }
-    };
+fn sfdisk_part(
+    device: &Path,
+    sfdisk_path: &str,
+    fs_dump: &FSDump,
+    executor: &mut ScriptedExec,
+) -> FlashResult {
 
     // TODO: configure partition type
 
-    {
-        let alignment_blocks: u64 = DEFAULT_PARTITION_ALIGNMENT_KIB * 1024 / DEF_BLOCK_SIZE as u64;
-        debug!(
-            "Alignment '{}'KiB, {} blocks",
-            DEFAULT_PARTITION_ALIGNMENT_KIB, alignment_blocks
-        );
+    let alignment_blocks: u64 = DEFAULT_PARTITION_ALIGNMENT_KIB * 1024 / DEF_BLOCK_SIZE as u64;
+    debug!(
+        "Alignment '{}'KiB, {} blocks",
+        DEFAULT_PARTITION_ALIGNMENT_KIB, alignment_blocks
+    );
 
-        if let Some(ref mut stdin) = sfdisk_cmd.stdin {
-            debug!("Writing a new partition table to '{}'", device.display());
-            let mut buffer: String = String::from("label: dos\n");
+    debug!("Writing a new partition table to '{}'", device.display());
+    let mut buffer: String = String::from("label: dos\n");
 
-            debug!(
-                "Writing resin-boot as 'size={},bootable,type=e' to '{}'",
-                fs_dump.boot.blocks,
-                device.display()
-            );
+    debug!(
+        "Writing resin-boot as 'size={},bootable,type=e' to '{}'",
+        fs_dump.boot.blocks,
+        device.display()
+    );
 
-            let mut start_block: u64 = alignment_blocks;
-            buffer.push_str(&format!(
-                "start={},size={},bootable,type=c\n",
-                start_block, fs_dump.boot.blocks
-            ));
+    let mut start_block: u64 = alignment_blocks;
+    buffer.push_str(&format!(
+        "start={},size={},bootable,type=c\n",
+        start_block, fs_dump.boot.blocks
+    ));
 
-            start_block += fs_dump.boot.blocks;
-            if (start_block % alignment_blocks) != 0 {
-                start_block = (start_block / alignment_blocks + 1) * alignment_blocks;
-            }
-
-            buffer.push_str(&format!(
-                "start={},size={},type=83\n",
-                start_block, fs_dump.root_a.blocks
-            ));
-
-            start_block += fs_dump.root_a.blocks;
-            if (start_block % alignment_blocks) != 0 {
-                start_block = (start_block / alignment_blocks + 1) * alignment_blocks;
-            }
-
-            buffer.push_str(&format!(
-                "start={},size={},type=83\n",
-                start_block, fs_dump.root_b.blocks
-            ));
-
-            start_block += fs_dump.root_b.blocks;
-            if (start_block % alignment_blocks) != 0 {
-                start_block = (start_block / alignment_blocks + 1) * alignment_blocks;
-            }
-
-            // TODO: make ext part type configurable
-            buffer.push_str(&format!("start={},type=f\n", start_block));
-
-            start_block += alignment_blocks;
-
-            buffer.push_str(&format!(
-                "start={},size={},type=83\n",
-                start_block, fs_dump.state.blocks
-            ));
-
-            // in dos extended partition at least 1 block offset is needed for the next extended entry
-            // so align to next and add an extra alignment block
-            start_block += fs_dump.state.blocks;
-            if (start_block % alignment_blocks) != 0 {
-                // TODO: clarify if this is right
-                start_block = (start_block / alignment_blocks + 2) * alignment_blocks;
-            } else {
-                start_block += alignment_blocks;
-            }
-
-            let max_data = if let Some(max_data) = fs_dump.max_data {
-                max_data
-            } else {
-                DEFAULT_MAX_DATA
-            };
-
-            if max_data {
-                buffer.push_str(&format!("start={},type=83", start_block));
-            } else {
-                buffer.push_str(&format!(
-                    "start={},size={},type=83",
-                    start_block, fs_dump.data.blocks
-                ));
-            }
-
-            debug!("writing partitioning as: \n{}", buffer);
-
-            let data = buffer.as_bytes();
-            let count = data.len();
-            match stdin.write(data) {
-                Ok(bytes_written) => {
-                    if bytes_written != count {
-                        error!(
-                            "Failed to write some bytes to command stdin: {}  != {}",
-                            bytes_written, count
-                        );
-                        return FlashResult::FailNonRecoverable;
-                    }
-                }
-                Err(why) => {
-                    error!("Failed to write to command stdin, error: {:?}", why);
-                    return FlashResult::FailNonRecoverable;
-                }
-            }
-        } else {
-            error!("partition: sfdisk stdin could not be found");
-            return FlashResult::FailRecoverable;
-        }
+    start_block += fs_dump.boot.blocks;
+    if (start_block % alignment_blocks) != 0 {
+        start_block = (start_block / alignment_blocks + 1) * alignment_blocks;
     }
 
-    debug!("done writing to sfdisk stdin - command should terminate now");
+    buffer.push_str(&format!(
+        "start={},size={},type=83\n",
+        start_block, fs_dump.root_a.blocks
+    ));
 
-    // TODO: wait with timeout, terminate
+    start_block += fs_dump.root_a.blocks;
+    if (start_block % alignment_blocks) != 0 {
+        start_block = (start_block / alignment_blocks + 1) * alignment_blocks;
+    }
 
-    let cmd_res = match sfdisk_cmd.wait_with_output() {
-        Ok(cmd_res) => cmd_res,
-        Err(why) => {
-            error!("failure waiting for sfdisk to terminate, error: {:?}", why);
-            return FlashResult::FailNonRecoverable;
-        }
+    buffer.push_str(&format!(
+        "start={},size={},type=83\n",
+        start_block, fs_dump.root_b.blocks
+    ));
+
+    start_block += fs_dump.root_b.blocks;
+    if (start_block % alignment_blocks) != 0 {
+        start_block = (start_block / alignment_blocks + 1) * alignment_blocks;
+    }
+
+    // TODO: make ext part type configurable
+    buffer.push_str(&format!("start={},type=f\n", start_block));
+
+    start_block += alignment_blocks;
+
+    buffer.push_str(&format!(
+        "start={},size={},type=83\n",
+        start_block, fs_dump.state.blocks
+    ));
+
+    // in dos extended partition at least 1 block offset is needed for the next extended entry
+    // so align to next and add an extra alignment block
+    start_block += fs_dump.state.blocks;
+    if (start_block % alignment_blocks) != 0 {
+        // TODO: clarify if this is right
+        start_block = (start_block / alignment_blocks + 2) * alignment_blocks;
+    } else {
+        start_block += alignment_blocks;
+    }
+
+    let max_data = if let Some(max_data) = fs_dump.max_data {
+        max_data
+    } else {
+        DEFAULT_MAX_DATA
     };
 
-    if !cmd_res.status.success() {
-        error!(
-            "sfdisk returned an error status: code: {:?}, stderr: {:?}",
-            cmd_res.status.code(),
-            str::from_utf8(&cmd_res.stderr)
-        );
-        return FlashResult::FailNonRecoverable;
+    if max_data {
+        buffer.push_str(&format!("start={},type=83", start_block));
+    } else {
+        buffer.push_str(&format!(
+            "start={},size={},type=83",
+            start_block, fs_dump.data.blocks
+        ));
     }
 
-    debug!("sfdisk stdout: {:?}", str::from_utf8(&cmd_res.stdout));
-    FlashResult::Ok
+    debug!("writing partitioning as: \n{}", buffer);
+
+    match executor.execute_with_stdin(
+        sfdisk_path,
+        &["-f", &*device.to_string_lossy()],
+        &buffer,
+        true,
+    ) {
+        Ok(cmd_res) => {
+            if let Some(cmd_res) = cmd_res {
+                if !cmd_res.status.success() {
+                    error!(
+                        "sfdisk returned an error status: code: {:?}, stderr: {:?}",
+                        cmd_res.status.code(),
+                        str::from_utf8(&cmd_res.stderr)
+                    );
+                    FlashResult::FailNonRecoverable
+                } else {
+                    debug!("sfdisk stdout: {:?}", str::from_utf8(&cmd_res.stdout));
+                    FlashResult::Ok
+                }
+            } else {
+                FlashResult::Ok
+            }
+        }
+        Err(why) => {
+            error!(
+                "Failed to partition: '{}', error{:?}",
+                device.display(),
+                why
+            );
+            // TODO: this might be overly optimistic
+            FlashResult::FailRecoverable
+        }
+    }
 }
 
 fn part_reread(

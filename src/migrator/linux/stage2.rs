@@ -35,6 +35,9 @@ mod fs_writer;
 
 mod flasher;
 
+pub(crate) mod scripted_exec;
+use scripted_exec::ScriptedExec;
+
 pub(crate) mod mounts;
 use mounts::Mounts;
 
@@ -563,6 +566,14 @@ impl<'a> Stage2 {
             Stage2::exit(&FailMode::Reboot)?;
         }
 
+        let mut executor = match ScriptedExec::new(self.config.is_scripted(), &self.cmds.borrow()) {
+            Ok(executor) => executor,
+            Err(why) => {
+                error!("Unable create scripted execution instance, {:?}", why);
+                return Err(MigError::displayed());
+            }
+        };
+
         match self.config.get_balena_image().image {
             CheckedImageType::Flasher(ref image_file) => {
                 // TODO: move some, if not most of this into flasher
@@ -633,6 +644,7 @@ impl<'a> Stage2 {
                     &mut self.mounts.borrow_mut(),
                     &self.config,
                     &base_path,
+                    &mut executor,
                 ) {
                     FlashResult::Ok => (),
                     FlashResult::FailNonRecoverable => {

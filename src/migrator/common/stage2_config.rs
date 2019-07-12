@@ -101,6 +101,8 @@ pub(crate) struct Stage2Config {
     device_type: DeviceType,
     // boot type
     boot_type: BootType,
+    // scripted execution of commands, just for debug hopefully
+    scripted: bool,
 }
 
 impl<'a> Stage2Config {
@@ -132,6 +134,10 @@ impl<'a> Stage2Config {
         ))?;
 
         Stage2Config::from_str(&config_str)
+    }
+
+    pub fn is_scripted(&self) -> bool {
+        self.scripted
     }
 
     pub fn is_log_console(&self) -> bool {
@@ -281,6 +287,7 @@ pub(crate) struct Stage2ConfigBuilder {
     boot_bckup: Optional<Vec<(String, String)>>,
     has_backup: Required<bool>,
     gzip_internal: Required<bool>,
+    scripted: Required<bool>,
     log_level: Required<String>,
     log_to: Optional<Stage2LogConfig>,
     log_console: Required<bool>,
@@ -300,6 +307,7 @@ impl<'a> Stage2ConfigBuilder {
             boot_bckup: Optional::new(None),
             has_backup: Required::new("has_backup", None),
             gzip_internal: Required::new("gzip_internal", Some(&true)),
+            scripted: Required::new("scripted", Some(&false)),
             log_level: Required::new("log_level", Some(&String::from("warn"))),
             log_to: Optional::new(None),
             log_console: Required::new("log_console", Some(&false)),
@@ -319,6 +327,7 @@ impl<'a> Stage2ConfigBuilder {
             boot_bckup: self.boot_bckup.get().clone(),
             has_backup: *self.has_backup.get()?,
             gzip_internal: *self.gzip_internal.get()?,
+            scripted: *self.scripted.get()?,
             log_level: self.log_level.get()?.clone(),
             log_to: self.log_to.get().clone(),
             log_console: self.log_console.get()?.clone(),
@@ -390,6 +399,10 @@ impl<'a> Stage2ConfigBuilder {
 
     pub fn set_gzip_internal(&mut self, val: bool) {
         self.gzip_internal.set(val);
+    }
+
+    pub fn set_scripted(&mut self, val: bool) {
+        self.scripted.set(val);
     }
 
     pub fn set_device_type(&mut self, dev_type: &DeviceType) {
