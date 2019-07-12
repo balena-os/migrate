@@ -463,7 +463,7 @@ fn format(lsblk_dev: &LsblkDevice, cmds: &EnsuredCmds, fs_dump: &FSDump) -> bool
 
 fn sfdisk_part(device: &Path, sfdisk_path: &str, fs_dump: &FSDump) -> FlashResult {
     let mut sfdisk_cmd = match Command::new(sfdisk_path)
-        .args(&["-f", &*device.to_string_lossy()])
+        .args(&["--wipe", "always", "-f", &*device.to_string_lossy()])
         .stderr(Stdio::piped())
         .stdout(Stdio::piped())
         .stdin(Stdio::piped())

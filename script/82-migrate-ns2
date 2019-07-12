@@ -8,6 +8,8 @@ PARTITION=${DEVICE}
 MKFSEXT4=/sbin/mkfs.ext4
 MKFSVFAT=/usr/sbin/mkfs.vfat
 SFDISK=/usr/sbin/sfdisk
+EXT4_OPTS="-O ^64bit -E lazy_itable_init=0,lazy_journal_init=0 -i 8192 -v -F -F -e remount-ro -D"
+
 
 migrate_enabled() {
 	return 0
@@ -22,14 +24,14 @@ migrate_run() {
     sleep 2
   done
 
-  ${SFDISK} -f ${DEVICE} << EOI
+  ${SFDISK} --wipe always ${DEVICE} << EOI
 label: dos
-size=81920,bootable,type=c
-size=638976,type=83
-size=638976,type=83
-type=5
-size=40960,type=83
-type=83
+start=8192,size=81920,bootable,type=c
+start=90112,size=638976,type=83
+start=729088,size=638976,type=83
+start=1368064,type=f
+start=1376256,size=40960,type=83
+start=1425408,size=2105344,type=83
 EOI
 
   # wait for partitions on /dev/sda to show up
@@ -39,11 +41,13 @@ EOI
     sleep 2
   done
 
+
   ${MKFSVFAT} -n resin-boot ${PARTITION}1
-  ${MKFSEXT4} -O ^64bit,^metadata_csum -F -L resin-rootA ${PARTITION}2
-  ${MKFSEXT4} -O ^64bit,^metadata_csum -F -L resin-rootB ${PARTITION}3
-  ${MKFSEXT4} -O ^64bit,^metadata_csum -F -L resin-state ${PARTITION}5
-  ${MKFSEXT4} -O ^64bit,^metadata_csum -F -L resin-data ${PARTITION}6
+
+  ${MKFSEXT4} ${EXT4_OPTS} -L resin-rootA ${PARTITION}2
+  ${MKFSEXT4} ${EXT4_OPTS} -L resin-rootB ${PARTITION}3
+  ${MKFSEXT4} ${EXT4_OPTS} -L resin-state ${PARTITION}5
+  ${MKFSEXT4} ${EXT4_OPTS} -L resin-data ${PARTITION}6
 
   echo "done partitioning, starting shell"
   sh

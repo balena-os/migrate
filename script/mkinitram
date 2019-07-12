@@ -1,0 +1,57 @@
+#!/bin/bash
+
+set -e
+
+CURR_DIR=$(pwd)
+
+if [[ $EUID -ne 0 ]]; then
+    echo "This script must be run as root"
+    exit 1
+fi
+
+if [ -n $1 ] ; then
+    SOURCE_INITRD="$(cd "$(dirname "$1")"; pwd)/$(basename "$1")"
+    echo "SOURCE_INITRD=${SOURCE_INITRD}"
+else
+    echo "no source was initramfs given"
+    exit 1
+fi
+
+if [ -n $2 ] ; then
+    TARGET_INITRD="$(cd "$(dirname "$2")"; pwd)/$(basename "$2")"
+    echo "TARGET_INITRD=${TARGET_INITRD}"
+else
+    echo "no target was initramfs given"
+    exit 1
+fi
+
+# TODO: create and use abs path for target
+
+PROJECT_ROOT="$(dirname $(cd "$(dirname "$0")"; pwd))"
+echo "PROJECT_ROOT=${PROJECT_ROOT}"
+
+if [ -z $3 ] ; then
+    RELEASE_DIR="${PROJECT_ROOT}/target/armv7-unknown-linux-gnueabihf/release"
+else
+    RELEASE_DIR=$3
+fi
+
+WORK_DIR=$(mktemp -d)
+
+echo "using working directory ${WORK_DIR}"
+
+gzip -c -d ${SOURCE_INITRD} | cpio -idmu -D ${WORK_DIR}
+
+rm -rf ${WORK_DIR}/init.d/8*
+rm -rf ${WORK_DIR}/init.d/9*
+
+cp ${PROJECT_ROOT}/script/82-migrate ${WORK_DIR}/init.d
+cp ${RELEASE_DIR}/balena-stage2 ${WORK_DIR}/bin
+
+cd ${WORK_DIR}
+
+find . | cpio --quiet -o -H newc | gzip -c > ${TARGET_INITRD}
+
+cd ${CURR_DIR}
+
+rm -rf ${WORK_DIR}
