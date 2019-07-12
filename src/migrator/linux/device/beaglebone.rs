@@ -145,13 +145,6 @@ impl Device for BeagleboneGreen {
         config: &Config,
         s2_cfg: &mut Stage2ConfigBuilder,
     ) -> Result<(), MigError> {
-        // TODO: remove when XM is debugged
-
-        if let CheckedImageType::FileSystems(ref mut fs_dump) = dev_info.image_file.image {
-            fs_dump.mkfs_direct = Some(true);
-            fs_dump.max_data = Some(false);
-        }
-
         self.boot_manager.setup(cmds, dev_info, config, s2_cfg)
     }
 

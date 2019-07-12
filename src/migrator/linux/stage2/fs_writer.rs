@@ -278,8 +278,7 @@ fn sub_format(
             "-F",
             "-F", // don't let anything get in our way
             // "-n",            // Pretend
-            "-e",
-            "continue",
+            "-e", "remount-ro", // "continue" | "remount-ro" | "panic"
         ]); // Try remount-ro, anything but panic
 
         if direct_io {
