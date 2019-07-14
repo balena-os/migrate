@@ -12,7 +12,7 @@ EXT4_OPTS="-O ^64bit -E lazy_itable_init=0,lazy_journal_init=0 -i 8192 -v -F -F 
 TMP_MOUNT=/migrate_tmp/mount
 
 scripted_enabled() {
-	return 0
+	return 1
 }
 
 scripted_run() {
