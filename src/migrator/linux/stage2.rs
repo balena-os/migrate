@@ -563,6 +563,11 @@ impl<'a> Stage2 {
             Stage2::exit(&FailMode::Reboot)?;
         }
 
+
+        // TODO: debug fs_writer crash
+        // Exit in Rescue Shell  Mode to call external script
+        // Call external script
+
         match self.config.get_balena_image().image {
             CheckedImageType::Flasher(ref image_file) => {
                 // TODO: move some, if not most of this into flasher

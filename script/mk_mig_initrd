@@ -46,6 +46,7 @@ rm -rf ${WORK_DIR}/init.d/8*
 rm -rf ${WORK_DIR}/init.d/9*
 
 cp ${PROJECT_ROOT}/script/82-migrate ${WORK_DIR}/init.d
+cp ${PROJECT_ROOT}/script/85-scripted ${WORK_DIR}/init.d
 cp ${RELEASE_DIR}/balena-stage2 ${WORK_DIR}/bin
 
 cd ${WORK_DIR}

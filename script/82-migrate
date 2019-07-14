@@ -3,7 +3,7 @@
 # Licensed on MIT
 
 migrate_enabled() {
-	return 0
+	return 1
 }
 
 migrate_run() {

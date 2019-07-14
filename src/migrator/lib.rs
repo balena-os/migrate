@@ -2,7 +2,7 @@ use log::error;
 use nix::unistd::sync;
 use std::panic;
 
-use mod_logger::{Level, Logger};
+use mod_logger::{Logger};
 
 pub mod common;
 
@@ -73,10 +73,3 @@ pub fn stage2() -> Result<(), MigError> {
     Ok(())
 }
 
-pub fn test() -> Result<(), MigError> {
-    Logger::set_default_level(&Level::Trace);
-    /*    ensure_cmds(&[LSBLK_CMD, FDISK_CMD], &[])?;
-        linux_common::migrate_info::DiskInfo::new(BootType::GRUB, &Path::new("."), None)?;
-    */
-    Ok(())
-}
