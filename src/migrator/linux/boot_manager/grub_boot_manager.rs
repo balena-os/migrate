@@ -298,6 +298,11 @@ impl<'a> BootManager for GrubBootManager {
             boot_path.fs_type
         ));
 
+        if let Some(ref kernel_opts) = mig_info.kernel_opts {
+            linux.push(' ');
+            linux.push_str(kernel_opts);
+        }
+
         let mut grub_cfg = String::from(GRUB_CFG_TEMPLATE);
 
         grub_cfg = grub_cfg.replace("__PART_MOD__", &part_mod);

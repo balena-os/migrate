@@ -74,7 +74,7 @@ impl BootManager for RaspiBootManager {
     fn setup(
         &self,
         cmds: &EnsuredCmds,
-        _mig_info: &MigrateInfo,
+        mig_info: &MigrateInfo,
         config: &Config,
         s2_cfg: &mut Stage2ConfigBuilder,
     ) -> Result<(), MigError> {
@@ -288,6 +288,11 @@ impl BootManager for RaspiBootManager {
                 if !mod_cmdline.contains(rep) {
                     mod_cmdline.push(' ');
                     mod_cmdline.push_str(rep);
+                }
+
+                if let Some(ref kernel_opts) = mig_info.kernel_opts {
+                    mod_cmdline.push(' ');
+                    mod_cmdline.push_str(kernel_opts);
                 }
 
                 mod_cmdline.push('\n');

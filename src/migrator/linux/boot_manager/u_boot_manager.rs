@@ -46,7 +46,7 @@ loadxrd=echo debug: [__INITRD_PATH__] ... ; load mmc __DRIVE__:__PARTITION__ ${r
 check_uboot_overlays=if test -n ${enable_uboot_overlays}; then setenv enable_uboot_overlays ;fi;
 loadall=run check_uboot_overlays; run loadximage; run loadxrd; run loadxfdt;
 
-mmcargs=setenv bootargs console=tty0 console=${console} ${optargs} ${cape_disable} ${cape_enable} root=__ROOT_DEV__ rootfstype=__ROOT_FSTYPE__ ${cmdline}
+mmcargs=setenv bootargs console=tty0 console=${console} ${optargs} ${cape_disable} ${cape_enable} root=__ROOT_DEV__ rootfstype=__ROOT_FSTYPE__ __MISC_OPTS__ ${cmdline}
 
 uenvcmd=run loadall; run mmcargs; echo debug: [${bootargs}] ... ; echo debug: [bootz ${loadaddr} ${rdaddr}:${rdsize} ${fdtaddr}] ... ; bootz ${loadaddr} ${rdaddr}:${rdsize} ${fdtaddr};
 "###;
@@ -351,7 +351,7 @@ impl<'a> BootManager for UBootManager {
     fn setup(
         &self,
         cmds: &EnsuredCmds,
-        _mig_info: &MigrateInfo,
+        mig_info: &MigrateInfo,
         config: &Config,
         s2_cfg: &mut Stage2ConfigBuilder,
     ) -> Result<(), MigError> {
@@ -530,6 +530,7 @@ impl<'a> BootManager for UBootManager {
                 (kernel_path, initrd_path, dtb_path)
             };
 
+
         let mut uenv_text = String::from(BALENA_FILE_TAG);
         uenv_text.push_str(UENV_TXT);
         uenv_text = uenv_text.replace("__KERNEL_PATH__", &kernel_path.to_string_lossy());
@@ -539,6 +540,12 @@ impl<'a> BootManager for UBootManager {
         uenv_text = uenv_text.replace("__PARTITION__", &drive_num.1);
         uenv_text = uenv_text.replace("__ROOT_DEV__", &bootmgr_path.get_kernel_cmd());
         uenv_text = uenv_text.replace("__ROOT_FSTYPE__", &bootmgr_path.fs_type);
+        uenv_text = uenv_text.replace("__MISC_OPTS__", if let Some(ref kernel_opts) = mig_info.kernel_opts {
+            kernel_opts
+        } else {
+            ""
+        });
+
 
         debug!("writing uEnv.txt as:\n {}", uenv_text);
 

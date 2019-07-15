@@ -13,6 +13,7 @@ pub(crate) struct DebugConfig {
     force_flash_device: Option<PathBuf>,
     // pretend mode, stop after unmounting former root
     no_flash: Option<bool>,
+    kernel_opts: Option<String>,
 }
 
 impl<'a> DebugConfig {
@@ -22,6 +23,7 @@ impl<'a> DebugConfig {
             force_flash_device: None,
             // TODO: default to false when project is mature
             no_flash: None,
+            kernel_opts: None,
         }
     }
 
@@ -50,6 +52,15 @@ impl<'a> DebugConfig {
             None
         }
     }
+
+    pub fn get_kernel_opts(&self) -> Option<String> {
+        if let Some(ref val) = self.kernel_opts {
+            Some(val.clone())
+        } else {
+            None
+        }
+    }
+
 
     pub fn check(&self, _mig_mode: &MigMode) -> Result<(), MigError> {
         // TODO: implement
