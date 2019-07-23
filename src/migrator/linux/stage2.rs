@@ -21,7 +21,7 @@ use crate::{
     defs::{FailMode, BACKUP_FILE, SYSTEM_CONNECTIONS_DIR},
     linux::{
         device,
-        ensured_cmds::{EnsuredCmds, REBOOT_CMD},
+        ensured_cmds::{EnsuredCmds, FAT_CHK_CMD, REBOOT_CMD, UDEVADM_CMD},
         linux_common::get_mem_info,
         linux_defs::{MIGRATE_LOG_FILE, STAGE2_MEM_THRESHOLD},
     },
@@ -38,7 +38,6 @@ mod flasher;
 pub(crate) mod mounts;
 use mounts::Mounts;
 
-use crate::linux::ensured_cmds::UDEVADM_CMD;
 use std::cell::RefCell;
 
 const REBOOT_DELAY: u64 = 3;
@@ -55,7 +54,7 @@ const DATA_MNT_DIR: &str = "mnt_data";
 
 const DD_BLOCK_SIZE: usize = 4194304;
 
-const MIG_REQUIRED_CMDS: &[&str] = &[REBOOT_CMD, UDEVADM_CMD];
+const MIG_REQUIRED_CMDS: &[&str] = &[REBOOT_CMD, UDEVADM_CMD, FAT_CHK_CMD];
 
 const BALENA_IMAGE_FILE: &str = "balenaOS.img.gz";
 const BALENA_CONFIG_FILE: &str = "config.json";
@@ -159,7 +158,7 @@ impl<'a> Stage2 {
         Logger::set_default_level(&stage2_cfg.get_log_level());
 
         // Mount all remaining drives - work and log
-        match mounts.mount_from_config(&stage2_cfg) {
+        match mounts.mount_from_config(&stage2_cfg, &cmds) {
             Ok(_) => {
                 info!("mounted all configured drives");
             }
@@ -562,7 +561,6 @@ impl<'a> Stage2 {
             info!("Not flashing due to config parameter no_flash");
             Stage2::exit(&FailMode::Reboot)?;
         }
-
 
         // TODO: debug fs_writer crash
         // Exit in Rescue Shell  Mode to call external script

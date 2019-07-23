@@ -18,6 +18,17 @@ use crate::{
 
 const SUPPORTED_OSSES: [&str; 2] = ["Ubuntu 18.04.2 LTS", "Ubuntu 14.04.1 LTS"];
 
+// add some of this to balena bb XM command line:
+// mtdparts=omap2-nand.0:512k(spl),1920k(u-boot),128k(u-boot-env),128k(dtb),6m(kernel),-(rootfs)
+// mpurate=auto
+// buddy=none
+// camera=none
+// vram=12M
+// omapfb.mode=dvi:640x480MR-16@60 omapdss.def_disp=dvi
+// rootwait
+
+const BBXM_KOPTS: &str ="mtdparts=omap2-nand.0:512k(spl),1920k(u-boot),128k(u-boot-env),128k(dtb),6m(kernel),-(rootfs) mpurate=auto buddy=none camera=none vram=12M omapfb.mode=dvi:640x480MR-16@60 omapdss.def_disp=dvi";
+
 // Supported models
 // TI OMAP3 BeagleBoard xM
 const BB_MODEL_REGEX: &str = r#"^((\S+\s+)*\S+)\s+Beagle(Bone|Board)\s+(\S+)$"#;
@@ -242,6 +253,7 @@ pub(crate) struct BeagleboardXM {
 
 impl BeagleboardXM {
     // this is used in stage1
+
     fn from_config(
         cmds: &mut EnsuredCmds,
         mig_info: &MigrateInfo,
@@ -304,17 +316,26 @@ impl<'a> Device for BeagleboardXM {
     fn setup(
         &self,
         cmds: &EnsuredCmds,
-        dev_info: &mut MigrateInfo,
+        mig_info: &mut MigrateInfo,
         config: &Config,
         s2_cfg: &mut Stage2ConfigBuilder,
     ) -> Result<(), MigError> {
-        if let CheckedImageType::FileSystems(ref mut fs_dump) = dev_info.image_file.image {
+        mig_info.kernel_opts = if let Some(ref kopts) = mig_info.kernel_opts {
+            let mut new_opts: String = kopts.clone();
+            new_opts.push(' ');
+            new_opts.push_str(BBXM_KOPTS);
+            Some(new_opts)
+        } else {
+            Some(String::from(BBXM_KOPTS))
+        };
+
+        if let CheckedImageType::FileSystems(ref mut fs_dump) = mig_info.image_file.image {
             fs_dump.mkfs_direct = Some(true);
             fs_dump.max_data = Some(false);
         }
         //dev_info.image_file.image.
 
-        self.boot_manager.setup(cmds, dev_info, config, s2_cfg)
+        self.boot_manager.setup(cmds, mig_info, config, s2_cfg)
     }
 
     fn get_boot_device(&self) -> PathInfo {

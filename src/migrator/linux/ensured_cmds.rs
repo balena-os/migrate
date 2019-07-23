@@ -30,6 +30,8 @@ pub const UNAME_CMD: &str = "uname";
 pub const EXT_FMT_CMD: &str = "mkfs.ext4";
 pub const FAT_FMT_CMD: &str = "mkfs.vfat";
 
+pub const FAT_CHK_CMD: &str = "fsck.vfat";
+
 #[derive(Debug)]
 pub(crate) struct EnsuredCmds {
     cmd_table: HashMap<String, String>,

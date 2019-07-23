@@ -2,7 +2,7 @@ use log::error;
 use nix::unistd::sync;
 use std::panic;
 
-use mod_logger::{Logger};
+use mod_logger::Logger;
 
 pub mod common;
 
@@ -72,4 +72,3 @@ pub fn stage2() -> Result<(), MigError> {
 
     Ok(())
 }
-

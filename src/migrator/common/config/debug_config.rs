@@ -61,7 +61,6 @@ impl<'a> DebugConfig {
         }
     }
 
-
     pub fn check(&self, _mig_mode: &MigMode) -> Result<(), MigError> {
         // TODO: implement
         Ok(())

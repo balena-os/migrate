@@ -84,7 +84,7 @@ pub(crate) fn write_balena_os(
 
             if format(&lsblk_dev, cmds, fs_dump) {
                 // TODO: need partprobe ?
-                if let Err(why) = mounts.mount_balena(true) {
+                if let Err(why) = mounts.mount_balena(true, cmds) {
                     error!(
                         "write_balena_os: failed mount balena partitions, error: {:?}",
                         why
@@ -278,7 +278,8 @@ fn sub_format(
             "-F",
             "-F", // don't let anything get in our way
             // "-n",            // Pretend
-            "-e", "remount-ro", // "continue" | "remount-ro" | "panic"
+            "-e",
+            "remount-ro", // "continue" | "remount-ro" | "panic"
         ]); // Try remount-ro, anything but panic
 
         if direct_io {
@@ -387,7 +388,7 @@ fn format(lsblk_dev: &LsblkDevice, cmds: &EnsuredCmds, fs_dump: &FSDump) -> bool
         while (part_idx < children.len()) && (part_idx < PART_NAME.len()) {
             if let Some(ref part_type) = children[dev_idx].parttype {
                 match part_type.as_ref() {
-                    "0xc"|"0xe" => {
+                    "0xc" | "0xe" => {
                         debug!("Formatting fat partition at index {}/{}", dev_idx, part_idx);
                         if !sub_format(
                             &children[dev_idx].get_path(),

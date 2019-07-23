@@ -354,7 +354,6 @@ impl MigrateInfo {
             }
         }
 
-
         let result = MigrateInfo {
             os_name: get_os_name()?,
             os_arch,

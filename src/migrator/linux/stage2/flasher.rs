@@ -69,7 +69,7 @@ pub(crate) fn flash_balena_os(
 
         let _res = cmds.call(UDEVADM_CMD, UDEVADM_PARAMS, true);
 
-        if let Err(why) = mounts.mount_balena(false) {
+        if let Err(why) = mounts.mount_balena(false, cmds) {
             error!("Failed to mount balena partitions, error: {:?}", why);
             return FlashResult::FailNonRecoverable;
         }

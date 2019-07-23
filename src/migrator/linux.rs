@@ -354,7 +354,6 @@ impl<'a> LinuxMigrator {
             }
         }
 
-
         trace!("device setup");
 
         // We need this before s2 config as it might still modify migrate_info
@@ -433,7 +432,6 @@ impl<'a> LinuxMigrator {
 
         self.stage2_config
             .set_gzip_internal(self.config.migrate.is_gzip_internal());
-
 
         trace!("write stage 2 config");
         let s2_path = path_append(&boot_device.mountpoint, STAGE2_CFG_FILE);

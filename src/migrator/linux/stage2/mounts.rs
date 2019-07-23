@@ -2,6 +2,7 @@ use failure::ResultExt;
 use log::{debug, error, info, trace, warn};
 use std::fs::create_dir_all;
 use std::path::{Path, PathBuf};
+use std::str;
 use std::thread;
 use std::time::Duration;
 
@@ -19,7 +20,7 @@ use crate::{
         BALENA_STATE_FSTYPE, BALENA_STATE_PART, DISK_BY_LABEL_PATH, STAGE2_CFG_FILE,
     },
     linux::{
-        ensured_cmds::{EnsuredCmds, UDEVADM_CMD},
+        ensured_cmds::{EnsuredCmds, FAT_CHK_CMD, UDEVADM_CMD},
         linux_common::{
             drive_from_partition, drive_to_partition, get_kernel_root_info, to_std_device_path,
         },
@@ -137,7 +138,7 @@ impl<'a> Mounts {
             }
 
             for fstype in &fstypes {
-                match Mounts::mount(BOOTFS_DIR, &kernel_root_device, fstype) {
+                match Mounts::mount(BOOTFS_DIR, &kernel_root_device, fstype, cmds) {
                     Ok(boot_mountpoint) => {
                         let stage2_config = path_append(&boot_mountpoint, STAGE2_CFG_FILE);
                         if file_exists(&stage2_config) {
@@ -218,7 +219,7 @@ impl<'a> Mounts {
                                     fstype
                                 );
 
-                                match Mounts::mount(BOOTFS_DIR, &device, &fstype) {
+                                match Mounts::mount(BOOTFS_DIR, &device, &fstype, cmds) {
                                     Ok(boot_mountpoint) => {
                                         let stage2_config =
                                             path_append(&boot_mountpoint, STAGE2_CFG_FILE);
@@ -341,13 +342,17 @@ impl<'a> Mounts {
         }
     }
 
-    pub fn mount_from_config(&mut self, stage2_config: &Stage2Config) -> Result<(), MigError> {
+    pub fn mount_from_config(
+        &mut self,
+        stage2_config: &Stage2Config,
+        cmds: &EnsuredCmds,
+    ) -> Result<(), MigError> {
         trace!("mount_all: entered");
 
         // TODO: ensure nothing is mounted twice, eg: work_mount == log_mount
 
         if let Some((log_dev, log_fs)) = stage2_config.get_log_device() {
-            self.log_path = match Mounts::mount(LOGFS_DIR, log_dev, log_fs) {
+            self.log_path = match Mounts::mount(LOGFS_DIR, log_dev, log_fs, cmds) {
                 Ok(mountpoint) => Some(mountpoint),
                 Err(why) => {
                     warn!(
@@ -374,7 +379,7 @@ impl<'a> Mounts {
                 debug!("Work mountpoint is a mount: '{}'", device.display());
                 // TODO: make all mounts retry with timeout
                 if self.boot_part != device {
-                    match Mounts::mount(WORKFS_DIR, &device, mount_cfg.get_fstype()) {
+                    match Mounts::mount(WORKFS_DIR, &device, mount_cfg.get_fstype(), cmds) {
                         Ok(mountpoint) => {
                             match drive_from_partition(&device) {
                                 Ok(drive) => {
@@ -466,24 +471,25 @@ impl<'a> Mounts {
         }
     }
 
-    pub fn mount_balena(&mut self, mount_all: bool) -> Result<bool, MigError> {
+    pub fn mount_balena(&mut self, mount_all: bool, cmds: &EnsuredCmds) -> Result<bool, MigError> {
         let mut parts_found = true;
         let mut part_label = path_append(DISK_BY_LABEL_PATH, BALENA_BOOT_PART);
         if !file_exists(&part_label) {
             part_label = drive_to_partition(&self.flash_device, 1)?;
         }
 
-        self.balena_boot_mp = match Mounts::mount(BOOT_MNT_DIR, &part_label, BALENA_BOOT_FSTYPE) {
-            Ok(mountpoint) => Some(mountpoint),
-            Err(why) => {
-                error!(
-                    "Failed to mount balena device: '{}', error: {:?}",
-                    part_label.display(),
-                    why
-                );
-                return Err(MigError::displayed());
-            }
-        };
+        self.balena_boot_mp =
+            match Mounts::mount(BOOT_MNT_DIR, &part_label, BALENA_BOOT_FSTYPE, cmds) {
+                Ok(mountpoint) => Some(mountpoint),
+                Err(why) => {
+                    error!(
+                        "Failed to mount balena device: '{}', error: {:?}",
+                        part_label.display(),
+                        why
+                    );
+                    return Err(MigError::displayed());
+                }
+            };
 
         let mut part_label = path_append(DISK_BY_LABEL_PATH, BALENA_ROOTA_PART);
         if !file_exists(&part_label) {
@@ -492,7 +498,7 @@ impl<'a> Mounts {
 
         if mount_all {
             self.balena_root_a_mp =
-                match Mounts::mount(ROOTA_MNT_DIR, &part_label, BALENA_ROOTA_FSTYPE) {
+                match Mounts::mount(ROOTA_MNT_DIR, &part_label, BALENA_ROOTA_FSTYPE, cmds) {
                     Ok(mountpoint) => Some(mountpoint),
                     Err(why) => {
                         error!(
@@ -520,7 +526,7 @@ impl<'a> Mounts {
 
         if mount_all {
             self.balena_root_b_mp =
-                match Mounts::mount(ROOTB_MNT_DIR, &part_label, BALENA_ROOTB_FSTYPE) {
+                match Mounts::mount(ROOTB_MNT_DIR, &part_label, BALENA_ROOTB_FSTYPE, cmds) {
                     Ok(mountpoint) => Some(mountpoint),
                     Err(why) => {
                         error!(
@@ -548,7 +554,7 @@ impl<'a> Mounts {
 
         if mount_all {
             self.balena_state_mp =
-                match Mounts::mount(STATE_MNT_DIR, &part_label, BALENA_STATE_FSTYPE) {
+                match Mounts::mount(STATE_MNT_DIR, &part_label, BALENA_STATE_FSTYPE, cmds) {
                     Ok(mountpoint) => Some(mountpoint),
                     Err(why) => {
                         error!(
@@ -574,23 +580,24 @@ impl<'a> Mounts {
             part_label = drive_to_partition(&self.flash_device, 6)?;
         }
 
-        self.balena_data_mp = match Mounts::mount(DATA_MNT_DIR, &part_label, BALENA_DATA_FSTYPE) {
-            Ok(mountpoint) => Some(mountpoint),
-            Err(why) => {
-                error!(
-                    "Failed to mount balena data device: '{}', error: {:?}",
-                    part_label.display(),
-                    why
-                );
+        self.balena_data_mp =
+            match Mounts::mount(DATA_MNT_DIR, &part_label, BALENA_DATA_FSTYPE, cmds) {
+                Ok(mountpoint) => Some(mountpoint),
+                Err(why) => {
+                    error!(
+                        "Failed to mount balena data device: '{}', error: {:?}",
+                        part_label.display(),
+                        why
+                    );
 
-                if mount_all {
-                    return Err(MigError::displayed());
-                } else {
-                    parts_found = false;
-                    None
+                    if mount_all {
+                        return Err(MigError::displayed());
+                    } else {
+                        parts_found = false;
+                        None
+                    }
                 }
-            }
-        };
+            };
 
         Ok(parts_found)
     }
@@ -675,6 +682,7 @@ impl<'a> Mounts {
         dir: P1,
         device: P2,
         fstype: &str,
+        cmds: &EnsuredCmds,
     ) -> Result<PathBuf, MigError> {
         // TODO: retry with delay
         let device = device.as_ref();
@@ -705,6 +713,20 @@ impl<'a> Mounts {
                     mountpoint.display(),
                     fstype
                 );
+
+                if fstype == "vfat" {
+                    debug!("checking fat file system on '{}'", device.display());
+                    let cmd_res =
+                        cmds.call(FAT_CHK_CMD, &["-a", &device.to_string_lossy()], true)?;
+                    if !cmd_res.status.success() {
+                        warn!(
+                            "Failed to check file system '{}': {} ",
+                            device.display(),
+                            cmd_res.stderr
+                        );
+                    }
+                }
+
                 mount(
                     Some(&device),
                     &mountpoint,

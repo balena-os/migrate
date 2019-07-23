@@ -530,7 +530,6 @@ impl<'a> BootManager for UBootManager {
                 (kernel_path, initrd_path, dtb_path)
             };
 
-
         let mut uenv_text = String::from(BALENA_FILE_TAG);
         uenv_text.push_str(UENV_TXT);
         uenv_text = uenv_text.replace("__KERNEL_PATH__", &kernel_path.to_string_lossy());
@@ -540,12 +539,14 @@ impl<'a> BootManager for UBootManager {
         uenv_text = uenv_text.replace("__PARTITION__", &drive_num.1);
         uenv_text = uenv_text.replace("__ROOT_DEV__", &bootmgr_path.get_kernel_cmd());
         uenv_text = uenv_text.replace("__ROOT_FSTYPE__", &bootmgr_path.fs_type);
-        uenv_text = uenv_text.replace("__MISC_OPTS__", if let Some(ref kernel_opts) = mig_info.kernel_opts {
-            kernel_opts
-        } else {
-            ""
-        });
-
+        uenv_text = uenv_text.replace(
+            "__MISC_OPTS__",
+            if let Some(ref kernel_opts) = mig_info.kernel_opts {
+                kernel_opts
+            } else {
+                ""
+            },
+        );
 
         debug!("writing uEnv.txt as:\n {}", uenv_text);
 
