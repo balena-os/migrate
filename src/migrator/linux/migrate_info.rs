@@ -48,7 +48,6 @@ pub(crate) struct MigrateInfo {
     pub kernel_file: FileInfo,
     pub initrd_file: FileInfo,
     pub dtb_file: Option<FileInfo>,
-    pub kernel_opts: Option<String>,
 }
 
 // TODO: /etc path just in case
@@ -367,7 +366,6 @@ impl MigrateInfo {
             nwmgr_files,
             config_file,
             wifis,
-            kernel_opts: config.debug.get_kernel_opts(),
         };
 
         debug!("Diskinfo: {:?}", result);

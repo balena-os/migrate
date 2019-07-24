@@ -118,7 +118,15 @@ impl<'a> Device for IntelNuc {
         s2_cfg: &mut Stage2ConfigBuilder,
     ) -> Result<(), MigError> {
         trace!("setup: entered");
-        self.boot_manager.setup(cmds, dev_info, config, s2_cfg)
+
+        let kernel_opts = if let Some(ref kernel_opts) = config.debug.get_kernel_opts() {
+            kernel_opts.clone()
+        } else {
+            String::from("")
+        };
+
+        self.boot_manager
+            .setup(cmds, dev_info, config, s2_cfg, &kernel_opts)
     }
 
     fn restore_boot(&self, mounts: &Mounts, config: &Stage2Config) -> Result<(), MigError> {

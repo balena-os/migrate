@@ -42,11 +42,16 @@ echo "using working directory ${WORK_DIR}"
 
 gzip -c -d ${SOURCE_INITRD} | cpio -idmu -D ${WORK_DIR}
 
+
+echo "Removing init.d scripts 8* 9*"
 rm -rf ${WORK_DIR}/init.d/8*
 rm -rf ${WORK_DIR}/init.d/9*
 
+echo "copying ${PROJECT_ROOT}/script/82-migrate to init.d"
 cp ${PROJECT_ROOT}/script/82-migrate ${WORK_DIR}/init.d
+echo "copying ${PROJECT_ROOT}/script/85-scripted to init.d"
 cp ${PROJECT_ROOT}/script/85-scripted ${WORK_DIR}/init.d
+echo "copying ${RELEASE_DIR}/balena-stage2 to bin"
 cp ${RELEASE_DIR}/balena-stage2 ${WORK_DIR}/bin
 
 cd ${WORK_DIR}

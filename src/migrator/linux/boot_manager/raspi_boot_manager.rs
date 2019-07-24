@@ -77,6 +77,7 @@ impl BootManager for RaspiBootManager {
         mig_info: &MigrateInfo,
         config: &Config,
         s2_cfg: &mut Stage2ConfigBuilder,
+        kernel_opts: &str,
     ) -> Result<(), MigError> {
         trace!("setup: entered with type: RaspberryPi3",);
 
@@ -290,7 +291,7 @@ impl BootManager for RaspiBootManager {
                     mod_cmdline.push_str(rep);
                 }
 
-                if let Some(ref kernel_opts) = mig_info.kernel_opts {
+                if !kernel_opts.is_empty() {
                     mod_cmdline.push(' ');
                     mod_cmdline.push_str(kernel_opts);
                 }

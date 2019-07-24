@@ -16,6 +16,7 @@ use crate::{
         EnsuredCmds, MigrateInfo,
     },
 };
+use std::net::ToSocketAddrs;
 
 const RPI_MODEL_REGEX: &str = r#"^Raspberry\s+Pi\s+(\S+)\s+Model\s+(.*)$"#;
 
@@ -116,7 +117,14 @@ impl<'a> Device for RaspberryPi3 {
         config: &Config,
         s2_cfg: &mut Stage2ConfigBuilder,
     ) -> Result<(), MigError> {
-        self.boot_manager.setup(cmds, dev_info, config, s2_cfg)
+        let kernel_opts = if let Some(ref kernel_opts) = config.debug.get_kernel_opts() {
+            kernel_opts.clone()
+        } else {
+            String::from("")
+        };
+
+        self.boot_manager
+            .setup(cmds, dev_info, config, s2_cfg, &kernel_opts)
     }
 
     fn restore_boot(&self, mounts: &Mounts, config: &Stage2Config) -> Result<(), MigError> {

@@ -25,6 +25,8 @@ pub(crate) fn from_boot_type(boot_type: &BootType) -> Box<BootManager> {
     }
 }
 
+// TODO: support configured / device specific command line options
+
 pub(crate) trait BootManager {
     fn get_boot_type(&self) -> BootType;
     fn can_migrate(
@@ -40,6 +42,7 @@ pub(crate) trait BootManager {
         mig_info: &MigrateInfo,
         config: &Config,
         s2_cfg: &mut Stage2ConfigBuilder,
+        kernel_opts: &str,
     ) -> Result<(), MigError>;
 
     fn restore(&self, mounts: &Mounts, config: &Stage2Config) -> Result<(), MigError>;
@@ -84,6 +87,7 @@ impl BootManager for EfiBootManager {
         _dev_info: &MigrateInfo,
         _config: &Config,
         _s2_cfg: &mut Stage2ConfigBuilder,
+        _kernel_opts: &str,
     ) -> Result<(), MigError> {
         Err(MigError::from(MigErrorKind::NotImpl))
     }

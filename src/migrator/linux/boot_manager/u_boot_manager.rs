@@ -354,6 +354,7 @@ impl<'a> BootManager for UBootManager {
         mig_info: &MigrateInfo,
         config: &Config,
         s2_cfg: &mut Stage2ConfigBuilder,
+        kernel_opts: &str,
     ) -> Result<(), MigError> {
         // **********************************************************************
         // ** read drive number & partition number from boot device
@@ -539,14 +540,7 @@ impl<'a> BootManager for UBootManager {
         uenv_text = uenv_text.replace("__PARTITION__", &drive_num.1);
         uenv_text = uenv_text.replace("__ROOT_DEV__", &bootmgr_path.get_kernel_cmd());
         uenv_text = uenv_text.replace("__ROOT_FSTYPE__", &bootmgr_path.fs_type);
-        uenv_text = uenv_text.replace(
-            "__MISC_OPTS__",
-            if let Some(ref kernel_opts) = mig_info.kernel_opts {
-                kernel_opts
-            } else {
-                ""
-            },
-        );
+        uenv_text = uenv_text.replace("__MISC_OPTS__", kernel_opts);
 
         debug!("writing uEnv.txt as:\n {}", uenv_text);
 

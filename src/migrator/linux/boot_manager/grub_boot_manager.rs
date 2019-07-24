@@ -191,6 +191,7 @@ impl<'a> BootManager for GrubBootManager {
         mig_info: &MigrateInfo,
         _config: &Config,
         _s2_cfg: &mut Stage2ConfigBuilder,
+        kernel_opts: &str,
     ) -> Result<(), MigError> {
         trace!("setup: entered");
 
@@ -298,7 +299,7 @@ impl<'a> BootManager for GrubBootManager {
             boot_path.fs_type
         ));
 
-        if let Some(ref kernel_opts) = mig_info.kernel_opts {
+        if !kernel_opts.is_empty() {
             linux.push(' ');
             linux.push_str(kernel_opts);
         }

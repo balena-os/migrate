@@ -29,6 +29,10 @@ const SUPPORTED_OSSES: [&str; 2] = ["Ubuntu 18.04.2 LTS", "Ubuntu 14.04.1 LTS"];
 
 const BBXM_KOPTS: &str ="mtdparts=omap2-nand.0:512k(spl),1920k(u-boot),128k(u-boot-env),128k(dtb),6m(kernel),-(rootfs) mpurate=auto buddy=none camera=none vram=12M omapfb.mode=dvi:640x480MR-16@60 omapdss.def_disp=dvi";
 
+const BBG_KOPTS: &str = "";
+
+const BBB_KOPTS: &str = "";
+
 // Supported models
 // TI OMAP3 BeagleBoard xM
 const BB_MODEL_REGEX: &str = r#"^((\S+\s+)*\S+)\s+Beagle(Bone|Board)\s+(\S+)$"#;
@@ -156,7 +160,17 @@ impl Device for BeagleboneGreen {
         config: &Config,
         s2_cfg: &mut Stage2ConfigBuilder,
     ) -> Result<(), MigError> {
-        self.boot_manager.setup(cmds, dev_info, config, s2_cfg)
+        let kernel_opts = if let Some(ref kopts) = config.debug.get_kernel_opts() {
+            let mut new_opts: String = kopts.clone();
+            new_opts.push(' ');
+            new_opts.push_str(BBG_KOPTS);
+            new_opts
+        } else {
+            String::from(BBG_KOPTS)
+        };
+
+        self.boot_manager
+            .setup(cmds, dev_info, config, s2_cfg, &kernel_opts)
     }
 
     fn restore_boot(&self, mounts: &Mounts, config: &Stage2Config) -> Result<(), MigError> {
@@ -235,7 +249,17 @@ impl Device for BeagleboneBlack {
         config: &Config,
         s2_cfg: &mut Stage2ConfigBuilder,
     ) -> Result<(), MigError> {
-        self.boot_manager.setup(cmds, dev_info, config, s2_cfg)
+        let kernel_opts = if let Some(ref kopts) = config.debug.get_kernel_opts() {
+            let mut new_opts: String = kopts.clone();
+            new_opts.push(' ');
+            new_opts.push_str(BBB_KOPTS);
+            new_opts
+        } else {
+            String::from(BBB_KOPTS)
+        };
+
+        self.boot_manager
+            .setup(cmds, dev_info, config, s2_cfg, &kernel_opts)
     }
 
     fn restore_boot(&self, mounts: &Mounts, config: &Stage2Config) -> Result<(), MigError> {
@@ -264,6 +288,12 @@ impl BeagleboardXM {
 
         if let Some(_idx) = SUPPORTED_OSSES.iter().position(|&r| r == os_name) {
             let mut boot_manager = UBootManager::new();
+
+            if let None = config.balena.get_uboot_env() {
+                let msg = String::from("Device type beagleboard xM requires the u-boot env to be set up to migrate successfully");
+                error!("{}", &msg);
+                return Err(MigError::from_remark(MigErrorKind::InvState, &msg));
+            }
 
             if boot_manager.can_migrate(cmds, mig_info, config, s2_cfg)? {
                 Ok(BeagleboardXM {
@@ -320,13 +350,13 @@ impl<'a> Device for BeagleboardXM {
         config: &Config,
         s2_cfg: &mut Stage2ConfigBuilder,
     ) -> Result<(), MigError> {
-        mig_info.kernel_opts = if let Some(ref kopts) = mig_info.kernel_opts {
+        let kernel_opts = if let Some(ref kopts) = config.debug.get_kernel_opts() {
             let mut new_opts: String = kopts.clone();
             new_opts.push(' ');
             new_opts.push_str(BBXM_KOPTS);
-            Some(new_opts)
+            new_opts
         } else {
-            Some(String::from(BBXM_KOPTS))
+            String::from(BBXM_KOPTS)
         };
 
         if let CheckedImageType::FileSystems(ref mut fs_dump) = mig_info.image_file.image {
@@ -335,7 +365,8 @@ impl<'a> Device for BeagleboardXM {
         }
         //dev_info.image_file.image.
 
-        self.boot_manager.setup(cmds, mig_info, config, s2_cfg)
+        self.boot_manager
+            .setup(cmds, mig_info, config, s2_cfg, &kernel_opts)
     }
 
     fn get_boot_device(&self) -> PathInfo {

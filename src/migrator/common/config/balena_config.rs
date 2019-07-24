@@ -16,6 +16,12 @@ pub struct Host {
 }
 */
 
+#[derive(Debug, Serialize, Deserialize, Clone)]
+pub(crate) struct UBootEnv {
+    pub mlo: PathBuf,
+    pub image: PathBuf,
+}
+
 // TODO: also store optional bootable flag, partition type and start offset ?
 #[derive(Debug, Serialize, Deserialize, Clone)]
 pub(crate) struct PartDump {
@@ -65,6 +71,7 @@ pub(crate) struct BalenaConfig {
     api: Option<ApiInfo>,
     check_vpn: Option<bool>,
     check_timeout: Option<u64>,
+    uboot_env: Option<UBootEnv>,
 }
 
 impl<'a> BalenaConfig {
@@ -76,6 +83,7 @@ impl<'a> BalenaConfig {
             api: None,
             check_vpn: None,
             check_timeout: None,
+            uboot_env: None,
         }
     }
 
@@ -189,6 +197,14 @@ impl<'a> BalenaConfig {
             path
         } else {
             panic!("config path is not set");
+        }
+    }
+
+    pub fn get_uboot_env(&'a self) -> Option<&UBootEnv> {
+        if let Some(ref uboot_env) = self.uboot_env {
+            Some(uboot_env)
+        } else {
+            None
         }
     }
 }
