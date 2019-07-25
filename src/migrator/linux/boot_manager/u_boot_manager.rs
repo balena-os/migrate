@@ -351,7 +351,7 @@ impl<'a> BootManager for UBootManager {
     fn setup(
         &self,
         cmds: &EnsuredCmds,
-        mig_info: &MigrateInfo,
+        _mig_info: &MigrateInfo,
         config: &Config,
         s2_cfg: &mut Stage2ConfigBuilder,
         kernel_opts: &str,

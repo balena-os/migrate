@@ -89,6 +89,10 @@ pub(crate) struct MigrateConfig {
     require_nwmgr_config: Option<bool>,
     gzip_internal: Option<bool>,
     extract_device: Option<String>,
+    watchdogs: Option<Vec<PathBuf>>,
+    delay: Option<u64>,
+    kernel_opts: Option<String>,
+    force_flash_device: Option<PathBuf>,
     // COPY_NMGR_FILES="eth0_static enp2s0_static enp3s0_static"
 }
 
@@ -113,6 +117,10 @@ impl<'a> MigrateConfig {
             require_nwmgr_config: None,
             gzip_internal: None,
             extract_device: None,
+            watchdogs: None,
+            delay: None,
+            kernel_opts: None,
+            force_flash_device: None,
         }
     }
 
@@ -179,6 +187,38 @@ impl<'a> MigrateConfig {
             mode
         } else {
             &DEFAULT_MIG_MODE
+        }
+    }
+
+    pub fn get_delay(&self) -> u64 {
+        if let Some(val) = self.delay {
+            val
+        } else {
+            0
+        }
+    }
+
+    pub fn get_watchdogs(&'a self) -> Option<&'a Vec<PathBuf>> {
+        if let Some(ref val) = self.watchdogs {
+            Some(val)
+        } else {
+            None
+        }
+    }
+
+    pub fn get_kernel_opts(&self) -> Option<String> {
+        if let Some(ref val) = self.kernel_opts {
+            Some(val.clone())
+        } else {
+            None
+        }
+    }
+
+    pub fn get_force_flash_device(&'a self) -> Option<&'a Path> {
+        if let Some(ref val) = self.force_flash_device {
+            Some(val)
+        } else {
+            None
         }
     }
 

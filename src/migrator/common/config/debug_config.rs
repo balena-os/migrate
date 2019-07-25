@@ -1,4 +1,4 @@
-use std::path::{Path, PathBuf};
+use std::path::PathBuf;
 
 use super::MigMode;
 use crate::common::MigError;
@@ -7,32 +7,18 @@ use serde::Deserialize;
 
 #[derive(Debug, Deserialize)]
 pub(crate) struct DebugConfig {
-    // ignore non admin user
-    fake_admin: Option<bool>,
     // flash on this device instead of / device
     force_flash_device: Option<PathBuf>,
     // pretend mode, stop after unmounting former root
     no_flash: Option<bool>,
-    kernel_opts: Option<String>,
 }
 
 impl<'a> DebugConfig {
     pub fn default() -> DebugConfig {
         DebugConfig {
-            fake_admin: None,
             force_flash_device: None,
             // TODO: default to false when project is mature
             no_flash: None,
-            kernel_opts: None,
-        }
-    }
-
-    #[cfg(debug_assertions)]
-    pub fn is_fake_admin(&self) -> bool {
-        if let Some(val) = self.fake_admin {
-            val
-        } else {
-            false
         }
     }
 
@@ -42,22 +28,6 @@ impl<'a> DebugConfig {
         } else {
             // TODO: change to false when mature
             true
-        }
-    }
-
-    pub fn get_force_flash_device(&'a self) -> Option<&'a Path> {
-        if let Some(ref val) = self.force_flash_device {
-            Some(val)
-        } else {
-            None
-        }
-    }
-
-    pub fn get_kernel_opts(&self) -> Option<String> {
-        if let Some(ref val) = self.kernel_opts {
-            Some(val.clone())
-        } else {
-            None
         }
     }
 

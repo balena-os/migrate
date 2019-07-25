@@ -101,6 +101,10 @@ pub(crate) struct Stage2Config {
     device_type: DeviceType,
     // boot type
     boot_type: BootType,
+    // delay migration in stage 2
+    migrate_delay: Option<u64>,
+    // watchdogs to kick
+    watchdogs: Option<Vec<PathBuf>>,
 }
 
 impl<'a> Stage2Config {
@@ -169,6 +173,22 @@ impl<'a> Stage2Config {
     pub fn get_force_flash_device(&'a self) -> Option<&'a PathBuf> {
         if let Some(ref flash_device) = self.force_flash_device {
             Some(flash_device)
+        } else {
+            None
+        }
+    }
+
+    pub fn get_migrate_delay(&self) -> u64 {
+        if let Some(val) = self.migrate_delay {
+            val
+        } else {
+            0
+        }
+    }
+
+    pub fn get_watchdogs(&'a self) -> Option<&'a Vec<PathBuf>> {
+        if let Some(ref val) = self.watchdogs {
+            Some(val)
         } else {
             None
         }
@@ -286,6 +306,8 @@ pub(crate) struct Stage2ConfigBuilder {
     log_console: Required<bool>,
     device_type: Required<DeviceType>,
     boot_type: Required<BootType>,
+    migrate_delay: Optional<u64>,
+    watchdogs: Optional<Vec<PathBuf>>,
 }
 
 impl<'a> Stage2ConfigBuilder {
@@ -305,6 +327,8 @@ impl<'a> Stage2ConfigBuilder {
             log_console: Required::new("log_console", Some(&false)),
             device_type: Required::new("device_type", None),
             boot_type: Required::new("boot_type", None),
+            migrate_delay: Optional::new(None),
+            watchdogs: Optional::new(None),
         }
     }
 
@@ -324,6 +348,8 @@ impl<'a> Stage2ConfigBuilder {
             log_console: self.log_console.get()?.clone(),
             device_type: self.device_type.get()?.clone(),
             boot_type: self.boot_type.get()?.clone(),
+            migrate_delay: self.migrate_delay.get().clone(),
+            watchdogs: self.watchdogs.get().clone(),
         };
 
         Ok(result)
@@ -410,6 +436,14 @@ impl<'a> Stage2ConfigBuilder {
 
     pub fn set_boot_type(&mut self, val: &BootType) {
         self.boot_type.set_ref(val);
+    }
+
+    pub fn set_migrate_delay(&mut self, val: u64) {
+        self.migrate_delay.set_ref(&val);
+    }
+
+    pub fn set_watchdogs(&mut self, val: &Vec<PathBuf>) {
+        self.watchdogs.set_ref(val);
     }
 }
 

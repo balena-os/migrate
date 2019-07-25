@@ -1,4 +1,4 @@
-use failure::ResultExt;
+use failure::{ResultExt};
 use log::{debug, error, info, trace, warn, Level};
 use mod_logger::{LogDestination, Logger, NO_STREAM};
 use nix::{
@@ -6,11 +6,13 @@ use nix::{
     unistd::sync,
 };
 
-use std::fs::{copy, create_dir, read_dir};
+use std::fs::{copy, create_dir, read_dir, File, OpenOptions};
+use std::os::unix::fs::OpenOptionsExt;
 // use std::io::{Write};
 use std::path::Path;
-use std::thread;
-use std::time::Duration;
+use std::sync::mpsc::{self, Sender};
+use std::thread::{self, JoinHandle};
+use std::time::{Duration, Instant};
 
 use crate::{
     common::{
@@ -39,6 +41,7 @@ pub(crate) mod mounts;
 use mounts::Mounts;
 
 use std::cell::RefCell;
+use std::io::Write;
 
 const REBOOT_DELAY: u64 = 3;
 const S2_REV: u32 = 5;
@@ -235,6 +238,24 @@ impl<'a> Stage2 {
                     why
                 );
             }
+        }
+
+        let watchdog_handler = self.handle_watchdogs();
+
+        let migrate_delay = self.config.get_migrate_delay();
+        if migrate_delay > 0 {
+            let start_time = Instant::now();
+            let max_wait = Duration::from_secs(migrate_delay);
+            info!("Taking a break for {} seconds", migrate_delay);
+
+            let mut elapsed = start_time.elapsed();
+            while elapsed < max_wait {
+                thread::sleep(Duration::from_secs(1));
+                elapsed = start_time.elapsed();
+                debug!("still sleeping, time elapsed: {}", elapsed.as_secs());
+            }
+
+            info!("Done waiting, continuing now");
         }
 
         info!("migrating {:?} boot type: {:?}", device_type, boot_type);
@@ -755,6 +776,14 @@ impl<'a> Stage2 {
 
         let _res = self.mounts.borrow_mut().unmount_log();
 
+        if let Some((tx, join_handle)) = watchdog_handler {
+            debug!("sending term signal to watchdog handler");
+            let _res = tx.send(1);
+            debug!("waiting for watchdg handler");
+            let _res = join_handle.join();
+            debug!("watchdog handler has stopped");
+        }
+
         thread::sleep(Duration::new(REBOOT_DELAY, 0));
 
         Logger::flush(); // superfluous
@@ -801,6 +830,71 @@ impl<'a> Stage2 {
             Stage2::exit(self.config.get_fail_mode())
         } else {
             Stage2::exit(&FailMode::RescueShell)
+        }
+    }
+
+    fn handle_watchdogs(&self) -> Option<(Sender<usize>, JoinHandle<()>)> {
+        if let Some(watchdogs) = self.config.get_watchdogs() {
+            debug!("Looking for watchdog devices:");
+            let mut files: Vec<File> = Vec::new();
+            for watchdog in watchdogs {
+                if file_exists(watchdog) {
+                    match OpenOptions::new()
+                        .read(true)
+                        .write(true)
+                        .custom_flags(libc::O_NONBLOCK)
+                        .open(watchdog)
+                    {
+                        Ok(file) => {
+                            debug!("Opened '{}", watchdog.display());
+                            files.push(file)
+                        }
+                        Err(why) => error!(
+                            "Failed to open watchdog '{}', error: {:?}",
+                            watchdog.display(),
+                            why
+                        ),
+                    }
+                } else {
+                    warn!("Watchdog not found: '{}", watchdog.display());
+                }
+            }
+
+            if files.len() > 0 {
+                let (tx, rx) = mpsc::channel::<usize>();
+                let join_handle = thread::spawn(move || loop {
+                    let start = Instant::now();
+                    let check_interval = Duration::from_secs(50);
+                    loop {
+                        thread::sleep(Duration::from_secs(1));
+                        match rx.try_recv() {
+                            Ok(sig) => {
+                                debug!("Watchdog thread termination signal received: {}", sig);
+                                return;
+                            }
+                            Err(_why) => (),
+                        }
+                        if start.elapsed() >= check_interval {
+                            break;
+                        }
+                    }
+
+                    for ref mut file in &files {
+                        match file.write("w".as_ref()) {
+                            Ok(_res) => (),
+                            Err(why) => {
+                                error!("got error writing to watchdog device: {:?}", why);
+                            }
+                        }
+                    }
+                });
+
+                Some((tx, join_handle))
+            } else {
+                None
+            }
+        } else {
+            None
         }
     }
 }

@@ -33,18 +33,10 @@ const BIN_DIRS: &[&str] = &["/bin", "/usr/bin", "/sbin", "/usr/sbin"];
 const OS_RELEASE_FILE: &str = "/etc/os-release";
 const OS_NAME_REGEX: &str = r#"^PRETTY_NAME="([^"]+)"$"#;
 
-#[cfg(not(debug_assertions))]
 pub(crate) fn is_admin(_config: &Config) -> Result<bool, MigError> {
     trace!("LinuxMigrator::is_admin: entered");
     let admin = Some(unsafe { getuid() } == 0);
     Ok(admin.unwrap())
-}
-
-#[cfg(debug_assertions)]
-pub(crate) fn is_admin(config: &Config) -> Result<bool, MigError> {
-    trace!("LinuxMigrator::is_admin: entered");
-    let admin = Some(unsafe { getuid() } == 0);
-    Ok(admin.unwrap() | config.debug.is_fake_admin())
 }
 
 pub(crate) fn whereis(cmd: &str) -> Result<String, MigError> {

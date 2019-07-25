@@ -160,7 +160,7 @@ impl Device for BeagleboneGreen {
         config: &Config,
         s2_cfg: &mut Stage2ConfigBuilder,
     ) -> Result<(), MigError> {
-        let kernel_opts = if let Some(ref kopts) = config.debug.get_kernel_opts() {
+        let kernel_opts = if let Some(ref kopts) = config.migrate.get_kernel_opts() {
             let mut new_opts: String = kopts.clone();
             new_opts.push(' ');
             new_opts.push_str(BBG_KOPTS);
@@ -249,7 +249,7 @@ impl Device for BeagleboneBlack {
         config: &Config,
         s2_cfg: &mut Stage2ConfigBuilder,
     ) -> Result<(), MigError> {
-        let kernel_opts = if let Some(ref kopts) = config.debug.get_kernel_opts() {
+        let kernel_opts = if let Some(ref kopts) = config.migrate.get_kernel_opts() {
             let mut new_opts: String = kopts.clone();
             new_opts.push(' ');
             new_opts.push_str(BBB_KOPTS);
@@ -350,7 +350,7 @@ impl<'a> Device for BeagleboardXM {
         config: &Config,
         s2_cfg: &mut Stage2ConfigBuilder,
     ) -> Result<(), MigError> {
-        let kernel_opts = if let Some(ref kopts) = config.debug.get_kernel_opts() {
+        let kernel_opts = if let Some(ref kopts) = config.migrate.get_kernel_opts() {
             let mut new_opts: String = kopts.clone();
             new_opts.push(' ');
             new_opts.push_str(BBXM_KOPTS);

@@ -16,7 +16,6 @@ use crate::{
         EnsuredCmds, MigrateInfo,
     },
 };
-use std::net::ToSocketAddrs;
 
 const RPI_MODEL_REGEX: &str = r#"^Raspberry\s+Pi\s+(\S+)\s+Model\s+(.*)$"#;
 
@@ -117,7 +116,7 @@ impl<'a> Device for RaspberryPi3 {
         config: &Config,
         s2_cfg: &mut Stage2ConfigBuilder,
     ) -> Result<(), MigError> {
-        let kernel_opts = if let Some(ref kernel_opts) = config.debug.get_kernel_opts() {
+        let kernel_opts = if let Some(ref kernel_opts) = config.migrate.get_kernel_opts() {
             kernel_opts.clone()
         } else {
             String::from("")

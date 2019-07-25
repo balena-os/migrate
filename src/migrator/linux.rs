@@ -372,7 +372,7 @@ impl<'a> LinuxMigrator {
         // *****************************************************************************************
         // Finish Stage2ConfigBuilder & create stage2 config file
 
-        if let Some(device) = self.config.debug.get_force_flash_device() {
+        if let Some(device) = self.config.migrate.get_force_flash_device() {
             warn!("Forcing flash device to '{}'", device.display());
             self.stage2_config
                 .set_force_flash_device(device.to_path_buf());
@@ -388,6 +388,9 @@ impl<'a> LinuxMigrator {
                 self.stage2_config
                     .set_skip_flash(self.config.debug.is_skip_flash());
         */
+
+        self.stage2_config
+            .set_migrate_delay(self.config.migrate.get_delay());
 
         self.stage2_config
             .set_balena_image(self.mig_info.image_file.clone());
