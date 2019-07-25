@@ -219,6 +219,8 @@ impl<'a> Stage2 {
 
         // Recover device type and restore original boot configuration
 
+        let watchdog_handler = self.handle_watchdogs();
+
         let migrate_delay = self.config.get_migrate_delay();
         if migrate_delay > 0 {
             let start_time = Instant::now();
@@ -234,8 +236,6 @@ impl<'a> Stage2 {
 
             info!("Done waiting, continuing now");
         }
-
-        let watchdog_handler = self.handle_watchdogs();
 
         let device = device::from_config(device_type, boot_type)?;
         match device.restore_boot(&self.mounts.borrow(), &self.config) {
@@ -878,7 +878,7 @@ impl<'a> Stage2 {
 
             if files.len() > 0 {
                 let (tx, rx) = mpsc::channel::<usize>();
-                let join_handle = thread::spawn(move || loop {
+                let join_handle = thread::spawn(move || {
                     debug!("watchdog_thread: performing initial kick");
                     for ref mut file in &files {
                         match file.write("w".as_ref()) {
@@ -889,28 +889,30 @@ impl<'a> Stage2 {
                         }
                     }
 
-                    let start = Instant::now();
-                    let check_interval = Duration::from_secs(interval);
                     loop {
-                        thread::sleep(Duration::from_secs(1));
-                        match rx.try_recv() {
-                            Ok(sig) => {
-                                debug!("Watchdog thread termination signal received: {}", sig);
-                                return;
+                        let start = Instant::now();
+                        let check_interval = Duration::from_secs(interval);
+                        loop {
+                            thread::sleep(Duration::from_secs(1));
+                            match rx.try_recv() {
+                                Ok(sig) => {
+                                    debug!("watchdog thread: termination signal received: {}", sig);
+                                    return;
+                                }
+                                Err(_why) => (),
                             }
-                            Err(_why) => (),
+                            if start.elapsed() >= check_interval {
+                                break;
+                            }
                         }
-                        if start.elapsed() >= check_interval {
-                            break;
-                        }
-                    }
 
-                    debug!("watchdog_thread: performing repeated kick");
-                    for ref mut file in &files {
-                        match file.write("w".as_ref()) {
-                            Ok(_res) => (),
-                            Err(why) => {
-                                error!("got error writing to watchdog device: {:?}", why);
+                        debug!("watchdog_thread: performing repeated kick");
+                        for ref mut file in &files {
+                            match file.write("w".as_ref()) {
+                                Ok(_res) => (),
+                                Err(why) => {
+                                    error!("got error writing to watchdog device: {:?}", why);
+                                }
                             }
                         }
                     }
