@@ -74,6 +74,7 @@ impl EnsuredCmds {
         }
     }
 
+    /*
     pub fn has<'a>(&'a self, cmd: &str) -> bool {
         if let Some(_cmd_path) = self.cmd_table.get(cmd) {
             true
@@ -81,6 +82,7 @@ impl EnsuredCmds {
             false
         }
     }
+    */
 
     pub fn get<'a>(&'a self, cmd: &str) -> Result<&'a str, MigError> {
         if let Some(cmd_path) = self.cmd_table.get(cmd) {

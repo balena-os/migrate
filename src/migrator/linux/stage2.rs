@@ -1,4 +1,4 @@
-use failure::{ResultExt};
+use failure::ResultExt;
 use log::{debug, error, info, trace, warn, Level};
 use mod_logger::{LogDestination, Logger, NO_STREAM};
 use nix::{
@@ -48,14 +48,8 @@ const S2_REV: u32 = 5;
 
 // TODO: set this to Info once mature
 const INIT_LOG_LEVEL: Level = Level::Trace;
-const LOG_MOUNT_DIR: &str = "/migrate_log";
-const LOG_FILE_NAME: &str = "migrate.log";
 
 const MIGRATE_TEMP_DIR: &str = "/migrate_tmp";
-const BOOT_MNT_DIR: &str = "mnt_boot";
-const DATA_MNT_DIR: &str = "mnt_data";
-
-const DD_BLOCK_SIZE: usize = 4194304;
 
 const MIG_REQUIRED_CMDS: &[&str] = &[REBOOT_CMD, UDEVADM_CMD, FAT_CHK_CMD];
 
@@ -225,23 +219,6 @@ impl<'a> Stage2 {
 
         // Recover device type and restore original boot configuration
 
-        let device = device::from_config(device_type, boot_type)?;
-        match device.restore_boot(&self.mounts.borrow(), &self.config) {
-            Ok(_) => {
-                info!("Boot configuration was restored sucessfully");
-                // boot config restored can reboot
-                self.recoverable_state = true;
-            }
-            Err(why) => {
-                warn!(
-                    "Failed to restore boot configuration - trying to migrate anyway. error: {:?}",
-                    why
-                );
-            }
-        }
-
-        let watchdog_handler = self.handle_watchdogs();
-
         let migrate_delay = self.config.get_migrate_delay();
         if migrate_delay > 0 {
             let start_time = Instant::now();
@@ -257,6 +234,25 @@ impl<'a> Stage2 {
 
             info!("Done waiting, continuing now");
         }
+
+        let watchdog_handler = self.handle_watchdogs();
+
+        let device = device::from_config(device_type, boot_type)?;
+        match device.restore_boot(&self.mounts.borrow(), &self.config) {
+            Ok(_) => {
+                info!("Boot configuration was restored sucessfully");
+                // boot config restored can reboot
+                self.recoverable_state = true;
+            }
+            Err(why) => {
+                warn!(
+                    "Failed to restore boot configuration - trying to migrate anyway. error: {:?}",
+                    why
+                );
+            }
+        }
+
+        sync();
 
         info!("migrating {:?} boot type: {:?}", device_type, boot_type);
 
@@ -834,37 +830,67 @@ impl<'a> Stage2 {
     }
 
     fn handle_watchdogs(&self) -> Option<(Sender<usize>, JoinHandle<()>)> {
+        debug!("handle_watchdogs: entered");
+
         if let Some(watchdogs) = self.config.get_watchdogs() {
             debug!("Looking for watchdog devices:");
             let mut files: Vec<File> = Vec::new();
+            let mut interval: u64 = 55;
             for watchdog in watchdogs {
-                if file_exists(watchdog) {
+                debug!(
+                    "checking watchdog device: '{}' , timeout: {:?}",
+                    watchdog.path.display(),
+                    watchdog.interval
+                );
+                if file_exists(&watchdog.path) {
                     match OpenOptions::new()
                         .read(true)
                         .write(true)
                         .custom_flags(libc::O_NONBLOCK)
-                        .open(watchdog)
+                        .open(&watchdog.path)
                     {
                         Ok(file) => {
-                            debug!("Opened '{}", watchdog.display());
-                            files.push(file)
+                            debug!("Opened '{}", watchdog.path.display());
+                            files.push(file);
+                            if let Some(curr_itv) = watchdog.interval {
+                                if curr_itv < interval {
+                                    interval = curr_itv - 5;
+                                }
+                            }
                         }
+
                         Err(why) => error!(
                             "Failed to open watchdog '{}', error: {:?}",
-                            watchdog.display(),
+                            watchdog.path.display(),
                             why
                         ),
                     }
                 } else {
-                    warn!("Watchdog not found: '{}", watchdog.display());
+                    warn!("Watchdog not found: '{}", watchdog.path.display());
                 }
             }
+
+            debug!(
+                "got {} watchdog devices to kick, interval: {}",
+                files.len(),
+                interval
+            );
 
             if files.len() > 0 {
                 let (tx, rx) = mpsc::channel::<usize>();
                 let join_handle = thread::spawn(move || loop {
+                    debug!("watchdog_thread: performing initial kick");
+                    for ref mut file in &files {
+                        match file.write("w".as_ref()) {
+                            Ok(_res) => (),
+                            Err(why) => {
+                                error!("got error writing to watchdog device: {:?}", why);
+                            }
+                        }
+                    }
+
                     let start = Instant::now();
-                    let check_interval = Duration::from_secs(50);
+                    let check_interval = Duration::from_secs(interval);
                     loop {
                         thread::sleep(Duration::from_secs(1));
                         match rx.try_recv() {
@@ -879,6 +905,7 @@ impl<'a> Stage2 {
                         }
                     }
 
+                    debug!("watchdog_thread: performing repeated kick");
                     for ref mut file in &files {
                         match file.write("w".as_ref()) {
                             Ok(_res) => (),

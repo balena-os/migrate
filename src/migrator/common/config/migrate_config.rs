@@ -6,7 +6,7 @@ use crate::{
     defs::FailMode,
 };
 
-use serde::Deserialize;
+use serde::{Deserialize, Serialize};
 
 const MODULE: &str = "common::config::migrate_config";
 const NO_NMGR_FILES: &[PathBuf] = &[];
@@ -42,6 +42,18 @@ impl MigMode {
 }
 
 const DEFAULT_MIG_MODE: MigMode = MigMode::PRETEND;
+
+#[derive(Debug, Serialize, Deserialize, Clone)]
+pub(crate) struct Watchdog {
+    pub path: PathBuf,
+    pub interval: Option<u64>,
+}
+
+#[derive(Debug, Deserialize, Clone)]
+pub(crate) struct UBootEnv {
+    pub mlo: PathBuf,
+    pub image: PathBuf,
+}
 
 #[derive(Debug, Deserialize)]
 pub(crate) struct ItemConfig {
@@ -89,10 +101,11 @@ pub(crate) struct MigrateConfig {
     require_nwmgr_config: Option<bool>,
     gzip_internal: Option<bool>,
     extract_device: Option<String>,
-    watchdogs: Option<Vec<PathBuf>>,
+    watchdogs: Option<Vec<Watchdog>>,
     delay: Option<u64>,
     kernel_opts: Option<String>,
     force_flash_device: Option<PathBuf>,
+    uboot_env: Option<UBootEnv>,
     // COPY_NMGR_FILES="eth0_static enp2s0_static enp3s0_static"
 }
 
@@ -121,6 +134,7 @@ impl<'a> MigrateConfig {
             delay: None,
             kernel_opts: None,
             force_flash_device: None,
+            uboot_env: None,
         }
     }
 
@@ -198,7 +212,7 @@ impl<'a> MigrateConfig {
         }
     }
 
-    pub fn get_watchdogs(&'a self) -> Option<&'a Vec<PathBuf>> {
+    pub fn get_watchdogs(&'a self) -> Option<&'a Vec<Watchdog>> {
         if let Some(ref val) = self.watchdogs {
             Some(val)
         } else {
@@ -283,6 +297,16 @@ impl<'a> MigrateConfig {
             false
         }
     }
+
+    /*
+        pub fn get_uboot_env(&'a self) -> Option<&UBootEnv> {
+            if let Some(ref uboot_env) = self.uboot_env {
+                Some(uboot_env)
+            } else {
+                None
+            }
+        }
+    */
 
     // The following functions can only be safely called after check has succeeded
 

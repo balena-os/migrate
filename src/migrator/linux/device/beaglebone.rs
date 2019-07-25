@@ -289,12 +289,13 @@ impl BeagleboardXM {
         if let Some(_idx) = SUPPORTED_OSSES.iter().position(|&r| r == os_name) {
             let mut boot_manager = UBootManager::new();
 
-            if let None = config.balena.get_uboot_env() {
-                let msg = String::from("Device type beagleboard xM requires the u-boot env to be set up to migrate successfully");
-                error!("{}", &msg);
-                return Err(MigError::from_remark(MigErrorKind::InvState, &msg));
-            }
-
+            /*
+                        if let None = config.balena.get_uboot_env() {
+                            let msg = String::from("Device type beagleboard xM requires the u-boot env to be set up to migrate successfully");
+                            error!("{}", &msg);
+                            return Err(MigError::from_remark(MigErrorKind::InvState, &msg));
+                        }
+            */
             if boot_manager.can_migrate(cmds, mig_info, config, s2_cfg)? {
                 Ok(BeagleboardXM {
                     boot_manager: Box::new(boot_manager),

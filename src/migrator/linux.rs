@@ -384,13 +384,12 @@ impl<'a> LinuxMigrator {
         self.stage2_config
             .set_no_flash(self.config.debug.is_no_flash());
 
-        /*
-                self.stage2_config
-                    .set_skip_flash(self.config.debug.is_skip_flash());
-        */
-
         self.stage2_config
             .set_migrate_delay(self.config.migrate.get_delay());
+
+        if let Some(watchdogs) = self.config.migrate.get_watchdogs() {
+            self.stage2_config.set_watchdogs(watchdogs);
+        }
 
         self.stage2_config
             .set_balena_image(self.mig_info.image_file.clone());

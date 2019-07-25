@@ -40,14 +40,10 @@ use crate::common::disk_util::PartitionType;
 use crate::common::path_append;
 
 const REQUIRED_CMDS: &[&str] = &[FILE_CMD, MOUNT_CMD, MKTEMP_CMD, TAR_CMD];
-
-const DEF_BLOCK_SIZE: usize = 512;
 const DEF_BUFFER_SIZE: usize = 1024 * 1024;
 
 const EXTRACT_FILE_TEMPLATE: &str = "extract.XXXXXXXXXX";
 const MOUNTPOINT_TEMPLATE: &str = "mountpoint.XXXXXXXXXX";
-
-const BUFFER_SIZE: usize = 1024 * 1024; // 1Mb
 
 pub(crate) struct Partition {
     pub name: &'static str,

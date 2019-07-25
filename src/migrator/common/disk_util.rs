@@ -421,6 +421,7 @@ pub(crate) struct PartitionReader<'a> {
 }
 
 impl<'a> PartitionReader<'a> {
+    /*
     pub fn from_disk(part: &PartInfo, disk: &'a mut Disk) -> PartitionReader<'a> {
         let block_size = disk.block_size;
 
@@ -435,6 +436,7 @@ impl<'a> PartitionReader<'a> {
             bytes_left: part.num_sectors * block_size,
         }
     }
+    */
 
     pub fn from_part_iterator(
         part: &PartInfo,
