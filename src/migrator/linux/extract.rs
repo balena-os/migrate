@@ -1,9 +1,14 @@
 use failure::ResultExt;
 use log::{debug, error, info, trace};
-use nix::mount::umount;
+use nix::{
+    mount::{mount, umount, MsFlags},
+    unistd::sync,
+};
 use std::fs::{remove_dir, remove_file, OpenOptions};
 use std::io::{Read, Write};
 use std::path::{Path, PathBuf};
+use std::thread;
+use std::time::Duration;
 
 // use serde::{Deserialize, Serialize};
 use serde_yaml;
@@ -21,8 +26,12 @@ use crate::{
     },
     defs::{PART_FSTYPE, PART_NAME},
     linux::{
-        ensured_cmds::{EnsuredCmds, FILE_CMD, MKTEMP_CMD, MOUNT_CMD, TAR_CMD},
+        ensured_cmds::{
+            EnsuredCmds, BLKID_CMD, FILE_CMD, LOSETUP_CMD, LSBLK_CMD, MKTEMP_CMD, MOUNT_CMD,
+            TAR_CMD,
+        },
         linux_common::mktemp,
+        linux_defs::NIX_NONE,
     },
 };
 
@@ -39,7 +48,15 @@ use crate::common::config::balena_config::{FSDump, PartDump};
 use crate::common::disk_util::PartitionType;
 use crate::common::path_append;
 
-const REQUIRED_CMDS: &[&str] = &[FILE_CMD, MOUNT_CMD, MKTEMP_CMD, TAR_CMD];
+const REQUIRED_CMDS: &[&str] = &[
+    FILE_CMD,
+    MOUNT_CMD,
+    MKTEMP_CMD,
+    TAR_CMD,
+    LSBLK_CMD,
+    LOSETUP_CMD,
+    BLKID_CMD,
+];
 const DEF_BUFFER_SIZE: usize = 1024 * 1024;
 
 const EXTRACT_FILE_TEMPLATE: &str = "extract.XXXXXXXXXX";
@@ -284,6 +301,7 @@ impl Extractor {
 
         if partitions.len() == 5 {
             let res = ImageType::FileSystems(FSDump {
+                disk_id: part_iterator.get_disk_id().clone(),
                 device_slug: self.device_slug.clone(),
                 check: None,
                 max_data: None,
@@ -406,34 +424,65 @@ impl Extractor {
             );
         }
 
+        let cmd_res = cmds.call(LOSETUP_CMD, &["-f", &tmp_name.to_string_lossy()], true)?;
+
+        if !cmd_res.status.success() {
+            return Err(MigError::from_remark(
+                MigErrorKind::ExecProcess,
+                &format!(
+                    "Failed to loop mount extracted partition: {}",
+                    cmd_res.stderr
+                ),
+            ));
+        }
+
+        let cmd_res = cmds.call(
+            LOSETUP_CMD,
+            &["-O", "name", "-j", &tmp_name.to_string_lossy()],
+            true,
+        )?;
+
+        if !cmd_res.status.success() {
+            return Err(MigError::from_remark(
+                MigErrorKind::ExecProcess,
+                &format!("Failed to locate mounted loop device"),
+            ));
+        }
+
+        let device = if let Some(output) = cmd_res.stdout.lines().into_iter().last() {
+            String::from(output)
+        } else {
+            return Err(MigError::from_remark(
+                MigErrorKind::ExecProcess,
+                &format!("Failed to parse mounted loop device"),
+            ));
+        };
+
         debug!(
-            "write_partition: mounting '{}' on '{}'",
+            "write_partition: mounting '{}' as '{}' on '{}'",
             tmp_name.display(),
+            device,
             mountpoint.display()
         );
 
         // TODO: use losetup and then mount, mount -o loop seems to not work in ubuntu-14
 
-        let cmd_res = cmds.call(
-            MOUNT_CMD,
-            &[
-                "-t",
-                &partition.fstype,
-                "-o",
-                "loop",
-                &tmp_name.to_string_lossy(),
-                &mountpoint.to_string_lossy(),
-            ],
-            true,
-        )?;
-        if !cmd_res.status.success() {
-            return Err(MigError::from_remark(
-                MigErrorKind::ExecProcess,
-                &format!("Failed to mount extracted partition: {}", cmd_res.stderr),
-            ));
-        }
-
-        // TODO: Try with builtin mount - not sure if loopmount is possible with this
+        mount(
+            Some(device.as_str()),
+            &mountpoint.to_path_buf(),
+            Some(partition.fstype.as_bytes()),
+            MsFlags::empty(),
+            NIX_NONE,
+        )
+        .context(MigErrCtx::from_remark(
+            MigErrorKind::Upstream,
+            &format!(
+                "Failed to mount loop device '{}' to '{}' with fstype: {:?}",
+                device,
+                &mountpoint.display(),
+                partition.fstype
+            ),
+        ))?;
 
         let arch_name = if let Some(output_path) = output_path {
             path_append(output_path, &format!("{}.tgz", partition.name))
@@ -468,11 +517,23 @@ impl Extractor {
             ));
         }
 
+        sync();
+        thread::sleep(Duration::from_secs(1));
+
         debug!("write_partition: unmounting '{}'", mountpoint.display());
         umount(mountpoint).context(MigErrCtx::from_remark(
             MigErrorKind::Upstream,
             &format!("failed to unmount '{}'", mountpoint.display()),
         ))?;
+
+        let cmd_res = cmds.call(LOSETUP_CMD, &["-d", &device], true)?;
+
+        if !cmd_res.status.success() {
+            return Err(MigError::from_remark(
+                MigErrorKind::ExecProcess,
+                &format!("Failed to remove loop ,mount,  {}", cmd_res.stderr),
+            ));
+        }
 
         debug!(
             "write_partition: extracted partition '{}' to '{}'",

@@ -60,10 +60,36 @@ struct PartEntry {
 
 #[repr(C, packed)]
 struct MasterBootRecord {
-    boot_code: [u8; 446],
+    boot_code_0: [u8; 218],
+    zeros: [u8; 2],
+    orig_phys_drive: u8,
+    drive_ts_seconds: u8,
+    drive_ts_minutes: u8,
+    drive_ts_hours: u8,
+    boot_code_1: [u8; 216],
+    disk_sig_32: [u8; 4],
+    disk_sig_2: [u8; 2],
     part_tbl: [PartEntry; 4],
     boot_sig1: u8,
     boot_sig2: u8,
+}
+
+impl MasterBootRecord {
+    pub fn get_disk_id(&self) -> Option<u32> {
+        if self.zeros[0] == 0 && self.zeros[1] == 0 {
+            let mut disk_sig_32: u32 = 0;
+            for byte in self.disk_sig_32.iter().rev() {
+                disk_sig_32 = disk_sig_32 * 256 + *byte as u32;
+            }
+            if disk_sig_32 != 0 {
+                Some(disk_sig_32)
+            } else {
+                None
+            }
+        } else {
+            None
+        }
+    }
 }
 
 #[derive(Debug, Clone)]
@@ -185,12 +211,14 @@ pub(crate) struct PartitionIterator<'a> {
     offset: u64,
     index: usize,
     part_idx: usize,
+    disk_id: Option<u32>,
 }
 
 impl<'a> PartitionIterator<'a> {
     pub fn new(disk: &mut Disk) -> Result<PartitionIterator, MigError> {
         let offset: u64 = 0;
         let mbr = disk.read_mbr(offset)?;
+        let disk_id = mbr.get_disk_id();
 
         Ok(PartitionIterator {
             disk,
@@ -198,7 +226,12 @@ impl<'a> PartitionIterator<'a> {
             offset,
             index: 0,
             part_idx: 0,
+            disk_id,
         })
+    }
+
+    pub fn get_disk_id(&'a self) -> &'a Option<u32> {
+        &self.disk_id
     }
 }
 
@@ -245,6 +278,7 @@ impl<'a> Iterator for PartitionIterator<'a> {
                             self.offset = part.first_lba as u64;
                             // self.mbr = None; // we are done with this mbr
                             self.part_idx += 1;
+
                             (
                                 Some(PartInfo {
                                     index: self.part_idx,
@@ -260,6 +294,7 @@ impl<'a> Iterator for PartitionIterator<'a> {
                             // return regular partition
                             self.index += 1;
                             self.part_idx += 1;
+
                             (
                                 Some(PartInfo {
                                     index: self.part_idx,
@@ -364,6 +399,7 @@ impl<'a> Iterator for PartitionIterator<'a> {
                             debug!("PartitionIterator::next: got partition data partition");
                             self.index = 1;
                             self.part_idx += 1;
+
                             (
                                 Some(PartInfo {
                                     index: self.part_idx,

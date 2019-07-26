@@ -493,6 +493,10 @@ fn sfdisk_part(device: &Path, sfdisk_path: &str, fs_dump: &FSDump) -> FlashResul
             debug!("Writing a new partition table to '{}'", device.display());
             let mut buffer: String = String::from("label: dos\n");
 
+            if let Some(disk_id) = fs_dump.disk_id {
+                buffer.push_str(&format!("label-id: 0x{:x}\n", disk_id));
+            }
+
             debug!(
                 "Writing resin-boot as 'size={},bootable,type=e' to '{}'",
                 fs_dump.boot.blocks,
