@@ -16,7 +16,11 @@ use crate::{
     },
 };
 
-const SUPPORTED_OSSES: [&str; 2] = ["Ubuntu 18.04.2 LTS", "Ubuntu 14.04.1 LTS"];
+const SUPPORTED_OSSES: [&str; 3] = [
+    "Ubuntu 18.04.2 LTS",
+    "Ubuntu 14.04.1 LTS",
+    "Debian GNU/Linux 9 (stretch)",
+];
 
 // add some of this to balena bb XM command line:
 // mtdparts=omap2-nand.0:512k(spl),1920k(u-boot),128k(u-boot-env),128k(dtb),6m(kernel),-(rootfs)

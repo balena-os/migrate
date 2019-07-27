@@ -491,11 +491,8 @@ fn sfdisk_part(device: &Path, sfdisk_path: &str, fs_dump: &FSDump) -> FlashResul
 
         if let Some(ref mut stdin) = sfdisk_cmd.stdin {
             debug!("Writing a new partition table to '{}'", device.display());
-            let mut buffer: String = String::from("label: dos\n");
 
-            if let Some(disk_id) = fs_dump.disk_id {
-                buffer.push_str(&format!("label-id: 0x{:x}\n", disk_id));
-            }
+            let mut buffer = format!("label: dos\nlabel-id: 0x{:x}\n", fs_dump.disk_id);
 
             debug!(
                 "Writing resin-boot as 'size={},bootable,type=e' to '{}'",
@@ -637,10 +634,17 @@ fn part_reread(
 
     match cmds.call(PARTPROBE_CMD, &[&device.to_string_lossy()], true) {
         Ok(cmd_res) => {
-            debug!(
-                "part_reread: partprobe returned: stdout '{}', stderr: '{}'",
-                cmd_res.stdout, cmd_res.stderr
-            );
+            if !cmd_res.status.success() {
+                warn!(
+                    "part_reread: partprobe returned: stderr: '{}'",
+                    cmd_res.stderr
+                );
+            } else {
+                debug!(
+                    "part_reread: partprobe returned: stdout '{}'",
+                    cmd_res.stdout
+                );
+            }
         }
         Err(why) => {
             warn!(

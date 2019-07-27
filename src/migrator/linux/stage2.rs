@@ -1,10 +1,7 @@
 use failure::ResultExt;
 use log::{debug, error, info, trace, warn, Level};
 use mod_logger::{LogDestination, Logger, NO_STREAM};
-use nix::{
-    sys::reboot::{reboot, RebootMode},
-    unistd::sync,
-};
+use nix::unistd::sync;
 
 use std::fs::{copy, create_dir, read_dir, File, OpenOptions};
 use std::os::unix::fs::OpenOptionsExt;
@@ -16,7 +13,7 @@ use std::time::{Duration, Instant};
 
 use crate::{
     common::{
-        dir_exists, file_exists, file_size, format_size_with_unit, path_append,
+        call, dir_exists, file_exists, file_size, format_size_with_unit, path_append,
         stage2_config::{CheckedImageType, Stage2Config},
         MigErrCtx, MigError, MigErrorKind,
     },
@@ -24,7 +21,7 @@ use crate::{
     linux::{
         device,
         ensured_cmds::{EnsuredCmds, FAT_CHK_CMD, REBOOT_CMD, UDEVADM_CMD},
-        linux_common::get_mem_info,
+        linux_common::{get_mem_info, whereis},
         linux_defs::{MIGRATE_LOG_FILE, STAGE2_MEM_THRESHOLD},
     },
 };
@@ -798,10 +795,12 @@ impl<'a> Stage2 {
 
         match fail_mode {
             FailMode::Reboot => {
-                reboot(RebootMode::RB_AUTOBOOT).context(MigErrCtx::from_remark(
-                    MigErrorKind::Upstream,
-                    "failed to reboot",
-                ))?;
+                let reboot_cmd = whereis(REBOOT_CMD)?;
+                let cmd_res = call(&reboot_cmd, &["-f"], true)?;
+                if !cmd_res.status.success() {
+                    error!("Command failed: {}, : '{}'", REBOOT_CMD, cmd_res.stderr);
+                    return Err(MigError::displayed());
+                }
             }
             FailMode::RescueShell => {
                 std::process::exit(1);

@@ -32,7 +32,7 @@ pub(crate) enum PartCheck {
 
 #[derive(Debug, Serialize, Deserialize, Clone)]
 pub(crate) struct FSDump {
-    pub disk_id: Option<u32>,
+    pub disk_id: u32,
     pub device_slug: String,
     pub check: Option<PartCheck>,
     pub max_data: Option<bool>,
