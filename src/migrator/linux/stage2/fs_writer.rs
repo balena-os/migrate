@@ -66,8 +66,6 @@ pub(crate) fn write_balena_os(
             return FlashResult::FailRecoverable;
         };
 
-        sync();
-
         if let FlashResult::Ok = res {
             let lsblk_dev = match part_reread(device, 30, PART_NAME.len(), cmds) {
                 Ok(lsblk_device) => lsblk_device,
@@ -94,6 +92,20 @@ pub(crate) fn write_balena_os(
                 }
 
                 if balena_write(mounts, cmds.get(TAR_CMD).unwrap(), fs_dump, base_path) {
+                    sync();
+                    match cmds.call(LSBLK_CMD, &["-o", "name,partuuid", &device.to_string_lossy() ], true) {
+                        Ok(cmd_res) => {
+                            if cmd_res.status.success() {
+                                debug!("lsblk after fs-write: '{}'", cmd_res.stdout);
+                            } else {
+                                warn!("lsblk failure after fs-write: '{}'", cmd_res.stderr);
+                            }
+                        },
+                        Err(why) => {
+                            warn!("lsblk failure after fs-write, error {:?}", why);
+                        }
+                    }
+
                     FlashResult::Ok
                 } else {
                     error!("write_balena_os: failed initialise devices");
@@ -612,6 +624,7 @@ fn sfdisk_part(device: &Path, sfdisk_path: &str, fs_dump: &FSDump) -> FlashResul
         return FlashResult::FailNonRecoverable;
     }
 
+    sync();
     debug!("sfdisk stdout: {:?}", str::from_utf8(&cmd_res.stdout));
     FlashResult::Ok
 }

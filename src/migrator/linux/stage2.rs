@@ -853,7 +853,7 @@ impl<'a> Stage2 {
                             files.push(file);
                             if let Some(curr_itv) = watchdog.interval {
                                 if curr_itv < interval {
-                                    interval = curr_itv - 5;
+                                    interval = curr_itv;
                                 }
                             }
                         }
