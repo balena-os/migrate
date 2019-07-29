@@ -6,7 +6,10 @@ use std::str;
 use std::thread;
 use std::time::Duration;
 
-use nix::mount::{mount, umount, MsFlags};
+use nix::{
+    mount::{mount, umount, MsFlags},
+    unistd::sync,
+};
 
 use crate::{
     common::{
@@ -415,6 +418,7 @@ impl<'a> Mounts {
 
     pub fn unmount_log(&self) -> Result<(), MigError> {
         if let Some(ref mountpoint) = self.log_path {
+            sync();
             umount(mountpoint).context(MigErrCtx::from_remark(
                 MigErrorKind::Upstream,
                 &format!("Failed to unmount log device: '{}'", mountpoint.display()),
@@ -426,6 +430,7 @@ impl<'a> Mounts {
     // unmount all mounted drives except log
     // which is expected to be on a separate drive
     pub fn unmount_boot_devs(&mut self) -> Result<(), MigError> {
+        sync();
         if let Some(ref mountpoint) = self.work_mountpoint {
             if self.work_no_copy {
                 debug!("Not unmounting work_dir as it is separate from flash_device");
@@ -604,6 +609,8 @@ impl<'a> Mounts {
 
     pub fn unmount_balena(&mut self) -> bool {
         let mut success = true;
+
+        sync();
 
         if let Some(ref mountpoint) = self.balena_boot_mp {
             debug!("unmounting '{}'", mountpoint.display());

@@ -125,8 +125,6 @@ fn flash_gzip_internal(
         }
     };
 
-    Logger::flush();
-
     let start_time = Instant::now();
     let mut last_elapsed = Duration::new(0, 0);
     let mut write_count: usize = 0;

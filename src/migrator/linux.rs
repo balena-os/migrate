@@ -31,8 +31,8 @@ pub(crate) mod stage2;
 
 pub(crate) mod ensured_cmds;
 pub(crate) use ensured_cmds::{
-    EnsuredCmds, CHMOD_CMD, DF_CMD, FDISK_CMD, FILE_CMD, GRUB_REBOOT_CMD, GRUB_UPDT_CMD, LSBLK_CMD,
-    MKTEMP_CMD, MOKUTIL_CMD, MOUNT_CMD, PARTED_CMD, REBOOT_CMD, UNAME_CMD,
+    EnsuredCmds, CHMOD_CMD, DF_CMD, FILE_CMD, GRUB_REBOOT_CMD, GRUB_UPDT_CMD, LSBLK_CMD,
+    MKTEMP_CMD, MOKUTIL_CMD, MOUNT_CMD, REBOOT_CMD, UNAME_CMD,
 };
 
 pub(crate) mod migrate_info;
@@ -103,27 +103,6 @@ impl<'a> LinuxMigrator {
         if !is_admin(&config)? {
             error!("please run this program as root");
             return Err(MigError::from(MigErrorKind::Displayed));
-        }
-
-        // **********************************************************************
-        // Ensure some more vital commands
-        let parted_found = match cmds.ensure(PARTED_CMD) {
-            Ok(_s) => true,
-            Err(_why) => false,
-        };
-
-        let fdisk_found = match cmds.ensure(FDISK_CMD) {
-            Ok(_s) => true,
-            Err(_why) => false,
-        };
-
-        if !(fdisk_found || parted_found) {
-            let message = format!(
-                "Missing partitioning commands, please make sure either {} or {} is available",
-                PARTED_CMD, FDISK_CMD
-            );
-            error!("{}", message);
-            return Err(MigError::from_remark(MigErrorKind::InvState, &message));
         }
 
         // **********************************************************************
