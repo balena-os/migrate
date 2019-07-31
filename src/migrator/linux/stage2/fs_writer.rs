@@ -35,7 +35,7 @@ const FORMAT_WITH_LABEL: bool = true;
 const DEFAULT_PARTITION_ALIGNMENT_KIB: u64 = 4096; // KiB
                                                    // should we maximize data partition to fill disk
                                                    // TODO: true might be the better default but can be very slow in combination with mkfs_direct_io
-const DEFAULT_MAX_DATA: bool = false;
+const DEFAULT_MAX_DATA: bool = true;
 
 pub const REQUIRED_CMDS: &[&str] = &[
     EXT_FMT_CMD,
@@ -475,6 +475,7 @@ fn format(lsblk_dev: &LsblkDevice, cmds: &EnsuredCmds, fs_dump: &FSDump) -> bool
 }
 
 fn sfdisk_part(device: &Path, sfdisk_path: &str, fs_dump: &FSDump) -> FlashResult {
+
     let mut sfdisk_cmd = match Command::new(sfdisk_path)
         .args(&["--wipe", "always", "-f", &*device.to_string_lossy()])
         .stderr(Stdio::piped())
@@ -504,7 +505,7 @@ fn sfdisk_part(device: &Path, sfdisk_path: &str, fs_dump: &FSDump) -> FlashResul
         if let Some(ref mut stdin) = sfdisk_cmd.stdin {
             debug!("Writing a new partition table to '{}'", device.display());
 
-            let mut buffer = format!("label: dos\nlabel-id: 0x{:x}\n", fs_dump.disk_id);
+            let mut buffer = format!("label: dos\n");
 
             debug!(
                 "Writing resin-boot as 'size={},bootable,type=e' to '{}'",
