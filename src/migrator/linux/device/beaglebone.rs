@@ -3,7 +3,7 @@ use regex::Regex;
 
 use crate::{
     common::{
-        stage2_config::{CheckedImageType, Stage2Config, Stage2ConfigBuilder},
+        stage2_config::{ Stage2Config, Stage2ConfigBuilder},
         Config, MigError, MigErrorKind,
     },
     defs::{BootType, DeviceType},
@@ -31,7 +31,8 @@ const SUPPORTED_OSSES: [&str; 3] = [
 // omapfb.mode=dvi:640x480MR-16@60 omapdss.def_disp=dvi
 // rootwait
 
-const BBXM_KOPTS: &str ="mtdparts=omap2-nand.0:512k(spl),1920k(u-boot),128k(u-boot-env),128k(dtb),6m(kernel),-(rootfs) mpurate=auto buddy=none camera=none vram=12M omapfb.mode=dvi:640x480MR-16@60 omapdss.def_disp=dvi";
+// const BBXM_KOPTS: &str ="mtdparts=omap2-nand.0:512k(spl),1920k(u-boot),128k(u-boot-env),128k(dtb),6m(kernel),-(rootfs) mpurate=auto buddy=none camera=none vram=12M omapfb.mode=dvi:640x480MR-16@60 omapdss.def_disp=dvi";
+const BBXM_KOPTS: &str ="";
 
 const BBG_KOPTS: &str = "";
 
@@ -363,12 +364,6 @@ impl<'a> Device for BeagleboardXM {
         } else {
             String::from(BBXM_KOPTS)
         };
-
-        if let CheckedImageType::FileSystems(ref mut fs_dump) = mig_info.image_file.image {
-            fs_dump.mkfs_direct = Some(true);
-            fs_dump.max_data = Some(false);
-        }
-        //dev_info.image_file.image.
 
         self.boot_manager
             .setup(cmds, mig_info, config, s2_cfg, &kernel_opts)

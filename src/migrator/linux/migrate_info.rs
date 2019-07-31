@@ -242,7 +242,7 @@ impl MigrateInfo {
 
             balena_cfg
         } else {
-            error!("The balena image has not been specified or cannot be accessed. Automatic download is not yet implemented, so you need to specify and supply all required files");
+            error!("The balena config has not been specified or cannot be accessed. Automatic download is not yet implemented, so you need to specify and supply all required files");
             return Err(MigError::displayed());
         };
 
