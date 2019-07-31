@@ -230,6 +230,7 @@ impl<'a> PartitionIterator<'a> {
         })
     }
 
+    #[allow(dead_code)]
     pub fn get_disk_id(&'a self) -> &'a Option<u32> {
         &self.disk_id
     }

@@ -2,19 +2,11 @@ use super::MigMode;
 use crate::common::{MigError, MigErrorKind};
 use serde::{Deserialize, Serialize};
 use std::path::{Path, PathBuf};
+use log::{debug};
 
 const MODULE: &str = "common::config::balena_config";
 
 use crate::defs::DEFAULT_API_CHECK_TIMEOUT;
-
-/*
-#[derive(Debug, Deserialize)]
-pub struct Host {
-    host: Option<String>,
-    port: Option<u16>,
-    check: Option<bool>,
-}
-*/
 
 // TODO: also store optional bootable flag, partition type and start offset ?
 #[derive(Debug, Serialize, Deserialize, Clone)]
@@ -32,7 +24,6 @@ pub(crate) enum PartCheck {
 
 #[derive(Debug, Serialize, Deserialize, Clone)]
 pub(crate) struct FSDump {
-    pub disk_id: u32,
     pub device_slug: String,
     pub check: Option<PartCheck>,
     pub max_data: Option<bool>,
@@ -81,6 +72,7 @@ impl<'a> BalenaConfig {
     }
 
     pub fn check(&self, mig_mode: &MigMode) -> Result<(), MigError> {
+        debug!("check: {:?}", self);
         if let MigMode::IMMEDIATE = mig_mode {
             if let None = self.image {
                 return Err(MigError::from_remark(
@@ -106,55 +98,6 @@ impl<'a> BalenaConfig {
         Ok(())
     }
 
-    /*
-        pub fn get_app_name(&'a self) -> Option<&'a str> {
-            if let Some(ref val) = self.app_name {
-                Some(val)
-            } else {
-                None
-            }
-        }
-
-        pub fn get_api_host(&'a self) -> &'a str {
-            if let Some(ref api) = self.api {
-                if let Some(ref val) = api.host {
-                    return val;
-                }
-            }
-
-            return DEFAULT_API_HOST;
-        }
-
-        pub fn get_api_port(&self) -> u16 {
-            if let Some(ref api) = self.api {
-                if let Some(ref val) = api.port {
-                    return *val;
-                }
-            }
-
-            return DEFAULT_API_PORT;
-        }
-
-        pub fn is_api_check(&self) -> bool {
-            if let Some(ref api) = self.api {
-                if let Some(ref val) = api.check {
-                    return *val;
-                }
-            }
-
-            return true;
-        }
-
-        pub fn get_api_key(&self) -> Option<String> {
-            if let Some(ref api) = self.api {
-                if let Some(ref val) = api.key {
-                    return Some(val.clone());
-                }
-            }
-
-            return None;
-        }
-    */
     pub fn is_check_vpn(&self) -> bool {
         if let Some(ref check_vpn) = self.check_vpn {
             *check_vpn

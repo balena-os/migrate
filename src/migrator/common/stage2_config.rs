@@ -1,5 +1,5 @@
 use failure::ResultExt;
-use log::{info, Level};
+use log::{info, debug, Level};
 use std::fs::{read_to_string, File};
 use std::io::Write;
 use std::path::{Path, PathBuf};
@@ -368,6 +368,9 @@ impl<'a> Stage2ConfigBuilder {
         let mut cfg_str = String::from("# Balena Migrate Stage2 Config\n");
         cfg_str.push_str("# auto-created by balena migrate - do not edit\n");
         cfg_str.push_str(&self.build()?.to_str()?);
+
+        debug!("write_stage2_cfg_to: config: '{}'", cfg_str);
+
         File::create(file)
             .context(MigErrCtx::from_remark(
                 MigErrorKind::Upstream,
@@ -378,6 +381,7 @@ impl<'a> Stage2ConfigBuilder {
                 MigErrorKind::Upstream,
                 &format!("Failed to write to config file: {}'", file.display()),
             ))?;
+
         info!("Wrote stage2 config to '{}'", file.display());
         Ok(())
     }

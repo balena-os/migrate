@@ -300,59 +300,51 @@ impl Extractor {
         }
 
         if partitions.len() == 5 {
-            if let Some(disk_id) = part_iterator.get_disk_id() {
-                let res = ImageType::FileSystems(FSDump {
-                    disk_id: *disk_id,
-                    device_slug: self.device_slug.clone(),
-                    check: None,
-                    max_data: None,
-                    mkfs_direct: None,
-                    boot: PartDump {
-                        archive: partitions[0].archive.clone(),
-                        blocks: partitions[0].num_sectors,
-                    },
-                    root_a: PartDump {
-                        archive: partitions[1].archive.clone(),
-                        blocks: partitions[1].num_sectors,
-                    },
-                    root_b: PartDump {
-                        archive: partitions[2].archive.clone(),
-                        blocks: partitions[2].num_sectors,
-                    },
-                    state: PartDump {
-                        archive: partitions[3].archive.clone(),
-                        blocks: partitions[3].num_sectors,
-                    },
-                    data: PartDump {
-                        archive: partitions[4].archive.clone(),
-                        blocks: partitions[4].num_sectors,
-                    },
-                });
 
-                debug!("res: {:?}", &res);
+            let res = ImageType::FileSystems(FSDump {
+                device_slug: self.device_slug.clone(),
+                check: None,
+                max_data: None,
+                mkfs_direct: None,
+                boot: PartDump {
+                    archive: partitions[0].archive.clone(),
+                    blocks: partitions[0].num_sectors,
+                },
+                root_a: PartDump {
+                    archive: partitions[1].archive.clone(),
+                    blocks: partitions[1].num_sectors,
+                },
+                root_b: PartDump {
+                    archive: partitions[2].archive.clone(),
+                    blocks: partitions[2].num_sectors,
+                },
+                state: PartDump {
+                    archive: partitions[3].archive.clone(),
+                    blocks: partitions[3].num_sectors,
+                },
+                data: PartDump {
+                    archive: partitions[4].archive.clone(),
+                    blocks: partitions[4].num_sectors,
+                },
+            });
 
-                let yaml_config = serde_yaml::to_string(&res).context(MigErrCtx::from_remark(
-                    MigErrorKind::Upstream,
-                    &format!("Failed to serialize config to yaml"),
-                ))?;
+            debug!("res: {:?}", &res);
 
-                let mut entabbed_cfg = String::new();
-                let lines = yaml_config.lines();
-                for line in lines {
-                    entabbed_cfg.push_str(&format!("    {}\n", line));
-                }
+            let yaml_config = serde_yaml::to_string(&res).context(MigErrCtx::from_remark(
+                MigErrorKind::Upstream,
+                &format!("Failed to serialize config to yaml"),
+            ))?;
 
-                println!("image config:");
-                println!("{}", entabbed_cfg);
-
-                Ok(res)
-            } else {
-                error!(
-                    "Missing disk id in image: '{}'",
-                    self.disk.get_image_file().display(),
-                );
-                Err(MigError::displayed())
+            let mut entabbed_cfg = String::new();
+            let lines = yaml_config.lines();
+            for line in lines {
+                entabbed_cfg.push_str(&format!("    {}\n", line));
             }
+
+            println!("image config:");
+            println!("{}", entabbed_cfg);
+
+            Ok(res)
         } else {
             error!(
                 "Unexpected number of partitions found in image: '{}', {}",

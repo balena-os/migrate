@@ -176,7 +176,6 @@ impl MigrateInfo {
 
                 ImageInfo {
                     image: CheckedImageType::FileSystems(FSDump {
-                        disk_id: fs_dump.disk_id,
                         device_slug: fs_dump.device_slug.clone(),
                         check: fs_dump.check.clone(),
                         max_data: fs_dump.max_data.clone(),

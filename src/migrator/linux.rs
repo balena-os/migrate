@@ -208,20 +208,6 @@ impl<'a> LinuxMigrator {
 
         // TODO: check available space for work files here if work is not on a distinct partition
 
-        /*
-        if let Some(flash_device) = config.migrate.get_flash_device() {
-            // force annother device to be flashed, strictly debug !!!
-            // forced flash device currently  goes unchecked for existence and size
-            warn!(
-                "Overriding chosen flash device with: '{}'",
-                force_flash_device.display()
-            );
-            stage2_config.set_flash_device(&PathBuf::from(force_flash_device));
-        } else {
-            stage2_config.set_flash_device(flash_device);
-        }
-        */
-
         // **********************************************************************
         // Require a minimum disk device size for installation
 
