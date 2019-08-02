@@ -1,8 +1,8 @@
 use super::MigMode;
 use crate::common::{MigError, MigErrorKind};
+use log::debug;
 use serde::{Deserialize, Serialize};
 use std::path::{Path, PathBuf};
-use log::{debug};
 
 const MODULE: &str = "common::config::balena_config";
 
@@ -24,6 +24,7 @@ pub(crate) enum PartCheck {
 
 #[derive(Debug, Serialize, Deserialize, Clone)]
 pub(crate) struct FSDump {
+    pub extended_blocks: u64,
     pub device_slug: String,
     pub check: Option<PartCheck>,
     pub max_data: Option<bool>,

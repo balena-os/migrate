@@ -222,6 +222,8 @@ impl Extractor {
 
         let mut part_iterator = PartitionIterator::new(&mut self.disk)?;
 
+        let mut extended_blocks: u64 = 0;
+
         loop {
             let raw_part = if let Some(raw_part) = part_iterator.next() {
                 raw_part
@@ -233,6 +235,7 @@ impl Extractor {
 
             match PartitionType::from_ptype(raw_part.ptype) {
                 PartitionType::Container => {
+                    extended_blocks = raw_part.num_sectors;
                     continue;
                 } // skip extended partition
                 PartitionType::Fat | PartitionType::Linux => (), // expected partition
@@ -300,12 +303,12 @@ impl Extractor {
         }
 
         if partitions.len() == 5 {
-
             let res = ImageType::FileSystems(FSDump {
                 device_slug: self.device_slug.clone(),
                 check: None,
                 max_data: None,
                 mkfs_direct: None,
+                extended_blocks,
                 boot: PartDump {
                     archive: partitions[0].archive.clone(),
                     blocks: partitions[0].num_sectors,

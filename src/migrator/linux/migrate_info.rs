@@ -180,6 +180,7 @@ impl MigrateInfo {
                         check: fs_dump.check.clone(),
                         max_data: fs_dump.max_data.clone(),
                         mkfs_direct: fs_dump.mkfs_direct.clone(),
+                        extended_blocks: fs_dump.extended_blocks,
                         boot: PartDump {
                             archive: boot_path,
                             blocks: fs_dump.boot.blocks,
