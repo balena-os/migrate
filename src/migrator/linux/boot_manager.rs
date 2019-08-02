@@ -52,6 +52,7 @@ pub(crate) trait BootManager {
 }
 
 pub(crate) struct EfiBootManager {
+    #[allow(dead_code)]
     msw_device: bool,
 }
 

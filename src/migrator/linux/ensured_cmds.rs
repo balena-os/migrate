@@ -18,17 +18,13 @@ pub const GZIP_CMD: &str = "gzip";
 pub const MKTEMP_CMD: &str = "mktemp";
 pub const MOKUTIL_CMD: &str = "mokutil";
 pub const MOUNT_CMD: &str = "mount";
-// pub const UMOUNT_CMD: &str = "umount";
 pub const LOSETUP_CMD: &str = "losetup";
 pub const PARTED_CMD: &str = "parted";
 pub const PARTPROBE_CMD: &str = "partprobe";
 pub const REBOOT_CMD: &str = "reboot";
-// pub const SFDISK_CMD: &str = "sfdisk";
 pub const TAR_CMD: &str = "tar";
-// pub const TRUNCATE_CMD: &str = "truncate";
 pub const UDEVADM_CMD: &str = "udevadm";
 pub const UNAME_CMD: &str = "uname";
-
 pub const EXT_FMT_CMD: &str = "mkfs.ext4";
 pub const FAT_FMT_CMD: &str = "mkfs.vfat";
 
@@ -76,7 +72,7 @@ impl EnsuredCmds {
         }
     }
 
-    /*
+    #[allow(dead_code)]
     pub fn has<'a>(&'a self, cmd: &str) -> bool {
         if let Some(_cmd_path) = self.cmd_table.get(cmd) {
             true
@@ -84,7 +80,6 @@ impl EnsuredCmds {
             false
         }
     }
-    */
 
     pub fn get<'a>(&'a self, cmd: &str) -> Result<&'a str, MigError> {
         if let Some(cmd_path) = self.cmd_table.get(cmd) {

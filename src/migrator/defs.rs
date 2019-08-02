@@ -14,6 +14,7 @@ pub const MIG_KERNEL_NAME: &str = "balena-migrate.zImage";
 pub const MIG_INITRD_NAME: &str = "balena-migrate.initrd";
 pub const MIG_DTB_NAME: &str = "balena-migrate.dtb";
 
+#[allow(dead_code)]
 pub const EFI_STARTUP_FILE: &str = "startup.nsh";
 
 // where do disk labels live ?
@@ -33,8 +34,6 @@ pub const BALENA_FILE_TAG_REGEX: &str = r###"^\s*## created by balena-migrate"##
 pub const DEFAULT_API_CHECK_TIMEOUT: u64 = 20;
 
 pub const BACKUP_FILE: &str = "backup.tgz";
-
-pub const APPROX_MEM_THRESHOLD: u64 = 64 * 1024 * 1024; // 64 MiB
 
 pub const MIN_DISK_SIZE: u64 = 2 * 1024 * 1024 * 1024; // 2 GiB
 
