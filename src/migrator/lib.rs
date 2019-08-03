@@ -1,3 +1,6 @@
+#[macro_use]
+extern crate nix;
+
 use log::error;
 use nix::unistd::sync;
 use std::panic;

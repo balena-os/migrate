@@ -3,12 +3,10 @@ use log::{debug, error, info, trace, warn, Level};
 use mod_logger::{LogDestination, Logger, NO_STREAM};
 use nix::unistd::sync;
 
-use std::fs::{copy, create_dir, read_dir, File, OpenOptions};
-use std::os::unix::fs::OpenOptionsExt;
-// use std::io::{Write};
+use std::fs::{copy, create_dir, read_dir};
+
 use std::path::Path;
-use std::sync::mpsc::{self, Sender};
-use std::thread::{self, JoinHandle};
+use std::thread;
 use std::time::{Duration, Instant};
 
 use crate::{
@@ -34,11 +32,13 @@ mod fs_writer;
 
 mod flasher;
 
+mod watchdog;
+use watchdog::WatchdogHandler;
+
 pub(crate) mod mounts;
 use mounts::Mounts;
 
 use std::cell::RefCell;
-use std::io::Write;
 
 const REBOOT_DELAY: u64 = 3;
 const S2_REV: u32 = 5;
@@ -216,7 +216,22 @@ impl<'a> Stage2 {
 
         // Recover device type and restore original boot configuration
 
-        let watchdog_handler = self.handle_watchdogs();
+        let mut watchdog_handler =
+            if let Some(watchdogs) = self.config.get_watchdogs() {
+                if watchdogs.len() > 0 {
+                    match WatchdogHandler::new(watchdogs) {
+                        Ok(handler) => Some(handler),
+                        Err(why) => {
+                            warn!("failed to initialize watchdog handler, error: {:?}", why);
+                            None
+                        }
+                    }
+                } else {
+                    None
+                }
+            } else {
+                None
+            };
 
         let migrate_delay = self.config.get_migrate_delay();
         if migrate_delay > 0 {
@@ -769,11 +784,9 @@ impl<'a> Stage2 {
 
         let _res = self.mounts.borrow_mut().unmount_log();
 
-        if let Some((tx, join_handle)) = watchdog_handler {
+        if let Some(ref mut wd_handler) = watchdog_handler {
             debug!("sending term signal to watchdog handler");
-            let _res = tx.send(1);
-            debug!("waiting for watchdg handler");
-            let _res = join_handle.join();
+            wd_handler.stop();
             debug!("watchdog handler has stopped");
         }
 
@@ -825,104 +838,6 @@ impl<'a> Stage2 {
             Stage2::exit(self.config.get_fail_mode())
         } else {
             Stage2::exit(&FailMode::RescueShell)
-        }
-    }
-
-    fn handle_watchdogs(&self) -> Option<(Sender<usize>, JoinHandle<()>)> {
-        debug!("handle_watchdogs: entered");
-
-        if let Some(watchdogs) = self.config.get_watchdogs() {
-            debug!("Looking for watchdog devices:");
-            let mut files: Vec<File> = Vec::new();
-            let mut interval: u64 = 55;
-            for watchdog in watchdogs {
-                debug!(
-                    "checking watchdog device: '{}' , timeout: {:?}",
-                    watchdog.path.display(),
-                    watchdog.interval
-                );
-                if file_exists(&watchdog.path) {
-                    match OpenOptions::new()
-                        .read(true)
-                        .write(true)
-                        .custom_flags(libc::O_NONBLOCK)
-                        .open(&watchdog.path)
-                    {
-                        Ok(file) => {
-                            debug!("Opened '{}", watchdog.path.display());
-                            files.push(file);
-                            if let Some(curr_itv) = watchdog.interval {
-                                if curr_itv < interval {
-                                    interval = curr_itv;
-                                }
-                            }
-                        }
-
-                        Err(why) => error!(
-                            "Failed to open watchdog '{}', error: {:?}",
-                            watchdog.path.display(),
-                            why
-                        ),
-                    }
-                } else {
-                    warn!("Watchdog not found: '{}", watchdog.path.display());
-                }
-            }
-
-            debug!(
-                "got {} watchdog devices to kick, interval: {}",
-                files.len(),
-                interval
-            );
-
-            if files.len() > 0 {
-                let (tx, rx) = mpsc::channel::<usize>();
-                let join_handle = thread::spawn(move || {
-                    debug!("watchdog_thread: performing initial kick");
-                    for ref mut file in &files {
-                        match file.write("w".as_ref()) {
-                            Ok(_res) => (),
-                            Err(why) => {
-                                error!("got error writing to watchdog device: {:?}", why);
-                            }
-                        }
-                    }
-
-                    loop {
-                        let start = Instant::now();
-                        let check_interval = Duration::from_secs(interval);
-                        loop {
-                            thread::sleep(Duration::from_secs(1));
-                            match rx.try_recv() {
-                                Ok(sig) => {
-                                    debug!("watchdog thread: termination signal received: {}", sig);
-                                    return;
-                                }
-                                Err(_why) => (),
-                            }
-                            if start.elapsed() >= check_interval {
-                                break;
-                            }
-                        }
-
-                        debug!("watchdog_thread: performing repeated kick");
-                        for ref mut file in &files {
-                            match file.write("w".as_ref()) {
-                                Ok(_res) => (),
-                                Err(why) => {
-                                    error!("got error writing to watchdog device: {:?}", why);
-                                }
-                            }
-                        }
-                    }
-                });
-
-                Some((tx, join_handle))
-            } else {
-                None
-            }
-        } else {
-            None
         }
     }
 }
