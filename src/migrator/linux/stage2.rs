@@ -216,22 +216,21 @@ impl<'a> Stage2 {
 
         // Recover device type and restore original boot configuration
 
-        let mut watchdog_handler =
-            if let Some(watchdogs) = self.config.get_watchdogs() {
-                if watchdogs.len() > 0 {
-                    match WatchdogHandler::new(watchdogs) {
-                        Ok(handler) => Some(handler),
-                        Err(why) => {
-                            warn!("failed to initialize watchdog handler, error: {:?}", why);
-                            None
-                        }
+        let mut watchdog_handler = if let Some(watchdogs) = self.config.get_watchdogs() {
+            if watchdogs.len() > 0 {
+                match WatchdogHandler::new(watchdogs) {
+                    Ok(handler) => Some(handler),
+                    Err(why) => {
+                        warn!("failed to initialize watchdog handler, error: {:?}", why);
+                        None
                     }
-                } else {
-                    None
                 }
             } else {
                 None
-            };
+            }
+        } else {
+            None
+        };
 
         let migrate_delay = self.config.get_migrate_delay();
         if migrate_delay > 0 {

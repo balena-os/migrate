@@ -6,7 +6,7 @@ use crate::{
     defs::FailMode,
 };
 
-use serde::Deserialize;
+use serde::{Deserialize, Serialize};
 
 const MODULE: &str = "common::config::migrate_config";
 const NO_NMGR_FILES: &[PathBuf] = &[];
@@ -42,6 +42,13 @@ impl MigMode {
 }
 
 const DEFAULT_MIG_MODE: MigMode = MigMode::PRETEND;
+
+#[derive(Debug, Deserialize, Serialize, Clone)]
+pub(crate) struct WatchdogCfg {
+    pub path: PathBuf,
+    pub timeout: Option<u64>,
+    pub close: Option<bool>,
+}
 
 #[derive(Debug, Deserialize, Clone)]
 pub(crate) struct UBootEnv {
@@ -95,7 +102,7 @@ pub(crate) struct MigrateConfig {
     require_nwmgr_config: Option<bool>,
     gzip_internal: Option<bool>,
     extract_device: Option<String>,
-    watchdogs: Option<Vec<PathBuf>>,
+    watchdogs: Option<Vec<WatchdogCfg>>,
     delay: Option<u64>,
     kernel_opts: Option<String>,
     force_flash_device: Option<PathBuf>,
@@ -206,7 +213,7 @@ impl<'a> MigrateConfig {
         }
     }
 
-    pub fn get_watchdogs(&'a self) -> Option<&'a Vec<PathBuf>> {
+    pub fn get_watchdogs(&'a self) -> Option<&'a Vec<WatchdogCfg>> {
         if let Some(ref val) = self.watchdogs {
             Some(val)
         } else {

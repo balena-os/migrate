@@ -324,7 +324,7 @@ dependencies = [
 [[package]]
 name = "mod_logger"
 version = "0.5.1"
-source = "git+https://github.com/samothx/ModuleLogger.git#c21bbd0354d4c7c17b9d57fd4360a4b2b8d23d17"
+source = "git+https://github.com/samothx/ModuleLogger.git#9bd117d28d69d01bc77a80ece3bba27b92ecadb8"
 dependencies = [
  "chrono 0.4.6 (registry+https://github.com/rust-lang/crates.io-index)",
  "colored 1.8.0 (registry+https://github.com/rust-lang/crates.io-index)",

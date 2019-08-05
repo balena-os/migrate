@@ -13,7 +13,10 @@ pub const EMPTY_BACKUPS: &[(String, String)] = &[];
 const MODULE: &str = "stage2::stage2:config";
 
 use crate::{
-    common::{config::balena_config::FSDump, MigErrCtx, MigError, MigErrorKind},
+    common::{
+        config::balena_config::FSDump, config::migrate_config::WatchdogCfg, MigErrCtx, MigError,
+        MigErrorKind,
+    },
     defs::{BootType, DeviceType, FailMode},
 };
 
@@ -104,7 +107,7 @@ pub(crate) struct Stage2Config {
     // delay migration in stage 2
     migrate_delay: Option<u64>,
     // watchdogs to kick
-    watchdogs: Option<Vec<PathBuf>>,
+    watchdogs: Option<Vec<WatchdogCfg>>,
 }
 
 impl<'a> Stage2Config {
@@ -186,7 +189,7 @@ impl<'a> Stage2Config {
         }
     }
 
-    pub fn get_watchdogs(&'a self) -> Option<&'a Vec<PathBuf>> {
+    pub fn get_watchdogs(&'a self) -> Option<&'a Vec<WatchdogCfg>> {
         if let Some(ref val) = self.watchdogs {
             Some(val)
         } else {
@@ -307,7 +310,7 @@ pub(crate) struct Stage2ConfigBuilder {
     device_type: Required<DeviceType>,
     boot_type: Required<BootType>,
     migrate_delay: Optional<u64>,
-    watchdogs: Optional<Vec<PathBuf>>,
+    watchdogs: Optional<Vec<WatchdogCfg>>,
 }
 
 impl<'a> Stage2ConfigBuilder {
@@ -446,7 +449,7 @@ impl<'a> Stage2ConfigBuilder {
         self.migrate_delay.set_ref(&val);
     }
 
-    pub fn set_watchdogs(&mut self, val: &Vec<PathBuf>) {
+    pub fn set_watchdogs(&mut self, val: &Vec<WatchdogCfg>) {
         self.watchdogs.set_ref(val);
     }
 }

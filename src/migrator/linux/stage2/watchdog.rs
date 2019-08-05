@@ -1,14 +1,14 @@
 use libc::c_int;
-use log::{debug, info, warn};
+use log::{debug, error, info, warn};
 use std::fs::{File, OpenOptions};
 use std::io::Write;
 use std::mem;
 use std::os::unix::io::AsRawFd;
-use std::path::PathBuf;
 use std::sync::mpsc::{self, Receiver, Sender};
 use std::thread::{self, JoinHandle};
 use std::time::{Duration, Instant};
 
+use crate::common::config::migrate_config::WatchdogCfg;
 use crate::common::MigError;
 
 const WD_IOC_MAGIC: u8 = b'W';
@@ -42,7 +42,7 @@ ioctl_read_buf!(wdioc_get_support, WD_IOC_MAGIC, WD_IOC_GETSUPPORT, u8);
 // ioctl_write_ptr!(wdioc_set_timeout, WD_IOC_MAGIC, WD_IOC_SETTIMEOUT, c_int);
 
 struct Watchdog {
-    path: PathBuf,
+    config: WatchdogCfg,
     file: Option<File>,
     fd: c_int,
     info: Option<WatchdogInfo>,
@@ -52,12 +52,12 @@ struct Watchdog {
 }
 
 impl Watchdog {
-    pub fn new(watchdog: &PathBuf) -> Result<Watchdog, MigError> {
+    pub fn new(watchdog_cfg: &WatchdogCfg) -> Result<Watchdog, MigError> {
         match OpenOptions::new()
             .read(true)
             .write(true)
             .create(false)
-            .open(&*watchdog.to_string_lossy())
+            .open(&*watchdog_cfg.path.to_string_lossy())
         {
             Ok(file) => {
                 let fd = file.as_raw_fd();
@@ -69,11 +69,11 @@ impl Watchdog {
                         let watchdog_info: WatchdogInfo = unsafe { mem::transmute(watchdog_buff) };
                         debug!(
                             "io_ctl result for get_support on '{}' retured Ok",
-                            watchdog.display()
+                            watchdog_cfg.path.display()
                         );
                         debug!(
                             "io_ctl result for get_support on '{}' retured options: 0x{:x}",
-                            watchdog.display(),
+                            watchdog_cfg.path.display(),
                             watchdog_info.options
                         );
                         Some(watchdog_info.clone())
@@ -81,7 +81,7 @@ impl Watchdog {
                     Err(why) => {
                         warn!(
                             "io_ctl result for get_support on '{}' failed {:?}",
-                            watchdog.display(),
+                            watchdog_cfg.path.display(),
                             why
                         );
                         None
@@ -95,7 +95,7 @@ impl Watchdog {
                         // TODO: assume 60 ?
                         warn!(
                             "Failed to retrieve timeout from watchdog: '{}', error: {:?}",
-                            watchdog.display(),
+                            watchdog_cfg.path.display(),
                             why
                         );
                         timeout = 60;
@@ -108,8 +108,8 @@ impl Watchdog {
                     Err(why) => {
                         // TODO: assume 60 ?
                         warn!(
-                            "Failed to retrieve timeout from watchdog: '{}', error: {:?}",
-                            watchdog.display(),
+                            "Failed to retrieve remaining time from watchdog: '{}', error: {:?}",
+                            watchdog_cfg.path.display(),
                             why
                         );
                         due = 1;
@@ -117,7 +117,7 @@ impl Watchdog {
                 }
 
                 Ok(Watchdog {
-                    path: watchdog.clone(),
+                    config: watchdog_cfg.clone(),
                     file: Some(file),
                     fd,
                     info,
@@ -129,11 +129,19 @@ impl Watchdog {
             Err(why) => {
                 warn!(
                     "Failed to open watchdog '{}', error: {:?}",
-                    watchdog.display(),
+                    watchdog_cfg.path.display(),
                     why
                 );
                 Err(MigError::displayed())
             }
+        }
+    }
+
+    pub fn is_close(&self) -> bool {
+        if let Some(fl_close) = self.config.close {
+            fl_close
+        } else {
+            true
         }
     }
 
@@ -150,11 +158,15 @@ impl Watchdog {
         if let Err(why) = unsafe { wdioc_keepalive(self.fd, &mut status) } {
             warn!(
                 "wdioc_keepalive '{}', failed with: {:?}",
-                self.path.display(),
+                self.config.path.display(),
                 why
             );
         } else {
-            debug!("wdioc_keepalive '{}': 0x{:x}", self.path.display(), status);
+            debug!(
+                "wdioc_keepalive '{}': 0x{:x}",
+                self.config.path.display(),
+                status
+            );
             self.kicked = Instant::now();
             self.due = Duration::new(self.timeout - 1, SECOND_2_NANO / 2);
         }
@@ -170,7 +182,16 @@ impl Watchdog {
         if self.has_magic_close() {
             if let Some(ref mut file) = self.file {
                 let buf: [u8; 1] = [b'V'];
-                let _res = file.write(&buf);
+                match file.write(&buf) {
+                    Ok(_) => (),
+                    Err(why) => {
+                        error!(
+                            "Failed to write close byte to '{}', error {:?}",
+                            self.config.path.display(),
+                            why
+                        );
+                    }
+                }
             }
         }
         self.file = None;
@@ -183,27 +204,29 @@ pub(crate) struct WatchdogHandler {
 }
 
 impl WatchdogHandler {
-    pub fn new(watchdogs: &Vec<PathBuf>) -> Result<WatchdogHandler, MigError> {
+    pub fn new(watchdogs: &Vec<WatchdogCfg>) -> Result<WatchdogHandler, MigError> {
         let mut dogs: Vec<Watchdog> = Vec::new();
 
-        for watchdog_path in watchdogs {
-            match Watchdog::new(watchdog_path) {
+        for watchdog_cfg in watchdogs {
+            match Watchdog::new(watchdog_cfg) {
                 Ok(mut watchdog) => {
-                    if watchdog.has_magic_close() {
+                    if watchdog.is_close() && watchdog.has_magic_close() {
+                        watchdog.kick();
                         watchdog.close();
                         debug!(
                             "created and closed watchdog for: '{}'",
-                            watchdog_path.display()
+                            watchdog_cfg.path.display()
                         );
+                        continue;
                     } else {
-                        debug!("created watchdog for: '{}'", watchdog_path.display());
-                        dogs.push(watchdog)
+                        debug!("created watchdog for: '{}'", watchdog_cfg.path.display());
+                        dogs.push(watchdog);
                     }
                 }
                 Err(why) => {
                     warn!(
                         "Failed to initialize watchdog: '{}': error {:?}",
-                        watchdog_path.display(),
+                        watchdog_cfg.path.display(),
                         why
                     );
                 }
