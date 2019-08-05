@@ -46,7 +46,7 @@ struct Watchdog {
     file: Option<File>,
     fd: c_int,
     info: Option<WatchdogInfo>,
-    timeout: u64,
+    interval: u64,
     due: Duration,
     kicked: Instant,
 }
@@ -88,19 +88,22 @@ impl Watchdog {
                     }
                 };
 
-                let mut timeout: c_int = 0;
-                match unsafe { wdioc_get_timeout(fd, &mut timeout) } {
-                    Ok(_) => (),
-                    Err(why) => {
-                        // TODO: assume 60 ?
-                        warn!(
-                            "Failed to retrieve timeout from watchdog: '{}', error: {:?}",
-                            watchdog_cfg.path.display(),
-                            why
-                        );
-                        timeout = 60;
+                let interval = if let Some(interval) = watchdog_cfg.interval {
+                    interval
+                } else {
+                    let mut interval: c_int = 0;
+                    match unsafe { wdioc_get_timeout(fd, &mut interval) } {
+                        Ok(_) => interval as u64,
+                        Err(why) => {
+                            warn!(
+                                "Failed to retrieve timeout from watchdog: '{}', error: {:?}",
+                                watchdog_cfg.path.display(),
+                                why
+                            );
+                            60
+                        }
                     }
-                }
+                };
 
                 let mut due: c_int = 0;
                 match unsafe { wdioc_get_timeleft(fd, &mut due) } {
@@ -122,7 +125,7 @@ impl Watchdog {
                     fd,
                     info,
                     kicked: Instant::now(),
-                    timeout: timeout as u64,
+                    interval,
                     due: Duration::new((due - 1) as u64, SECOND_2_NANO / 2),
                 })
             }
@@ -156,7 +159,7 @@ impl Watchdog {
     pub fn kick(&mut self) {
         let mut status: c_int = 0;
         if let Err(why) = unsafe { wdioc_keepalive(self.fd, &mut status) } {
-            warn!(
+            error!(
                 "wdioc_keepalive '{}', failed with: {:?}",
                 self.config.path.display(),
                 why
@@ -167,9 +170,9 @@ impl Watchdog {
                 self.config.path.display(),
                 status
             );
-            self.kicked = Instant::now();
-            self.due = Duration::new(self.timeout - 1, SECOND_2_NANO / 2);
         }
+        self.kicked = Instant::now();
+        self.due = Duration::new(self.interval - 1, SECOND_2_NANO / 2);
     }
 
     pub fn kick_if_due(&mut self) {

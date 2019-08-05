@@ -46,7 +46,7 @@ const DEFAULT_MIG_MODE: MigMode = MigMode::PRETEND;
 #[derive(Debug, Deserialize, Serialize, Clone)]
 pub(crate) struct WatchdogCfg {
     pub path: PathBuf,
-    pub timeout: Option<u64>,
+    pub interval: Option<u64>,
     pub close: Option<bool>,
 }
 
