@@ -1,4 +1,3 @@
-use lazy_static::lazy_static;
 use log::debug;
 use std::path::{Path, PathBuf};
 
@@ -6,7 +5,7 @@ use std::path::{Path, PathBuf};
 use super::QueryRes;
 use crate::{
     common::{MigError, MigErrorKind},
-    mswin::{msw_defs::FileSystem, win_api::wmi_api::WmiAPI, wmi_utils::volume::Volume},
+    mswin::{ win_api::wmi_api::WmiAPI, wmi_utils::volume::Volume},
 };
 
 use crate::mswin::wmi_utils::NS_CVIM2;

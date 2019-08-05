@@ -1,5 +1,5 @@
 use failure::ResultExt;
-use std::path::{Path, PathBuf};
+use std::path::{Path, };
 
 use crate::{
     common::{
@@ -8,18 +8,18 @@ use crate::{
     },
     defs::{OSArch, APPROX_MEM_THRESHOLD},
     mswin::{
-        boot_manager::{BootManager, EfiBootManager},
+        // boot_manager::{BootManager, EfiBootManager},
         msw_defs::FileSystem,
         powershell::PSInfo,
         util::mount_efi,
         win_api::is_efi_boot,
-        wmi_utils::{LogicalDrive, MountPoint, Partition, PhysicalDrive, Volume, WmiUtils},
+        wmi_utils::{ MountPoint,  PhysicalDrive, Volume, WmiUtils},
     },
 };
 use log::{debug, error, info, trace, warn};
 
 pub(crate) mod path_info;
-use crate::defs::BootType;
+// use crate::defs::BootType;
 use path_info::PathInfo;
 
 #[derive(Debug, Clone)]

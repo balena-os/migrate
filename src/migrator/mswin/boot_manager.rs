@@ -1,5 +1,5 @@
 use failure::ResultExt;
-use log::{debug, info, trace};
+use log::{debug, info, trace, error, warn};
 use regex::Regex;
 use std::fs::{copy, create_dir_all, rename, File};
 use std::io::Write;
@@ -17,10 +17,12 @@ use crate::{
         Config, MigErrCtx, MigError, MigErrorKind,
     },
     defs::{
-        BootType, BALENA_EFI_DIR, EFI_BCKUP_DIR, EFI_BOOT_DIR, EFI_DEFAULT_BOOTMGR64,
+        BootType,
         EFI_STARTUP_FILE, MIG_INITRD_NAME, MIG_KERNEL_NAME,
     },
-    mswin::{migrate_info::MigrateInfo, msw_defs::EFI_MS_BOOTMGR},
+    mswin::{migrate_info::MigrateInfo, 
+            msw_defs::{ EFI_MS_BOOTMGR, BALENA_EFI_DIR, EFI_BCKUP_DIR, EFI_BOOT_DIR, EFI_DEFAULT_BOOTMGR64 },
+    },
 };
 
 pub(crate) trait BootManager {

@@ -1,11 +1,7 @@
+
+#[cfg(target_os = "linux")]
 #[macro_use]
 extern crate nix;
-
-use log::error;
-use nix::unistd::sync;
-use std::panic;
-
-use mod_logger::Logger;
 
 pub mod common;
 
@@ -34,6 +30,12 @@ pub fn migrate() -> Result<(), MigError> {
 
 #[cfg(target_os = "linux")]
 pub fn stage2() -> Result<(), MigError> {
+    use nix::unistd::sync;
+    use log::error;
+    use std::panic;
+    use mod_logger::Logger;
+    
+
     let res = panic::catch_unwind(|| -> Result<(), MigError> {
         let mut stage2 = match Stage2::try_init() {
             Ok(res) => res,

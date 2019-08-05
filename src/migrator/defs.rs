@@ -17,6 +17,9 @@ pub const MIG_DTB_NAME: &str = "balena-migrate.dtb";
 #[allow(dead_code)]
 pub const EFI_STARTUP_FILE: &str = "startup.nsh";
 
+#[allow(dead_code)]
+pub const APPROX_MEM_THRESHOLD: u64 = 1024 * 1024;
+
 // where do disk labels live ?
 pub const DISK_BY_LABEL_PATH: &str = "/dev/disk/by-label";
 pub const DISK_BY_PARTUUID_PATH: &str = "/dev/disk/by-partuuid";

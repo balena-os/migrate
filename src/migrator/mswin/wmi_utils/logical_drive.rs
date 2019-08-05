@@ -1,5 +1,5 @@
 use log::debug;
-use std::rc::Rc;
+
 // use log::{debug};
 use super::QueryRes;
 use crate::{
@@ -16,23 +16,23 @@ const QUERY_BASE: &str = "SELECT Caption, DeviceID, Compressed, FileSystem, Medi
 
 #[derive(Debug, Clone)]
 pub(crate) enum MediaType {
-    UNKNOWN,
-    FIXED_MEDIA,
-    REMOVABLE_MEDIA,
-    REMOVABLE_FLOPPY,
+    Unknown,
+    FixedMedia,
+    RemovableMedia,
+    RemovableFloppy,
 }
 
 impl MediaType {
     pub fn from_int(value: i32) -> MediaType {
         match value {
-            0 => MediaType::UNKNOWN,
-            11 => MediaType::REMOVABLE_MEDIA,
-            12 => MediaType::FIXED_MEDIA,
+            0 => MediaType::Unknown,
+            11 => MediaType::RemovableMedia,
+            12 => MediaType::FixedMedia,
             _ => {
                 if ((value > 0) && (value < 11)) || (value > 12 && value < 22) {
-                    MediaType::REMOVABLE_FLOPPY
+                    MediaType::RemovableFloppy
                 } else {
-                    MediaType::UNKNOWN
+                    MediaType::Unknown
                 }
             }
         }

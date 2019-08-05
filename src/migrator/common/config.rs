@@ -15,7 +15,7 @@ pub(crate) mod volume_config;
 pub(crate) use backup_config::BackupConfig;
 */
 pub(crate) mod migrate_config;
-pub(crate) use migrate_config::{MigMode, MigrateConfig, MigrateWifis};
+pub(crate) use migrate_config::{MigMode, MigrateConfig,};
 
 pub(crate) mod balena_config;
 pub(crate) use balena_config::BalenaConfig;
