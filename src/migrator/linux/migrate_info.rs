@@ -7,7 +7,8 @@ use crate::{
         config::balena_config::{FSDump, ImageType, PartDump},
         stage2_config::{CheckedImageType, ImageInfo},
         wifi_config::WifiConfig,
-        Config, FileInfo, FileType, MigError, MigErrorKind, MigrateWifis,
+        Config, FileInfo, FileType, MigError, MigErrorKind,
+        config::MigrateWifis,
     },
     defs::OSArch,
     linux::{

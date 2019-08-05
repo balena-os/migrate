@@ -43,6 +43,9 @@ migrate:
       # optional close, false disables MAGICCLOSE flag read from device
       # watchdog will be kicked instead
       close: false
+  # by default migration requires some network manager config to be present (eg from wlan or supplied)
+  # set this to false to not require connection files
+  require_nwmgr_config: ~
 balena:
   image:
     # use dd / flash balena image

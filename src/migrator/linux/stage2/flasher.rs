@@ -15,7 +15,7 @@ use std::time::{Duration, Instant};
 use crate::{
     common::{format_size_with_unit, stage2_config::Stage2Config, MigError},
     linux::{
-        ensured_cmds::{EnsuredCmds, DD_CMD, GZIP_CMD, LSBLK_CMD, PARTPROBE_CMD, UDEVADM_CMD},
+        ensured_cmds::{EnsuredCmds, DD_CMD, GZIP_CMD, PARTPROBE_CMD, UDEVADM_CMD},
         linux_defs::{POST_PARTPROBE_WAIT_SECS, PRE_PARTPROBE_WAIT_SECS},
         stage2::{mounts::Mounts, FlashResult},
     },
@@ -24,7 +24,7 @@ use crate::{
 const DD_BLOCK_SIZE: usize = 4194304;
 const UDEVADM_PARAMS: &[&str] = &["settle", "-t", "10"];
 
-const REQUIRED_CMDS: &[&str] = &[DD_CMD, PARTPROBE_CMD, UDEVADM_CMD, LSBLK_CMD];
+const REQUIRED_CMDS: &[&str] = &[DD_CMD, PARTPROBE_CMD, UDEVADM_CMD,];
 
 // TODO: return something else instead (success, (recoverable / not recoverable))
 

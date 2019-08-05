@@ -32,6 +32,7 @@ impl IntelNuc {
             "Ubuntu 16.04.2 LTS",
             "Ubuntu 14.04.2 LTS",
             "Ubuntu 14.04.5 LTS",
+            "Ubuntu 14.04.6 LTS"
         ];
 
         let os_name = &mig_info.os_name;
