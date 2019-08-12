@@ -90,6 +90,7 @@ pub(crate) struct LsblkInfo {
 }
 
 impl<'a> LsblkInfo {
+    /// Return LsblkInfo of selected device
     pub fn for_device(device: &Path, cmds: &EnsuredCmds) -> Result<LsblkDevice, MigError> {
         let lsblk_info = LsblkInfo::call_lsblk(Some(device), cmds)?;
         if lsblk_info.blockdevices.len() == 1 {
@@ -105,6 +106,7 @@ impl<'a> LsblkInfo {
         }
     }
 
+    /// Return LsblkInfo of all devices filtered by BLOC_DEV_SUPP_MAJ_NUMBERS
     pub fn all(cmds: &EnsuredCmds) -> Result<LsblkInfo, MigError> {
         let mut lsblk_info = LsblkInfo::call_lsblk(None, cmds)?;
 
@@ -144,6 +146,7 @@ impl<'a> LsblkInfo {
         Ok(lsblk_info)
     }
 
+    /// Get LsblkDevice, LsblkPartition for a given path
     pub fn get_path_info<P: AsRef<Path>>(
         &'a self,
         path: P,
@@ -197,11 +200,12 @@ impl<'a> LsblkInfo {
         }
     }
 
+    /// Get the list of block devices
     pub fn get_blk_devices(&'a self) -> &'a Vec<LsblkDevice> {
         &self.blockdevices
     }
 
-    // get the LsblkDevice & LsblkPartition from partition device path as in /dev/sda1
+    /// Get the LsblkDevice & LsblkPartition from partition device path as in /dev/sda1
     pub fn get_devinfo_from_partition<P: AsRef<Path>>(
         &'a self,
         part_path: P,
@@ -233,6 +237,7 @@ impl<'a> LsblkInfo {
         }
     }
 
+    /// call lsblk and parse results
     fn call_lsblk(device: Option<&Path>, cmds: &EnsuredCmds) -> Result<LsblkInfo, MigError> {
         let mut _tmp_path: Option<String> = None;
         let args: Vec<&str> = if let Some(device) = device {
@@ -276,6 +281,7 @@ impl<'a> LsblkInfo {
         }
     }
 
+    /// Parse lsblk results from list for older Os'ses
     fn from_list(list: &str) -> Result<LsblkInfo, MigError> {
         let param_re = Regex::new(r#"^([^=]+)="([^"]*)"$"#).unwrap();
 
@@ -408,6 +414,7 @@ impl<'a> LsblkInfo {
         Ok(lsblk_info)
     }
 
+    /// Parse lsblk results from json for newer Os'ses
     fn from_json(json_str: &str) -> Result<LsblkInfo, MigError> {
         let mut lsblk_info =
             serde_json::from_str::<LsblkInfo>(json_str).context(MigErrCtx::from_remark(

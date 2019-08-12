@@ -187,22 +187,6 @@ impl Disk {
 
         Ok(mbr)
     }
-
-    /*
-        pub fn get_partition_iterator(&mut self) -> Result<PartitionIterator, MigError> {
-            Ok(PartitionIterator::new(self)?)
-        }
-
-        // TODO: allow reading partitions while holding PartitionIterator
-        // PartitionIterator must supply partitionReader as it holds a mut ref to Disk
-
-        pub fn get_partition_reader(
-            &mut self,
-            partition: &PartInfo,
-        ) -> Result<PartitionReader, MigError> {
-            Ok(PartitionReader::from_disk(partition, self)?)
-        }
-    */
 }
 
 pub(crate) struct PartitionIterator<'a> {

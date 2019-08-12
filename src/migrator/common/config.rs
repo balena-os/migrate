@@ -229,7 +229,7 @@ impl<'a> Config {
             }
         }
 
-        if let MigMode::EXTRACT = config.migrate.get_mig_mode() {
+        if let MigMode::FSExtract = config.migrate.get_mig_mode() {
             if arg_matches.is_present("device-type") {
                 if let Some(dev_type) = arg_matches.value_of("device-type") {
                     config.migrate.set_extract_device(dev_type);
@@ -321,7 +321,7 @@ mod tests {
     fn read_conf_ok() -> () {
         let config = Config::from_string(TEST_CONFIG_OK).unwrap();
 
-        assert_eq!(config.migrate.get_mig_mode(), &MigMode::IMMEDIATE);
+        assert_eq!(config.migrate.get_mig_mode(), &MigMode::Immediate);
         assert_eq!(config.migrate.get_work_dir(), Path::new("./work/"));
         match config.migrate.get_wifis() {
             MigrateWifis::SOME(list) => assert_eq!(list.len(), 3),

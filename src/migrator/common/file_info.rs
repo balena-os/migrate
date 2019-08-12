@@ -6,8 +6,8 @@ use regex::Regex;
 use std::path::{Path, PathBuf};
 
 // ******************************************************************
-// Find location and size of file as absolute or relative to workdir
-// make a guess on file contents / type and conpare to expected value
+// Find location and size of file as absolute path or relative to workdir
+// Use file command on unix to establish the file type
 // ******************************************************************
 
 // file on ubuntu-14.04 reports x86 boot sector for image and kernel files
@@ -184,6 +184,8 @@ impl FileInfo {
         }
     }
 
+
+    // TODO: implement for windows
     #[cfg(target_os = "windows")]
     pub fn expect_type(&self, ftype: &FileType) -> Result<(), MigError> {
         if !self.is_type(ftype)? {

@@ -74,7 +74,7 @@ impl<'a> BalenaConfig {
 
     pub fn check(&self, mig_mode: &MigMode) -> Result<(), MigError> {
         debug!("check: {:?}", self);
-        if let MigMode::IMMEDIATE = mig_mode {
+        if let MigMode::Immediate = mig_mode {
             if let None = self.image {
                 return Err(MigError::from_remark(
                     MigErrorKind::InvParam,

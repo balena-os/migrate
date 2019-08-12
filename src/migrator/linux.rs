@@ -24,8 +24,11 @@ pub(crate) use device::Device;
 
 pub(crate) mod boot_manager;
 
-mod extract;
-use extract::Extractor;
+mod extract_fs;
+use extract_fs::FsExtractor;
+
+mod extract_flash;
+use extract_flash::FlashExtractor;
 
 pub(crate) mod stage2;
 
@@ -61,18 +64,23 @@ impl<'a> LinuxMigrator {
         let config = Config::new()?;
 
         match config.migrate.get_mig_mode() {
-            MigMode::EXTRACT => {
-                let mut extractor = Extractor::new(config)?;
+            MigMode::FSExtract => {
+                let mut extractor = FsExtractor::new(config)?;
+                extractor.extract(None)?;
+                Ok(())
+            }
+            MigMode::FlashExtract => {
+                let mut extractor = FlashExtractor::new(config)?;
                 extractor.extract(None)?;
                 Ok(())
             }
             _ => {
                 let mut migrator = LinuxMigrator::try_init(config)?;
                 let res = match migrator.config.migrate.get_mig_mode() {
-                    MigMode::IMMEDIATE => migrator.do_migrate(),
-                    MigMode::PRETEND => Ok(()),
-                    MigMode::AGENT => Err(MigError::from(MigErrorKind::NotImpl)),
-                    MigMode::EXTRACT => panic!("impossible MigMode here"),
+                    MigMode::Immediate => migrator.do_migrate(),
+                    MigMode::Pretend => Ok(()),
+                    MigMode::Agent => Err(MigError::from(MigErrorKind::NotImpl)),
+                    _ => panic!("impossible MigMode here"),
                 };
                 Logger::flush();
                 res

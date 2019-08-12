@@ -16,7 +16,7 @@ use serde_yaml;
 use crate::{
     common::{
         config::balena_config::ImageType,
-        disk_util::{Disk, PartitionIterator, PartitionReader}, //  , ImageFile, GZipFile, PlainFile },
+        disk_util::{Disk, PartitionIterator, PartitionReader},
         Config,
         FileInfo,
         FileType,
@@ -27,35 +27,24 @@ use crate::{
     defs::{PART_FSTYPE, PART_NAME},
     linux::{
         ensured_cmds::{
-            EnsuredCmds, BLKID_CMD, FILE_CMD, LOSETUP_CMD, LSBLK_CMD, MKTEMP_CMD, MOUNT_CMD,
-            TAR_CMD,
+            EnsuredCmds, FILE_CMD, LOSETUP_CMD, LSBLK_CMD, MKTEMP_CMD, TAR_CMD,
         },
         linux_common::mktemp,
         linux_defs::NIX_NONE,
     },
 };
 
-// mod image_file;
-// use image_file::ImageFile;
-
-// mod gzip_file;
-// use gzip_file::GZipFile;
-
-// mod plain_file;
-// use plain_file::PlainFile;
 
 use crate::common::config::balena_config::{FSDump, PartDump};
 use crate::common::disk_util::PartitionType;
 use crate::common::path_append;
 
 const REQUIRED_CMDS: &[&str] = &[
-    FILE_CMD,
-    MOUNT_CMD,
-    MKTEMP_CMD,
-    TAR_CMD,
-    LSBLK_CMD,
-    LOSETUP_CMD,
-    BLKID_CMD,
+    FILE_CMD,   // for FileInfo
+    LSBLK_CMD,  // for LsblkInfo
+    MKTEMP_CMD, // for linux_cmmon::mktemp
+    TAR_CMD,    // locally
+    LOSETUP_CMD, // locally
 ];
 const DEF_BUFFER_SIZE: usize = 1024 * 1024;
 
@@ -72,7 +61,7 @@ pub(crate) struct Partition {
     pub archive: Option<PathBuf>,
 }
 
-pub(crate) struct Extractor {
+pub(crate) struct FsExtractor {
     cmds: EnsuredCmds,
     config: Config,
     device_slug: String,
@@ -82,8 +71,8 @@ pub(crate) struct Extractor {
 // TODO: Extractor could modify config / save new ImageType
 // TODO: Save ImageType as yml file
 
-impl Extractor {
-    pub fn new(config: Config) -> Result<Extractor, MigError> {
+impl FsExtractor {
+    pub fn new(config: Config) -> Result<FsExtractor, MigError> {
         trace!("new: entered");
 
         // TODO: support more devices
@@ -125,7 +114,7 @@ impl Extractor {
                 match Disk::from_gzip_img(&image_info.path) {
                     Ok(gzip_img) => {
                         debug!("new: is gzipped image '{}'", image_info.path.display());
-                        return Ok(Extractor {
+                        return Ok(FsExtractor {
                             cmds,
                             config,
                             disk: gzip_img,
@@ -146,7 +135,7 @@ impl Extractor {
                     match Disk::from_drive_file(&image_info.path, None) {
                         Ok(plain_img) => {
                             debug!("new: is plain image '{}'", image_info.path.display());
-                            return Ok(Extractor {
+                            return Ok(FsExtractor {
                                 cmds,
                                 config,
                                 disk: plain_img,
@@ -260,7 +249,7 @@ impl Extractor {
             let mut part_reader =
                 PartitionReader::from_part_iterator(&raw_part, &mut part_iterator);
 
-            match Extractor::write_partition(
+            match FsExtractor::write_partition(
                 &self.cmds,
                 &self.config,
                 &mut part_reader,

@@ -15,19 +15,21 @@ const NO_BACKUP_VOLUMES: &[VolumeConfig] = &[];
 
 #[derive(Debug, PartialEq, Deserialize, Clone)]
 pub(crate) enum MigMode {
-    AGENT,
-    IMMEDIATE,
-    PRETEND,
-    EXTRACT,
+    Agent,
+    Immediate,
+    Pretend,
+    FSExtract,
+    FlashExtract,
 }
 
 impl MigMode {
     pub fn from_str(mode: &str) -> Result<Self, MigError> {
         match mode.to_lowercase().as_str() {
-            "extract" => Ok(MigMode::EXTRACT),
-            "immediate" => Ok(MigMode::IMMEDIATE),
-            "agent" => Ok(MigMode::AGENT),
-            "pretend" => Ok(MigMode::PRETEND),
+            "fsextract" => Ok(MigMode::FSExtract),
+            "flashextract" => Ok(MigMode::FlashExtract),
+            "immediate" => Ok(MigMode::Immediate),
+            "agent" => Ok(MigMode::Agent),
+            "pretend" => Ok(MigMode::Pretend),
             _ => {
                 return Err(MigError::from_remark(
                     MigErrorKind::InvParam,
@@ -41,7 +43,7 @@ impl MigMode {
     }
 }
 
-const DEFAULT_MIG_MODE: MigMode = MigMode::PRETEND;
+const DEFAULT_MIG_MODE: MigMode = MigMode::Pretend;
 
 #[derive(Debug, Deserialize, Serialize, Clone)]
 pub(crate) struct WatchdogCfg {
@@ -141,7 +143,7 @@ impl<'a> MigrateConfig {
 
     pub fn check(&self) -> Result<(), MigError> {
         match self.get_mig_mode() {
-            MigMode::AGENT => Err(MigError::from(MigErrorKind::NotImpl)),
+            MigMode::Agent => Err(MigError::from(MigErrorKind::NotImpl)),
             _ => {
                 if let None = self.work_dir {
                     error!("A required parameter was not found: 'work_dir'");
