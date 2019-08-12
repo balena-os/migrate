@@ -52,16 +52,17 @@ of memory available can be determined more precisely.
 
 ### Stage 2 Boot Setup
 
-Setting boot is handled by the device and boot_manager traits / modules  and the device / boot manager specific 
-implementations. ```device.get_device``` will attempt to return a device specific device trait implementation or fail if 
+Setting up stag 2 boot is handled by the device and boot_manager traits / modules  and the device / boot manager specific 
+implementations. ```Device::get_device()``` will attempt to return a device specific device trait implementation or fail if 
 none is found. 
 
 The device implementation will determine and return a suitable boot_manager implementation or fail if none is found.
 
-The basic strategy for stage2 is to place the kernel, initramfs and possible dtb files in a convenient location 
-depending on the boot manager used and boot them. 
+The basic strategy for stage2 is to place the kernel, initramfs and possible dtb files (device tree blob) in a convenient 
+location depending on the boot manager used and to configure the system to boot them. 
 The kernel command line provided will typically use partuuid or uuid syntax for the root device which has no relevance 
-other than that it contains the stage2 config file ```balena-stage2.yml```. 
+other than that it contains the stage2 config file ```balena-stage2.yml```. The root partition defaults to the same 
+partition that contains the kernel and initramfs. 
 For most system (other than x86 / grub) this is the critical of stage2 boot as the stage2 config contains 
 information needed to restore the former boot configuration and mount all other required partitions / directories. 
 Failing to restore the former boot configuration will lead to lost devices if stage2 fails.    
@@ -72,7 +73,7 @@ be utilized.
 If we are running on a Windows system currently only EFI is supported and ```balena-migrate``` will fail if EFI setup 
 can not be found or if secure-boot is detected which is currently not supported. 
 
-On x86 Linux currently only grub is supported. 
+On x86 Linux currently only grub is implemented as a supported boot manager. 
 It can be challenging to determine the active boot manager when more than one boot manager is present/installed in the 
 system. If a grub installation is found on an x86 Linux system ```balena-migrate``` will use grub 'hoping' that this 
 configuration will work to reboot the system into stage2. If grub is not the active boot manager the setup should have 
@@ -82,7 +83,7 @@ no effect.
 
 If a grub boot manager is detected balena-migrate will attempt to add a new boot configuration in /etc/grub/grub.d 
 and activate that configuration using ```update-grub``` and ```grub-reboot``` to allow the stage2 boot configuration 
-to boot only once. 
+to boot once. 
 This way - if stage2 fails - the system will return to the former configuration on next boot without the need to restore 
 the former configuration. 
 
@@ -121,12 +122,13 @@ The stage2 configuration will also be placed in ```/boot``` and the boot partiti
 
 #### UBoot Platforms  
 
-u-boot boot configurations be setup up in several different ways and the challenge for the balena migrate u-boot boot 
-manager is to understand the configuration presnt on the device.
-u-boot files (MLO & u-boot.img) that indicate the partition u-boot boots from can be found in regular partitions, 
+u-boot boot configurations can be setup up in several different ways and the challenge for the balena migrate u-boot boot 
+manager is to understand the configuration present on the device.
+u-boot files (MLO & u-boot.img) that indicate the partition u-boot boots from, can be found in regular partitions, 
 in the boot sector of a drive or in special mmcblk devices (mmcblkboot). 
+
 The current strategy is to use a uEnv.txt file to modify the boot configuration. The location of the file has 
-to carefully chosen to allow u-boot to find it and use it appropriately. 
+to be carefully chosen to allow u-boot to find it and use it appropriately. 
 
 Possible complications can result from incompatibilities between the u-boot files and the kernel / dtb files.
 
