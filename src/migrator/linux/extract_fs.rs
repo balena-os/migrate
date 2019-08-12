@@ -34,6 +34,10 @@ use crate::{
     },
 };
 
+// Extract balena image & config.json from flasher image
+// might be the better approach to use existing scripts from
+// bash balena-migrate
+
 
 use crate::common::config::balena_config::{FSDump, PartDump};
 use crate::common::disk_util::PartitionType;
