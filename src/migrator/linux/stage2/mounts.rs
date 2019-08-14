@@ -611,6 +611,8 @@ impl<'a> Mounts {
         let mut success = true;
 
         sync();
+        // below: debug missing network_manager files on bbxm
+        thread::sleep(Duration::from_secs(5));
 
         if let Some(ref mountpoint) = self.balena_boot_mp {
             debug!("unmounting '{}'", mountpoint.display());
