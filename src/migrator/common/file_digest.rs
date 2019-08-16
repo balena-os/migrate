@@ -6,6 +6,7 @@ use sha1::Sha1;
 use std::fs::File;
 use std::io::Read;
 use std::path::PathBuf;
+use log::{debug};
 
 use crate::common::{MigErrCtx, MigError, MigErrorKind};
 
@@ -20,8 +21,11 @@ pub(crate) enum HashInfo {
 pub(crate) fn check_digest(path: &PathBuf, digest: &HashInfo) -> Result<bool, MigError> {
     let computed = match digest {
         HashInfo::Sha1(_) => HashInfo::Sha1(process_digest::<Sha1>(path)?),
-        HashInfo::Md5(_) => HashInfo::Sha1(process_digest::<Md5>(path)?),
+        HashInfo::Md5(_) => HashInfo::Md5(process_digest::<Md5>(path)?),
     };
+
+    debug!("check_digest: provided digest is: {:?}", digest);
+    debug!("check_digest: computed digest is: {:?}", computed);
     Ok(computed == *digest)
 }
 
