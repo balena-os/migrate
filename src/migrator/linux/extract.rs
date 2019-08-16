@@ -1,12 +1,12 @@
 use failure::ResultExt;
-use log::{debug, error, info, trace};
+use log::{debug, error, info, trace, warn};
 use nix::{
     mount::{mount, umount, MsFlags},
     unistd::sync,
 };
 use std::fs::{remove_dir, remove_file, OpenOptions};
 use std::io::{Read, Write};
-use std::path::{Path, PathBuf};
+use std::path::Path;
 use std::thread;
 use std::time::Duration;
 
@@ -14,9 +14,13 @@ use std::time::Duration;
 use serde_yaml;
 
 use crate::{
+    common::disk_util::PartitionType,
     common::{
         config::balena_config::ImageType,
+        config::balena_config::{FSDump, FileRef, PartDump},
         disk_util::{Disk, PartitionIterator, PartitionReader}, //  , ImageFile, GZipFile, PlainFile },
+        file_digest::get_default_digest,
+        path_append,
         Config,
         FileInfo,
         FileType,
@@ -44,10 +48,6 @@ use crate::{
 // mod plain_file;
 // use plain_file::PlainFile;
 
-use crate::common::config::balena_config::{FSDump, PartDump};
-use crate::common::disk_util::PartitionType;
-use crate::common::path_append;
-
 const REQUIRED_CMDS: &[&str] = &[
     FILE_CMD,
     MOUNT_CMD,
@@ -69,7 +69,7 @@ pub(crate) struct Partition {
     pub status: u8,
     pub start_lba: u64,
     pub num_sectors: u64,
-    pub archive: Option<PathBuf>,
+    pub archive: Option<FileRef>,
 }
 
 pub(crate) struct Extractor {
@@ -110,6 +110,7 @@ impl Extractor {
             return Err(MigError::displayed());
         }
 
+        // TODO: check hash if present, create hash
         let image_file = if let ImageType::Flasher(image_file) = config.balena.get_image_path() {
             image_file
         } else {
@@ -117,7 +118,7 @@ impl Extractor {
             return Err(MigError::displayed());
         };
 
-        let image_info = FileInfo::new(image_file, config.migrate.get_work_dir())?;
+        let image_info = FileInfo::new(&image_file.path, config.migrate.get_work_dir())?;
 
         if let Some(image_info) = image_info {
             debug!("new: working with file '{}'", image_info.path.display());
@@ -173,7 +174,7 @@ impl Extractor {
         } else {
             error!(
                 "The image file could not be found: '{}'",
-                image_file.display()
+                image_file.path.display()
             );
             Err(MigError::displayed())
         }
@@ -273,7 +274,7 @@ impl Extractor {
                     info!(
                         "extracted partition: {}: to '{}'",
                         partition.name,
-                        partition.archive.as_ref().unwrap().display()
+                        partition.archive.as_ref().unwrap().path.display()
                     );
                 }
                 Err(why) => {
@@ -310,23 +311,23 @@ impl Extractor {
                 mkfs_direct: None,
                 extended_blocks,
                 boot: PartDump {
-                    archive: partitions[0].archive.clone(),
+                    archive: partitions[0].archive.as_ref().unwrap().clone(),
                     blocks: partitions[0].num_sectors,
                 },
                 root_a: PartDump {
-                    archive: partitions[1].archive.clone(),
+                    archive: partitions[1].archive.as_ref().unwrap().clone(),
                     blocks: partitions[1].num_sectors,
                 },
                 root_b: PartDump {
-                    archive: partitions[2].archive.clone(),
+                    archive: partitions[2].archive.as_ref().unwrap().clone(),
                     blocks: partitions[2].num_sectors,
                 },
                 state: PartDump {
-                    archive: partitions[3].archive.clone(),
+                    archive: partitions[3].archive.as_ref().unwrap().clone(),
                     blocks: partitions[3].num_sectors,
                 },
                 data: PartDump {
-                    archive: partitions[4].archive.clone(),
+                    archive: partitions[4].archive.as_ref().unwrap().clone(),
                     blocks: partitions[4].num_sectors,
                 },
             });
@@ -544,10 +545,25 @@ impl Extractor {
             arch_name.display()
         );
 
-        partition.archive = Some(arch_name.canonicalize().context(MigErrCtx::from_remark(
-            MigErrorKind::Upstream,
-            &format!("Failed to canonicalize path: '{}'", arch_name.display()),
-        ))?);
+        let digest = match get_default_digest(&arch_name) {
+            Ok(digest) => Some(digest),
+            Err(why) => {
+                warn!(
+                    "Failed to create digest for file: '{}', error: {:?}",
+                    arch_name.display(),
+                    why
+                );
+                None
+            }
+        };
+
+        partition.archive = Some(FileRef {
+            path: arch_name.canonicalize().context(MigErrCtx::from_remark(
+                MigErrorKind::Upstream,
+                &format!("Failed to canonicalize path: '{}'", arch_name.display()),
+            ))?,
+            hash: digest,
+        });
 
         Ok(())
     }

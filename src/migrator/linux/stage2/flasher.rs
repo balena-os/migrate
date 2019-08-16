@@ -24,7 +24,7 @@ use crate::{
 const DD_BLOCK_SIZE: usize = 4194304;
 const UDEVADM_PARAMS: &[&str] = &["settle", "-t", "10"];
 
-const REQUIRED_CMDS: &[&str] = &[DD_CMD, PARTPROBE_CMD, UDEVADM_CMD,];
+const REQUIRED_CMDS: &[&str] = &[DD_CMD, PARTPROBE_CMD, UDEVADM_CMD];
 
 // TODO: return something else instead (success, (recoverable / not recoverable))
 

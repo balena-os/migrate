@@ -5,10 +5,11 @@ use crate::{
     common::{
         balena_cfg_json::BalenaCfgJson,
         config::balena_config::{FSDump, ImageType, PartDump},
+        config::MigrateWifis,
+        file_digest::check_digest,
         stage2_config::{CheckedImageType, ImageInfo},
         wifi_config::WifiConfig,
         Config, FileInfo, FileType, MigError, MigErrorKind,
-        config::MigrateWifis,
     },
     defs::OSArch,
     linux::{
@@ -26,6 +27,7 @@ pub(crate) mod lsblk_info;
 pub(crate) use lsblk_info::{LsblkDevice, LsblkInfo, LsblkPartition};
 
 pub(crate) mod path_info;
+use crate::common::config::balena_config::FileRef;
 pub(crate) use path_info::PathInfo;
 
 //use crate::linux::migrate_info::lsblk_info::;
@@ -131,7 +133,7 @@ impl MigrateInfo {
                     MigrateInfo::check_dump(&fs_dump.boot, &work_path, cmds, &lsblk_info)?
                 {
                     req_space += size;
-                    Some(archive)
+                    archive
                 } else {
                     error!("The balena boot archive has not been specified. Automatic download is not yet implemented, so you need to specify and supply all required files");
                     return Err(MigError::displayed());
@@ -141,7 +143,7 @@ impl MigrateInfo {
                     MigrateInfo::check_dump(&fs_dump.root_a, &work_path, cmds, &lsblk_info)?
                 {
                     req_space += size;
-                    Some(archive)
+                    archive
                 } else {
                     error!("The balena root_a archive has not been specified. Automatic download is not yet implemented, so you need to specify and supply all required files");
                     return Err(MigError::displayed());
@@ -151,25 +153,27 @@ impl MigrateInfo {
                     MigrateInfo::check_dump(&fs_dump.root_b, &work_path, cmds, &lsblk_info)?
                 {
                     req_space += size;
-                    Some(archive)
+                    archive
                 } else {
-                    None
+                    error!("The balena root_b archive has not been specified. Automatic download is not yet implemented, so you need to specify and supply all required files");
+                    return Err(MigError::displayed());
                 };
 
                 let state_path = if let Some((archive, size)) =
                     MigrateInfo::check_dump(&fs_dump.state, &work_path, cmds, &lsblk_info)?
                 {
                     req_space += size;
-                    Some(archive)
+                    archive
                 } else {
-                    None
+                    error!("The balena state archive has not been specified. Automatic download is not yet implemented, so you need to specify and supply all required files");
+                    return Err(MigError::displayed());
                 };
 
                 let data_path = if let Some((archive, size)) =
                     MigrateInfo::check_dump(&fs_dump.data, &work_path, cmds, &lsblk_info)?
                 {
                     req_space += size;
-                    Some(archive)
+                    archive
                 } else {
                     error!("The balena data archive has not been specified. Automatic download is not yet implemented, so you need to specify and supply all required files");
                     return Err(MigError::displayed());
@@ -183,23 +187,38 @@ impl MigrateInfo {
                         mkfs_direct: fs_dump.mkfs_direct.clone(),
                         extended_blocks: fs_dump.extended_blocks,
                         boot: PartDump {
-                            archive: boot_path,
+                            archive: FileRef {
+                                path: boot_path,
+                                hash: fs_dump.boot.archive.hash.clone(),
+                            },
                             blocks: fs_dump.boot.blocks,
                         },
                         root_a: PartDump {
-                            archive: root_a_path,
+                            archive: FileRef {
+                                path: root_a_path,
+                                hash: fs_dump.root_a.archive.hash.clone(),
+                            },
                             blocks: fs_dump.root_a.blocks,
                         },
                         root_b: PartDump {
-                            archive: root_b_path,
+                            archive: FileRef {
+                                path: root_b_path,
+                                hash: fs_dump.root_b.archive.hash.clone(),
+                            },
                             blocks: fs_dump.root_b.blocks,
                         },
                         state: PartDump {
-                            archive: state_path,
+                            archive: FileRef {
+                                path: state_path,
+                                hash: fs_dump.state.archive.hash.clone(),
+                            },
                             blocks: fs_dump.state.blocks,
                         },
                         data: PartDump {
-                            archive: data_path,
+                            archive: FileRef {
+                                path: data_path,
+                                hash: fs_dump.data.archive.hash.clone(),
+                            },
                             blocks: fs_dump.data.blocks,
                         },
                     }),
@@ -381,38 +400,34 @@ impl MigrateInfo {
         cmds: &EnsuredCmds,
         lsblk_info: &LsblkInfo,
     ) -> Result<Option<(PathBuf, u64)>, MigError> {
-        if let Some(ref archive) = dump.archive {
-            Ok(Some(MigrateInfo::check_file(
-                archive,
-                &FileType::GZipTar,
-                work_path,
-                cmds,
-                lsblk_info,
-            )?))
-        } else {
-            Ok(None)
-        }
+        Ok(Some(MigrateInfo::check_file(
+            &dump.archive,
+            &FileType::GZipTar,
+            work_path,
+            cmds,
+            lsblk_info,
+        )?))
     }
 
     fn check_file(
-        path: &PathBuf,
+        file_ref: &FileRef,
         expected_type: &FileType,
         work_path: &PathInfo,
         cmds: &EnsuredCmds,
         lsblk_info: &LsblkInfo,
     ) -> Result<(PathBuf, u64), MigError> {
-        if let Some(file_info) = FileInfo::new(path, &work_path.path)? {
+        if let Some(file_info) = FileInfo::new(&file_ref.path, &work_path.path)? {
             // make sure files are present and in /workdir, generate total size and partitioning config in miginfo
             let rel_path = if let Some(ref rel_path) = file_info.rel_path {
                 rel_path.clone()
             } else {
-                error!("The file '{}' was found outside of the working directory. This setup is not supported", path.display());
+                error!("The file '{}' was found outside of the working directory. This setup is not supported", file_ref.path.display());
                 return Err(MigError::displayed());
             };
 
             let (_img_drive, img_part) = lsblk_info.get_path_info(&file_info.path)?;
             if img_part.get_path() != work_path.device {
-                error!("The file '{}' appears to reside on a different partition from the working directory. This setup is not supported", path.display());
+                error!("The file '{}' appears to reside on a different partition from the working directory. This setup is not supported", file_ref.path.display());
                 return Err(MigError::displayed());
             }
 
@@ -425,8 +440,19 @@ impl MigrateInfo {
                     // TODO: try gzip non compressed OS image
                     error!(
                         "The file '{}' does not match the expected type: '{:?}'",
-                        path.display(),
+                        file_ref.path.display(),
                         expected_type
+                    );
+                    return Err(MigError::displayed());
+                }
+            }
+
+            if let Some(ref hash_info) = file_ref.hash {
+                if !check_digest(&file_ref.path, hash_info)? {
+                    error!(
+                        "The balena file: '{}' did not match its digest {:?}",
+                        file_ref.path.display(),
+                        file_ref.hash
                     );
                     return Err(MigError::displayed());
                 }
@@ -434,7 +460,10 @@ impl MigrateInfo {
 
             Ok((rel_path, file_info.size))
         } else {
-            error!("The balena file: '{}' can not be accessed.", path.display());
+            error!(
+                "The balena file: '{}' can not be accessed.",
+                file_ref.path.display()
+            );
             return Err(MigError::displayed());
         }
     }

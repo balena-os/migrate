@@ -11,7 +11,11 @@ use std::time::{Duration, Instant};
 
 use crate::{
     common::{
-        call, dir_exists, file_exists, file_size, format_size_with_unit, path_append,
+        call,
+        config::balena_config::FileRef,
+        dir_exists,
+        file_digest::check_digest,
+        file_exists, file_size, format_size_with_unit, path_append,
         stage2_config::{CheckedImageType, Stage2Config},
         MigErrCtx, MigError, MigErrorKind,
     },
@@ -365,110 +369,41 @@ impl<'a> Stage2 {
                     info!("copied balena OS image to '{}'", tgt.display());
                 }
                 CheckedImageType::FileSystems(ref fs_dump) => {
-                    if let Some(ref archive) = fs_dump.boot.archive {
-                        let src = path_append(&work_path, archive);
-                        let tgt = path_append(mig_tmp_dir, BALENA_BOOT_FS_FILE);
-                        copy(&src, &tgt).context(MigErrCtx::from_remark(
-                            MigErrorKind::Upstream,
-                            &format!(
-                                "failed to copy balena boot fs archive to migrate temp directory, '{}' -> '{}'",
-                                src.display(),
-                                tgt.display()
-                            ),
-                        ))?;
-                        info!(
-                            "copied balena boot archive to '{}' -> '{}'",
-                            src.display(),
-                            tgt.display()
-                        );
-                    } else {
-                        error!(
-                            "The balena boot archive was not configure - cannot partition drive"
-                        );
-                        return Err(MigError::displayed());
-                    }
-
-                    if let Some(ref archive) = fs_dump.root_a.archive {
-                        let src = path_append(&work_path, archive);
-                        let tgt = path_append(mig_tmp_dir, BALENA_ROOTA_FS_FILE);
-                        copy(&src, &tgt).context(MigErrCtx::from_remark(
-                            MigErrorKind::Upstream,
-                            &format!(
-                                "failed to copy balena root a fs archive to migrate temp directory, '{}' -> '{}'",
-                                src.display(),
-                                tgt.display()
-                            ),
-                        ))?;
-                        info!(
-                            "copied balena rootA archive to '{}' -> '{}'",
-                            src.display(),
-                            tgt.display()
-                        );
-                    } else {
-                        error!(
-                            "The balena root_a archive was not configure - cannot partition drive"
-                        );
-                        return Err(MigError::displayed());
-                    }
-
-                    if let Some(ref archive) = fs_dump.root_b.archive {
-                        let src = path_append(&work_path, archive);
-                        let tgt = path_append(mig_tmp_dir, BALENA_ROOTB_FS_FILE);
-                        copy(&src, &tgt).context(MigErrCtx::from_remark(
-                            MigErrorKind::Upstream,
-                            &format!(
-                                "failed to copy balena root b fs archive to migrate temp directory, '{}' -> '{}'",
-                                src.display(),
-                                tgt.display()
-                            ),
-                        ))?;
-                        info!(
-                            "copied balena rootB archive to '{}' -> '{}'",
-                            src.display(),
-                            tgt.display()
-                        );
-                    }
-
-                    if let Some(ref archive) = fs_dump.state.archive {
-                        let src = path_append(&work_path, archive);
-                        let tgt = path_append(mig_tmp_dir, BALENA_STATE_FS_FILE);
-                        copy(&src, &tgt).context(MigErrCtx::from_remark(
-                            MigErrorKind::Upstream,
-                            &format!(
-                                "failed to copy balena state fs archive to migrate temp directory, '{}' -> '{}'",
-                                src.display(),
-                                tgt.display()
-                            ),
-                        ))?;
-                        info!(
-                            "copied balena state archive to '{}' -> '{}'",
-                            src.display(),
-                            tgt.display()
-                        );
-                    }
-
-                    if let Some(ref archive) = fs_dump.data.archive {
-                        let src = path_append(&work_path, archive);
-                        let tgt = path_append(mig_tmp_dir, BALENA_DATA_FS_FILE);
-                        copy(&src, &tgt).context(MigErrCtx::from_remark(
-                            MigErrorKind::Upstream,
-                            &format!(
-                                "failed to copy balena data fs archive to migrate temp directory, '{}' -> '{}'",
-                                src.display(),
-                                tgt.display()
-                            ),
-                        ))?;
-                        info!(
-                            "copied balena data archive to '{}' -> '{}'",
-                            src.display(),
-                            tgt.display()
-                        );
-                    } else {
-                        error!(
-                            "The balena data archive was not configure - cannot partition drive"
-                        );
-                        return Err(MigError::displayed());
-                    }
+                    self.check_and_copy(
+                        &work_path,
+                        &fs_dump.boot.archive,
+                        mig_tmp_dir,
+                        "boot",
+                        BALENA_BOOT_FS_FILE,
+                    )?;
+                    self.check_and_copy(
+                        &work_path,
+                        &fs_dump.root_a.archive,
+                        mig_tmp_dir,
+                        "rootA",
+                        BALENA_ROOTA_FS_FILE,
+                    )?;
+                    self.check_and_copy(
+                        &work_path,
+                        &fs_dump.root_b.archive,
+                        mig_tmp_dir,
+                        "rootB",
+                        BALENA_ROOTB_FS_FILE,
+                    )?;
+                    self.check_and_copy(
+                        &work_path,
+                        &fs_dump.state.archive,
+                        mig_tmp_dir,
+                        "state",
+                        BALENA_STATE_FS_FILE,
+                    )?;
+                    self.check_and_copy(
+                        &work_path,
+                        &fs_dump.data.archive,
+                        mig_tmp_dir,
+                        "data",
+                        BALENA_DATA_FS_FILE,
+                    )?;
                 }
             };
 
@@ -838,5 +773,47 @@ impl<'a> Stage2 {
         } else {
             Stage2::exit(&FailMode::RescueShell)
         }
+    }
+
+    fn check_and_copy(
+        &self,
+        source_dir: &Path,
+        archive: &FileRef,
+        target_dir: &Path,
+        tag: &str,
+        target_name: &str,
+    ) -> Result<(), MigError> {
+        if let Some(ref hash_info) = archive.hash {
+            if !check_digest(&archive.path, hash_info)? {
+                return Err(MigError::from_remark(
+                    MigErrorKind::InvParam,
+                    &format!(
+                        "Digest mismatch on file '{}', {:?}",
+                        archive.path.display(),
+                        hash_info
+                    ),
+                ));
+            }
+        }
+
+        let src = path_append(&source_dir, &archive.path);
+        let tgt = path_append(target_dir, target_name);
+        copy(&src, &tgt).context(MigErrCtx::from_remark(
+            MigErrorKind::Upstream,
+            &format!(
+                "failed to copy balena fs archive to migrate temp directory, '{}' -> '{}'",
+                src.display(),
+                tgt.display()
+            ),
+        ))?;
+
+        info!(
+            "copied balena {} archive to '{}' -> '{}'",
+            tag,
+            src.display(),
+            tgt.display()
+        );
+
+        Ok(())
     }
 }

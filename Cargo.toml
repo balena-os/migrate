@@ -45,6 +45,9 @@ url = "*"
 mod_logger = { git = "https://github.com/samothx/ModuleLogger.git" }
 tar = "*"
 flate2 = "1.0"
+digest = "0.8"
+sha-1 = "0.8"
+md-5 = "0.8"
 
 # tempfile = "3"
 

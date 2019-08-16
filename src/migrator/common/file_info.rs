@@ -27,7 +27,14 @@ const DTB_FTYPE_REGEX: &str = r#"^(Device Tree Blob|data).*$"#;
 
 const GZIP_TAR_FTYPE_REGEX: &str = r#"^(POSIX tar archive \(GNU\)).*\(gzip compressed data.*\)$"#;
 
-use crate::common::{file_exists, MigErrCtx, MigError, MigErrorKind};
+use crate::common::{
+    file_exists,
+    MigErrCtx,
+    MigError,
+    MigErrorKind,
+    //file_digest::check_digest
+};
+
 #[cfg(target_os = "linux")]
 use crate::linux::{EnsuredCmds, FILE_CMD};
 
@@ -204,4 +211,10 @@ impl FileInfo {
         // TODO: think of something for windows
         Ok(true)
     }
+
+    /*
+    pub (crate) fn check_digest(&self, digest: &HashInfo) -> Result<bool, MigError> {
+        Ok(check_digest(&self.path, digest)?)
+    }
+    */
 }

@@ -127,60 +127,50 @@ pub(crate) fn write_balena_os(
     }
 }
 
-fn sub_write(
-    tar_path: &str,
-    mountpoint: &Path,
-    base_path: &Path,
-    archive: &Option<PathBuf>,
-) -> bool {
-    if let Some(archive) = archive {
-        let arch_path = path_append(base_path, archive);
-        let tar_args: &[&str] = &[
-            "-xzf",
-            &arch_path.to_string_lossy(),
-            "-C",
-            &mountpoint.to_string_lossy(),
-        ];
+fn sub_write(tar_path: &str, mountpoint: &Path, base_path: &Path, archive: &PathBuf) -> bool {
+    let arch_path = path_append(base_path, archive);
+    let tar_args: &[&str] = &[
+        "-xzf",
+        &arch_path.to_string_lossy(),
+        "-C",
+        &mountpoint.to_string_lossy(),
+    ];
 
-        debug!("sub_write: invoking '{}' with {:?}", tar_path, tar_args);
+    debug!("sub_write: invoking '{}' with {:?}", tar_path, tar_args);
 
-        match Command::new(tar_path)
-            .stdin(Stdio::piped())
-            .stdout(Stdio::piped())
-            .stderr(Stdio::piped())
-            .args(tar_args)
-            .output()
-        {
-            Ok(cmd_res) => {
-                if cmd_res.status.success() {
-                    info!(
-                        "Successfully wrote '{}' to '{}'",
-                        arch_path.display(),
-                        mountpoint.display()
-                    );
-                    true
-                } else {
-                    error!(
-                        "sub_write: failed to untar archive with {} {:?}, code: {:?} stderr: {:?}",
-                        tar_path,
-                        tar_args,
-                        cmd_res.status.code(),
-                        str::from_utf8(&cmd_res.stderr)
-                    );
-                    false
-                }
-            }
-            Err(why) => {
+    match Command::new(tar_path)
+        .stdin(Stdio::piped())
+        .stdout(Stdio::piped())
+        .stderr(Stdio::piped())
+        .args(tar_args)
+        .output()
+    {
+        Ok(cmd_res) => {
+            if cmd_res.status.success() {
+                info!(
+                    "Successfully wrote '{}' to '{}'",
+                    arch_path.display(),
+                    mountpoint.display()
+                );
+                true
+            } else {
                 error!(
-                    "sub_write: failed to untar archive with {} {:?}, error: {:?}",
-                    tar_path, tar_args, why
+                    "sub_write: failed to untar archive with {} {:?}, code: {:?} stderr: {:?}",
+                    tar_path,
+                    tar_args,
+                    cmd_res.status.code(),
+                    str::from_utf8(&cmd_res.stderr)
                 );
                 false
             }
         }
-    } else {
-        error!("sub_write: a required archive was not found",);
-        false
+        Err(why) => {
+            error!(
+                "sub_write: failed to untar archive with {} {:?}, error: {:?}",
+                tar_path, tar_args, why
+            );
+            false
+        }
     }
 }
 
@@ -193,7 +183,7 @@ fn balena_write(mounts: &Mounts, tar_path: &str, fs_dump: &FSDump, base_path: &P
     );
 
     if let Some(mountpoint) = mounts.get_balena_boot_mountpoint() {
-        if !sub_write(tar_path, mountpoint, base_path, &fs_dump.boot.archive) {
+        if !sub_write(tar_path, mountpoint, base_path, &fs_dump.boot.archive.path) {
             return false;
         }
     } else {
@@ -202,7 +192,12 @@ fn balena_write(mounts: &Mounts, tar_path: &str, fs_dump: &FSDump, base_path: &P
     }
 
     if let Some(mountpoint) = mounts.get_balena_root_a_mountpoint() {
-        if !sub_write(tar_path, mountpoint, base_path, &fs_dump.root_a.archive) {
+        if !sub_write(
+            tar_path,
+            mountpoint,
+            base_path,
+            &fs_dump.root_a.archive.path,
+        ) {
             return false;
         }
     } else {
@@ -210,30 +205,31 @@ fn balena_write(mounts: &Mounts, tar_path: &str, fs_dump: &FSDump, base_path: &P
         return false;
     }
 
-    if let Some(ref _archive) = fs_dump.root_b.archive {
-        if let Some(mountpoint) = mounts.get_balena_root_b_mountpoint() {
-            if !sub_write(tar_path, mountpoint, base_path, &fs_dump.root_b.archive) {
-                return false;
-            }
-        } else {
-            error!("Could not retrieve root_b mountpoint");
+    if let Some(mountpoint) = mounts.get_balena_root_b_mountpoint() {
+        if !sub_write(
+            tar_path,
+            mountpoint,
+            base_path,
+            &fs_dump.root_b.archive.path,
+        ) {
             return false;
         }
+    } else {
+        error!("Could not retrieve root_b mountpoint");
+        return false;
     }
 
-    if let Some(ref _archive) = fs_dump.state.archive {
-        if let Some(mountpoint) = mounts.get_balena_state_mountpoint() {
-            if !sub_write(tar_path, mountpoint, base_path, &fs_dump.state.archive) {
-                return false;
-            }
-        } else {
-            error!("Could not retrieve state mountpoint");
+    if let Some(mountpoint) = mounts.get_balena_state_mountpoint() {
+        if !sub_write(tar_path, mountpoint, base_path, &fs_dump.state.archive.path) {
             return false;
         }
+    } else {
+        error!("Could not retrieve state mountpoint");
+        return false;
     }
 
     if let Some(mountpoint) = mounts.get_balena_data_mountpoint() {
-        sub_write(tar_path, mountpoint, base_path, &fs_dump.data.archive)
+        sub_write(tar_path, mountpoint, base_path, &fs_dump.data.archive.path)
     } else {
         error!("Could not retrieve data mountpoint");
         return false;

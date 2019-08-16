@@ -1,5 +1,5 @@
 use super::MigMode;
-use crate::common::{MigError, MigErrorKind};
+use crate::common::{file_digest::HashInfo, MigError, MigErrorKind};
 use log::debug;
 use serde::{Deserialize, Serialize};
 use std::path::{Path, PathBuf};
@@ -12,7 +12,7 @@ use crate::defs::DEFAULT_API_CHECK_TIMEOUT;
 #[derive(Debug, Serialize, Deserialize, Clone)]
 pub(crate) struct PartDump {
     pub blocks: u64,
-    pub archive: Option<PathBuf>,
+    pub archive: FileRef,
 }
 
 #[derive(Debug, Serialize, Deserialize, Clone)]
@@ -37,8 +37,14 @@ pub(crate) struct FSDump {
 }
 
 #[derive(Debug, Serialize, Deserialize, Clone)]
+pub(crate) struct FileRef {
+    pub path: PathBuf,
+    pub hash: Option<HashInfo>,
+}
+
+#[derive(Debug, Serialize, Deserialize, Clone)]
 pub(crate) enum ImageType {
-    Flasher(PathBuf),
+    Flasher(FileRef),
     FileSystems(FSDump),
 }
 
@@ -116,7 +122,10 @@ impl<'a> BalenaConfig {
     }
 
     pub fn set_image_path(&mut self, image_path: &str) {
-        self.image = Some(ImageType::Flasher(PathBuf::from(image_path)));
+        self.image = Some(ImageType::Flasher(FileRef {
+            path: PathBuf::from(image_path),
+            hash: None,
+        }));
     }
 
     // The following functions can only be safely called after check has succeeded
