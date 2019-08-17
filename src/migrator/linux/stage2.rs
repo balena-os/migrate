@@ -381,7 +381,7 @@ impl<'a> Stage2 {
                             ));
                         }
                     } else {
-                        info!(
+                        warn!(
                             "Not checking digest on copied file '{}' - no digest provided",
                             tgt.display()
                         );
@@ -504,6 +504,7 @@ impl<'a> Stage2 {
         } else {
             info!("Files were not copied, work dir is on a separate drive");
             // TODO: adapt path for no copy mode
+            // TODO: check digest anyway ?
             &work_path
         };
 
@@ -824,7 +825,7 @@ impl<'a> Stage2 {
         );
 
         if let Some(ref hash_info) = archive.hash {
-            info!("Checking digest on copied file '{}'", tgt.display());
+            info!("Checking digest on copied file '{}' - {:?}", tgt.display(), hash_info);
             if !check_digest(&tgt, hash_info)? {
                 return Err(MigError::from_remark(
                     MigErrorKind::InvParam,
@@ -835,6 +836,8 @@ impl<'a> Stage2 {
                     ),
                 ));
             }
+        } else {
+            warn!("Not checking digest on copied file '{}' - no digest supplied", tgt.display())
         }
 
         Ok(())

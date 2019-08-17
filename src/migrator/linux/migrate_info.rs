@@ -29,6 +29,7 @@ pub(crate) use lsblk_info::{LsblkDevice, LsblkInfo, LsblkPartition};
 pub(crate) mod path_info;
 use crate::common::config::balena_config::FileRef;
 pub(crate) use path_info::PathInfo;
+use crate::common::file_digest::get_default_digest;
 
 //use crate::linux::migrate_info::lsblk_info::;
 
@@ -113,7 +114,7 @@ impl MigrateInfo {
 
         let os_image = match config.balena.get_image_path() {
             ImageType::Flasher(ref flasher_img) => {
-                let (checked_path, req_space) = MigrateInfo::check_file(
+                let (checked_ref, req_space) = MigrateInfo::check_file(
                     &flasher_img,
                     &FileType::GZipOSImage,
                     &work_path,
@@ -121,10 +122,7 @@ impl MigrateInfo {
                     &lsblk_info,
                 )?;
                 ImageInfo {
-                    image: CheckedImageType::Flasher(FileRef {
-                        path: checked_path,
-                        hash: flasher_img.hash.clone(),
-                    }),
+                    image: CheckedImageType::Flasher(checked_ref),
                     req_space,
                 }
             }
@@ -133,7 +131,7 @@ impl MigrateInfo {
                 // make sure all files are present and in /workdir, generate total size and partitioning config in miginfo
                 let mut req_space: u64 = 0;
 
-                let boot_path = if let Some((archive, size)) =
+                let boot_ref = if let Some((archive, size)) =
                     MigrateInfo::check_dump(&fs_dump.boot, &work_path, cmds, &lsblk_info)?
                 {
                     req_space += size;
@@ -143,7 +141,7 @@ impl MigrateInfo {
                     return Err(MigError::displayed());
                 };
 
-                let root_a_path = if let Some((archive, size)) =
+                let root_a_ref = if let Some((archive, size)) =
                     MigrateInfo::check_dump(&fs_dump.root_a, &work_path, cmds, &lsblk_info)?
                 {
                     req_space += size;
@@ -153,7 +151,7 @@ impl MigrateInfo {
                     return Err(MigError::displayed());
                 };
 
-                let root_b_path = if let Some((archive, size)) =
+                let root_b_ref = if let Some((archive, size)) =
                     MigrateInfo::check_dump(&fs_dump.root_b, &work_path, cmds, &lsblk_info)?
                 {
                     req_space += size;
@@ -163,7 +161,7 @@ impl MigrateInfo {
                     return Err(MigError::displayed());
                 };
 
-                let state_path = if let Some((archive, size)) =
+                let state_ref = if let Some((archive, size)) =
                     MigrateInfo::check_dump(&fs_dump.state, &work_path, cmds, &lsblk_info)?
                 {
                     req_space += size;
@@ -173,7 +171,7 @@ impl MigrateInfo {
                     return Err(MigError::displayed());
                 };
 
-                let data_path = if let Some((archive, size)) =
+                let data_ref = if let Some((archive, size)) =
                     MigrateInfo::check_dump(&fs_dump.data, &work_path, cmds, &lsblk_info)?
                 {
                     req_space += size;
@@ -191,38 +189,23 @@ impl MigrateInfo {
                         mkfs_direct: fs_dump.mkfs_direct.clone(),
                         extended_blocks: fs_dump.extended_blocks,
                         boot: PartDump {
-                            archive: FileRef {
-                                path: boot_path,
-                                hash: fs_dump.boot.archive.hash.clone(),
-                            },
+                            archive: boot_ref,
                             blocks: fs_dump.boot.blocks,
                         },
                         root_a: PartDump {
-                            archive: FileRef {
-                                path: root_a_path,
-                                hash: fs_dump.root_a.archive.hash.clone(),
-                            },
+                            archive: root_a_ref,
                             blocks: fs_dump.root_a.blocks,
                         },
                         root_b: PartDump {
-                            archive: FileRef {
-                                path: root_b_path,
-                                hash: fs_dump.root_b.archive.hash.clone(),
-                            },
+                            archive: root_b_ref,
                             blocks: fs_dump.root_b.blocks,
                         },
                         state: PartDump {
-                            archive: FileRef {
-                                path: state_path,
-                                hash: fs_dump.state.archive.hash.clone(),
-                            },
+                            archive: state_ref,
                             blocks: fs_dump.state.blocks,
                         },
                         data: PartDump {
-                            archive: FileRef {
-                                path: data_path,
-                                hash: fs_dump.data.archive.hash.clone(),
-                            },
+                            archive: data_ref,
                             blocks: fs_dump.data.blocks,
                         },
                     }),
@@ -403,7 +386,7 @@ impl MigrateInfo {
         work_path: &PathInfo,
         cmds: &EnsuredCmds,
         lsblk_info: &LsblkInfo,
-    ) -> Result<Option<(PathBuf, u64)>, MigError> {
+    ) -> Result<Option<(FileRef, u64)>, MigError> {
         Ok(Some(MigrateInfo::check_file(
             &dump.archive,
             &FileType::GZipTar,
@@ -419,7 +402,7 @@ impl MigrateInfo {
         work_path: &PathInfo,
         cmds: &EnsuredCmds,
         lsblk_info: &LsblkInfo,
-    ) -> Result<(PathBuf, u64), MigError> {
+    ) -> Result<(FileRef, u64), MigError> {
         if let Some(file_info) = FileInfo::new(&file_ref.path, &work_path.path)? {
             // make sure files are present and in /workdir, generate total size and partitioning config in miginfo
             let rel_path = if let Some(ref rel_path) = file_info.rel_path {
@@ -451,7 +434,7 @@ impl MigrateInfo {
                 }
             }
 
-            if let Some(ref hash_info) = file_ref.hash {
+            let res_ref = if let Some(ref hash_info) = file_ref.hash {
                 if !check_digest(&file_ref.path, hash_info)? {
                     error!(
                         "The balena file: '{}' did not match its digest {:?}",
@@ -459,10 +442,16 @@ impl MigrateInfo {
                         file_ref.hash
                     );
                     return Err(MigError::displayed());
+                } else {
+                    FileRef{ path: rel_path, hash: file_ref.hash.clone() }
                 }
-            }
+            } else {
+                let digest = get_default_digest(&rel_path)?;
+                debug!("Created digest for file: '{}': {:?}", rel_path.display(), digest);
+                FileRef{ path: rel_path, hash: Some(digest) }
+            };
 
-            Ok((rel_path, file_info.size))
+            Ok((res_ref, file_info.size))
         } else {
             error!(
                 "The balena file: '{}' can not be accessed.",
