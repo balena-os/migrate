@@ -14,15 +14,18 @@ const MODULE: &str = "stage2::stage2:config";
 
 use crate::{
     common::{
-        config::balena_config::FSDump, config::migrate_config::WatchdogCfg, MigErrCtx, MigError,
-        MigErrorKind,
+        config::{
+            balena_config::{FSDump, FileRef},
+            migrate_config::WatchdogCfg,
+        },
+        MigErrCtx, MigError, MigErrorKind,
     },
     defs::{BootType, DeviceType, FailMode},
 };
 
 #[derive(Debug, Deserialize, Serialize, Clone)]
 pub(crate) enum CheckedImageType {
-    Flasher(PathBuf),
+    Flasher(FileRef),
     FileSystems(FSDump),
 }
 
@@ -459,16 +462,31 @@ mod tests {
     use super::*;
 
     const TEST_CONFIG: &str = r##"
-migrate:
-  mode: IMMEDIATE
-  all_wifis: true
-  reboot: 10
-  log_to:
-    drive: '/dev/sda1'
-    fs_type: ext4
-balena:
-  image: image.gz
-  config: config.json
+fail_mode: Reboot
+no_flash: true
+force_flash_device: ~
+balena_config: config.json
+balena_image:
+  req_space: 139522865
+  image:
+    Flasher:
+      path: balena-cloud-intel-nuc-2.38.3+rev5-v9.15.7.img.gz
+      hash:
+        Md5: c55a19eacc425c3e75a007ae4249b85d
+work_path:
+  Path: /home/thomas/migrate
+boot_bckup: ~
+has_backup: false
+gzip_internal: true
+log_level: debug
+log_to:
+  device: /dev/sdb1
+  fstype: vfat
+log_console: false
+device_type: IntelNuc
+boot_type: Grub
+migrate_delay: 0
+watchdogs: ~'
 "##;
 
     #[test]

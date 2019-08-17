@@ -1,12 +1,12 @@
 use digest::Digest;
 use failure::ResultExt;
+use log::debug;
 use md5::Md5;
 use serde::{Deserialize, Serialize};
 use sha1::Sha1;
 use std::fs::File;
 use std::io::Read;
 use std::path::PathBuf;
-use log::{debug};
 
 use crate::common::{MigErrCtx, MigError, MigErrorKind};
 

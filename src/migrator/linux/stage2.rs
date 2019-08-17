@@ -268,6 +268,8 @@ impl<'a> Stage2 {
         }
 
         sync();
+        // TODO: debug, remove this
+        thread::sleep(Duration::from_secs(3));
 
         info!("migrating {:?} boot type: {:?}", device_type, boot_type);
 
@@ -356,7 +358,7 @@ impl<'a> Stage2 {
 
             match self.config.get_balena_image().image {
                 CheckedImageType::Flasher(ref image_file) => {
-                    let src = path_append(&work_path, image_file);
+                    let src = path_append(&work_path, &image_file.path);
                     let tgt = path_append(mig_tmp_dir, BALENA_IMAGE_FILE);
                     copy(&src, &tgt).context(MigErrCtx::from_remark(
                         MigErrorKind::Upstream,
@@ -366,38 +368,58 @@ impl<'a> Stage2 {
                             tgt.display()
                         ),
                     ))?;
+                    if let Some(ref hash_info) = image_file.hash {
+                        info!("Checking digest on copied file '{}'", tgt.display());
+                        if !check_digest(&tgt, hash_info)? {
+                            return Err(MigError::from_remark(
+                                MigErrorKind::InvParam,
+                                &format!(
+                                    "Failed to check digest on copied file: '{}', {:?} ",
+                                    tgt.display(),
+                                    hash_info
+                                ),
+                            ));
+                        }
+                    } else {
+                        info!(
+                            "Not checking digest on copied file '{}' - no digest provided",
+                            tgt.display()
+                        );
+                    }
+
                     info!("copied balena OS image to '{}'", tgt.display());
+                    // check digest
                 }
                 CheckedImageType::FileSystems(ref fs_dump) => {
-                    self.check_and_copy(
+                    self.copy_and_check(
                         &work_path,
                         &fs_dump.boot.archive,
                         mig_tmp_dir,
                         "boot",
                         BALENA_BOOT_FS_FILE,
                     )?;
-                    self.check_and_copy(
+                    self.copy_and_check(
                         &work_path,
                         &fs_dump.root_a.archive,
                         mig_tmp_dir,
                         "rootA",
                         BALENA_ROOTA_FS_FILE,
                     )?;
-                    self.check_and_copy(
+                    self.copy_and_check(
                         &work_path,
                         &fs_dump.root_b.archive,
                         mig_tmp_dir,
                         "rootB",
                         BALENA_ROOTB_FS_FILE,
                     )?;
-                    self.check_and_copy(
+                    self.copy_and_check(
                         &work_path,
                         &fs_dump.state.archive,
                         mig_tmp_dir,
                         "state",
                         BALENA_STATE_FS_FILE,
                     )?;
-                    self.check_and_copy(
+                    self.copy_and_check(
                         &work_path,
                         &fs_dump.data.archive,
                         mig_tmp_dir,
@@ -535,7 +557,7 @@ impl<'a> Stage2 {
 
                 let image_path = if self.mounts.borrow().is_work_no_copy() {
                     if let Some(work_dir) = self.mounts.borrow().get_work_path() {
-                        path_append(work_dir, image_file)
+                        path_append(work_dir, &image_file.path)
                     } else {
                         warn!("Work path not found in no_copy mode, trying mig temp");
                         path_append(mig_tmp_dir, BALENA_IMAGE_FILE)
@@ -775,7 +797,7 @@ impl<'a> Stage2 {
         }
     }
 
-    fn check_and_copy(
+    fn copy_and_check(
         &self,
         source_dir: &Path,
         archive: &FileRef,
@@ -783,19 +805,6 @@ impl<'a> Stage2 {
         tag: &str,
         target_name: &str,
     ) -> Result<(), MigError> {
-        if let Some(ref hash_info) = archive.hash {
-            if !check_digest(&archive.path, hash_info)? {
-                return Err(MigError::from_remark(
-                    MigErrorKind::InvParam,
-                    &format!(
-                        "Digest mismatch on file '{}', {:?}",
-                        archive.path.display(),
-                        hash_info
-                    ),
-                ));
-            }
-        }
-
         let src = path_append(&source_dir, &archive.path);
         let tgt = path_append(target_dir, target_name);
         copy(&src, &tgt).context(MigErrCtx::from_remark(
@@ -813,6 +822,20 @@ impl<'a> Stage2 {
             src.display(),
             tgt.display()
         );
+
+        if let Some(ref hash_info) = archive.hash {
+            info!("Checking digest on copied file '{}'", tgt.display());
+            if !check_digest(&tgt, hash_info)? {
+                return Err(MigError::from_remark(
+                    MigErrorKind::InvParam,
+                    &format!(
+                        "Digest mismatch on file '{}', {:?}",
+                        archive.path.display(),
+                        hash_info
+                    ),
+                ));
+            }
+        }
 
         Ok(())
     }

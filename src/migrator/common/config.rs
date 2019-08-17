@@ -439,9 +439,9 @@ migrate:
     drive: "/dev/sda1"
     fs_type: ext4
   # the migrate kernel, might be downloaded automatically in future versions
-  kernel_file: "balena_x86_64.migrate.kernel"
+  kernel_path: "balena_x86_64.migrate.kernel"
   # the migrate initramfs, might be downloaded automatically in future versions
-  initramfs_file: "balena_x86_64.migrate.initramfs"
+  initrd_path: "balena_x86_64.migrate.initramfs"
   # backup configuration
   backup:
    - volume: "test volume 1"
@@ -470,7 +470,8 @@ balena:
   version:
   ## the balena image to flash
   image:
-    Flasher: image.gz
+    Flasher:
+      path: image.gz
   ## the balena config file to use (can be auto generated in future versions)
   config: config.json
   ## The balena app name - needed for download (not yet implemented) checked against present config.json

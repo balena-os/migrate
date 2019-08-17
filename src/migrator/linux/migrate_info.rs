@@ -121,10 +121,14 @@ impl MigrateInfo {
                     &lsblk_info,
                 )?;
                 ImageInfo {
-                    image: CheckedImageType::Flasher(checked_path),
+                    image: CheckedImageType::Flasher(FileRef {
+                        path: checked_path,
+                        hash: flasher_img.hash.clone(),
+                    }),
                     req_space,
                 }
             }
+
             ImageType::FileSystems(ref fs_dump) => {
                 // make sure all files are present and in /workdir, generate total size and partitioning config in miginfo
                 let mut req_space: u64 = 0;
