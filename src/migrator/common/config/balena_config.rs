@@ -17,8 +17,11 @@ pub(crate) struct PartDump {
 
 #[derive(Debug, Serialize, Deserialize, Clone)]
 pub(crate) enum PartCheck {
+    #[serde(rename = "none")]
     None,
-    Read,
+    #[serde(rename = "ro")]
+    ReadOnly,
+    #[serde(rename = "rw")]
     ReadWrite,
 }
 
@@ -44,7 +47,9 @@ pub(crate) struct FileRef {
 
 #[derive(Debug, Serialize, Deserialize, Clone)]
 pub(crate) enum ImageType {
+    #[serde(rename = "dd")]
     Flasher(FileRef),
+    #[serde(rename = "fs")]
     FileSystems(FSDump),
 }
 
@@ -80,7 +85,7 @@ impl<'a> BalenaConfig {
 
     pub fn check(&self, mig_mode: &MigMode) -> Result<(), MigError> {
         debug!("check: {:?}", self);
-        if let MigMode::IMMEDIATE = mig_mode {
+        if let MigMode::Immediate = mig_mode {
             if let None = self.image {
                 return Err(MigError::from_remark(
                     MigErrorKind::InvParam,

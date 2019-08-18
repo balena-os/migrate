@@ -14,7 +14,9 @@ const BUFFER_SIZE: usize = 1024 * 1024;
 
 #[derive(Debug, Serialize, Deserialize, Clone, PartialEq)]
 pub(crate) enum HashInfo {
+    #[serde (rename = "sha1")]
     Sha1(String),
+    #[serde (rename = "md5")]
     Md5(String),
 }
 

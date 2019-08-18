@@ -310,7 +310,7 @@ fn sub_format(
 
     match check {
         PartCheck::None => (),
-        PartCheck::Read => {
+        PartCheck::ReadOnly => {
             args.push("-c");
         }
         PartCheck::ReadWrite => {
@@ -383,7 +383,7 @@ fn format(lsblk_dev: &LsblkDevice, cmds: &EnsuredCmds, fs_dump: &FSDump) -> bool
 
         let fat_check = if let PartCheck::ReadWrite = check {
             // mkdosfs does not know about ReadWrite checks
-            &PartCheck::Read
+            &PartCheck::ReadOnly
         } else {
             check
         };

@@ -326,14 +326,14 @@ impl MigrateInfo {
         }
 
         let wifi_cfg = config.migrate.get_wifis();
-        let wifis: Vec<WifiConfig> = if MigrateWifis::NONE != wifi_cfg {
+        let wifis: Vec<WifiConfig> = if MigrateWifis::None != wifi_cfg {
             // **********************************************************************
             // ** migrate wifi config
             // TODO: NetworkManager configs
             debug!("looking for wifi configurations to migrate");
 
             let empty_list: Vec<String> = Vec::new();
-            let list: &Vec<String> = if let MigrateWifis::SOME(ref list) = wifi_cfg {
+            let list: &Vec<String> = if let MigrateWifis::List(ref list) = wifi_cfg {
                 list
             } else {
                 &empty_list

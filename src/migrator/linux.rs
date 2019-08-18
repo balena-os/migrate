@@ -61,7 +61,7 @@ impl<'a> LinuxMigrator {
         let config = Config::new()?;
 
         match config.migrate.get_mig_mode() {
-            MigMode::EXTRACT => {
+            MigMode::Extract => {
                 let mut extractor = Extractor::new(config)?;
                 extractor.extract(None)?;
                 Ok(())
@@ -69,10 +69,10 @@ impl<'a> LinuxMigrator {
             _ => {
                 let mut migrator = LinuxMigrator::try_init(config)?;
                 let res = match migrator.config.migrate.get_mig_mode() {
-                    MigMode::IMMEDIATE => migrator.do_migrate(),
-                    MigMode::PRETEND => Ok(()),
-                    MigMode::AGENT => Err(MigError::from(MigErrorKind::NotImpl)),
-                    MigMode::EXTRACT => panic!("impossible MigMode here"),
+                    MigMode::Immediate => migrator.do_migrate(),
+                    MigMode::Pretend => Ok(()),
+                    MigMode::Agent => Err(MigError::from(MigErrorKind::NotImpl)),
+                    MigMode::Extract => panic!("impossible MigMode here"),
                 };
                 Logger::flush();
                 res

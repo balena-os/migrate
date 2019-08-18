@@ -192,7 +192,7 @@ impl<'a> Stage2Config {
         }
     }
 
-    pub fn get_watchdogs(&'a self) -> Option<&'a Vec<WatchdogCfg>> {
+    pub fn get_watchdogs(&self) -> Option<&Vec<WatchdogCfg>> {
         if let Some(ref val) = self.watchdogs {
             Some(val)
         } else {
@@ -250,7 +250,7 @@ impl<T: Clone> Required<T> {
         }
     }
 
-    fn get<'a>(&'a self) -> Result<&'a T, MigError> {
+    fn get<'a>(&self) -> Result<&T, MigError> {
         if let Some(ref val) = self.data {
             Ok(val)
         } else {

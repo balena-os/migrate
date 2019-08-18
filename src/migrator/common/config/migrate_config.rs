@@ -15,19 +15,23 @@ const NO_BACKUP_VOLUMES: &[VolumeConfig] = &[];
 
 #[derive(Debug, PartialEq, Deserialize, Clone)]
 pub(crate) enum MigMode {
-    AGENT,
-    IMMEDIATE,
-    PRETEND,
-    EXTRACT,
+    #[serde(rename = "agent")]
+    Agent,
+    #[serde(rename = "immediate")]
+    Immediate,
+    #[serde(rename = "pretend")]
+    Pretend,
+    #[serde(rename = "extract")]
+    Extract,
 }
 
 impl MigMode {
     pub fn from_str(mode: &str) -> Result<Self, MigError> {
         match mode.to_lowercase().as_str() {
-            "extract" => Ok(MigMode::EXTRACT),
-            "immediate" => Ok(MigMode::IMMEDIATE),
-            "agent" => Ok(MigMode::AGENT),
-            "pretend" => Ok(MigMode::PRETEND),
+            "extract" => Ok(MigMode::Extract),
+            "immediate" => Ok(MigMode::Immediate),
+            "agent" => Ok(MigMode::Agent),
+            "pretend" => Ok(MigMode::Pretend),
             _ => {
                 return Err(MigError::from_remark(
                     MigErrorKind::InvParam,
@@ -41,7 +45,7 @@ impl MigMode {
     }
 }
 
-const DEFAULT_MIG_MODE: MigMode = MigMode::PRETEND;
+const DEFAULT_MIG_MODE: MigMode = MigMode::Pretend;
 
 #[derive(Debug, Deserialize, Serialize, Clone)]
 pub(crate) struct WatchdogCfg {
@@ -70,11 +74,12 @@ pub(crate) struct VolumeConfig {
     pub items: Vec<ItemConfig>,
 }
 
+
 #[derive(Debug, PartialEq, Clone)]
 pub(crate) enum MigrateWifis {
-    NONE,
-    ALL,
-    SOME(Vec<String>),
+    None,
+    All,
+    List(Vec<String>),
 }
 
 #[derive(Debug, Deserialize)]
@@ -92,10 +97,13 @@ pub(crate) struct MigrateConfig {
     all_wifis: Option<bool>,
     wifis: Option<Vec<String>>,
     log: Option<LogConfig>,
+    // TODO: make boot files FileRef - add digest
     kernel_path: Option<PathBuf>,
     initrd_path: Option<PathBuf>,
     dtb_path: Option<PathBuf>,
+
     force_slug: Option<String>,
+    // TODO: check fail mode processing
     fail_mode: Option<FailMode>,
     backup: Option<Vec<VolumeConfig>>,
     nwmgr_files: Option<Vec<PathBuf>>,
@@ -141,7 +149,7 @@ impl<'a> MigrateConfig {
 
     pub fn check(&self) -> Result<(), MigError> {
         match self.get_mig_mode() {
-            MigMode::AGENT => Err(MigError::from(MigErrorKind::NotImpl)),
+            MigMode::Agent => Err(MigError::from(MigErrorKind::NotImpl)),
             _ => {
                 if let None = self.work_dir {
                     error!("A required parameter was not found: 'work_dir'");
@@ -261,16 +269,16 @@ impl<'a> MigrateConfig {
 
     pub fn get_wifis(&self) -> MigrateWifis {
         if let Some(ref wifis) = self.wifis {
-            MigrateWifis::SOME(wifis.clone())
+            MigrateWifis::List(wifis.clone())
         } else {
             if let Some(ref all_wifis) = self.all_wifis {
                 if *all_wifis {
-                    MigrateWifis::ALL
+                    MigrateWifis::All
                 } else {
-                    MigrateWifis::NONE
+                    MigrateWifis::None
                 }
             } else {
-                MigrateWifis::NONE
+                MigrateWifis::None
             }
         }
     }

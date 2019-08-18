@@ -52,9 +52,9 @@ impl<'a> MSWMigrator {
     pub fn migrate() -> Result<(), MigError> {
         let mut migrator = MSWMigrator::try_init(Config::new()?)?;
         match migrator.config.migrate.get_mig_mode() {
-            MigMode::IMMEDIATE => migrator.do_migrate(),
-            MigMode::PRETEND => Ok(()),
-            MigMode::AGENT => Err(MigError::from(MigErrorKind::NotImpl)),
+            MigMode::Immediate => migrator.do_migrate(),
+            MigMode::Pretend => Ok(()),
+            MigMode::Agent => Err(MigError::from(MigErrorKind::NotImpl)),
         }
     }
 
