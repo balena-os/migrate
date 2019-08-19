@@ -3,6 +3,7 @@ use failure::ResultExt;
 use lazy_static::lazy_static;
 use log::{debug, error, trace};
 use regex::Regex;
+use serde::{Deserialize, Serialize};
 use std::path::{Path, PathBuf};
 
 // ******************************************************************
@@ -35,6 +36,8 @@ use crate::common::{
     //file_digest::check_digest
 };
 
+use crate::common::config::balena_config::FileRef;
+use crate::common::file_digest::{check_digest, get_default_digest, HashInfo};
 #[cfg(target_os = "linux")]
 use crate::linux::{EnsuredCmds, FILE_CMD};
 
@@ -69,21 +72,22 @@ impl FileType {
     }
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Deserialize, Serialize, Clone)]
 pub(crate) struct FileInfo {
     pub path: PathBuf,
     pub rel_path: Option<PathBuf>,
     pub size: u64,
+    pub hash_info: HashInfo,
 }
 
 // TODO: make this detect file formats used by migrate, eg: kernel, initramfs, json file, disk image
 
 impl FileInfo {
-    pub fn new<P1: AsRef<Path>, P2: AsRef<Path>>(
-        file: P1,
-        work_dir: P2,
+    pub fn new<P: AsRef<Path>>(
+        file_ref: &FileRef,
+        work_dir: P,
     ) -> Result<Option<FileInfo>, MigError> {
-        let file_path = file.as_ref();
+        let file_path = &file_ref.path;
         let work_path = work_dir.as_ref();
         trace!(
             "FileInfo::new: entered with file: '{}', work_dir: '{}'",
@@ -121,10 +125,27 @@ impl FileInfo {
             Err(_why) => None,
         };
 
+        let hash_info = if let Some(ref hash_info) = file_ref.hash {
+            if !check_digest(&file_ref.path, hash_info)? {
+                error!(
+                    "Failed to check file digest for file '{}': {:?}",
+                    file_ref.path.display(),
+                    hash_info
+                );
+                return Err(MigError::displayed());
+            } else {
+                hash_info.clone()
+            }
+        } else {
+            debug!("Created digest for file: '{}'", file_ref.path.display());
+            get_default_digest(&file_ref.path)?
+        };
+
         Ok(Some(FileInfo {
             path: abs_path,
             rel_path,
             size: metadata.len(),
+            hash_info,
         }))
     }
 

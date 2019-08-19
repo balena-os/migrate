@@ -367,58 +367,57 @@ mod tests {
         let config = Config::from_string(TEST_FS_CONFIG_OK).unwrap();
     }
 
+    /*
 
-        /*
-
-            fn assert_test_config_ok(config: &Config) -> () {
-                match config.migrate.mode {
-                    MigMode::IMMEDIATE => (),
-                    _ => {
-                        panic!("unexpected migrate mode");
-                    }
-                };
-
-                assert!(config.migrate.all_wifis == true);
-
-                if let Some(i) = config.migrate.reboot {
-                    assert!(i == 10);
-                } else {
-                    panic!("missing parameter migarte.reboot");
+        fn assert_test_config_ok(config: &Config) -> () {
+            match config.migrate.mode {
+                MigMode::IMMEDIATE => (),
+                _ => {
+                    panic!("unexpected migrate mode");
                 }
+            };
 
-                if let Some(ref log_to) = config.migrate.log_to {
-                    assert!(log_to.drive == "/dev/sda1");
-                    assert!(log_to.fs_type == "ext4");
-                } else {
-                    panic!("no log config found");
-                }
+            assert!(config.migrate.all_wifis == true);
 
-                if let Some(ref balena) = config.balena {
-                    assert!(balena.get_image_path().to_string_lossy() == "image.gz");
-                    assert!(balena.get_config_path().to_string_lossy() == "config.json");
-                } else {
-                    panic!("no balena config found");
-                }
-
-                config.check().unwrap();
+            if let Some(i) = config.migrate.reboot {
+                assert!(i == 10);
+            } else {
+                panic!("missing parameter migarte.reboot");
             }
 
-
-
-            #[test]
-            fn read_write() -> () {
-                let mut config = Config::default();
-                config.from_string(TEST_CONFIG).unwrap();
-
-                let out = config.to_yaml("");
-
-                let mut new_config = Config::default();
-                new_config.from_string(&out).unwrap();
-                assert_test_config1(&new_config);
-
-                ()
+            if let Some(ref log_to) = config.migrate.log_to {
+                assert!(log_to.drive == "/dev/sda1");
+                assert!(log_to.fs_type == "ext4");
+            } else {
+                panic!("no log config found");
             }
-        */
+
+            if let Some(ref balena) = config.balena {
+                assert!(balena.get_image_path().to_string_lossy() == "image.gz");
+                assert!(balena.get_config_path().to_string_lossy() == "config.json");
+            } else {
+                panic!("no balena config found");
+            }
+
+            config.check().unwrap();
+        }
+
+
+
+        #[test]
+        fn read_write() -> () {
+            let mut config = Config::default();
+            config.from_string(TEST_CONFIG).unwrap();
+
+            let out = config.to_yaml("");
+
+            let mut new_config = Config::default();
+            new_config.from_string(&out).unwrap();
+            assert_test_config1(&new_config);
+
+            ()
+        }
+    */
 
     const TEST_DD_CONFIG_OK: &str = r###"
 migrate:

@@ -118,7 +118,13 @@ impl Extractor {
             return Err(MigError::displayed());
         };
 
-        let image_info = FileInfo::new(&image_file.path, config.migrate.get_work_dir())?;
+        let image_info = FileInfo::new(
+            &FileRef {
+                path: image_file.path.clone(),
+                hash: None,
+            },
+            config.migrate.get_work_dir(),
+        )?;
 
         if let Some(image_info) = image_info {
             debug!("new: working with file '{}'", image_info.path.display());

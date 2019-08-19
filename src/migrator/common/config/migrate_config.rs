@@ -6,10 +6,11 @@ use crate::{
     defs::FailMode,
 };
 
+use crate::common::config::balena_config::FileRef;
 use serde::{Deserialize, Serialize};
 
 const MODULE: &str = "common::config::migrate_config";
-const NO_NMGR_FILES: &[PathBuf] = &[];
+const NO_NMGR_FILES: &[FileRef] = &[];
 
 const NO_BACKUP_VOLUMES: &[VolumeConfig] = &[];
 
@@ -74,7 +75,6 @@ pub(crate) struct VolumeConfig {
     pub items: Vec<ItemConfig>,
 }
 
-
 #[derive(Debug, PartialEq, Clone)]
 pub(crate) enum MigrateWifis {
     None,
@@ -98,15 +98,15 @@ pub(crate) struct MigrateConfig {
     wifis: Option<Vec<String>>,
     log: Option<LogConfig>,
     // TODO: make boot files FileRef - add digest
-    kernel_path: Option<PathBuf>,
-    initrd_path: Option<PathBuf>,
-    dtb_path: Option<PathBuf>,
+    kernel_path: Option<FileRef>,
+    initrd_path: Option<FileRef>,
+    dtb_path: Option<FileRef>,
 
     force_slug: Option<String>,
     // TODO: check fail mode processing
     fail_mode: Option<FailMode>,
     backup: Option<Vec<VolumeConfig>>,
-    nwmgr_files: Option<Vec<PathBuf>>,
+    nwmgr_files: Option<Vec<FileRef>>,
     require_nwmgr_config: Option<bool>,
     gzip_internal: Option<bool>,
     extract_device: Option<String>,
@@ -194,7 +194,7 @@ impl<'a> MigrateConfig {
         return true;
     }
 
-    pub fn get_nwmgr_files(&'a self) -> &'a [PathBuf] {
+    pub fn get_nwmgr_files(&'a self) -> &'a [FileRef] {
         if let Some(ref val) = self.nwmgr_files {
             return val.as_ref();
         }
@@ -327,7 +327,7 @@ impl<'a> MigrateConfig {
         }
     }
 
-    pub fn get_kernel_path(&'a self) -> &'a Path {
+    pub fn get_kernel_path(&'a self) -> &'a FileRef {
         if let Some(ref path) = self.kernel_path {
             path
         } else {
@@ -335,7 +335,7 @@ impl<'a> MigrateConfig {
         }
     }
 
-    pub fn get_initrd_path(&'a self) -> &'a Path {
+    pub fn get_initrd_path(&'a self) -> &'a FileRef {
         if let Some(ref path) = self.initrd_path {
             path
         } else {
@@ -343,7 +343,7 @@ impl<'a> MigrateConfig {
         }
     }
 
-    pub fn get_dtb_path(&'a self) -> Option<&'a Path> {
+    pub fn get_dtb_path(&'a self) -> Option<&'a FileRef> {
         if let Some(ref path) = self.dtb_path {
             Some(path)
         } else {

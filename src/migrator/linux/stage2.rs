@@ -11,12 +11,10 @@ use std::time::{Duration, Instant};
 
 use crate::{
     common::{
-        call,
-        config::balena_config::FileRef,
-        dir_exists,
+        call, dir_exists,
         file_digest::check_digest,
         file_exists, file_size, format_size_with_unit, path_append,
-        stage2_config::{CheckedImageType, Stage2Config},
+        stage2_config::{CheckedFileInfo, CheckedImageType, Stage2Config},
         MigErrCtx, MigError, MigErrorKind,
     },
     defs::{FailMode, BACKUP_FILE, SYSTEM_CONNECTIONS_DIR},
@@ -273,13 +271,13 @@ impl<'a> Stage2 {
 
         info!("migrating {:?} boot type: {:?}", device_type, boot_type);
 
-        if let Err(why) = if let CheckedImageType::Flasher(ref _image_path) =
-            self.config.get_balena_image().image
+        if let Err(why) =
+            if let CheckedImageType::Flasher(ref _image_path) = self.config.get_balena_image() {
+                flasher::check_commands(&mut self.cmds.borrow_mut(), &self.config)
+            } else {
+                fs_writer::check_commands(&mut self.cmds.borrow_mut())
+            }
         {
-            flasher::check_commands(&mut self.cmds.borrow_mut(), &self.config)
-        } else {
-            fs_writer::check_commands(&mut self.cmds.borrow_mut())
-        } {
             error!("Some programs required to write the OS image to disk could not be located, error: '{:?}", why);
             return Err(MigError::displayed());
         }
@@ -301,7 +299,7 @@ impl<'a> Stage2 {
                         format_size_with_unit(mem_tot)
                     );
 
-                    let mut required_size = self.config.get_balena_image().req_space;
+                    let mut required_size = self.config.get_balena_image().get_required_space();
 
                     required_size +=
                         file_size(path_append(&work_path, &self.config.get_balena_config()))?;
@@ -356,9 +354,9 @@ impl<'a> Stage2 {
                 ))?;
             }
 
-            match self.config.get_balena_image().image {
+            match self.config.get_balena_image() {
                 CheckedImageType::Flasher(ref image_file) => {
-                    let src = path_append(&work_path, &image_file.path);
+                    let src = path_append(&work_path, &image_file.rel_path);
                     let tgt = path_append(mig_tmp_dir, BALENA_IMAGE_FILE);
                     copy(&src, &tgt).context(MigErrCtx::from_remark(
                         MigErrorKind::Upstream,
@@ -368,23 +366,16 @@ impl<'a> Stage2 {
                             tgt.display()
                         ),
                     ))?;
-                    if let Some(ref hash_info) = image_file.hash {
-                        info!("Checking digest on copied file '{}'", tgt.display());
-                        if !check_digest(&tgt, hash_info)? {
-                            return Err(MigError::from_remark(
-                                MigErrorKind::InvParam,
-                                &format!(
-                                    "Failed to check digest on copied file: '{}', {:?} ",
-                                    tgt.display(),
-                                    hash_info
-                                ),
-                            ));
-                        }
-                    } else {
-                        warn!(
-                            "Not checking digest on copied file '{}' - no digest provided",
-                            tgt.display()
-                        );
+                    info!("Checking digest on copied file '{}'", tgt.display());
+                    if !check_digest(&tgt, &image_file.hash_info)? {
+                        return Err(MigError::from_remark(
+                            MigErrorKind::InvParam,
+                            &format!(
+                                "Failed to check digest on copied file: '{}', {:?} ",
+                                tgt.display(),
+                                image_file.hash_info
+                            ),
+                        ));
                     }
 
                     info!("copied balena OS image to '{}'", tgt.display());
@@ -552,13 +543,13 @@ impl<'a> Stage2 {
         // Exit in Rescue Shell  Mode to call external script
         // Call external script
 
-        match self.config.get_balena_image().image {
+        match self.config.get_balena_image() {
             CheckedImageType::Flasher(ref image_file) => {
                 // TODO: move some, if not most of this into flasher
 
                 let image_path = if self.mounts.borrow().is_work_no_copy() {
                     if let Some(work_dir) = self.mounts.borrow().get_work_path() {
-                        path_append(work_dir, &image_file.path)
+                        path_append(work_dir, &image_file.rel_path)
                     } else {
                         warn!("Work path not found in no_copy mode, trying mig temp");
                         path_append(mig_tmp_dir, BALENA_IMAGE_FILE)
@@ -801,12 +792,12 @@ impl<'a> Stage2 {
     fn copy_and_check(
         &self,
         source_dir: &Path,
-        archive: &FileRef,
+        archive: &CheckedFileInfo,
         target_dir: &Path,
         tag: &str,
         target_name: &str,
     ) -> Result<(), MigError> {
-        let src = path_append(&source_dir, &archive.path);
+        let src = path_append(&source_dir, &archive.rel_path);
         let tgt = path_append(target_dir, target_name);
         copy(&src, &tgt).context(MigErrCtx::from_remark(
             MigErrorKind::Upstream,
@@ -824,22 +815,21 @@ impl<'a> Stage2 {
             tgt.display()
         );
 
-        if let Some(ref hash_info) = archive.hash {
-            info!("Checking digest on copied file '{}' - {:?}", tgt.display(), hash_info);
-            if !check_digest(&tgt, hash_info)? {
-                return Err(MigError::from_remark(
-                    MigErrorKind::InvParam,
-                    &format!(
-                        "Digest mismatch on file '{}', {:?}",
-                        archive.path.display(),
-                        hash_info
-                    ),
-                ));
-            }
-        } else {
-            warn!("Not checking digest on copied file '{}' - no digest supplied", tgt.display())
+        info!(
+            "Checking digest on copied file '{}' - {:?}",
+            tgt.display(),
+            archive.hash_info
+        );
+        if !check_digest(&tgt, &archive.hash_info)? {
+            return Err(MigError::from_remark(
+                MigErrorKind::InvParam,
+                &format!(
+                    "Digest mismatch on file '{}', {:?}",
+                    archive.rel_path.display(),
+                    archive.hash_info
+                ),
+            ));
         }
-
         Ok(())
     }
 }

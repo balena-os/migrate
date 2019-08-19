@@ -11,9 +11,10 @@ use std::time::{Duration, SystemTime};
 use nix::unistd::sync;
 
 use crate::common::file_exists;
+use crate::common::stage2_config::CheckedFSDump;
 use crate::{
     common::{
-        config::balena_config::{FSDump, PartCheck},
+        config::balena_config::PartCheck,
         path_append,
         stage2_config::{CheckedImageType, Stage2Config},
         MigErrCtx, MigError, MigErrorKind,
@@ -58,7 +59,7 @@ pub(crate) fn write_balena_os(
     base_path: &Path,
 ) -> FlashResult {
     // make sure we have allrequired commands
-    if let CheckedImageType::FileSystems(ref fs_dump) = config.get_balena_image().image {
+    if let CheckedImageType::FileSystems(ref fs_dump) = config.get_balena_image() {
         let res = partition(device, &cmds, fs_dump);
         if let FlashResult::Ok = res {
             let lsblk_dev = match part_reread(device, 30, PART_NAME.len(), cmds) {
@@ -174,7 +175,12 @@ fn sub_write(tar_path: &str, mountpoint: &Path, base_path: &Path, archive: &Path
     }
 }
 
-fn balena_write(mounts: &Mounts, tar_path: &str, fs_dump: &FSDump, base_path: &Path) -> bool {
+fn balena_write(
+    mounts: &Mounts,
+    tar_path: &str,
+    fs_dump: &CheckedFSDump,
+    base_path: &Path,
+) -> bool {
     // TODO: try use device labels instead
 
     debug!(
@@ -183,7 +189,12 @@ fn balena_write(mounts: &Mounts, tar_path: &str, fs_dump: &FSDump, base_path: &P
     );
 
     if let Some(mountpoint) = mounts.get_balena_boot_mountpoint() {
-        if !sub_write(tar_path, mountpoint, base_path, &fs_dump.boot.archive.path) {
+        if !sub_write(
+            tar_path,
+            mountpoint,
+            base_path,
+            &fs_dump.boot.archive.rel_path,
+        ) {
             return false;
         }
     } else {
@@ -196,7 +207,7 @@ fn balena_write(mounts: &Mounts, tar_path: &str, fs_dump: &FSDump, base_path: &P
             tar_path,
             mountpoint,
             base_path,
-            &fs_dump.root_a.archive.path,
+            &fs_dump.root_a.archive.rel_path,
         ) {
             return false;
         }
@@ -210,7 +221,7 @@ fn balena_write(mounts: &Mounts, tar_path: &str, fs_dump: &FSDump, base_path: &P
             tar_path,
             mountpoint,
             base_path,
-            &fs_dump.root_b.archive.path,
+            &fs_dump.root_b.archive.rel_path,
         ) {
             return false;
         }
@@ -220,7 +231,12 @@ fn balena_write(mounts: &Mounts, tar_path: &str, fs_dump: &FSDump, base_path: &P
     }
 
     if let Some(mountpoint) = mounts.get_balena_state_mountpoint() {
-        if !sub_write(tar_path, mountpoint, base_path, &fs_dump.state.archive.path) {
+        if !sub_write(
+            tar_path,
+            mountpoint,
+            base_path,
+            &fs_dump.state.archive.rel_path,
+        ) {
             return false;
         }
     } else {
@@ -229,7 +245,12 @@ fn balena_write(mounts: &Mounts, tar_path: &str, fs_dump: &FSDump, base_path: &P
     }
 
     if let Some(mountpoint) = mounts.get_balena_data_mountpoint() {
-        sub_write(tar_path, mountpoint, base_path, &fs_dump.data.archive.path)
+        sub_write(
+            tar_path,
+            mountpoint,
+            base_path,
+            &fs_dump.data.archive.rel_path,
+        )
     } else {
         error!("Could not retrieve data mountpoint");
         return false;
@@ -356,7 +377,7 @@ fn sub_format(
     }
 }
 
-fn format(lsblk_dev: &LsblkDevice, cmds: &EnsuredCmds, fs_dump: &FSDump) -> bool {
+fn format(lsblk_dev: &LsblkDevice, cmds: &EnsuredCmds, fs_dump: &CheckedFSDump) -> bool {
     if let Some(ref children) = lsblk_dev.children {
         // write an empty /etc/mtab to make mkfs happy
         let mtab_path = PathBuf::from("/etc/mtab");
@@ -468,7 +489,7 @@ fn format(lsblk_dev: &LsblkDevice, cmds: &EnsuredCmds, fs_dump: &FSDump) -> bool
     }
 }
 
-fn partition(device: &Path, cmds: &EnsuredCmds, fs_dump: &FSDump) -> FlashResult {
+fn partition(device: &Path, cmds: &EnsuredCmds, fs_dump: &CheckedFSDump) -> FlashResult {
     /*
     parted -s -a none /dev/sdb -- unit s \
     mklabel msdos \

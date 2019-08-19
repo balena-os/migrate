@@ -8,7 +8,9 @@ use std::time::SystemTime;
 
 use crate::{
     common::{
-        dir_exists, file_exists, is_balena_file, path_append,
+        dir_exists,
+        file_digest::check_digest,
+        file_exists, is_balena_file, path_append,
         stage2_config::{Stage2Config, Stage2ConfigBuilder},
         Config, MigErrCtx, MigError, MigErrorKind,
     },
@@ -74,8 +76,8 @@ impl BootManager for RaspiBootManager {
     fn setup(
         &self,
         cmds: &EnsuredCmds,
-        _mig_info: &MigrateInfo,
-        config: &Config,
+        mig_info: &MigrateInfo,
+        _config: &Config,
         s2_cfg: &mut Stage2ConfigBuilder,
         kernel_opts: &str,
     ) -> Result<(), MigError> {
@@ -83,18 +85,30 @@ impl BootManager for RaspiBootManager {
 
         // **********************************************************************
         // ** copy new kernel
-        let kernel_path = config.migrate.get_kernel_path();
-        std::fs::copy(kernel_path, RPI_MIG_KERNEL_PATH).context(MigErrCtx::from_remark(
-            MigErrorKind::Upstream,
-            &format!(
-                "failed to copy kernel file '{}' to '{}'",
-                kernel_path.display(),
-                RPI_MIG_KERNEL_PATH
+        std::fs::copy(&mig_info.kernel_file.path, RPI_MIG_KERNEL_PATH).context(
+            MigErrCtx::from_remark(
+                MigErrorKind::Upstream,
+                &format!(
+                    "failed to copy kernel file '{}' to '{}'",
+                    mig_info.kernel_file.path.display(),
+                    RPI_MIG_KERNEL_PATH
+                ),
             ),
-        ))?;
+        )?;
+
+        if !check_digest(RPI_MIG_KERNEL_PATH, &mig_info.kernel_file.hash_info)? {
+            return Err(MigError::from_remark(
+                MigErrorKind::Upstream,
+                &format!(
+                    "Failed to check digest on copied kernel file '{}' to {:?}",
+                    RPI_MIG_KERNEL_PATH, mig_info.kernel_file.hash_info
+                ),
+            ));
+        }
+
         info!(
             "copied kernel: '{}' -> '{}'",
-            kernel_path.display(),
+            mig_info.kernel_file.path.display(),
             RPI_MIG_KERNEL_PATH
         );
 
@@ -102,18 +116,30 @@ impl BootManager for RaspiBootManager {
 
         // **********************************************************************
         // ** copy new iniramfs
-        let initrd_path = config.migrate.get_initrd_path();
-        std::fs::copy(initrd_path, RPI_MIG_INITRD_PATH).context(MigErrCtx::from_remark(
-            MigErrorKind::Upstream,
-            &format!(
-                "failed to copy initrd file '{}' to '{}'",
-                initrd_path.display(),
-                RPI_MIG_INITRD_PATH
+        std::fs::copy(&mig_info.initrd_file.path, RPI_MIG_INITRD_PATH).context(
+            MigErrCtx::from_remark(
+                MigErrorKind::Upstream,
+                &format!(
+                    "failed to copy initrd file '{}' to '{}'",
+                    mig_info.initrd_file.path.display(),
+                    RPI_MIG_INITRD_PATH
+                ),
             ),
-        ))?;
+        )?;
+
+        if !check_digest(RPI_MIG_INITRD_PATH, &mig_info.initrd_file.hash_info)? {
+            return Err(MigError::from_remark(
+                MigErrorKind::Upstream,
+                &format!(
+                    "Failed to check digest on copied initrd file '{}' to {:?}",
+                    RPI_MIG_INITRD_PATH, mig_info.initrd_file.hash_info
+                ),
+            ));
+        }
+
         info!(
             "copied initramfs: '{}' -> '{}'",
-            initrd_path.display(),
+            mig_info.initrd_file.path.display(),
             RPI_MIG_INITRD_PATH
         );
 

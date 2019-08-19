@@ -2,7 +2,7 @@ use super::MigMode;
 use crate::common::{file_digest::HashInfo, MigError, MigErrorKind};
 use log::debug;
 use serde::{Deserialize, Serialize};
-use std::path::{Path, PathBuf};
+use std::path::PathBuf;
 
 const MODULE: &str = "common::config::balena_config";
 
@@ -64,7 +64,7 @@ pub(crate) struct ApiInfo {
 #[derive(Debug, Deserialize)]
 pub(crate) struct BalenaConfig {
     image: Option<ImageType>,
-    config: Option<PathBuf>,
+    config: Option<FileRef>,
     app_name: Option<String>,
     api: Option<ApiInfo>,
     check_vpn: Option<bool>,
@@ -143,7 +143,7 @@ impl<'a> BalenaConfig {
         }
     }
 
-    pub fn get_config_path(&'a self) -> &'a Path {
+    pub fn get_config_path(&'a self) -> &'a FileRef {
         if let Some(ref path) = self.config {
             path
         } else {

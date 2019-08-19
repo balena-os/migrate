@@ -6,7 +6,7 @@ use serde::{Deserialize, Serialize};
 use sha1::Sha1;
 use std::fs::File;
 use std::io::Read;
-use std::path::PathBuf;
+use std::path::Path;
 
 use crate::common::{MigErrCtx, MigError, MigErrorKind};
 
@@ -14,16 +14,17 @@ const BUFFER_SIZE: usize = 1024 * 1024;
 
 #[derive(Debug, Serialize, Deserialize, Clone, PartialEq)]
 pub(crate) enum HashInfo {
-    #[serde (rename = "sha1")]
+    #[serde(rename = "sha1")]
     Sha1(String),
-    #[serde (rename = "md5")]
+    #[serde(rename = "md5")]
     Md5(String),
 }
 
-pub(crate) fn check_digest(path: &PathBuf, digest: &HashInfo) -> Result<bool, MigError> {
+pub(crate) fn check_digest<P: AsRef<Path>>(path: P, digest: &HashInfo) -> Result<bool, MigError> {
+    //let path= path.as_ref();
     let computed = match digest {
-        HashInfo::Sha1(_) => HashInfo::Sha1(process_digest::<Sha1>(path)?),
-        HashInfo::Md5(_) => HashInfo::Md5(process_digest::<Md5>(path)?),
+        HashInfo::Sha1(_) => HashInfo::Sha1(process_digest::<Sha1, _>(path)?),
+        HashInfo::Md5(_) => HashInfo::Md5(process_digest::<Md5, _>(path)?),
     };
 
     debug!("check_digest: provided digest is: {:?}", digest);
@@ -31,21 +32,12 @@ pub(crate) fn check_digest(path: &PathBuf, digest: &HashInfo) -> Result<bool, Mi
     Ok(computed == *digest)
 }
 
-/*
-pub (crate) fn get_digest(path: &PathBuf, hash_type: &str ) -> Result<HashInfo, MigError> {
-    match hash_type.to_ascii_lowercase().as_ref() {
-        "sha1" => Ok(HashInfo::Sha1(process_digest::<Sha1>(path)?)),
-        "md5" => Ok(HashInfo::Md5(process_digest::<Md5>(path)?)),
-        _ => Err(MigError::from_remark(MigErrorKind::InvParam, &format!("Invalid/unsupported digest type encountered: '{}'",  hash_type)))
-    }
-}
-*/
-
-pub(crate) fn get_default_digest(path: &PathBuf) -> Result<HashInfo, MigError> {
-    Ok(HashInfo::Md5(process_digest::<Md5>(path)?))
+pub(crate) fn get_default_digest<P: AsRef<Path>>(path: P) -> Result<HashInfo, MigError> {
+    Ok(HashInfo::Md5(process_digest::<Md5, _>(path)?))
 }
 
-fn process_digest<D: Digest + Default>(path: &PathBuf) -> Result<String, MigError> {
+fn process_digest<D: Digest + Default, P: AsRef<Path>>(path: P) -> Result<String, MigError> {
+    let path = path.as_ref();
     let mut file = File::open(path).context(MigErrCtx::from_remark(
         MigErrorKind::Upstream,
         &format!("Failed to open file '{}'", path.display()),

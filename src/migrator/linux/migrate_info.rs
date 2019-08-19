@@ -4,10 +4,9 @@ use std::path::PathBuf;
 use crate::{
     common::{
         balena_cfg_json::BalenaCfgJson,
-        config::balena_config::{FSDump, ImageType, PartDump},
+        config::balena_config::{ImageType, PartDump},
         config::MigrateWifis,
-        file_digest::check_digest,
-        stage2_config::{CheckedImageType, ImageInfo},
+        stage2_config::{CheckedFSDump, CheckedFileInfo, CheckedImageType, CheckedPartDump},
         wifi_config::WifiConfig,
         Config, FileInfo, FileType, MigError, MigErrorKind,
     },
@@ -29,7 +28,6 @@ pub(crate) use lsblk_info::{LsblkDevice, LsblkInfo, LsblkPartition};
 pub(crate) mod path_info;
 use crate::common::config::balena_config::FileRef;
 pub(crate) use path_info::PathInfo;
-use crate::common::file_digest::get_default_digest;
 
 //use crate::linux::migrate_info::lsblk_info::;
 
@@ -47,10 +45,13 @@ pub(crate) struct MigrateInfo {
     pub nwmgr_files: Vec<FileInfo>,
     pub wifis: Vec<WifiConfig>,
 
-    pub image_file: ImageInfo,
+    pub image_file: CheckedImageType,
     pub config_file: BalenaCfgJson,
+
     pub kernel_file: FileInfo,
+
     pub initrd_file: FileInfo,
+
     pub dtb_file: Option<FileInfo>,
 }
 
@@ -114,109 +115,76 @@ impl MigrateInfo {
 
         let os_image = match config.balena.get_image_path() {
             ImageType::Flasher(ref flasher_img) => {
-                let (checked_ref, req_space) = MigrateInfo::check_file(
+                let checked_ref = MigrateInfo::check_file(
                     &flasher_img,
                     &FileType::GZipOSImage,
                     &work_path,
                     cmds,
                     &lsblk_info,
                 )?;
-                ImageInfo {
-                    image: CheckedImageType::Flasher(checked_ref),
-                    req_space,
-                }
-            }
 
+                CheckedImageType::Flasher(checked_ref)
+            }
             ImageType::FileSystems(ref fs_dump) => {
                 // make sure all files are present and in /workdir, generate total size and partitioning config in miginfo
-                let mut req_space: u64 = 0;
-
-                let boot_ref = if let Some((archive, size)) =
-                    MigrateInfo::check_dump(&fs_dump.boot, &work_path, cmds, &lsblk_info)?
-                {
-                    req_space += size;
-                    archive
-                } else {
-                    error!("The balena boot archive has not been specified. Automatic download is not yet implemented, so you need to specify and supply all required files");
-                    return Err(MigError::displayed());
-                };
-
-                let root_a_ref = if let Some((archive, size)) =
-                    MigrateInfo::check_dump(&fs_dump.root_a, &work_path, cmds, &lsblk_info)?
-                {
-                    req_space += size;
-                    archive
-                } else {
-                    error!("The balena root_a archive has not been specified. Automatic download is not yet implemented, so you need to specify and supply all required files");
-                    return Err(MigError::displayed());
-                };
-
-                let root_b_ref = if let Some((archive, size)) =
-                    MigrateInfo::check_dump(&fs_dump.root_b, &work_path, cmds, &lsblk_info)?
-                {
-                    req_space += size;
-                    archive
-                } else {
-                    error!("The balena root_b archive has not been specified. Automatic download is not yet implemented, so you need to specify and supply all required files");
-                    return Err(MigError::displayed());
-                };
-
-                let state_ref = if let Some((archive, size)) =
-                    MigrateInfo::check_dump(&fs_dump.state, &work_path, cmds, &lsblk_info)?
-                {
-                    req_space += size;
-                    archive
-                } else {
-                    error!("The balena state archive has not been specified. Automatic download is not yet implemented, so you need to specify and supply all required files");
-                    return Err(MigError::displayed());
-                };
-
-                let data_ref = if let Some((archive, size)) =
-                    MigrateInfo::check_dump(&fs_dump.data, &work_path, cmds, &lsblk_info)?
-                {
-                    req_space += size;
-                    archive
-                } else {
-                    error!("The balena data archive has not been specified. Automatic download is not yet implemented, so you need to specify and supply all required files");
-                    return Err(MigError::displayed());
-                };
-
-                ImageInfo {
-                    image: CheckedImageType::FileSystems(FSDump {
-                        device_slug: fs_dump.device_slug.clone(),
-                        check: fs_dump.check.clone(),
-                        max_data: fs_dump.max_data.clone(),
-                        mkfs_direct: fs_dump.mkfs_direct.clone(),
-                        extended_blocks: fs_dump.extended_blocks,
-                        boot: PartDump {
-                            archive: boot_ref,
-                            blocks: fs_dump.boot.blocks,
-                        },
-                        root_a: PartDump {
-                            archive: root_a_ref,
-                            blocks: fs_dump.root_a.blocks,
-                        },
-                        root_b: PartDump {
-                            archive: root_b_ref,
-                            blocks: fs_dump.root_b.blocks,
-                        },
-                        state: PartDump {
-                            archive: state_ref,
-                            blocks: fs_dump.state.blocks,
-                        },
-                        data: PartDump {
-                            archive: data_ref,
-                            blocks: fs_dump.data.blocks,
-                        },
-                    }),
-                    req_space,
-                }
+                CheckedImageType::FileSystems(CheckedFSDump {
+                    device_slug: fs_dump.device_slug.clone(),
+                    check: fs_dump.check.clone(),
+                    max_data: fs_dump.max_data.clone(),
+                    mkfs_direct: fs_dump.mkfs_direct.clone(),
+                    extended_blocks: fs_dump.extended_blocks,
+                    boot: CheckedPartDump {
+                        archive: MigrateInfo::check_dump(
+                            &fs_dump.boot,
+                            &work_path,
+                            cmds,
+                            &lsblk_info,
+                        )?,
+                        blocks: fs_dump.boot.blocks,
+                    },
+                    root_a: CheckedPartDump {
+                        archive: MigrateInfo::check_dump(
+                            &fs_dump.root_a,
+                            &work_path,
+                            cmds,
+                            &lsblk_info,
+                        )?,
+                        blocks: fs_dump.root_a.blocks,
+                    },
+                    root_b: CheckedPartDump {
+                        archive: MigrateInfo::check_dump(
+                            &fs_dump.root_b,
+                            &work_path,
+                            cmds,
+                            &lsblk_info,
+                        )?,
+                        blocks: fs_dump.root_b.blocks,
+                    },
+                    state: CheckedPartDump {
+                        archive: MigrateInfo::check_dump(
+                            &fs_dump.state,
+                            &work_path,
+                            cmds,
+                            &lsblk_info,
+                        )?,
+                        blocks: fs_dump.state.blocks,
+                    },
+                    data: CheckedPartDump {
+                        archive: MigrateInfo::check_dump(
+                            &fs_dump.data,
+                            &work_path,
+                            cmds,
+                            &lsblk_info,
+                        )?,
+                        blocks: fs_dump.data.blocks,
+                    },
+                })
             }
         };
 
-        let config_file = if let Some(file_info) =
-            FileInfo::new(&config.balena.get_config_path(), &work_dir)?
-        {
+        let config_info = config.balena.get_config_path();
+        let config_file = if let Some(file_info) = FileInfo::new(&config_info, &work_dir)? {
+            // TODO: process digest
             // Make sure balena config is in workdir and on its mount
             if let None = file_info.rel_path {
                 error!("The balena OS config was found outside of the working directory. This setup is not supported");
@@ -254,9 +222,8 @@ impl MigrateInfo {
             return Err(MigError::displayed());
         };
 
-        let kernel_file = if let Some(file_info) =
-            FileInfo::new(config.migrate.get_kernel_path(), work_dir)?
-        {
+        let kernel_info = config.migrate.get_kernel_path();
+        let kernel_file = if let Some(file_info) = FileInfo::new(&kernel_info, work_dir)? {
             file_info.expect_type(
                 &cmds,
                 match os_arch {
@@ -276,9 +243,8 @@ impl MigrateInfo {
             return Err(MigError::displayed());
         };
 
-        let initrd_file = if let Some(file_info) =
-            FileInfo::new(config.migrate.get_initrd_path(), work_dir)?
-        {
+        let initrd_info = config.migrate.get_initrd_path();
+        let initrd_file = if let Some(file_info) = FileInfo::new(&initrd_info, work_dir)? {
             file_info.expect_type(&cmds, &FileType::InitRD)?;
             info!(
                 "The balena migrate initramfs looks ok: '{}'",
@@ -290,8 +256,8 @@ impl MigrateInfo {
             return Err(MigError::displayed());
         };
 
-        let dtb_file = if let Some(ref dtb_path) = config.migrate.get_dtb_path() {
-            if let Some(file_info) = FileInfo::new(dtb_path, work_dir)? {
+        let dtb_file = if let Some(dtb_path) = config.migrate.get_dtb_path() {
+            if let Some(file_info) = FileInfo::new(&dtb_path, work_dir)? {
                 file_info.expect_type(&cmds, &FileType::DTB)?;
                 info!(
                     "The balena migrate device tree blob looks ok: '{}'",
@@ -319,7 +285,7 @@ impl MigrateInfo {
             } else {
                 error!(
                     "The network manager config file '{}' could not be found",
-                    file.display()
+                    file.path.display()
                 );
                 return Err(MigError::displayed());
             }
@@ -386,14 +352,14 @@ impl MigrateInfo {
         work_path: &PathInfo,
         cmds: &EnsuredCmds,
         lsblk_info: &LsblkInfo,
-    ) -> Result<Option<(FileRef, u64)>, MigError> {
-        Ok(Some(MigrateInfo::check_file(
+    ) -> Result<CheckedFileInfo, MigError> {
+        Ok(MigrateInfo::check_file(
             &dump.archive,
             &FileType::GZipTar,
             work_path,
             cmds,
             lsblk_info,
-        )?))
+        )?)
     }
 
     fn check_file(
@@ -402,8 +368,8 @@ impl MigrateInfo {
         work_path: &PathInfo,
         cmds: &EnsuredCmds,
         lsblk_info: &LsblkInfo,
-    ) -> Result<(FileRef, u64), MigError> {
-        if let Some(file_info) = FileInfo::new(&file_ref.path, &work_path.path)? {
+    ) -> Result<CheckedFileInfo, MigError> {
+        if let Some(file_info) = FileInfo::new(&file_ref, &work_path.path)? {
             // make sure files are present and in /workdir, generate total size and partitioning config in miginfo
             let rel_path = if let Some(ref rel_path) = file_info.rel_path {
                 rel_path.clone()
@@ -434,24 +400,11 @@ impl MigrateInfo {
                 }
             }
 
-            let res_ref = if let Some(ref hash_info) = file_ref.hash {
-                if !check_digest(&file_ref.path, hash_info)? {
-                    error!(
-                        "The balena file: '{}' did not match its digest {:?}",
-                        file_ref.path.display(),
-                        file_ref.hash
-                    );
-                    return Err(MigError::displayed());
-                } else {
-                    FileRef{ path: rel_path, hash: file_ref.hash.clone() }
-                }
-            } else {
-                let digest = get_default_digest(&rel_path)?;
-                debug!("Created digest for file: '{}': {:?}", rel_path.display(), digest);
-                FileRef{ path: rel_path, hash: Some(digest) }
-            };
-
-            Ok((res_ref, file_info.size))
+            Ok(CheckedFileInfo {
+                rel_path,
+                size: file_info.size,
+                hash_info: file_info.hash_info,
+            })
         } else {
             error!(
                 "The balena file: '{}' can not be accessed.",

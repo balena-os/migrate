@@ -10,6 +10,7 @@ use crate::{
     common::{
         dir_exists,
         disk_util::LabelType,
+        file_digest::check_digest,
         file_exists, format_size_with_unit, path_append,
         stage2_config::{Stage2Config, Stage2ConfigBuilder},
         Config, MigErrCtx, MigError, MigErrorKind,
@@ -342,39 +343,60 @@ impl<'a> BootManager for GrubBootManager {
         // **********************************************************************
         // ** copy new kernel & iniramfs
 
-        let source_path = &mig_info.kernel_file.path;
         let kernel_path = path_append(&boot_path.path, MIG_KERNEL_NAME);
 
-        std::fs::copy(&source_path, &kernel_path).context(MigErrCtx::from_remark(
+        std::fs::copy(&mig_info.kernel_file.path, &kernel_path).context(MigErrCtx::from_remark(
             MigErrorKind::Upstream,
             &format!(
                 "failed to copy kernel file '{}' to '{}'",
-                source_path.display(),
+                mig_info.kernel_file.path.display(),
                 kernel_path.display()
             ),
         ))?;
+
+        if !check_digest(&kernel_path, &mig_info.kernel_file.hash_info)? {
+            return Err(MigError::from_remark(
+                MigErrorKind::Upstream,
+                &format!(
+                    "Failed to check digest on copied kernel file '{}' to {:?}",
+                    kernel_path.display(),
+                    mig_info.kernel_file.hash_info
+                ),
+            ));
+        }
+
         info!(
             "copied kernel: '{}' -> '{}'",
-            source_path.display(),
+            mig_info.kernel_file.path.display(),
             kernel_path.display()
         );
 
         cmds.call(CHMOD_CMD, &["+x", &kernel_path.to_string_lossy()], false)?;
 
-        let source_path = &mig_info.initrd_file.path;
         let initrd_path = path_append(&boot_path.path, MIG_INITRD_NAME);
-        std::fs::copy(&source_path, &initrd_path).context(MigErrCtx::from_remark(
+        std::fs::copy(&mig_info.initrd_file.path, &initrd_path).context(MigErrCtx::from_remark(
             MigErrorKind::Upstream,
             &format!(
                 "failed to copy initrd file '{}' to '{}'",
-                source_path.display(),
+                mig_info.initrd_file.path.display(),
                 initrd_path.display()
             ),
         ))?;
 
+        if !check_digest(&initrd_path, &mig_info.initrd_file.hash_info)? {
+            return Err(MigError::from_remark(
+                MigErrorKind::Upstream,
+                &format!(
+                    "Failed to check digest on copied initrd file '{}' to {:?}",
+                    initrd_path.display(),
+                    mig_info.initrd_file.hash_info
+                ),
+            ));
+        }
+
         info!(
             "initramfs kernel: '{}' -> '{}'",
-            source_path.display(),
+            mig_info.initrd_file.path.display(),
             initrd_path.display()
         );
 

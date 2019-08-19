@@ -8,6 +8,7 @@ use std::fs::{remove_file, File};
 use std::io::Write;
 use std::path::PathBuf;
 
+use crate::common::file_digest::check_digest;
 use crate::{
     common::{
         file_exists, format_size_with_unit, is_balena_file, path_append,
@@ -351,8 +352,8 @@ impl<'a> BootManager for UBootManager {
     fn setup(
         &self,
         cmds: &EnsuredCmds,
-        _mig_info: &MigrateInfo,
-        config: &Config,
+        mig_info: &MigrateInfo,
+        _config: &Config,
         s2_cfg: &mut Stage2ConfigBuilder,
         kernel_opts: &str,
     ) -> Result<(), MigError> {
@@ -391,53 +392,87 @@ impl<'a> BootManager for UBootManager {
         // **********************************************************************
         // ** copy new kernel & iniramfs
 
-        let source_path = config.migrate.get_kernel_path();
         let kernel_path = path_append(&boot_path.path, MIG_KERNEL_NAME);
-        std::fs::copy(&source_path, &kernel_path).context(MigErrCtx::from_remark(
+        std::fs::copy(&mig_info.kernel_file.path, &kernel_path).context(MigErrCtx::from_remark(
             MigErrorKind::Upstream,
             &format!(
                 "failed to copy kernel file '{}' to '{}'",
-                source_path.display(),
+                mig_info.kernel_file.path.display(),
                 kernel_path.display()
             ),
         ))?;
+
+        if !check_digest(&kernel_path, &mig_info.kernel_file.hash_info)? {
+            return Err(MigError::from_remark(
+                MigErrorKind::Upstream,
+                &format!(
+                    "Failed to check digest on copied kernel file '{}' to {:?}",
+                    kernel_path.display(),
+                    mig_info.kernel_file.hash_info
+                ),
+            ));
+        }
+
         info!(
             "copied kernel: '{}' -> '{}'",
-            source_path.display(),
+            mig_info.kernel_file.path.display(),
             kernel_path.display()
         );
 
         cmds.call(CHMOD_CMD, &["+x", &kernel_path.to_string_lossy()], false)?;
 
-        let source_path = config.migrate.get_initrd_path();
         let initrd_path = path_append(&boot_path.path, MIG_INITRD_NAME);
-        std::fs::copy(&source_path, &initrd_path).context(MigErrCtx::from_remark(
+        std::fs::copy(&mig_info.initrd_file.path, &initrd_path).context(MigErrCtx::from_remark(
             MigErrorKind::Upstream,
             &format!(
                 "failed to copy initrd file '{}' to '{}'",
-                source_path.display(),
+                mig_info.initrd_file.path.display(),
                 initrd_path.display()
             ),
         ))?;
+
+        if !check_digest(&initrd_path, &mig_info.initrd_file.hash_info)? {
+            return Err(MigError::from_remark(
+                MigErrorKind::Upstream,
+                &format!(
+                    "Failed to check digest on copied initrd file '{}' to {:?}",
+                    initrd_path.display(),
+                    mig_info.initrd_file.hash_info
+                ),
+            ));
+        }
+
         info!(
             "initramfs file: '{}' -> '{}'",
-            source_path.display(),
+            mig_info.initrd_file.path.display(),
             initrd_path.display()
         );
 
-        let dtb_path = if let Some(source_path) = config.migrate.get_dtb_path() {
+        let dtb_path = if let Some(dtb_file) = &mig_info.dtb_file {
             let dtb_path = path_append(&boot_path.path, MIG_DTB_NAME);
-            std::fs::copy(&source_path, &dtb_path).context(MigErrCtx::from_remark(
+            std::fs::copy(&dtb_file.path, &dtb_path).context(MigErrCtx::from_remark(
                 MigErrorKind::Upstream,
                 &format!(
                     "failed to copy dtb file '{}' to '{}'",
-                    source_path.display(),
+                    dtb_file.path.display(),
                     dtb_path.display()
                 ),
             ))?;
+
+            if !check_digest(&dtb_path, &dtb_file.hash_info)? {
+                return Err(MigError::from_remark(
+                    MigErrorKind::Upstream,
+                    &format!(
+                        "Failed to check digest on copied dtb file '{}' to {:?}",
+                        dtb_path.display(),
+                        dtb_file.hash_info
+                    ),
+                ));
+            }
+
             info!(
                 "dtb file: '{}' -> '{}'",
-                source_path.display(),
+                dtb_file.path.display(),
                 dtb_path.display()
             );
             dtb_path

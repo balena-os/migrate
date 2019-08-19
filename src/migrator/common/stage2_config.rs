@@ -14,25 +14,59 @@ const MODULE: &str = "stage2::stage2:config";
 
 use crate::{
     common::{
-        config::{
-            balena_config::{FSDump, FileRef},
-            migrate_config::WatchdogCfg,
-        },
+        config::{balena_config::PartCheck, migrate_config::WatchdogCfg},
+        file_digest::HashInfo,
         MigErrCtx, MigError, MigErrorKind,
     },
     defs::{BootType, DeviceType, FailMode},
 };
 
 #[derive(Debug, Deserialize, Serialize, Clone)]
-pub(crate) enum CheckedImageType {
-    Flasher(FileRef),
-    FileSystems(FSDump),
+pub(crate) struct CheckedFileInfo {
+    pub rel_path: PathBuf,
+    pub size: u64,
+    pub hash_info: HashInfo,
 }
 
 #[derive(Debug, Deserialize, Serialize, Clone)]
-pub(crate) struct ImageInfo {
-    pub req_space: u64,
-    pub image: CheckedImageType,
+pub(crate) struct CheckedPartDump {
+    pub blocks: u64,
+    pub archive: CheckedFileInfo,
+}
+
+#[derive(Debug, Deserialize, Serialize, Clone)]
+pub(crate) struct CheckedFSDump {
+    pub extended_blocks: u64,
+    pub device_slug: String,
+    pub check: Option<PartCheck>,
+    pub max_data: Option<bool>,
+    pub mkfs_direct: Option<bool>,
+    pub boot: CheckedPartDump,
+    pub root_a: CheckedPartDump,
+    pub root_b: CheckedPartDump,
+    pub state: CheckedPartDump,
+    pub data: CheckedPartDump,
+}
+
+#[derive(Debug, Deserialize, Serialize, Clone)]
+pub(crate) enum CheckedImageType {
+    Flasher(CheckedFileInfo),
+    FileSystems(CheckedFSDump),
+}
+
+impl CheckedImageType {
+    pub fn get_required_space(&self) -> u64 {
+        match self {
+            CheckedImageType::Flasher(ref flasher) => flasher.size,
+            CheckedImageType::FileSystems(ref file_systems) => {
+                file_systems.boot.archive.size
+                    + file_systems.root_a.archive.size
+                    + file_systems.root_b.archive.size
+                    + file_systems.state.archive.size
+                    + file_systems.data.archive.size
+            }
+        }
+    }
 }
 
 #[derive(Debug, Deserialize, Serialize, Clone)]
@@ -88,7 +122,7 @@ pub(crate) struct Stage2Config {
     // balena config file
     balena_config: PathBuf,
     // balena OS image file in work_path
-    balena_image: ImageInfo,
+    balena_image: CheckedImageType,
     // working directory  in path on root or mount partition
     work_path: PathType,
     // backed up former boot configuration (from , to) expected in boot manager
@@ -208,7 +242,7 @@ impl<'a> Stage2Config {
         &self.device_type
     }
 
-    pub fn get_balena_image(&'a self) -> &'a ImageInfo {
+    pub fn get_balena_image(&'a self) -> &'a CheckedImageType {
         &self.balena_image
     }
 
@@ -302,7 +336,7 @@ pub(crate) struct Stage2ConfigBuilder {
     no_flash: Required<bool>,
     force_flash_device: Optional<PathBuf>,
     balena_config: Required<PathBuf>,
-    balena_image: Required<ImageInfo>,
+    balena_image: Required<CheckedImageType>,
     work_path: Required<PathType>,
     boot_bckup: Optional<Vec<(String, String)>>,
     has_backup: Required<bool>,
@@ -408,7 +442,7 @@ impl<'a> Stage2ConfigBuilder {
         self.balena_config.set(val);
     }
 
-    pub fn set_balena_image(&mut self, val: ImageInfo) {
+    pub fn set_balena_image(&mut self, val: CheckedImageType) {
         self.balena_image.set(val);
     }
 
