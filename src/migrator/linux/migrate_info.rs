@@ -6,7 +6,8 @@ use crate::{
         balena_cfg_json::BalenaCfgJson,
         config::balena_config::{ImageType, PartDump},
         config::MigrateWifis,
-        stage2_config::{CheckedFSDump, CheckedFileInfo, CheckedImageType, CheckedPartDump},
+        file_info::RelFileInfo,
+        stage2_config::{CheckedFSDump, CheckedImageType, CheckedPartDump},
         wifi_config::WifiConfig,
         Config, FileInfo, FileType, MigError, MigErrorKind,
     },
@@ -213,7 +214,7 @@ impl MigrateInfo {
             let balena_cfg = BalenaCfgJson::new(file_info)?;
             info!(
                 "The balena config file looks ok: '{}'",
-                balena_cfg.get_path().display()
+                balena_cfg.get_rel_path().display()
             );
 
             balena_cfg
@@ -352,7 +353,7 @@ impl MigrateInfo {
         work_path: &PathInfo,
         cmds: &EnsuredCmds,
         lsblk_info: &LsblkInfo,
-    ) -> Result<CheckedFileInfo, MigError> {
+    ) -> Result<RelFileInfo, MigError> {
         Ok(MigrateInfo::check_file(
             &dump.archive,
             &FileType::GZipTar,
@@ -368,7 +369,7 @@ impl MigrateInfo {
         work_path: &PathInfo,
         cmds: &EnsuredCmds,
         lsblk_info: &LsblkInfo,
-    ) -> Result<CheckedFileInfo, MigError> {
+    ) -> Result<RelFileInfo, MigError> {
         if let Some(file_info) = FileInfo::new(&file_ref, &work_path.path)? {
             // make sure files are present and in /workdir, generate total size and partitioning config in miginfo
             let rel_path = if let Some(ref rel_path) = file_info.rel_path {
@@ -400,7 +401,7 @@ impl MigrateInfo {
                 }
             }
 
-            Ok(CheckedFileInfo {
+            Ok(RelFileInfo {
                 rel_path,
                 size: file_info.size,
                 hash_info: file_info.hash_info,

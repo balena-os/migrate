@@ -28,6 +28,9 @@ const DTB_FTYPE_REGEX: &str = r#"^(Device Tree Blob|data).*$"#;
 
 const GZIP_TAR_FTYPE_REGEX: &str = r#"^(POSIX tar archive \(GNU\)).*\(gzip compressed data.*\)$"#;
 
+// TODO: make hash_info optional again
+// creating a digest in stage1 for check in stage2 does not mae a lot of sense.
+
 use crate::common::{
     file_exists,
     MigErrCtx,
@@ -72,10 +75,17 @@ impl FileType {
     }
 }
 
-#[derive(Debug, Deserialize, Serialize, Clone)]
+#[derive(Debug, Clone)]
 pub(crate) struct FileInfo {
     pub path: PathBuf,
     pub rel_path: Option<PathBuf>,
+    pub size: u64,
+    pub hash_info: HashInfo,
+}
+
+#[derive(Debug, Deserialize, Serialize, Clone)]
+pub(crate) struct RelFileInfo {
+    pub rel_path: PathBuf,
     pub size: u64,
     pub hash_info: HashInfo,
 }
@@ -231,6 +241,22 @@ impl FileInfo {
     pub fn is_type(&self, ftype: &FileType) -> Result<bool, MigError> {
         // TODO: think of something for windows
         Ok(true)
+    }
+
+    pub fn to_rel_fileinfo(&self) -> Result<RelFileInfo, MigError> {
+        if let Some(ref rel_path) = self.rel_path {
+            Ok(RelFileInfo {
+                rel_path: rel_path.clone(),
+                size: self.size,
+                hash_info: self.hash_info.clone(),
+            })
+        } else {
+            error!(
+                "The file '{}' was not found in the working directory",
+                self.path.display()
+            );
+            return Err(MigError::displayed());
+        }
     }
 
     /*

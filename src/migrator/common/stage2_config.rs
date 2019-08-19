@@ -15,23 +15,16 @@ const MODULE: &str = "stage2::stage2:config";
 use crate::{
     common::{
         config::{balena_config::PartCheck, migrate_config::WatchdogCfg},
-        file_digest::HashInfo,
+        file_info::RelFileInfo,
         MigErrCtx, MigError, MigErrorKind,
     },
     defs::{BootType, DeviceType, FailMode},
 };
 
 #[derive(Debug, Deserialize, Serialize, Clone)]
-pub(crate) struct CheckedFileInfo {
-    pub rel_path: PathBuf,
-    pub size: u64,
-    pub hash_info: HashInfo,
-}
-
-#[derive(Debug, Deserialize, Serialize, Clone)]
 pub(crate) struct CheckedPartDump {
     pub blocks: u64,
-    pub archive: CheckedFileInfo,
+    pub archive: RelFileInfo,
 }
 
 #[derive(Debug, Deserialize, Serialize, Clone)]
@@ -50,7 +43,7 @@ pub(crate) struct CheckedFSDump {
 
 #[derive(Debug, Deserialize, Serialize, Clone)]
 pub(crate) enum CheckedImageType {
-    Flasher(CheckedFileInfo),
+    Flasher(RelFileInfo),
     FileSystems(CheckedFSDump),
 }
 

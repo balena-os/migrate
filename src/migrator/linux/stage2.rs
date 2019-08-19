@@ -13,8 +13,10 @@ use crate::{
     common::{
         call, dir_exists,
         file_digest::check_digest,
-        file_exists, file_size, format_size_with_unit, path_append,
-        stage2_config::{CheckedFileInfo, CheckedImageType, Stage2Config},
+        file_exists,
+        file_info::RelFileInfo,
+        file_size, format_size_with_unit, path_append,
+        stage2_config::{CheckedImageType, Stage2Config},
         MigErrCtx, MigError, MigErrorKind,
     },
     defs::{FailMode, BACKUP_FILE, SYSTEM_CONNECTIONS_DIR},
@@ -792,7 +794,7 @@ impl<'a> Stage2 {
     fn copy_and_check(
         &self,
         source_dir: &Path,
-        archive: &CheckedFileInfo,
+        archive: &RelFileInfo,
         target_dir: &Path,
         tag: &str,
         target_name: &str,

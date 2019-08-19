@@ -5,12 +5,14 @@ use std::fs::File;
 use std::io::BufReader;
 use std::path::PathBuf;
 
-use super::{check_tcp_connect, Config, FileInfo, MigErrCtx, MigError, MigErrorKind};
+use crate::common::{
+    check_tcp_connect, file_info::RelFileInfo, Config, FileInfo, MigErrCtx, MigError, MigErrorKind,
+};
 
 #[derive(Debug, Clone)]
 pub(crate) struct BalenaCfgJson {
     doc: Value,
-    file: FileInfo,
+    file: RelFileInfo,
 }
 
 impl BalenaCfgJson {
@@ -26,7 +28,7 @@ impl BalenaCfgJson {
                 MigErrorKind::Upstream,
                 &format!("new: failed to parse '{}'", cfg_file.path.display()),
             ))?,
-            file: cfg_file,
+            file: cfg_file.to_rel_fileinfo()?,
         })
     }
 
@@ -62,16 +64,8 @@ impl BalenaCfgJson {
         Ok(())
     }
 
-    pub fn get_rel_path<'a>(&'a self) -> Option<&'a PathBuf> {
-        if let Some(ref rel_path) = self.file.rel_path {
-            Some(rel_path)
-        } else {
-            None
-        }
-    }
-
-    pub fn get_path<'a>(&'a self) -> &'a PathBuf {
-        &self.file.path
+    pub fn get_rel_path<'a>(&'a self) -> &'a PathBuf {
+        &self.file.rel_path
     }
 
     pub fn get_app_name<'a>(&self) -> Result<&str, MigError> {
@@ -99,7 +93,7 @@ impl BalenaCfgJson {
                     &format!(
                         "The key '{}' is missing in the config.json supplied in: '{}'.",
                         name,
-                        self.file.path.display()
+                        self.file.rel_path.display()
                     ),
                 )),
             },
@@ -108,7 +102,7 @@ impl BalenaCfgJson {
                 &format!(
                     "The key '{}' is invalid in the config.json supplied in: '{}'.",
                     name,
-                    self.file.path.display()
+                    self.file.rel_path.display()
                 ),
             )))),
         }
@@ -122,7 +116,7 @@ impl BalenaCfgJson {
                     &format!(
                         "invalid value for key '{}' found in '{}'",
                         name,
-                        &self.file.path.display()
+                        &self.file.rel_path.display()
                     ),
                 ))?),
                 Value::Number(nval) => Ok(nval.as_u64().unwrap() as u16),
@@ -132,7 +126,7 @@ impl BalenaCfgJson {
                         "invalid type {:?} for key '{}' found in '{}'",
                         value,
                         name,
-                        &self.file.path.display()
+                        &self.file.rel_path.display()
                     ),
                 )),
             }
@@ -142,7 +136,7 @@ impl BalenaCfgJson {
                 &format!(
                     "could not find value for '{}' in '{}'",
                     name,
-                    &self.file.path.display()
+                    &self.file.rel_path.display()
                 ),
             ))
         }

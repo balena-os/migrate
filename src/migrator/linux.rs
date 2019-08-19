@@ -165,12 +165,12 @@ impl<'a> LinuxMigrator {
         {
             Ok(_dummy) => info!(
                 "The sanity check on '{}' passed",
-                mig_info.config_file.get_path().display()
+                mig_info.config_file.get_rel_path().display()
             ),
             Err(why) => {
                 let message = format!(
                     "The sanity check on '{}' failed: {:?}",
-                    mig_info.config_file.get_path().display(),
+                    mig_info.config_file.get_rel_path().display(),
                     why
                 );
                 error!("{}", message);
@@ -360,7 +360,7 @@ impl<'a> LinuxMigrator {
             .set_balena_image(self.mig_info.image_file.clone());
 
         self.stage2_config
-            .set_balena_config(self.mig_info.config_file.get_rel_path().unwrap().clone());
+            .set_balena_config(self.mig_info.config_file.get_rel_path().clone());
 
         // TODO: setpath if on / mount else set mount
 
