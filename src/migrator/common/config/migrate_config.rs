@@ -97,9 +97,9 @@ pub(crate) struct MigrateConfig {
     all_wifis: Option<bool>,
     wifis: Option<Vec<String>>,
     log: Option<LogConfig>,
-    kernel_path: Option<FileRef>,
-    initrd_path: Option<FileRef>,
-    dtb_path: Option<FileRef>,
+    kernel: Option<FileRef>,
+    initrd: Option<FileRef>,
+    device_tree: Option<FileRef>,
     // TODO: check fail mode processing
     fail_mode: Option<FailMode>,
     backup: Option<Vec<VolumeConfig>>,
@@ -125,9 +125,9 @@ impl<'a> MigrateConfig {
             all_wifis: None,
             wifis: None,
             log: None,
-            kernel_path: None,
-            initrd_path: None,
-            dtb_path: None,
+            kernel: None,
+            initrd: None,
+            device_tree: None,
             fail_mode: None,
             backup: None,
             nwmgr_files: None,
@@ -150,12 +150,12 @@ impl<'a> MigrateConfig {
                     return Err(MigError::displayed());
                 }
 
-                if let None = self.kernel_path {
+                if let None = self.kernel {
                     error!("A required parameter was not found: 'kernel_path'");
                     return Err(MigError::displayed());
                 }
 
-                if let None = self.initrd_path {
+                if let None = self.initrd {
                     error!("A required parameter was not found: 'initrd_path'");
                     return Err(MigError::displayed());
                 }
@@ -302,7 +302,7 @@ impl<'a> MigrateConfig {
     }
 
     pub fn get_kernel_path(&'a self) -> &'a FileRef {
-        if let Some(ref path) = self.kernel_path {
+        if let Some(ref path) = self.kernel {
             path
         } else {
             panic!("kernel path is not set");
@@ -310,7 +310,7 @@ impl<'a> MigrateConfig {
     }
 
     pub fn get_initrd_path(&'a self) -> &'a FileRef {
-        if let Some(ref path) = self.initrd_path {
+        if let Some(ref path) = self.initrd {
             path
         } else {
             panic!("initramfs path is not set");
@@ -318,7 +318,7 @@ impl<'a> MigrateConfig {
     }
 
     pub fn get_dtb_path(&'a self) -> Option<&'a FileRef> {
-        if let Some(ref path) = self.dtb_path {
+        if let Some(ref path) = self.device_tree {
             Some(path)
         } else {
             None
