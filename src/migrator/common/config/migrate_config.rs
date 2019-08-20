@@ -10,7 +10,7 @@ use crate::common::config::balena_config::FileRef;
 use serde::{Deserialize, Serialize};
 
 const MODULE: &str = "common::config::migrate_config";
-const NO_NMGR_FILES: &[FileRef] = &[];
+const NO_NMGR_FILES: &[PathBuf] = &[];
 
 const NO_BACKUP_VOLUMES: &[VolumeConfig] = &[];
 
@@ -97,16 +97,14 @@ pub(crate) struct MigrateConfig {
     all_wifis: Option<bool>,
     wifis: Option<Vec<String>>,
     log: Option<LogConfig>,
-    // TODO: make boot files FileRef - add digest
     kernel_path: Option<FileRef>,
     initrd_path: Option<FileRef>,
     dtb_path: Option<FileRef>,
-
-    force_slug: Option<String>,
     // TODO: check fail mode processing
     fail_mode: Option<FailMode>,
     backup: Option<Vec<VolumeConfig>>,
-    nwmgr_files: Option<Vec<FileRef>>,
+    // TODO: find a good way to do digests on NetworkManager files
+    nwmgr_files: Option<Vec<PathBuf>>,
     require_nwmgr_config: Option<bool>,
     gzip_internal: Option<bool>,
     extract_device: Option<String>,
@@ -114,8 +112,6 @@ pub(crate) struct MigrateConfig {
     delay: Option<u64>,
     kernel_opts: Option<String>,
     force_flash_device: Option<PathBuf>,
-    uboot_env: Option<UBootEnv>,
-    // COPY_NMGR_FILES="eth0_static enp2s0_static enp3s0_static"
 }
 
 impl<'a> MigrateConfig {
@@ -132,7 +128,6 @@ impl<'a> MigrateConfig {
             kernel_path: None,
             initrd_path: None,
             dtb_path: None,
-            force_slug: None,
             fail_mode: None,
             backup: None,
             nwmgr_files: None,
@@ -143,7 +138,6 @@ impl<'a> MigrateConfig {
             delay: None,
             kernel_opts: None,
             force_flash_device: None,
-            uboot_env: None,
         }
     }
 
@@ -194,9 +188,9 @@ impl<'a> MigrateConfig {
         return true;
     }
 
-    pub fn get_nwmgr_files(&'a self) -> &'a [FileRef] {
+    pub fn get_nwmgr_files(&'a self) -> &'a [PathBuf] {
         if let Some(ref val) = self.nwmgr_files {
-            return val.as_ref();
+            return val.as_slice();
         }
         return NO_NMGR_FILES;
     }
@@ -249,16 +243,6 @@ impl<'a> MigrateConfig {
         &self.reboot
     }
 
-    /*
-    pub fn get_force_slug(&self) -> Option<String> {
-        if let Some(ref val) = self.force_slug {
-            Some(val.clone())
-        } else {
-            None
-        }
-    }
-    */
-
     pub fn get_fail_mode(&'a self) -> &'a FailMode {
         if let Some(ref val) = self.fail_mode {
             val
@@ -306,16 +290,6 @@ impl<'a> MigrateConfig {
             false
         }
     }
-
-    /*
-        pub fn get_uboot_env(&'a self) -> Option<&UBootEnv> {
-            if let Some(ref uboot_env) = self.uboot_env {
-                Some(uboot_env)
-            } else {
-                None
-            }
-        }
-    */
 
     // The following functions can only be safely called after check has succeeded
 
