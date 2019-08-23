@@ -188,12 +188,13 @@ impl Extractor {
 
     pub fn extract(&mut self, output_path: Option<&Path>) -> Result<ImageType, MigError> {
         trace!("extract: entered");
+        let work_dir = self.config.migrate.get_work_dir();
 
         let mountpoint = match mktemp(
             &self.cmds,
             true,
             Some(MOUNTPOINT_TEMPLATE),
-            Some(self.config.migrate.get_work_dir()),
+            Some(work_dir),
         ) {
             Ok(path) => path,
             Err(why) => {
@@ -210,7 +211,7 @@ impl Extractor {
             &self.cmds,
             false,
             Some(EXTRACT_FILE_TEMPLATE),
-            Some(self.config.migrate.get_work_dir()),
+            Some(work_dir),
         ) {
             Ok(path) => path,
             Err(why) => {
@@ -307,6 +308,15 @@ impl Extractor {
         // late error exit after cleanup
         if let Some(why) = extract_err {
             return Err(why);
+        }
+
+        for partition in &mut partitions {
+            if let Some( ref mut file_ref) = partition.archive {
+                file_ref.path = file_ref.path.strip_prefix(work_dir)
+                    .context(MigErrCtx::from_remark(MigErrorKind::Upstream,
+                                                    &format!("Failed to strip workdir '{}' off path '{}'", work_dir.display(), file_ref.path.display())))?
+                    .to_path_buf();
+            }
         }
 
         if partitions.len() == 5 {

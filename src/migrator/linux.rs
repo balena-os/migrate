@@ -58,7 +58,15 @@ pub(crate) struct LinuxMigrator {
 
 impl<'a> LinuxMigrator {
     pub fn migrate() -> Result<(), MigError> {
+        // **********************************************************************
+        // We need to be root to do this
+        
         let config = Config::new()?;
+
+        if !is_admin()? {
+            error!("please run this program as root");
+            return Err(MigError::from(MigErrorKind::Displayed));
+        }
 
         match config.migrate.get_mig_mode() {
             MigMode::Extract => {
@@ -95,15 +103,6 @@ impl<'a> LinuxMigrator {
             error!("Failed to ensure required commands: {:?}", why);
             return Err(MigError::displayed());
         };
-
-        // **********************************************************************
-        // We need to be root to do this
-        // note: fake admin is not honored in release mode
-
-        if !is_admin(&config)? {
-            error!("please run this program as root");
-            return Err(MigError::from(MigErrorKind::Displayed));
-        }
 
         // **********************************************************************
         // Get os architecture & name & disk properties, check required paths

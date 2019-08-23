@@ -10,7 +10,7 @@ use libc::getuid;
 
 use crate::{
     common::{
-        call, file_exists, parse_file, path_append, Config, MigErrCtx, MigError, MigErrorKind,
+        call, file_exists, parse_file, path_append, MigErrCtx, MigError, MigErrorKind,
     },
     defs::{OSArch, DISK_BY_LABEL_PATH, DISK_BY_PARTUUID_PATH, DISK_BY_UUID_PATH},
     linux::{
@@ -33,7 +33,7 @@ const BIN_DIRS: &[&str] = &["/bin", "/usr/bin", "/sbin", "/usr/sbin"];
 const OS_RELEASE_FILE: &str = "/etc/os-release";
 const OS_NAME_REGEX: &str = r#"^PRETTY_NAME="([^"]+)"$"#;
 
-pub(crate) fn is_admin(_config: &Config) -> Result<bool, MigError> {
+pub(crate) fn is_admin() -> Result<bool, MigError> {
     trace!("LinuxMigrator::is_admin: entered");
     let admin = Some(unsafe { getuid() } == 0);
     Ok(admin.unwrap())

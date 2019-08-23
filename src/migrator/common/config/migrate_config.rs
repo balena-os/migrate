@@ -144,6 +144,18 @@ impl<'a> MigrateConfig {
     pub fn check(&self) -> Result<(), MigError> {
         match self.get_mig_mode() {
             MigMode::Agent => Err(MigError::from(MigErrorKind::NotImpl)),
+            MigMode::Extract => {
+                if let None = self.work_dir {
+                    error!("A required parameter was not found: 'work_dir'");
+                    return Err(MigError::displayed());
+                }
+
+                if let None = self.extract_device {
+                    error!("A required parameter was not found: 'extract_device'");
+                    return Err(MigError::displayed());
+                }
+                Ok(())
+            },
             _ => {
                 if let None = self.work_dir {
                     error!("A required parameter was not found: 'work_dir'");
