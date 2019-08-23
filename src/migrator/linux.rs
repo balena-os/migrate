@@ -60,7 +60,7 @@ impl<'a> LinuxMigrator {
     pub fn migrate() -> Result<(), MigError> {
         // **********************************************************************
         // We need to be root to do this
-        
+
         let config = Config::new()?;
 
         if !is_admin()? {
