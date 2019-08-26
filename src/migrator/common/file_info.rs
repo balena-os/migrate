@@ -216,7 +216,15 @@ impl FileInfo {
             FileType::KernelARMHF => Ok(KERNEL_ARMHF_FTYPE_RE.is_match(&cmd_res.stdout)),
             FileType::KernelAMD64 => Ok(KERNEL_AMD64_FTYPE_RE.is_match(&cmd_res.stdout)),
             FileType::KernelI386 => Ok(KERNEL_I386_FTYPE_RE.is_match(&cmd_res.stdout)),
-            FileType::Json => Ok(OS_CFG_FTYPE_RE.is_match(&cmd_res.stdout)),
+            FileType::Json => {
+                let res = OS_CFG_FTYPE_RE.is_match(&cmd_res.stdout);
+                if ! res {
+                    debug!("Failed to match json file on '{}'", cmd_res.stdout);
+                } else {
+                    debug!("Matched json file on '{}'", cmd_res.stdout);
+                }
+                Ok(res)
+            },
             FileType::Text => Ok(TEXT_FTYPE_RE.is_match(&cmd_res.stdout)),
             FileType::DTB => Ok(DTB_FTYPE_RE.is_match(&cmd_res.stdout)),
             FileType::GZipTar => Ok(GZIP_TAR_FTYPE_RE.is_match(&cmd_res.stdout)),
