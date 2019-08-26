@@ -62,7 +62,7 @@ pub(crate) struct LsblkPartition {
     pub kname: String,
     #[serde(rename(deserialize = "maj:min"))]
     pub maj_min: String,
-    pub ro: String,
+    //pub ro: String,
     pub uuid: Option<String>,
     pub fstype: Option<String>,
     pub mountpoint: Option<PathBuf>,
@@ -419,7 +419,7 @@ impl<'a> LsblkInfo {
                             mountpoint: pathbuf_or_none(parse_it(words[4], "MOUNTPOINT")?),
                             label: string_or_none(parse_it(words[5], "LABEL")?),
                             uuid: string_or_none(parse_it(words[6], "UUID")?),
-                            ro: parse_it(words[7], "RO")?,
+                            // ro: parse_it(words[7], "RO")?,
                             size: parse_u64(parse_it(words[8], "SIZE")?)?,
                             parttype: None,
                             partlabel: None,

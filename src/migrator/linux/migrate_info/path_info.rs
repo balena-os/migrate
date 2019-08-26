@@ -32,7 +32,7 @@ pub(crate) struct PathInfo {
     // the drive device path
     pub fs_type: String,
     // the partition read only flag
-    pub mount_ro: bool,
+    // pub mount_ro: bool,
     // the partition uuid
     pub uuid: Option<String>,
     // the partition partuuid
@@ -114,7 +114,7 @@ impl PathInfo {
                     ),
                 ));
             },
-            mount_ro: partition.ro == "1",
+            //mount_ro: partition.ro == "1",
             uuid: partition.uuid.clone(),
             part_uuid: partition.partuuid.clone(),
             part_label: partition.partlabel.clone(),
