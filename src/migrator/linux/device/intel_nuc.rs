@@ -28,6 +28,7 @@ impl IntelNuc {
         s2_cfg: &mut Stage2ConfigBuilder,
     ) -> Result<IntelNuc, MigError> {
         const SUPPORTED_OSSES: &'static [&'static str] = &[
+            "Ubuntu 18.04.3 LTS",
             "Ubuntu 18.04.2 LTS",
             "Ubuntu 16.04.2 LTS",
             "Ubuntu 14.04.2 LTS",
