@@ -1,13 +1,7 @@
 use failure::ResultExt;
 use log::{debug, trace, warn};
 use regex::Regex;
-use serde::{
-    Deserialize, Deserializer,
-            de::{self, Unexpected},
-};
-use serde_json;
 
-use std::fmt;
 use std::path::{Path, PathBuf};
 
 use crate::{
@@ -24,45 +18,12 @@ const BLOC_DEV_SUPP_MAJ_NUMBERS: [&str; 45] = [
 ];
 
 
-struct DeserializeU64OrStringVisitor;
-impl<'de> de::Visitor<'de> for DeserializeU64OrStringVisitor {
-    type Value = u64;
-    fn expecting(&self, formatter: &mut fmt::Formatter) -> fmt::Result {
-        formatter.write_str("an integer or a string")
-    }
-    fn visit_u64<E>(self, v: u64) -> Result<Self::Value, E>
-        where
-            E: de::Error, {
-        Ok(v)
-    }
-
-    fn visit_str<E>(self, v: &str) -> Result<Self::Value, E>
-        where
-            E: de::Error,
-    {
-        match v.parse::<u64>() {
-            Ok(val) => Ok(val),
-            Err(_why) => {
-                Err(E::invalid_value(Unexpected::Str(v), &self))
-            }
-        }
-    }
-}
-
-fn deserialize_u64_or_string<'de, D>(deserializer: D) -> Result<u64, D::Error>
-    where
-        D: Deserializer<'de>,
-{
-    deserializer.deserialize_any(DeserializeU64OrStringVisitor)
-}
-
-#[derive(Debug, Deserialize, Clone)]
+#[derive(Debug, Clone)]
 pub(crate) struct LsblkPartition {
     pub name: String,
     pub kname: String,
-    #[serde(rename(deserialize = "maj:min"))]
     pub maj_min: String,
-    //pub ro: String,
+    pub ro: String,
     pub uuid: Option<String>,
     pub fstype: Option<String>,
     pub mountpoint: Option<PathBuf>,
@@ -70,9 +31,7 @@ pub(crate) struct LsblkPartition {
     pub parttype: Option<String>,
     pub partlabel: Option<String>,
     pub partuuid: Option<String>,
-    #[serde(deserialize_with = "deserialize_u64_or_string")]
-    pub size: u64,
-    #[serde(skip)]
+    pub size: Option<u64>,
     pub index: Option<u16>,
 }
 
@@ -82,15 +41,13 @@ impl LsblkPartition {
     }
 }
 
-#[derive(Debug, Deserialize, Clone)]
+#[derive(Debug, Clone)]
 pub(crate) struct LsblkDevice {
     pub name: String,
     pub kname: String,
-    #[serde(rename(deserialize = "maj:min"))]
     pub maj_min: String,
     pub uuid: Option<String>,
-    #[serde(deserialize_with = "deserialize_u64_or_string")]
-    pub size: u64,
+    pub size: Option<u64>,
     pub children: Option<Vec<LsblkPartition>>,
 }
 
@@ -124,7 +81,7 @@ impl<'a> LsblkDevice {
     }
 }
 
-#[derive(Debug, Deserialize)]
+#[derive(Debug)]
 pub(crate) struct LsblkInfo {
     blockdevices: Vec<LsblkDevice>,
 }
@@ -274,45 +231,34 @@ impl<'a> LsblkInfo {
     }
 
     fn call_lsblk(device: Option<&Path>, cmds: &EnsuredCmds) -> Result<LsblkInfo, MigError> {
-        let mut _tmp_path: Option<String> = None;
-        let args: Vec<&str> = if let Some(device) = device {
-            _tmp_path = Some(String::from(&*device.to_string_lossy()));
-            vec!["-b", "-O", "--json", _tmp_path.as_ref().unwrap()]
+        #[allow(unused_assignments)]
+        let mut dev_name = String::new();
+        let args= if let Some(device) = device {
+            dev_name = String::from(&*device.to_string_lossy());
+            vec![
+                "-b",
+                "-P",
+                "-o",
+                "NAME,KNAME,MAJ:MIN,FSTYPE,MOUNTPOINT,LABEL,UUID,RO,SIZE,TYPE",
+                dev_name.as_str(),
+            ]
         } else {
-            vec!["-b", "-O", "--json"]
+            vec![
+                "-b",
+                "-P",
+                "-o",
+                "NAME,KNAME,MAJ:MIN,FSTYPE,MOUNTPOINT,LABEL,UUID,RO,SIZE,TYPE",
+            ]
         };
 
         let cmd_res = cmds.call(LSBLK_CMD, &args, true)?;
         if cmd_res.status.success() {
-            Ok(LsblkInfo::from_json(&cmd_res.stdout)?)
+            Ok(LsblkInfo::from_list(&cmd_res.stdout)?)
         } else {
-            let args: Vec<&str> = if let Some(device) = device {
-                _tmp_path = Some(String::from(&*device.to_string_lossy()));
-                vec![
-                    "-b",
-                    "-P",
-                    "-o",
-                    "NAME,KNAME,MAJ:MIN,FSTYPE,MOUNTPOINT,LABEL,UUID,RO,SIZE,TYPE",
-                    _tmp_path.as_ref().unwrap(),
-                ]
-            } else {
-                vec![
-                    "-b",
-                    "-P",
-                    "-o",
-                    "NAME,KNAME,MAJ:MIN,FSTYPE,MOUNTPOINT,LABEL,UUID,RO,SIZE,TYPE",
-                ]
-            };
-
-            let cmd_res = cmds.call(LSBLK_CMD, &args, true)?;
-            if cmd_res.status.success() {
-                Ok(LsblkInfo::from_list(&cmd_res.stdout)?)
-            } else {
-                return Err(MigError::from_remark(
-                    MigErrorKind::ExecProcess,
-                    "new: failed to determine block device attributes for",
-                ));
-            }
+            return Err(MigError::from_remark(
+                MigErrorKind::ExecProcess,
+                "new: failed to determine block device attributes for",
+            ));
         }
     }
 
@@ -342,8 +288,12 @@ impl<'a> LsblkInfo {
             }
         };
 
-        let parse_u64 = |s: String| -> Result<u64,MigError> {
-            Ok(s.parse::<u64>().context(MigErrCtx::from_remark(MigErrorKind::Upstream,&format!("Failed to parse u64 from string '{}'", s)))?)
+        let parse_u64 = |s: String| -> Result<Option<u64>,MigError> {
+            if s.is_empty() {
+                Ok(None)
+            } else {
+                Ok(Some(s.parse::<u64>().context(MigErrCtx::from_remark(MigErrorKind::Upstream, &format!("Failed to parse u64 from string '{}'", s)))?))
+            }
         };
 
         let string_or_none = |s: String| -> Option<String> {
@@ -419,7 +369,7 @@ impl<'a> LsblkInfo {
                             mountpoint: pathbuf_or_none(parse_it(words[4], "MOUNTPOINT")?),
                             label: string_or_none(parse_it(words[5], "LABEL")?),
                             uuid: string_or_none(parse_it(words[6], "UUID")?),
-                            // ro: parse_it(words[7], "RO")?,
+                            ro: parse_it(words[7], "RO")?,
                             size: parse_u64(parse_it(words[8], "SIZE")?)?,
                             parttype: None,
                             partlabel: None,
@@ -447,26 +397,6 @@ impl<'a> LsblkInfo {
         if let Some(curr_dev) = curr_dev {
             lsblk_info.blockdevices.push(curr_dev);
             // curr_dev = None;
-        }
-
-        Ok(lsblk_info)
-    }
-
-    fn from_json(json_str: &str) -> Result<LsblkInfo, MigError> {
-        let mut lsblk_info =
-            serde_json::from_str::<LsblkInfo>(json_str).context(MigErrCtx::from_remark(
-                MigErrorKind::Upstream,
-                "failed to deserialze lsblk output from json",
-            ))?;
-
-        for device in &mut lsblk_info.blockdevices {
-            if let Some(ref mut children) = device.children {
-                let mut count: u16 = 1;
-                for mut partition in children {
-                    partition.index = Some(count);
-                    count += 1;
-                }
-            }
         }
 
         Ok(lsblk_info)

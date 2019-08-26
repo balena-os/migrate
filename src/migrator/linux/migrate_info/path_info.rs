@@ -102,7 +102,18 @@ impl PathInfo {
             },
             mountpoint: PathBuf::from(mountpoint),
             drive: PathBuf::from(device.get_path()),
-            drive_size:  device.size,
+            drive_size:  if let Some(size) = device.size {
+                size
+            } else {
+                return Err(MigError::from_remark(
+                    MigErrorKind::InvParam,
+                    &format!(
+                        "size not found for device: '{}'",
+                        device.get_path().display()
+                    ),
+                ));
+            },
+
             fs_type: if let Some(ref fs_type) = partition.fstype {
                 fs_type.clone()
             } else {
@@ -118,7 +129,17 @@ impl PathInfo {
             uuid: partition.uuid.clone(),
             part_uuid: partition.partuuid.clone(),
             part_label: partition.partlabel.clone(),
-            part_size: partition.size ,
+            part_size: if let Some(size) = partition.size {
+                size
+            } else {
+                return Err(MigError::from_remark(
+                    MigErrorKind::InvParam,
+                    &format!(
+                        "size not found for partition: '{}'",
+                        partition.get_path().display()
+                    ),
+                ));
+            },
             fs_size,
             fs_free,
         };
