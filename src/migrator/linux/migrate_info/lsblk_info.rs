@@ -1,8 +1,13 @@
 use failure::ResultExt;
 use log::{debug, trace, warn};
 use regex::Regex;
-use serde::Deserialize;
+use serde::{
+    Deserialize, Deserializer,
+            de::{self, Unexpected},
+};
 use serde_json;
+
+use std::fmt;
 use std::path::{Path, PathBuf};
 
 use crate::{
@@ -18,6 +23,39 @@ const BLOC_DEV_SUPP_MAJ_NUMBERS: [&str; 45] = [
     "78", "79", "80", "81", "82", "83", "84", "85", "86", "87", "179", "180", "259",
 ];
 
+
+struct DeserializeU64OrStringVisitor;
+impl<'de> de::Visitor<'de> for DeserializeU64OrStringVisitor {
+    type Value = u64;
+    fn expecting(&self, formatter: &mut fmt::Formatter) -> fmt::Result {
+        formatter.write_str("an integer or a string")
+    }
+    fn visit_u64<E>(self, v: u64) -> Result<Self::Value, E>
+        where
+            E: de::Error, {
+        Ok(v)
+    }
+
+    fn visit_str<E>(self, v: &str) -> Result<Self::Value, E>
+        where
+            E: de::Error,
+    {
+        match v.parse::<u64>() {
+            Ok(val) => Ok(val),
+            Err(_why) => {
+                Err(E::invalid_value(Unexpected::Str(v), &self))
+            }
+        }
+    }
+}
+
+fn deserialize_u64_or_string<'de, D>(deserializer: D) -> Result<u64, D::Error>
+    where
+        D: Deserializer<'de>,
+{
+    deserializer.deserialize_any(DeserializeU64OrStringVisitor)
+}
+
 #[derive(Debug, Deserialize, Clone)]
 pub(crate) struct LsblkPartition {
     pub name: String,
@@ -32,7 +70,8 @@ pub(crate) struct LsblkPartition {
     pub parttype: Option<String>,
     pub partlabel: Option<String>,
     pub partuuid: Option<String>,
-    pub size: Option<String>,
+    #[serde(deserialize_with = "deserialize_u64_or_string")]
+    pub size: u64,
     #[serde(skip)]
     pub index: Option<u16>,
 }
@@ -50,7 +89,8 @@ pub(crate) struct LsblkDevice {
     #[serde(rename(deserialize = "maj:min"))]
     pub maj_min: String,
     pub uuid: Option<String>,
-    pub size: Option<String>,
+    #[serde(deserialize_with = "deserialize_u64_or_string")]
+    pub size: u64,
     pub children: Option<Vec<LsblkPartition>>,
 }
 
@@ -302,6 +342,10 @@ impl<'a> LsblkInfo {
             }
         };
 
+        let parse_u64 = |s: String| -> Result<u64,MigError> {
+            Ok(s.parse::<u64>().context(MigErrCtx::from_remark(MigErrorKind::Upstream,&format!("Failed to parse u64 from string '{}'", s)))?)
+        };
+
         let string_or_none = |s: String| -> Option<String> {
             if s.is_empty() {
                 None
@@ -354,7 +398,7 @@ impl<'a> LsblkInfo {
                         kname: parse_it(words[1], "KNAME")?,
                         maj_min: parse_it(words[2], "MAJ:MIN")?,
                         uuid: string_or_none(parse_it(words[6], "UUID")?),
-                        size: string_or_none(parse_it(words[8], "SIZE")?),
+                        size: parse_u64(parse_it(words[8], "SIZE")?)?,
                         children: None,
                     });
                 }
@@ -376,7 +420,7 @@ impl<'a> LsblkInfo {
                             label: string_or_none(parse_it(words[5], "LABEL")?),
                             uuid: string_or_none(parse_it(words[6], "UUID")?),
                             ro: parse_it(words[7], "RO")?,
-                            size: string_or_none(parse_it(words[8], "SIZE")?),
+                            size: parse_u64(parse_it(words[8], "SIZE")?)?,
                             parttype: None,
                             partlabel: None,
                             partuuid: None,

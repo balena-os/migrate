@@ -102,23 +102,7 @@ impl PathInfo {
             },
             mountpoint: PathBuf::from(mountpoint),
             drive: PathBuf::from(device.get_path()),
-            drive_size: if let Some(ref size) = device.size {
-                size.parse::<u64>().context(MigErrCtx::from_remark(
-                    MigErrorKind::InvParam,
-                    &format!(
-                        "Could not parse drive size for partition: '{}'",
-                        partition.get_path().display()
-                    ),
-                ))?
-            } else {
-                return Err(MigError::from_remark(
-                    MigErrorKind::InvParam,
-                    &format!(
-                        "drive size not found for partition: '{}'",
-                        partition.get_path().display()
-                    ),
-                ));
-            },
+            drive_size:  device.size,
             fs_type: if let Some(ref fs_type) = partition.fstype {
                 fs_type.clone()
             } else {
@@ -134,23 +118,7 @@ impl PathInfo {
             uuid: partition.uuid.clone(),
             part_uuid: partition.partuuid.clone(),
             part_label: partition.partlabel.clone(),
-            part_size: if let Some(ref size) = partition.size {
-                size.parse::<u64>().context(MigErrCtx::from_remark(
-                    MigErrorKind::Upstream,
-                    &format!(
-                        "size could not be parsed for partition: '{}'",
-                        partition.get_path().display()
-                    ),
-                ))?
-            } else {
-                return Err(MigError::from_remark(
-                    MigErrorKind::InvParam,
-                    &format!(
-                        "size not found for partition: '{}'",
-                        partition.get_path().display()
-                    ),
-                ));
-            },
+            part_size: partition.size ,
             fs_size,
             fs_free,
         };
