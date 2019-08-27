@@ -70,8 +70,10 @@ impl RaspberryPi3 {
         s2_cfg: &mut Stage2ConfigBuilder,
     ) -> Result<RaspberryPi3, MigError> {
         const SUPPORTED_OSSES: &'static [&'static str] = &[
-            "Raspbian GNU/Linux 10 (buster)",
-            "Raspbian GNU/Linux 9 (stretch)"];
+            "Raspbian GNU/Linux 8 (jessie)",
+            "Raspbian GNU/Linux 9 (stretch)",
+            "Raspbian GNU/Linux 10 (buster)"
+        ];
 
         let os_name = &mig_info.os_name;
 
