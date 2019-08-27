@@ -4,11 +4,88 @@ use serde_json;
 use std::fs::File;
 use std::io::BufReader;
 use std::path::PathBuf;
-use serde::{Deserialize};
+use serde::{Deserialize, Deserializer, de::{self, Unexpected}};
+use std::fmt;
+
 
 use crate::common::{
     check_tcp_connect, file_info::RelFileInfo, Config, FileInfo, MigErrCtx, MigError, MigErrorKind,
 };
+
+struct DeserializeU64OrStringVisitor;
+
+impl<'de> de::Visitor<'de> for DeserializeU64OrStringVisitor {
+    type Value = u64;
+
+    fn expecting(&self, formatter: &mut fmt::Formatter) -> fmt::Result {
+        formatter.write_str("a string")
+    }
+/* enable if balena config allows int values here
+    fn visit_u64<E>(self, v: u64) -> Result<Self::Value, E>
+        where
+            E: de::Error,
+    {
+        Ok(v)
+    }
+*/
+    fn visit_str<E>(self, v: &str) -> Result<Self::Value, E>
+        where
+            E: de::Error,
+    {
+        match v.parse::<u64>() {
+            Ok(val) => Ok(val),
+            Err(_why) => {
+                Err(E::invalid_value(Unexpected::Str(v), &self))
+            }
+        }
+    }
+}
+
+fn deserialize_u64_or_string<'de, D>(deserializer: D) -> Result<u64, D::Error>
+    where
+        D: Deserializer<'de>,
+{
+    deserializer.deserialize_any(DeserializeU64OrStringVisitor)
+}
+
+struct DeserializeU16OrStringVisitor;
+
+impl<'de> de::Visitor<'de> for DeserializeU16OrStringVisitor {
+    type Value = u16;
+
+    fn expecting(&self, formatter: &mut fmt::Formatter) -> fmt::Result {
+        formatter.write_str("a string")
+    }
+
+/* enable if balena config allows int values here
+
+    fn visit_u16<E>(self, v: u16) -> Result<Self::Value, E>
+        where
+            E: de::Error,
+    {
+        Ok(v)
+    }
+*/
+    fn visit_str<E>(self, v: &str) -> Result<Self::Value, E>
+        where
+            E: de::Error,
+    {
+        match v.parse::<u16>() {
+            Ok(val) => Ok(val),
+            Err(_why) => {
+                Err(E::invalid_value(Unexpected::Str(v), &self))
+            }
+        }
+    }
+}
+
+fn deserialize_u16_or_string<'de, D>(deserializer: D) -> Result<u16, D::Error>
+    where
+        D: Deserializer<'de>,
+{
+    deserializer.deserialize_any(DeserializeU16OrStringVisitor)
+}
+
 
 #[derive(Debug, Deserialize, Clone)]
 struct BalenaConfig {
@@ -19,13 +96,16 @@ struct BalenaConfig {
     #[serde(rename = "deviceType")]
     pub device_type: String,
     #[serde(rename = "userId")]
-    pub user_id: u64,
+    pub user_id: String,
     pub username: String,
     #[serde(rename = "appUpdatePollInterval")]
+    #[serde(deserialize_with = "deserialize_u64_or_string")]
     pub app_poll_interval: u64,
     #[serde(rename = "listenPort")]
+    #[serde(deserialize_with = "deserialize_u16_or_string")]
     pub listen_port: u16,
     #[serde(rename = "vpnPort")]
+    #[serde(deserialize_with = "deserialize_u16_or_string")]
     pub vpn_port: u16,
     #[serde(rename = "apiEndpoint")]
     pub api_endpoint: String,
