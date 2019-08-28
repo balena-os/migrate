@@ -3,6 +3,7 @@ use log::{debug, error, info, trace, warn};
 use std::fs::{copy, create_dir};
 use std::thread;
 use std::time::Duration;
+use nix::unistd::sync;
 
 // TODO: Require files to be in work_dir: balena-image, balena-config, system-connections
 
@@ -408,6 +409,7 @@ impl<'a> LinuxMigrator {
                 "Migration stage 1 was successfull, rebooting system in {} seconds",
                 *delay
             );
+            sync();
             let delay = Duration::new(*delay, 0);
             thread::sleep(delay);
             println!("Rebooting now..");
