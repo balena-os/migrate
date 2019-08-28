@@ -5,7 +5,8 @@ use regex::Regex;
 use std::path::{Path, PathBuf};
 
 use crate::{
-    common::{MigErrCtx, MigError, MigErrorKind},
+    defs::{DISK_BY_PARTUUID_PATH, DISK_BY_UUID_PATH, DISK_BY_LABEL_PATH},
+    common::{MigErrCtx, MigError, MigErrorKind, path_append},
     linux::{EnsuredCmds, LSBLK_CMD},
 };
 
@@ -37,7 +38,23 @@ pub(crate) struct LsblkPartition {
 
 impl LsblkPartition {
     pub fn get_path(&self) -> PathBuf {
-        PathBuf::from(&format!("/dev/{}", self.name))
+        path_append("/dev", &self.name)
+    }
+
+    pub fn get_alt_path(&self) -> PathBuf {
+        if let Some(ref partuuid) = self.partuuid {
+            path_append(DISK_BY_PARTUUID_PATH, partuuid )
+        } else {
+            if let Some(ref uuid) = self.uuid {
+                path_append(DISK_BY_UUID_PATH, uuid )
+            } else {
+                if let Some(ref label) = self.label {
+                    path_append(DISK_BY_LABEL_PATH, label)
+                } else {
+                    path_append("/dev", &self.name)
+                }
+            }
+        }
     }
 }
 

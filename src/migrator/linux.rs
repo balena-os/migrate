@@ -255,7 +255,7 @@ impl<'a> LinuxMigrator {
             let (_lsblk_device, lsblk_part) = self.mig_info.lsblk_info.get_path_info(&work_dir)?;
             self.stage2_config
                 .set_work_path(&PathType::Mount(MountConfig::new(
-                    &lsblk_part.get_path(),
+                    &lsblk_part.get_alt_path(),
                     lsblk_part.fstype.as_ref().unwrap(),
                     work_dir
                         .strip_prefix(lsblk_part.mountpoint.as_ref().unwrap())
