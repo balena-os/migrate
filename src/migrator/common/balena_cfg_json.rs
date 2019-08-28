@@ -18,16 +18,16 @@ impl<'de> de::Visitor<'de> for DeserializeU64OrStringVisitor {
     type Value = u64;
 
     fn expecting(&self, formatter: &mut fmt::Formatter) -> fmt::Result {
-        formatter.write_str("a string")
+        formatter.write_str("an integer or a string")
     }
-/* enable if balena config allows int values here
+
     fn visit_u64<E>(self, v: u64) -> Result<Self::Value, E>
         where
             E: de::Error,
     {
         Ok(v)
     }
-*/
+
     fn visit_str<E>(self, v: &str) -> Result<Self::Value, E>
         where
             E: de::Error,
@@ -54,10 +54,8 @@ impl<'de> de::Visitor<'de> for DeserializeU16OrStringVisitor {
     type Value = u16;
 
     fn expecting(&self, formatter: &mut fmt::Formatter) -> fmt::Result {
-        formatter.write_str("a string")
+        formatter.write_str("an integer or a string")
     }
-
-/* enable if balena config allows int values here
 
     fn visit_u16<E>(self, v: u16) -> Result<Self::Value, E>
         where
@@ -65,7 +63,7 @@ impl<'de> de::Visitor<'de> for DeserializeU16OrStringVisitor {
     {
         Ok(v)
     }
-*/
+
     fn visit_str<E>(self, v: &str) -> Result<Self::Value, E>
         where
             E: de::Error,
@@ -92,11 +90,13 @@ struct BalenaConfig {
     #[serde(rename = "applicationName")]
     pub app_name: String,
     #[serde(rename = "applicationId")]
-    pub app_id: String,
+    #[serde(deserialize_with = "deserialize_u64_or_string")]
+    pub app_id: u64,
     #[serde(rename = "deviceType")]
     pub device_type: String,
     #[serde(rename = "userId")]
-    pub user_id: String,
+    #[serde(deserialize_with = "deserialize_u64_or_string")]
+    pub user_id: u64,
     pub username: String,
     #[serde(rename = "appUpdatePollInterval")]
     #[serde(deserialize_with = "deserialize_u64_or_string")]
