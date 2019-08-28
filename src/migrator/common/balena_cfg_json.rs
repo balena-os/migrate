@@ -84,6 +84,7 @@ fn deserialize_u16_or_string<'de, D>(deserializer: D) -> Result<u16, D::Error>
     deserializer.deserialize_any(DeserializeU16OrStringVisitor)
 }
 
+// TODO: make u16 work
 
 #[derive(Debug, Deserialize, Clone)]
 struct BalenaConfig {
@@ -102,11 +103,11 @@ struct BalenaConfig {
     #[serde(deserialize_with = "deserialize_u64_or_string")]
     pub app_poll_interval: u64,
     #[serde(rename = "listenPort")]
-    #[serde(deserialize_with = "deserialize_u16_or_string")]
-    pub listen_port: u16,
+    #[serde(deserialize_with = "deserialize_u64_or_string")]
+    pub listen_port: u64,
     #[serde(rename = "vpnPort")]
-    #[serde(deserialize_with = "deserialize_u16_or_string")]
-    pub vpn_port: u16,
+    #[serde(deserialize_with = "deserialize_u64_or_string")]
+    pub vpn_port: u64,
     #[serde(rename = "apiEndpoint")]
     pub api_endpoint: String,
     #[serde(rename = "vpnEndpoint")]
@@ -161,7 +162,7 @@ impl BalenaCfgJson {
         // TODO: check API too
 
         if config.balena.is_check_vpn() {
-            if let Ok(_v) = check_tcp_connect(&self.config.vpn_endpoint, self.config.vpn_port, config.balena.get_check_timeout())
+            if let Ok(_v) = check_tcp_connect(&self.config.vpn_endpoint, self.config.vpn_port as u16, config.balena.get_check_timeout())
             {
                 info!("connection to vpn: {}:{} is ok", self.config.vpn_endpoint, self.config.vpn_port);
             } else {
