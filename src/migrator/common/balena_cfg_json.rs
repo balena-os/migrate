@@ -57,6 +57,18 @@ impl<'de> de::Visitor<'de> for DeserializeU16OrStringVisitor {
         formatter.write_str("an integer or a string")
     }
 
+    fn visit_u64<E>(self, v: u64) -> Result<Self::Value, E>
+        where
+            E: de::Error,
+    {
+        // TODO: range check
+        if v <= 0xFFFF {
+            Ok(v as u16)
+        } else {
+            Err(E::invalid_value(Unexpected::Unsigned(v), &self))
+        }
+    }
+
     fn visit_u16<E>(self, v: u16) -> Result<Self::Value, E>
         where
             E: de::Error,
@@ -68,9 +80,10 @@ impl<'de> de::Visitor<'de> for DeserializeU16OrStringVisitor {
         where
             E: de::Error,
     {
+        println!("parse u16 from str: {:?}", v);
         match v.parse::<u16>() {
             Ok(val) => Ok(val),
-            Err(_why) => {
+            Err(why) => {
                 Err(E::invalid_value(Unexpected::Str(v), &self))
             }
         }
@@ -103,11 +116,11 @@ struct BalenaConfig {
     #[serde(deserialize_with = "deserialize_u64_or_string")]
     pub app_poll_interval: u64,
     #[serde(rename = "listenPort")]
-    #[serde(deserialize_with = "deserialize_u64_or_string")]
-    pub listen_port: u64,
+    #[serde(deserialize_with = "deserialize_u16_or_string")]
+    pub listen_port: u16,
     #[serde(rename = "vpnPort")]
-    #[serde(deserialize_with = "deserialize_u64_or_string")]
-    pub vpn_port: u64,
+    #[serde(deserialize_with = "deserialize_u16_or_string")]
+    pub vpn_port: u16,
     #[serde(rename = "apiEndpoint")]
     pub api_endpoint: String,
     #[serde(rename = "vpnEndpoint")]
@@ -180,6 +193,47 @@ impl BalenaCfgJson {
 
     pub fn get_rel_path(& self) -> &PathBuf {
         &self.file.rel_path
+    }
+
+}
+
+#[cfg(test)]
+mod tests {
+    const CONFIG1: &str = r###"
+{"applicationName":"TestDev","applicationId":1284711,"deviceType":"raspberrypi3","userId":120815,"username":"g_user","appUpdatePollInterval":600000,"listenPort":48484,"vpnPort":443,"apiEndpoint":"https://api.balena-cloud.com","vpnEndpoint":"vpn.balena-cloud.com","registryEndpoint":"registry2.balena-cloud.com","deltaEndpoint":"https://delta.balena-cloud.com","pubnubSubscribeKey":"","pubnubPublishKey":"","mixpanelToken":"9ef939ea64cb6cd9ef939ea64cb6cd","apiKey":"1xf6r2oNmJJt4M1xf6r2oNmJJt4M"}
+"###;
+
+    const CONFIG2: & str = r###"
+    {"applicationName":"test","applicationId":13454711,"deviceType":"beaglebone-green",	"userId":44815,	"username":"thomasr",
+	"appUpdatePollInterval":"600000",	"listenPort":"48484",	"vpnPort":443,	"apiEndpoint":"https://api.balena-cloud.com",
+	"vpnEndpoint":"vpn.balena-cloud.com","registryEndpoint":"registry2.balena-cloud.com", 	"deltaEndpoint":"https://delta.balena-cloud.com",
+	"pubnubSubscribeKey":"",	"pubnubPublishKey":"",	"mixpanelToken":"9ef939ea64cb6cd9ef939ea64cb6cd",
+	"apiKey":"DAEXwk4a55Df29tDAEXwk4a55Df29t",
+	"os": {    "sshKeys": [
+      "ssh-rsa AAAAB3NzaC1yc2EAAAADAQABAAABAQDb6MO7mLf5kXjRgTsaDzAH3ee74if4Endy/ZCBxGwt4vG4kl6bP9Ky7JBN5neG/srrrG4ezWkn2I9lz+MNqazT6TmzpBp1gan3CE0IVQRmdoaSW0V/n3oAucfN0tx0RZ7Zkn5CqnzNfLvTGSzlGM8g2Sfqpd3lCEIrQJFlagOqPW2eBB9FQrI+i8+cwM2iny25h4Fl7yiZIQ579hEHNDM8sCsrSfmApbpTnL7uNJM2gsJlpMNnrQjPAN16zViOmvgKB/BwuuvzGYMSVXRA/vb5GVhcPsAUT0sE1hgaEb"
+    ]
+  }
+}"###;
+
+    use super::*;
+    use crate::{common::config::migrate_config::MigrateWifis, defs::FailMode};
+
+    // TODO: update this to current config
+
+    #[test]
+    fn read_conf_ok1() -> () {
+        let config: BalenaConfig = serde_json::from_str(CONFIG1).unwrap();
+        assert_eq!(config.app_name, "TestDev");
+        assert_eq!(config.app_id, 1284711);
+        assert_eq!(config.vpn_port, 443);
+    }
+
+    #[test]
+    fn read_conf_ok2() -> () {
+        let config: BalenaConfig = serde_json::from_str(CONFIG2).unwrap();
+        assert_eq!(config.app_name, "test");
+        assert_eq!(config.app_id, 13454711);
+        assert_eq!(config.vpn_port, 443);
     }
 
 }

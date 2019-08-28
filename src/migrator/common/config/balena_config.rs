@@ -39,7 +39,7 @@ pub(crate) struct FSDump {
     pub data: PartDump,
 }
 
-#[derive(Debug, Serialize, Deserialize, Clone)]
+#[derive(Debug, Serialize, Deserialize, Clone, PartialEq)]
 pub(crate) struct FileRef {
     pub path: PathBuf,
     pub hash: Option<HashInfo>,

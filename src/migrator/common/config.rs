@@ -313,7 +313,11 @@ impl<'a> Config {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::{common::config::migrate_config::MigrateWifis, defs::FailMode};
+    use std::path::PathBuf;
+    use crate::{common::config::{
+        migrate_config::MigrateWifis,
+        balena_config::FileRef},
+    defs::FailMode };
 
     // TODO: update this to current config
 
@@ -330,11 +334,11 @@ mod tests {
         assert_eq!(config.migrate.get_reboot(), &Some(10));
         assert_eq!(
             config.migrate.get_kernel_path(),
-            Path::new("balena_x86_64.migrate.kernel")
+            &FileRef{ path: PathBuf::from("balena_x86_64.migrate.kernel"), hash: None}
         );
         assert_eq!(
             config.migrate.get_initrd_path(),
-            Path::new("balena_x86_64.migrate.initramfs")
+            &FileRef{ path: PathBuf::from("balena_x86_64.migrate.initramfs"), hash: None }
         );
         assert_eq!(config.migrate.get_fail_mode(), &FailMode::Reboot);
         /*        assert_eq!(
@@ -348,7 +352,7 @@ mod tests {
         assert_eq!(bckup_vols.get(0).unwrap().volume, "test volume 1");
 
         // assert_eq!(config.balena.get_image_path(), Path::new("image.gz"));
-        assert_eq!(config.balena.get_config_path(), Path::new("config.json"));
+        assert_eq!(config.balena.get_config_path(),  &FileRef{ path: PathBuf::from("config.json"), hash: None });
         /*
         assert_eq!(config.balena.get_app_name(), Some("test"));
         assert_eq!(config.balena.get_api_host(), "api1.balena-cloud.com");
