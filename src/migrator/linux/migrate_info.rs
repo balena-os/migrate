@@ -276,7 +276,13 @@ impl MigrateInfo {
         let mut nwmgr_files: Vec<FileInfo> = Vec::new();
 
         for file in config.migrate.get_nwmgr_files() {
-            if let Some(file_info) = FileInfo::new(&FileRef{path: file.clone() , hash: None}, &work_dir)? {
+            if let Some(file_info) = FileInfo::new(
+                &FileRef {
+                    path: file.clone(),
+                    hash: None,
+                },
+                &work_dir,
+            )? {
                 file_info.expect_type(&cmds, &FileType::Text)?;
                 info!(
                     "Adding network manager config: '{}'",

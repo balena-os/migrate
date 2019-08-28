@@ -9,9 +9,7 @@ use std::path::{Path, PathBuf};
 use libc::getuid;
 
 use crate::{
-    common::{
-        call, file_exists, parse_file, path_append, MigErrCtx, MigError, MigErrorKind,
-    },
+    common::{call, file_exists, parse_file, path_append, MigErrCtx, MigError, MigErrorKind},
     defs::{OSArch, DISK_BY_LABEL_PATH, DISK_BY_PARTUUID_PATH, DISK_BY_UUID_PATH},
     linux::{
         linux_defs::{KERNEL_CMDLINE_PATH, SYS_UEFI_DIR},

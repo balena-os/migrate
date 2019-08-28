@@ -5,8 +5,8 @@ use regex::Regex;
 use std::path::{Path, PathBuf};
 
 use crate::{
-    defs::{DISK_BY_PARTUUID_PATH, DISK_BY_UUID_PATH, DISK_BY_LABEL_PATH},
-    common::{MigErrCtx, MigError, MigErrorKind, path_append},
+    common::{path_append, MigErrCtx, MigError, MigErrorKind},
+    defs::{DISK_BY_LABEL_PATH, DISK_BY_PARTUUID_PATH, DISK_BY_UUID_PATH},
     linux::{EnsuredCmds, LSBLK_CMD},
 };
 
@@ -17,7 +17,6 @@ const BLOC_DEV_SUPP_MAJ_NUMBERS: [&str; 45] = [
     "57", "58", "64", "65", "66", "67", "68", "69", "70", "71", "72", "73", "74", "75", "76", "77",
     "78", "79", "80", "81", "82", "83", "84", "85", "86", "87", "179", "180", "259",
 ];
-
 
 #[derive(Debug, Clone)]
 pub(crate) struct LsblkPartition {
@@ -43,10 +42,10 @@ impl LsblkPartition {
 
     pub fn get_alt_path(&self) -> PathBuf {
         if let Some(ref partuuid) = self.partuuid {
-            path_append(DISK_BY_PARTUUID_PATH, partuuid )
+            path_append(DISK_BY_PARTUUID_PATH, partuuid)
         } else {
             if let Some(ref uuid) = self.uuid {
-                path_append(DISK_BY_UUID_PATH, uuid )
+                path_append(DISK_BY_UUID_PATH, uuid)
             } else {
                 if let Some(ref label) = self.label {
                     path_append(DISK_BY_LABEL_PATH, label)
@@ -250,7 +249,7 @@ impl<'a> LsblkInfo {
     fn call_lsblk(device: Option<&Path>, cmds: &EnsuredCmds) -> Result<LsblkInfo, MigError> {
         #[allow(unused_assignments)]
         let mut dev_name = String::new();
-        let args= if let Some(device) = device {
+        let args = if let Some(device) = device {
             dev_name = String::from(&*device.to_string_lossy());
             vec![
                 "-b",
@@ -305,11 +304,14 @@ impl<'a> LsblkInfo {
             }
         };
 
-        let parse_u64 = |s: String| -> Result<Option<u64>,MigError> {
+        let parse_u64 = |s: String| -> Result<Option<u64>, MigError> {
             if s.is_empty() {
                 Ok(None)
             } else {
-                Ok(Some(s.parse::<u64>().context(MigErrCtx::from_remark(MigErrorKind::Upstream, &format!("Failed to parse u64 from string '{}'", s)))?))
+                Ok(Some(s.parse::<u64>().context(MigErrCtx::from_remark(
+                    MigErrorKind::Upstream,
+                    &format!("Failed to parse u64 from string '{}'", s),
+                ))?))
             }
         };
 

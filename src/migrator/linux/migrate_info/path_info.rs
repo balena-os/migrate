@@ -102,7 +102,7 @@ impl PathInfo {
             },
             mountpoint: PathBuf::from(mountpoint),
             drive: PathBuf::from(device.get_path()),
-            drive_size:  if let Some(size) = device.size {
+            drive_size: if let Some(size) = device.size {
                 size
             } else {
                 return Err(MigError::from_remark(

@@ -1,12 +1,14 @@
-use failure::{ResultExt};
+use failure::ResultExt;
 use log::{error, info, warn};
+use serde::{
+    de::{self, Unexpected},
+    Deserialize, Deserializer,
+};
 use serde_json;
+use std::fmt;
 use std::fs::File;
 use std::io::BufReader;
 use std::path::PathBuf;
-use serde::{Deserialize, Deserializer, de::{self, Unexpected}};
-use std::fmt;
-
 
 use crate::common::{
     check_tcp_connect, file_info::RelFileInfo, Config, FileInfo, MigErrCtx, MigError, MigErrorKind,
@@ -22,28 +24,26 @@ impl<'de> de::Visitor<'de> for DeserializeU64OrStringVisitor {
     }
 
     fn visit_u64<E>(self, v: u64) -> Result<Self::Value, E>
-        where
-            E: de::Error,
+    where
+        E: de::Error,
     {
         Ok(v)
     }
 
     fn visit_str<E>(self, v: &str) -> Result<Self::Value, E>
-        where
-            E: de::Error,
+    where
+        E: de::Error,
     {
         match v.parse::<u64>() {
             Ok(val) => Ok(val),
-            Err(_why) => {
-                Err(E::invalid_value(Unexpected::Str(v), &self))
-            }
+            Err(_why) => Err(E::invalid_value(Unexpected::Str(v), &self)),
         }
     }
 }
 
 fn deserialize_u64_or_string<'de, D>(deserializer: D) -> Result<u64, D::Error>
-    where
-        D: Deserializer<'de>,
+where
+    D: Deserializer<'de>,
 {
     deserializer.deserialize_any(DeserializeU64OrStringVisitor)
 }
@@ -57,9 +57,16 @@ impl<'de> de::Visitor<'de> for DeserializeU16OrStringVisitor {
         formatter.write_str("an integer or a string")
     }
 
+    fn visit_u16<E>(self, v: u16) -> Result<Self::Value, E>
+    where
+        E: de::Error,
+    {
+        Ok(v)
+    }
+
     fn visit_u64<E>(self, v: u64) -> Result<Self::Value, E>
-        where
-            E: de::Error,
+    where
+        E: de::Error,
     {
         // TODO: range check
         if v <= 0xFFFF {
@@ -69,30 +76,21 @@ impl<'de> de::Visitor<'de> for DeserializeU16OrStringVisitor {
         }
     }
 
-    fn visit_u16<E>(self, v: u16) -> Result<Self::Value, E>
-        where
-            E: de::Error,
-    {
-        Ok(v)
-    }
-
     fn visit_str<E>(self, v: &str) -> Result<Self::Value, E>
-        where
-            E: de::Error,
+    where
+        E: de::Error,
     {
         println!("parse u16 from str: {:?}", v);
         match v.parse::<u16>() {
             Ok(val) => Ok(val),
-            Err(why) => {
-                Err(E::invalid_value(Unexpected::Str(v), &self))
-            }
+            Err(why) => Err(E::invalid_value(Unexpected::Str(v), &self)),
         }
     }
 }
 
 fn deserialize_u16_or_string<'de, D>(deserializer: D) -> Result<u16, D::Error>
-    where
-        D: Deserializer<'de>,
+where
+    D: Deserializer<'de>,
 {
     deserializer.deserialize_any(DeserializeU16OrStringVisitor)
 }
@@ -175,9 +173,15 @@ impl BalenaCfgJson {
         // TODO: check API too
 
         if config.balena.is_check_vpn() {
-            if let Ok(_v) = check_tcp_connect(&self.config.vpn_endpoint, self.config.vpn_port as u16, config.balena.get_check_timeout())
-            {
-                info!("connection to vpn: {}:{} is ok", self.config.vpn_endpoint, self.config.vpn_port);
+            if let Ok(_v) = check_tcp_connect(
+                &self.config.vpn_endpoint,
+                self.config.vpn_port as u16,
+                config.balena.get_check_timeout(),
+            ) {
+                info!(
+                    "connection to vpn: {}:{} is ok",
+                    self.config.vpn_endpoint, self.config.vpn_port
+                );
             } else {
                 // TODO: add option require_connect and fail if connection is required but not available
                 warn!(
@@ -190,11 +194,9 @@ impl BalenaCfgJson {
         Ok(())
     }
 
-
-    pub fn get_rel_path(& self) -> &PathBuf {
+    pub fn get_rel_path(&self) -> &PathBuf {
         &self.file.rel_path
     }
-
 }
 
 #[cfg(test)]

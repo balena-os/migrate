@@ -155,7 +155,7 @@ impl<'a> MigrateConfig {
                     return Err(MigError::displayed());
                 }
                 Ok(())
-            },
+            }
             _ => {
                 if let None = self.work_dir {
                     error!("A required parameter was not found: 'work_dir'");
