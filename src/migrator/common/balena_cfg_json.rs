@@ -83,7 +83,7 @@ impl<'de> de::Visitor<'de> for DeserializeU16OrStringVisitor {
         println!("parse u16 from str: {:?}", v);
         match v.parse::<u16>() {
             Ok(val) => Ok(val),
-            Err(why) => Err(E::invalid_value(Unexpected::Str(v), &self)),
+            Err(_why) => Err(E::invalid_value(Unexpected::Str(v), &self)),
         }
     }
 }
