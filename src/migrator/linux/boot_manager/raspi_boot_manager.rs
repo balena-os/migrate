@@ -296,48 +296,48 @@ impl BootManager for RaspiBootManager {
         let cmdline_str = match read_to_string(&cmdline_path) {
             Ok(cmdline) => {
                 let cmdline = cmdline.trim_end();
+
+                trace!("cmdline: '{}'", cmdline);
                 // Add or replace root command to cmdline
-                let root_cmd = &format!("root={}", &boot_path.get_kernel_cmd());
-                let rep: &str = root_cmd.as_ref();
+                let cmd_fragment = format!(" root={} ", &boot_path.get_kernel_cmd());
+                let cmd_len = cmd_fragment.len();
+
                 let mut mod_cmdline = String::from(
                     Regex::new(r#"root=\S+(\s+|$)"#)
                         .unwrap()
-                        .replace(cmdline, rep),
+                        .replace(cmdline, &cmd_fragment[1..]),
                 );
-                if !mod_cmdline.contains(rep) {
-                    mod_cmdline.push(' ');
-                    mod_cmdline.push_str(&root_cmd);
+
+                if !mod_cmdline.contains(&cmd_fragment[1..cmd_len-1]) {
+                    mod_cmdline.push_str(&cmd_fragment[..cmd_len-1]);
                 }
 
+                trace!("cmdline: '{}'", mod_cmdline);
+
                 // Add root fs type to cmdline
-                let rootfs_cmd = format!("rootfstype={}", &boot_path.fs_type);
-                let rep: &str = rootfs_cmd.as_ref();
+                let cmd_fragment = format!(" rootfstype={} ", &boot_path.fs_type);
+                let cmd_len = cmd_fragment.len();
                 mod_cmdline = String::from(
                     Regex::new(r#"rootfstype=\S+(\s+|$)"#)
                         .unwrap()
-                        .replace(mod_cmdline.as_ref(), rep),
+                        .replace(mod_cmdline.as_ref(), &cmd_fragment[1..]),
                 );
-                if !mod_cmdline.contains(rep) {
-                    mod_cmdline.push(' ');
-                    mod_cmdline.push_str(&rootfs_cmd);
+                if !mod_cmdline.contains(&cmd_fragment[1..cmd_len-1]) {
+                    mod_cmdline.push_str(&cmd_fragment[..cmd_len-1]);
                 }
 
+                trace!("cmdline: '{}'", mod_cmdline);
                 // make sure console points to the right thing
                 // TODO: make configurable
-                let rep = "";
+                let rep = " ";
                 mod_cmdline = String::from(
-                    Regex::new(r#"\s+console=\S+((\s+|$))"#)
+                    Regex::new(r#"console=\S+((\s+|$))"#)
                         .unwrap()
                         .replace_all(mod_cmdline.as_ref(), rep),
                 );
                 mod_cmdline.push_str(&format!(" console=tty1 console=serial0,115200"));
 
-                mod_cmdline = String::from(
-                    Regex::new(r#"\s+quiet(\s+|$)"#)
-                        .unwrap()
-                        .replace_all(mod_cmdline.as_ref(), rep),
-                );
-                mod_cmdline.push_str(&format!(" console=tty1 console=serial0,115200"));
+                trace!("cmdline: '{}'", mod_cmdline);
 
                 if !kernel_opts.is_empty() {
                     mod_cmdline.push(' ');
@@ -345,6 +345,7 @@ impl BootManager for RaspiBootManager {
                 }
 
                 mod_cmdline.push('\n');
+                trace!("cmdline: '{}'", mod_cmdline);
                 mod_cmdline
             }
             Err(why) => {

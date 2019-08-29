@@ -1,5 +1,5 @@
 use failure::ResultExt;
-use log::{debug, info, trace, warn};
+use log::{debug, trace, warn};
 use regex::Regex;
 
 use std::path::{Path, PathBuf};
@@ -172,10 +172,13 @@ impl<'a> LsblkInfo {
         let mut mp_match: Option<(&LsblkDevice, &LsblkPartition)> = None;
 
         for device in &self.blockdevices {
+            trace!("get_path_info: looking at device '{}", device.get_path().display());
             if let Some(ref children) = device.children {
                 for part in children {
+                    trace!("get_path_info: looking at partition '{}", part.get_path().display());
                     if let Some(ref mountpoint) = part.mountpoint {
-                        if abs_path == Path::new(mountpoint) {
+                        if abs_path == PathBuf::from(mountpoint) {
+                            debug!("get_path_info: looking at partition found equal at '{}'", mountpoint.display());
                             return Ok((&device, part));
                         } else if abs_path.starts_with(mountpoint) {
                             if let Some((_last_dev, last_part)) = mp_match {
@@ -289,7 +292,7 @@ impl<'a> LsblkInfo {
         let mut curr_dev: Option<LsblkDevice> = None;
 
         for line in list.lines() {
-            debug!("from_list: processing line: '{}'", line);
+            trace!("from_list: processing line: '{}'", line);
             let mut curr_pos = line;
             let mut params: HashMap<String, String> = HashMap::new();
 
@@ -317,7 +320,11 @@ impl<'a> LsblkInfo {
 
             let get_pathbuf_or_none = |p: &HashMap<String, String>, s: &str| -> Option<PathBuf> {
                 if let Some(res) = p.get(s) {
-                    Some(PathBuf::from(res))
+                    if res.is_empty() {
+                        None
+                    } else {
+                        Some(PathBuf::from(res))
+                    }
                 } else {
                     None
                 }
@@ -325,19 +332,19 @@ impl<'a> LsblkInfo {
 
             // parse current line into hashmap
             loop {
-                debug!("looking at '{}'", curr_pos);
+                trace!("looking at '{}'", curr_pos);
                 if let Some(captures) = param_re.captures(curr_pos) {
                     let param_name = captures.get(1).unwrap().as_str();
                     let param_value = captures.get(2).unwrap().as_str();
                     params.insert(String::from(param_name), String::from(param_value));
                     if let Some(ref rest) = captures.get(4) {
                         curr_pos = rest.as_str();
-                        debug!(
+                        trace!(
                             "Found param: '{}', value '{}', rest '{}'",
                             param_name, param_value, curr_pos
                         );
                     } else {
-                        debug!(
+                        trace!(
                             "Found param: '{}', value '{}', rest None",
                             param_name, param_value
                         );
@@ -351,7 +358,7 @@ impl<'a> LsblkInfo {
 
             let dev_type = get_str(&params, "TYPE")?;
 
-            debug!("got type: '{}'", dev_type);
+            trace!("got type: '{}'", dev_type);
 
             match dev_type.as_str() {
                 "disk" => {
