@@ -353,7 +353,6 @@ impl<'a> BootManager for UBootManager {
         &self,
         cmds: &EnsuredCmds,
         mig_info: &MigrateInfo,
-        _config: &Config,
         s2_cfg: &mut Stage2ConfigBuilder,
         kernel_opts: &str,
     ) -> Result<(), MigError> {

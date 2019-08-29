@@ -40,7 +40,6 @@ pub(crate) trait BootManager {
         &self,
         cmds: &EnsuredCmds,
         mig_info: &MigrateInfo,
-        config: &Config,
         s2_cfg: &mut Stage2ConfigBuilder,
         kernel_opts: &str,
     ) -> Result<(), MigError>;
@@ -86,7 +85,6 @@ impl BootManager for EfiBootManager {
         &self,
         _cmds: &EnsuredCmds,
         _dev_info: &MigrateInfo,
-        _config: &Config,
         _s2_cfg: &mut Stage2ConfigBuilder,
         _kernel_opts: &str,
     ) -> Result<(), MigError> {

@@ -77,7 +77,6 @@ impl BootManager for RaspiBootManager {
         &self,
         cmds: &EnsuredCmds,
         mig_info: &MigrateInfo,
-        _config: &Config,
         s2_cfg: &mut Stage2ConfigBuilder,
         kernel_opts: &str,
     ) -> Result<(), MigError> {
@@ -143,7 +142,15 @@ impl BootManager for RaspiBootManager {
             RPI_MIG_INITRD_PATH
         );
 
-        let boot_path = self.bootmgr_path.as_ref().unwrap();
+        let boot_path = if let Some(ref boot_path) = self.bootmgr_path {
+            boot_path
+        } else {
+            return Err(MigError::from_remark(
+                MigErrorKind::NotFound,
+                "bootmgr_path is not configured",
+            ));
+        };
+
         let config_path = path_append(&boot_path.path, RPI_CONFIG_TXT);
 
         if !file_exists(&config_path) {
@@ -197,6 +204,9 @@ impl BootManager for RaspiBootManager {
         let kernel_re = Regex::new(r#"^\s*kernel"#).unwrap();
         let mut kernel_found = false;
 
+        let uart_re = Regex::new(r#"^\s*enable_uart"#).unwrap();
+        let mut uart_found = false;
+
         let mut config_str = String::new();
 
         if !balena_config {
@@ -228,6 +238,12 @@ impl BootManager for RaspiBootManager {
                             if !kernel_found {
                                 config_str.push_str(&format!("kernel {}\n", RPI_MIG_KERNEL_NAME));
                                 kernel_found = true;
+                            }
+                        } else if uart_re.is_match(&line) {
+                            config_str.push_str(&format!("# {}\n", line));
+                            if !uart_found {
+                                config_str.push_str("enable_uart=1\n");
+                                uart_found = true;
                             }
                         } else {
                             config_str.push_str(&format!("{}\n", &line));
@@ -280,19 +296,24 @@ impl BootManager for RaspiBootManager {
         let cmdline_str = match read_to_string(&cmdline_path) {
             Ok(cmdline) => {
                 let cmdline = cmdline.trim_end();
-                let root_cmd = format!("root={}", &boot_path.get_kernel_cmd());
+                // Add or replace root command to cmdline
+                let root_cmd = &format!("root={}", &boot_path.get_kernel_cmd());
                 let rep: &str = root_cmd.as_ref();
-                let mut mod_cmdline =
-                    String::from(Regex::new(r#"root=\S+"#).unwrap().replace(cmdline, rep));
+                let mut mod_cmdline = String::from(
+                    Regex::new(r#"root=\S+(\s+|$)"#)
+                        .unwrap()
+                        .replace(cmdline, rep),
+                );
                 if !mod_cmdline.contains(rep) {
                     mod_cmdline.push(' ');
                     mod_cmdline.push_str(&root_cmd);
                 }
 
+                // Add root fs type to cmdline
                 let rootfs_cmd = format!("rootfstype={}", &boot_path.fs_type);
                 let rep: &str = rootfs_cmd.as_ref();
                 mod_cmdline = String::from(
-                    Regex::new(r#"rootfstype=\S+"#)
+                    Regex::new(r#"rootfstype=\S+(\s+|$)"#)
                         .unwrap()
                         .replace(mod_cmdline.as_ref(), rep),
                 );
@@ -305,17 +326,18 @@ impl BootManager for RaspiBootManager {
                 // TODO: make configurable
                 let rep = "";
                 mod_cmdline = String::from(
-                    Regex::new(r#"console=\S+"#)
+                    Regex::new(r#"\s+console=\S+((\s+|$))"#)
                         .unwrap()
                         .replace_all(mod_cmdline.as_ref(), rep),
                 );
-                mod_cmdline.push_str(&format!(" console=serial0,115200"));
+                mod_cmdline.push_str(&format!(" console=tty1 console=serial0,115200"));
 
-                let rep = "debug";
-                if !mod_cmdline.contains(rep) {
-                    mod_cmdline.push(' ');
-                    mod_cmdline.push_str(rep);
-                }
+                mod_cmdline = String::from(
+                    Regex::new(r#"\s+quiet(\s+|$)"#)
+                        .unwrap()
+                        .replace_all(mod_cmdline.as_ref(), rep),
+                );
+                mod_cmdline.push_str(&format!(" console=tty1 console=serial0,115200"));
 
                 if !kernel_opts.is_empty() {
                     mod_cmdline.push(' ');
@@ -335,7 +357,7 @@ impl BootManager for RaspiBootManager {
             }
         };
 
-        // save the backup loactions to s2_config
+        // save the backup locations to s2_config
         if boot_cfg_bckup.len() > 0 {
             s2_cfg.set_boot_bckup(boot_cfg_bckup);
         }
