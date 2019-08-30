@@ -190,16 +190,17 @@ impl BootManager for RaspiBootManager {
             let tgt_path = path_append(&RPI_BOOT_PATH, file);
 
             if file_exists(&tgt_path) {
-                let backup_path = format!("{}-{}",&*tgt_path.to_string_lossy(),system_time.as_secs());
+                let backup_file = format!("{}-{}",file,system_time.as_secs());
+                let backup_path = path_append(RPI_BOOT_PATH, &backup_file);
                 copy(&tgt_path, &backup_path).context(MigErrCtx::from_remark(
                     MigErrorKind::Upstream,
                     &format!(
                         "Failed to copy '{}' to '{}'",
                         tgt_path.display(),
-                        backup_path
+                        backup_path.display()
                     ),
                 ))?;
-                boot_cfg_bckup.push((String::from(&*tgt_path.to_string_lossy()), backup_path));
+                boot_cfg_bckup.push((String::from(*file), backup_file));
             }
 
             copy(&src_path, &tgt_path).context(MigErrCtx::from_remark(
