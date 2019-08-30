@@ -49,7 +49,7 @@ if [[ $EUID -ne 0 ]]; then
     exit 1
 fi
 
-WORK_DIR="$(pwd)"
+PROJECT_ROOT="$(pwd)"
 TARGET_DIR="$(pwd)/migrate"
 
 while [[ $# -gt 0 ]]; do
@@ -74,9 +74,9 @@ while [[ $# -gt 0 ]]; do
           fi
 
           cd "${2}"
-          WORK_DIR="$(pwd)"
+          PROJECT_ROOT="$(pwd)"
           cd "${CURR_DIR}"
-          echo "using working directory ${WORK_DIR}"
+          echo "using working directory ${PROJECT_ROOT}"
           shift
       ;;
       -t|--target-dir)
@@ -96,7 +96,7 @@ done
 
 case ${DEVICE_TYPE} in
   raspberrypi3)
-    BOOT_DIR="${WORK_DIR}/balena-boot/raspberrypi3"
+    BOOT_DIR="${PROJECT_ROOT}/balena-boot/raspberrypi3"
     COPY_FILES="balena.zImage \
 bcm2708-rpi-0-w.dtb \
 bcm2708-rpi-b.dtb \
@@ -107,7 +107,7 @@ bcm2710-rpi-3-b.dtb \
 bcm2710-rpi-3-b-plus.dtb \
 bcm2710-rpi-cm3.dtb \
 balena-migrate.yml"
-    RELEASE_DIR="${WORK_DIR}/target/armv7-unknown-linux-musleabihf/release"
+    RELEASE_DIR="${PROJECT_ROOT}/target/armv7-unknown-linux-musleabihf/release"
     ;;
   *)
     fail "invalid device type \"$DEVICE_TYPE\""
@@ -130,7 +130,7 @@ cd "${CURR_DIR}"
 SOURCE_INITRD="${BOOT_DIR}/balena.initrd.cpio.gz"
 TARGET_INITRD="${TARGET_DIR}/balena.initrd.cpio.gz"
 
-echo "working dir:                ${WORK_DIR}"
+echo "project root:               ${PROJECT_ROOT}"
 echo "target dir:                 ${TARGET_DIR}"
 echo "boot files are expected in: ${BOOT_DIR}"
 echo "source initrd:              ${SOURCE_INITRD}"
@@ -146,7 +146,7 @@ cp "${RELEASE_DIR}/balena-migrate" "${TARGET_DIR}/"
 # TODO: create and use abs path for target
 
 UNPACK_DIR=$(mktemp -d)
-echo "using unpack directory ${WORK_DIR}"
+echo "using unpack directory ${PROJECT_ROOT}"
 
 echo "unpacking \"${SOURCE_INITRD}\""
 gzip -c -d ${SOURCE_INITRD} | cpio -idmu -D ${UNPACK_DIR}
@@ -155,10 +155,10 @@ echo "Removing init.d scripts 8* 9*"
 rm -rf ${UNPACK_DIR}/init.d/8*
 rm -rf ${UNPACK_DIR}/init.d/9*
 
-echo "copying ${WORK_DIR}/script/82-migrate to init.d"
-cp ${WORK_DIR}/script/82-migrate ${WORK_DIR}/init.d
+echo "copying ${PROJECT_ROOT}/script/82-migrate to init.d"
+cp ${PROJECT_ROOT}/script/82-migrate ${PROJECT_ROOT}/init.d
 echo "copying ${PROJECT_ROOT}/script/85-scripted to init.d"
-cp ${WORK_DIR}/script/85-scripted ${WORK_DIR}/init.d
+cp ${PROJECT_ROOT}/script/85-scripted ${PROJECT_ROOT}/init.d
 echo "copying ${RELEASE_DIR}/balena-stage2 to bin"
 cp ${RELEASE_DIR}/balena-stage2 ${UNPACK_DIR}/bin
 

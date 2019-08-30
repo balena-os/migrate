@@ -214,6 +214,27 @@ impl BootManager for RaspiBootManager {
                     tgt_path.display()
                 ),
             ))?;
+
+            if let Some(file_info) = mig_info.dtb_file.iter().find(|&file_info| {
+                if let Some(ref rel_path) = file_info.rel_path {
+                    &&*rel_path.to_string_lossy() == file
+                } else {
+                    false
+                }
+            }) {
+                match check_digest(&tgt_path, &file_info.hash_info) {
+                    Ok(res) => {
+                        if !res {
+                            // TODO: implement rollback, return error
+                            warn!("Digest did not match on '{}' proceeding anyway", file)
+                        }
+                    }
+                    Err(why) => warn!(
+                        "Failed to check digest on file '{}', error: {:?}, proceeding anyway",
+                        file, why
+                    ),
+                }
+            }
         }
 
         let config_path = path_append(&boot_path.path, RPI_CONFIG_TXT);
