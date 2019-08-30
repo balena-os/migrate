@@ -99,7 +99,7 @@ pub(crate) struct MigrateConfig {
     log: Option<LogConfig>,
     kernel: Option<FileRef>,
     initrd: Option<FileRef>,
-    device_tree: Option<FileRef>,
+    device_tree: Option<Vec<FileRef>>,
     // TODO: check fail mode processing
     fail_mode: Option<FailMode>,
     backup: Option<Vec<VolumeConfig>>,
@@ -329,7 +329,7 @@ impl<'a> MigrateConfig {
         }
     }
 
-    pub fn get_dtb_path(&'a self) -> Option<&'a FileRef> {
+    pub fn get_dtb_path(&'a self) -> Option<&'a Vec<FileRef>> {
         if let Some(ref path) = self.device_tree {
             Some(path)
         } else {

@@ -72,7 +72,8 @@ impl RaspberryPi3 {
         const SUPPORTED_OSSES: &'static [&'static str] = &[
             "Raspbian GNU/Linux 8 (jessie)",
             "Raspbian GNU/Linux 9 (stretch)",
-            "Raspbian GNU/Linux 10 (buster)",
+            //"Raspbian GNU/Linux 10 (buster)", weird boot time problems that need to be sorted.
+            // incompatible dtb?
         ];
 
         let os_name = &mig_info.os_name;

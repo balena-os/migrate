@@ -21,6 +21,8 @@ use crate::{
     },
 };
 
+// TODO: copy rpi dtb's , backup orig dtbs
+
 const RPI_MIG_KERNEL_PATH: &str = "/boot/balena.zImage";
 const RPI_MIG_KERNEL_NAME: &str = "balena.zImage";
 
@@ -29,6 +31,19 @@ const RPI_MIG_INITRD_NAME: &str = "balena.initramfs.cpio.gz";
 
 const RPI_CONFIG_TXT: &str = "config.txt";
 const RPI_CMDLINE_TXT: &str = "cmdline.txt";
+const RPI_BOOT_PATH: &str = "/boot";
+
+// TODO: more specific lists for PRI types ?
+const RPI_DTB_FILES: [&str;8] = [
+    "bcm2708-rpi-0-w.dtb",
+    "bcm2708-rpi-b.dtb",
+    "bcm2708-rpi-b-plus.dtb",
+    "bcm2708-rpi-cm.dtb",
+    "bcm2709-rpi-2-b.dtb",
+    "bcm2710-rpi-3-b.dtb",
+    "bcm2710-rpi-3-b-plus.dtb",
+    "bcm2710-rpi-cm3.dtb"
+];
 
 pub(crate) struct RaspiBootManager {
     bootmgr_path: Option<PathInfo>,
@@ -69,6 +84,14 @@ impl BootManager for RaspiBootManager {
         }
 
         self.bootmgr_path = Some(PathInfo::new(cmds, BOOT_PATH, &mig_info.lsblk_info)?.unwrap());
+
+        // TODO: provide a way to supply digests for DTB files
+        for file in &RPI_DTB_FILES {
+            if !file_exists(path_append(&mig_info.work_path.path, file)) {
+                error!("The file '{}' could not be found in the working directory", file);
+                return Ok(false);
+            }
+        }
 
         Ok(true)
     }
@@ -151,15 +174,6 @@ impl BootManager for RaspiBootManager {
             ));
         };
 
-        let config_path = path_append(&boot_path.path, RPI_CONFIG_TXT);
-
-        if !file_exists(&config_path) {
-            return Err(MigError::from_remark(
-                MigErrorKind::NotFound,
-                &format!("Could not find '{}'", config_path.display()),
-            ));
-        }
-
         // create backup of config.txt
 
         let system_time = SystemTime::now()
@@ -170,6 +184,44 @@ impl BootManager for RaspiBootManager {
             ))?;
 
         let mut boot_cfg_bckup: Vec<(String, String)> = Vec::new();
+
+        for file in &RPI_DTB_FILES {
+            let src_path = path_append(&mig_info.work_path.path, file);
+            let tgt_path = path_append(&RPI_BOOT_PATH, file);
+
+            if file_exists(&tgt_path) {
+                let backup_path = format!("{}-{}",&*tgt_path.to_string_lossy(),system_time.as_secs());
+                copy(&tgt_path, &backup_path).context(MigErrCtx::from_remark(
+                    MigErrorKind::Upstream,
+                    &format!(
+                        "Failed to copy '{}' to '{}'",
+                        tgt_path.display(),
+                        backup_path
+                    ),
+                ))?;
+                boot_cfg_bckup.push((String::from(&*src_path.to_string_lossy()), backup_path));
+            }
+
+            copy(&src_path, &tgt_path).context(MigErrCtx::from_remark(
+                MigErrorKind::Upstream,
+                &format!(
+                    "Failed to copy '{}' to '{}'",
+                    src_path.display(),
+                    tgt_path.display()
+                ),
+            ))?;
+        }
+
+        let config_path = path_append(&boot_path.path, RPI_CONFIG_TXT);
+
+        if !file_exists(&config_path) {
+            return Err(MigError::from_remark(
+                MigErrorKind::NotFound,
+                &format!("Could not find '{}'", config_path.display()),
+            ));
+        }
+
+
 
         let balena_config = is_balena_file(&config_path)?;
         if !balena_config {

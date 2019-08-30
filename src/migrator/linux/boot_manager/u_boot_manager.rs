@@ -291,7 +291,8 @@ impl<'a> BootManager for UBootManager {
             0
         };
 
-        if let Some(ref dtb_file) = mig_info.dtb_file {
+        // TODO: support multiple dtb files ?
+        if let Some(dtb_file) = mig_info.dtb_file.get(0) {
             boot_req_space += if !file_exists(path_append(&bootmgr_path.path, MIG_DTB_NAME)) {
                 dtb_file.size
             } else {
@@ -447,7 +448,7 @@ impl<'a> BootManager for UBootManager {
             initrd_path.display()
         );
 
-        let dtb_path = if let Some(dtb_file) = &mig_info.dtb_file {
+        let dtb_path = if let Some(dtb_file) = &mig_info.dtb_file.get(0) {
             let dtb_path = path_append(&boot_path.path, MIG_DTB_NAME);
             std::fs::copy(&dtb_file.path, &dtb_path).context(MigErrCtx::from_remark(
                 MigErrorKind::Upstream,

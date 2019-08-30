@@ -336,7 +336,11 @@ impl<'a> LsblkInfo {
                 if let Some(captures) = param_re.captures(curr_pos) {
                     let param_name = captures.get(1).unwrap().as_str();
                     let param_value = captures.get(2).unwrap().as_str();
-                    params.insert(String::from(param_name), String::from(param_value));
+
+                    if !param_value.is_empty() {
+                        params.insert(String::from(param_name), String::from(param_value));
+                    }
+
                     if let Some(ref rest) = captures.get(4) {
                         curr_pos = rest.as_str();
                         trace!(

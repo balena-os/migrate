@@ -53,7 +53,7 @@ pub(crate) struct MigrateInfo {
 
     pub initrd_file: FileInfo,
 
-    pub dtb_file: Option<FileInfo>,
+    pub dtb_file: Vec<FileInfo>,
 }
 
 // TODO: /etc path just in case
@@ -257,20 +257,24 @@ impl MigrateInfo {
             return Err(MigError::displayed());
         };
 
-        let dtb_file = if let Some(dtb_path) = config.migrate.get_dtb_path() {
-            if let Some(file_info) = FileInfo::new(&dtb_path, work_dir)? {
-                file_info.expect_type(&cmds, &FileType::DTB)?;
-                info!(
-                    "The balena migrate device tree blob looks ok: '{}'",
-                    file_info.path.display()
-                );
-                Some(file_info)
-            } else {
-                error!("The migrate device tree blob has not been specified or cannot be accessed. Automatic download is not yet implemented, so you need to specify and supply all required files");
-                return Err(MigError::displayed());
+        let dtb_files = if let Some(dtb_path) = config.migrate.get_dtb_path() {
+            let mut dtb_files: Vec<FileInfo> = Vec::new();
+            for path in dtb_path {
+                if let Some(file_info) = FileInfo::new(path, work_dir)? {
+                    file_info.expect_type(&cmds, &FileType::DTB)?;
+                    info!(
+                        "The balena migrate device tree blob looks ok: '{}'",
+                        file_info.path.display()
+                    );
+                    dtb_files.push(file_info);
+                } else {
+                    error!("The migrate device tree blob '{}' cannot be accessed. Automatic download is not yet implemented, so you need to specify and supply all required files", path.path.display());
+                    return Err(MigError::displayed());
+                }
             }
+            dtb_files
         } else {
-            None
+            Vec::new()
         };
 
         let mut nwmgr_files: Vec<FileInfo> = Vec::new();
@@ -343,7 +347,7 @@ impl MigrateInfo {
             image_file: os_image,
             kernel_file,
             initrd_file,
-            dtb_file,
+            dtb_file: dtb_files,
             nwmgr_files,
             config_file,
             wifis,
