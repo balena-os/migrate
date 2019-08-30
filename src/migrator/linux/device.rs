@@ -31,7 +31,7 @@ pub(crate) trait Device {
         config: &Config,
         s2_cfg: &mut Stage2ConfigBuilder,
     ) -> Result<(), MigError>;
-    fn restore_boot(&self, mounts: &Mounts, config: &Stage2Config) -> Result<(), MigError>;
+    fn restore_boot(&self, mounts: &Mounts, config: &Stage2Config) -> bool;
 }
 
 pub(crate) fn from_config(

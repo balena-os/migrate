@@ -253,18 +253,12 @@ impl<'a> Stage2 {
         }
 
         let device = device::from_config(device_type, boot_type)?;
-        match device.restore_boot(&self.mounts.borrow(), &self.config) {
-            Ok(_) => {
-                info!("Boot configuration was restored sucessfully");
-                // boot config restored can reboot
-                self.recoverable_state = true;
-            }
-            Err(why) => {
-                warn!(
-                    "Failed to restore boot configuration - trying to migrate anyway. error: {:?}",
-                    why
-                );
-            }
+        if device.restore_boot(&self.mounts.borrow(), &self.config) {
+            info!("Boot configuration was restored sucessfully");
+            // boot config restored can reboot
+            self.recoverable_state = true;
+        } else {
+            warn!("Failed to restore boot configuration - trying to migrate anyway.",);
         }
 
         sync();

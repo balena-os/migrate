@@ -131,14 +131,9 @@ impl<'a> Device for RaspberryPi3 {
             .setup(cmds, dev_info, s2_cfg, &kernel_opts)
     }
 
-    fn restore_boot(&self, mounts: &Mounts, config: &Stage2Config) -> Result<(), MigError> {
+    fn restore_boot(&self, mounts: &Mounts, config: &Stage2Config) -> bool {
         info!("restoring boot configuration for Raspberry Pi 3");
-
-        restore_backups(mounts.get_boot_mountpoint(), config.get_boot_backups())?;
-
-        info!("The original boot configuration was restored");
-
-        Ok(())
+        restore_backups(mounts.get_boot_mountpoint(), config.get_boot_backups())
     }
 
     fn get_boot_device(&self) -> PathInfo {

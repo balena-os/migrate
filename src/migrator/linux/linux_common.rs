@@ -277,26 +277,26 @@ pub(crate) fn is_secure_boot() -> Result<bool, MigError> {
 
 // TODO: allow restoring from work_dir to Boot
 
-pub(crate) fn restore_backups(
-    root_path: &Path,
-    backups: &[(String, String)],
-) -> Result<(), MigError> {
+pub(crate) fn restore_backups(root_path: &Path, backups: &[(String, String)]) -> bool {
     // restore boot config backups
+    let mut res = true;
     for backup in backups {
         let src = path_append(root_path, &backup.1);
         let tgt = path_append(root_path, &backup.0);
-        copy(&src, &tgt).context(MigErrCtx::from_remark(
-            MigErrorKind::Upstream,
-            &format!(
-                "Failed to restore '{}' to '{}'",
+        if let Err(why) = copy(&src, &tgt) {
+            error!(
+                "Failed to restore '{}' to '{}', error: {:?}",
                 src.display(),
-                tgt.display()
-            ),
-        ))?;
-        info!("Restored '{}' to '{}'", src.display(), tgt.display())
+                tgt.display(),
+                why
+            );
+            res = false;
+        } else {
+            info!("Restored '{}' to '{}'", src.display(), tgt.display())
+        }
     }
 
-    Ok(())
+    res
 }
 
 pub(crate) fn to_std_device_path(device: &Path) -> Result<PathBuf, MigError> {

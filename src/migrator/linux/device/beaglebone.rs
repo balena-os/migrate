@@ -178,7 +178,7 @@ impl Device for BeagleboneGreen {
             .setup(cmds, dev_info, s2_cfg, &kernel_opts)
     }
 
-    fn restore_boot(&self, mounts: &Mounts, config: &Stage2Config) -> Result<(), MigError> {
+    fn restore_boot(&self, mounts: &Mounts, config: &Stage2Config) -> bool {
         self.boot_manager.restore(mounts, config)
     }
 
@@ -267,7 +267,7 @@ impl Device for BeagleboneBlack {
             .setup(cmds, dev_info, s2_cfg, &kernel_opts)
     }
 
-    fn restore_boot(&self, mounts: &Mounts, config: &Stage2Config) -> Result<(), MigError> {
+    fn restore_boot(&self, mounts: &Mounts, config: &Stage2Config) -> bool {
         self.boot_manager.restore(mounts, config)
     }
 
@@ -345,7 +345,7 @@ impl<'a> Device for BeagleboardXM {
         self.boot_manager.get_boot_type()
     }
 
-    fn restore_boot(&self, mounts: &Mounts, config: &Stage2Config) -> Result<(), MigError> {
+    fn restore_boot(&self, mounts: &Mounts, config: &Stage2Config) -> bool {
         self.boot_manager.restore(mounts, config)
     }
 

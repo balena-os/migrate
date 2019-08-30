@@ -172,13 +172,22 @@ impl<'a> LsblkInfo {
         let mut mp_match: Option<(&LsblkDevice, &LsblkPartition)> = None;
 
         for device in &self.blockdevices {
-            trace!("get_path_info: looking at device '{}", device.get_path().display());
+            trace!(
+                "get_path_info: looking at device '{}",
+                device.get_path().display()
+            );
             if let Some(ref children) = device.children {
                 for part in children {
-                    trace!("get_path_info: looking at partition '{}", part.get_path().display());
+                    trace!(
+                        "get_path_info: looking at partition '{}",
+                        part.get_path().display()
+                    );
                     if let Some(ref mountpoint) = part.mountpoint {
                         if abs_path == PathBuf::from(mountpoint) {
-                            debug!("get_path_info: looking at partition found equal at '{}'", mountpoint.display());
+                            debug!(
+                                "get_path_info: looking at partition found equal at '{}'",
+                                mountpoint.display()
+                            );
                             return Ok((&device, part));
                         } else if abs_path.starts_with(mountpoint) {
                             if let Some((_last_dev, last_part)) = mp_match {
@@ -345,12 +354,15 @@ impl<'a> LsblkInfo {
                         curr_pos = rest.as_str();
                         trace!(
                             "Found param: '{}', value '{}', rest '{}'",
-                            param_name, param_value, curr_pos
+                            param_name,
+                            param_value,
+                            curr_pos
                         );
                     } else {
                         trace!(
                             "Found param: '{}', value '{}', rest None",
-                            param_name, param_value
+                            param_name,
+                            param_value
                         );
                         break;
                     }

@@ -44,7 +44,7 @@ pub(crate) trait BootManager {
         kernel_opts: &str,
     ) -> Result<(), MigError>;
 
-    fn restore(&self, mounts: &Mounts, config: &Stage2Config) -> Result<(), MigError>;
+    fn restore(&self, mounts: &Mounts, config: &Stage2Config) -> bool;
     // TODO: make return reference
     fn get_bootmgr_path(&self) -> PathInfo;
     fn get_boot_path(&self) -> PathInfo;
@@ -90,7 +90,7 @@ impl BootManager for EfiBootManager {
     ) -> Result<(), MigError> {
         Err(MigError::from(MigErrorKind::NotImpl))
     }
-    fn restore(&self, _mounts: &Mounts, _config: &Stage2Config) -> Result<(), MigError> {
-        Err(MigError::from(MigErrorKind::NotImpl))
+    fn restore(&self, _mounts: &Mounts, _config: &Stage2Config) -> bool {
+        unimplemented!()
     }
 }

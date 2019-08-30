@@ -440,11 +440,12 @@ impl<'a> BootManager for GrubBootManager {
         Ok(())
     }
 
-    fn restore(&self, _mounts: &Mounts, _config: &Stage2Config) -> Result<(), MigError> {
+    fn restore(&self, _mounts: &Mounts, _config: &Stage2Config) -> bool {
         trace!("restore: entered");
         // Nothing to restore with grub-reboot
         // TODO: might be worthwhile to remove kernel / initramfs and grub config
-        Ok(())
+        // TODO: restore backups anyway if they exist
+        unimplemented!()
     }
     /*
         fn set_bootmgr_path(&self,dev_info:& DeviceInfo, config: &Config, s2_cfg: &mut Stage2ConfigBuilder) -> Result<bool, MigError> {

@@ -34,7 +34,7 @@ const RPI_CMDLINE_TXT: &str = "cmdline.txt";
 const RPI_BOOT_PATH: &str = "/boot";
 
 // TODO: more specific lists for PRI types ?
-const RPI_DTB_FILES: [&str;8] = [
+const RPI_DTB_FILES: [&str; 8] = [
     "bcm2708-rpi-0-w.dtb",
     "bcm2708-rpi-b.dtb",
     "bcm2708-rpi-b-plus.dtb",
@@ -42,7 +42,7 @@ const RPI_DTB_FILES: [&str;8] = [
     "bcm2709-rpi-2-b.dtb",
     "bcm2710-rpi-3-b.dtb",
     "bcm2710-rpi-3-b-plus.dtb",
-    "bcm2710-rpi-cm3.dtb"
+    "bcm2710-rpi-cm3.dtb",
 ];
 
 pub(crate) struct RaspiBootManager {
@@ -88,7 +88,10 @@ impl BootManager for RaspiBootManager {
         // TODO: provide a way to supply digests for DTB files
         for file in &RPI_DTB_FILES {
             if !file_exists(path_append(&mig_info.work_path.path, file)) {
-                error!("The file '{}' could not be found in the working directory", file);
+                error!(
+                    "The file '{}' could not be found in the working directory",
+                    file
+                );
                 return Ok(false);
             }
         }
@@ -190,7 +193,7 @@ impl BootManager for RaspiBootManager {
             let tgt_path = path_append(&RPI_BOOT_PATH, file);
 
             if file_exists(&tgt_path) {
-                let backup_file = format!("{}-{}",file,system_time.as_secs());
+                let backup_file = format!("{}-{}", file, system_time.as_secs());
                 let backup_path = path_append(RPI_BOOT_PATH, &backup_file);
                 copy(&tgt_path, &backup_path).context(MigErrCtx::from_remark(
                     MigErrorKind::Upstream,
@@ -221,8 +224,6 @@ impl BootManager for RaspiBootManager {
                 &format!("Could not find '{}'", config_path.display()),
             ));
         }
-
-
 
         let balena_config = is_balena_file(&config_path)?;
         if !balena_config {
@@ -361,8 +362,8 @@ impl BootManager for RaspiBootManager {
                         .replace(cmdline, &cmd_fragment[1..]),
                 );
 
-                if !mod_cmdline.contains(&cmd_fragment[1..cmd_len-1]) {
-                    mod_cmdline.push_str(&cmd_fragment[..cmd_len-1]);
+                if !mod_cmdline.contains(&cmd_fragment[1..cmd_len - 1]) {
+                    mod_cmdline.push_str(&cmd_fragment[..cmd_len - 1]);
                 }
 
                 trace!("cmdline: '{}'", mod_cmdline);
@@ -375,8 +376,8 @@ impl BootManager for RaspiBootManager {
                         .unwrap()
                         .replace(mod_cmdline.as_ref(), &cmd_fragment[1..]),
                 );
-                if !mod_cmdline.contains(&cmd_fragment[1..cmd_len-1]) {
-                    mod_cmdline.push_str(&cmd_fragment[..cmd_len-1]);
+                if !mod_cmdline.contains(&cmd_fragment[1..cmd_len - 1]) {
+                    mod_cmdline.push_str(&cmd_fragment[..cmd_len - 1]);
                 }
 
                 trace!("cmdline: '{}'", mod_cmdline);
@@ -453,8 +454,8 @@ impl BootManager for RaspiBootManager {
         Ok(())
     }
 
-    fn restore(&self, _mounts: &Mounts, _config: &Stage2Config) -> Result<(), MigError> {
+    fn restore(&self, _mounts: &Mounts, _config: &Stage2Config) -> bool {
         // TODO: remove kernel & initramfs, dtb  too
-        Err(MigError::from(MigErrorKind::NotImpl))
+        unimplemented!()
     }
 }

@@ -131,7 +131,7 @@ impl<'a> Device for IntelNuc {
             .setup(cmds, dev_info, s2_cfg, &kernel_opts)
     }
 
-    fn restore_boot(&self, mounts: &Mounts, config: &Stage2Config) -> Result<(), MigError> {
+    fn restore_boot(&self, mounts: &Mounts, config: &Stage2Config) -> bool {
         self.boot_manager.restore(mounts, config)
     }
 

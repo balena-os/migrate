@@ -593,35 +593,49 @@ impl<'a> BootManager for UBootManager {
         Ok(())
     }
 
-    fn restore(&self, mounts: &Mounts, config: &Stage2Config) -> Result<(), MigError> {
+    fn restore(&self, mounts: &Mounts, config: &Stage2Config) -> bool {
         info!("restoring boot configuration",);
 
         // TODO: restore on bootmgr device
+        let mut res = true;
 
         let uenv_file = path_append(mounts.get_boot_mountpoint(), UENV_FILE_NAME);
 
-        if file_exists(&uenv_file) && is_balena_file(&uenv_file)? {
-            remove_file(&uenv_file).context(MigErrCtx::from_remark(
-                MigErrorKind::Upstream,
-                &format!(
-                    "failed to remove migrate boot config file {}",
-                    uenv_file.display()
-                ),
-            ))?;
-            info!("Removed balena boot config file '{}'", &uenv_file.display());
+        let balena_file = match is_balena_file(&uenv_file) {
+            Ok(res) => res,
+            Err(why) => {
+                warn!(
+                    "Failed to get file status for '{}', error: {:?}",
+                    uenv_file.display(),
+                    why
+                );
+                false
+            }
+        };
 
-            restore_backups(mounts.get_boot_mountpoint(), config.get_boot_backups())?;
+        if file_exists(&uenv_file) && balena_file {
+            if let Err(why) = remove_file(&uenv_file) {
+                error!(
+                    "failed to remove migrate boot config file '{}' error: {:?}",
+                    uenv_file.display(),
+                    why
+                )
+            } else {
+                info!("Removed balena boot config file '{}'", &uenv_file.display());
+            }
         } else {
             warn!(
                 "balena boot config file not found in '{}'",
                 &uenv_file.display()
             );
+            res = false;
+        }
+
+        if !restore_backups(mounts.get_boot_mountpoint(), config.get_boot_backups()) {
+            res = false;
         }
 
         // TODO: remove kernel & initramfs, dtb  too
-
-        info!("The original boot configuration was restored");
-
-        Ok(())
+        res
     }
 }

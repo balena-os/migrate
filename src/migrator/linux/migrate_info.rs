@@ -112,7 +112,11 @@ impl MigrateInfo {
         };
 
         let work_dir = &work_path.path;
-        info!("Working directory is '{}' on '{}'", work_dir.display(), work_path.drive.display());
+        info!(
+            "Working directory is '{}' on '{}'",
+            work_dir.display(),
+            work_path.drive.display()
+        );
 
         let os_image = match config.balena.get_image_path() {
             ImageType::Flasher(ref flasher_img) => {
