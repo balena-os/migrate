@@ -199,7 +199,7 @@ impl BootManager for RaspiBootManager {
                         backup_path
                     ),
                 ))?;
-                boot_cfg_bckup.push((String::from(&*src_path.to_string_lossy()), backup_path));
+                boot_cfg_bckup.push((String::from(&*tgt_path.to_string_lossy()), backup_path));
             }
 
             copy(&src_path, &tgt_path).context(MigErrCtx::from_remark(
