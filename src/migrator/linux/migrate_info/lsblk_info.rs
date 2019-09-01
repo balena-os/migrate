@@ -4,6 +4,7 @@ use regex::Regex;
 
 use std::path::{Path, PathBuf};
 
+use crate::linux::linux_common::to_std_device_path;
 use crate::{
     common::{path_append, MigErrCtx, MigError, MigErrorKind},
     defs::{DISK_BY_LABEL_PATH, DISK_BY_PARTUUID_PATH, DISK_BY_UUID_PATH},
@@ -234,6 +235,9 @@ impl<'a> LsblkInfo {
     ) -> Result<(&'a LsblkDevice, &'a LsblkPartition), MigError> {
         let part_path = part_path.as_ref();
         trace!("get_devinfo_from_partition: '{}", part_path.display());
+
+        let part_path = to_std_device_path(part_path)?;
+
         if let Some(part_name) = part_path.file_name() {
             let cmp_name = part_name.to_string_lossy();
             if let Some(lsblk_dev) = self

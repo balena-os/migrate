@@ -54,7 +54,7 @@ pub(crate) struct LinuxMigrator {
     mig_info: MigrateInfo,
     config: Config,
     stage2_config: Stage2ConfigBuilder,
-    device: Box<Device>,
+    device: Box<dyn Device>,
 }
 
 impl<'a> LinuxMigrator {
@@ -373,27 +373,27 @@ impl<'a> LinuxMigrator {
         self.stage2_config
             .set_log_level(String::from(self.config.migrate.get_log_level()));
 
-        if let Some((ref log_path, ref log_drive, ref log_part)) = self.mig_info.log_path {
+        if let Some((ref log_drive, ref log_part)) = self.mig_info.log_path {
             if log_drive.get_path() != boot_device.drive {
                 if let Some(ref fstype) = log_part.fstype {
-                    self.stage2_config.set_log_to(Stage2LogConfig {
-                        device: log_path.clone(),
-                        fstype: fstype.clone(),
-                    });
-
                     info!(
                         "Set up log device as '{}' with file system type '{}'",
-                        log_path.display(),
+                        log_part.get_alt_path().display(),
                         fstype
                     );
+
+                    self.stage2_config.set_log_to(Stage2LogConfig {
+                        device: log_part.get_alt_path(),
+                        fstype: fstype.clone(),
+                    });
                 } else {
                     warn!(
                         "Could not determine file system type for log partition '{}'  - ignoring",
-                        log_path.display()
+                        log_part.get_path().display()
                     );
                 }
             } else {
-                warn!("Log partition '{}' is not on a distinct drive from flash drive: '{}' - ignoring", log_path.display(), boot_device.drive.display());
+                warn!("Log partition '{}' is not on a distinct drive from flash drive: '{}' - ignoring", log_part.get_path().display(), boot_device.drive.display());
             }
         }
 

@@ -316,7 +316,7 @@ pub(crate) fn to_std_device_path(device: &Path) -> Result<PathBuf, MigError> {
         return Ok(PathBuf::from(device));
     }
 
-    debug!(
+    trace!(
         "to_std_device_path: attempting to dereference as link '{}'",
         device.display()
     );
@@ -330,12 +330,12 @@ pub(crate) fn to_std_device_path(device: &Path) -> Result<PathBuf, MigError> {
                     &format!("failed to canonicalize path from: '{}'", dev_path.display()),
                 ))?);
             } else {
-                debug!("Failed to retrieve parent from  '{}'", device.display());
+                trace!("Failed to retrieve parent from  '{}'", device.display());
                 return Ok(PathBuf::from(device));
             }
         }
         Err(why) => {
-            debug!(
+            trace!(
                 "Failed to dereference file '{}' : {:?}",
                 device.display(),
                 why

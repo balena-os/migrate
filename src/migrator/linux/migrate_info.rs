@@ -1,5 +1,4 @@
 use log::{debug, error, info, trace, warn};
-use std::path::PathBuf;
 
 use crate::{
     common::{
@@ -13,7 +12,7 @@ use crate::{
     },
     defs::OSArch,
     linux::{
-        linux_common::{get_os_arch, get_os_name, to_std_device_path},
+        linux_common::{get_os_arch, get_os_name},
         EnsuredCmds,
     },
 };
@@ -41,7 +40,7 @@ pub(crate) struct MigrateInfo {
     // pub root_path: PathInfo,
     // pub boot_path: PathInfo,
     pub work_path: PathInfo,
-    pub log_path: Option<(PathBuf, LsblkDevice, LsblkPartition)>,
+    pub log_path: Option<(LsblkDevice, LsblkPartition)>,
 
     pub nwmgr_files: Vec<FileInfo>,
     pub wifis: Vec<WifiConfig>,
@@ -56,14 +55,11 @@ pub(crate) struct MigrateInfo {
     pub dtb_file: Vec<FileInfo>,
 }
 
-// TODO: /etc path just in case
 // TODO: sort out error reporting with Displayed
 
 impl MigrateInfo {
     pub(crate) fn new(config: &Config, cmds: &mut EnsuredCmds) -> Result<MigrateInfo, MigError> {
         trace!("new: entered");
-        // TODO: check files configured in config & create file_infos
-
         let os_arch = get_os_arch(&cmds)?;
 
         let lsblk_info = LsblkInfo::all(&cmds)?;
@@ -82,41 +78,40 @@ impl MigrateInfo {
             ));
         };
 
-        let log_path = if let Some(log_dev) = config.migrate.get_log_device() {
-            if let Ok(ref std_dev) = to_std_device_path(log_dev) {
-                if let Ok((log_drive, log_part)) = lsblk_info.get_devinfo_from_partition(std_dev) {
-                    if let Some(ref fstype) = log_part.fstype {
-                        info!(
-                            "Found log device '{}' with file system type '{}'",
-                            log_dev.display(),
-                            fstype
-                        );
-                        Some((PathBuf::from(log_dev), log_drive.clone(), log_part.clone()))
-                    } else {
-                        warn!("Could not determine file system type for log partition '{}'  - ignoring", log_dev.display());
-                        None
-                    }
-                } else {
-                    warn!(
-                        "failed to find lsblk info for log device '{}'",
-                        log_dev.display()
-                    );
-                    None
-                }
-            } else {
-                warn!("failed to evaluate log device '{}'", log_dev.display());
-                None
-            }
-        } else {
-            None
-        };
-
         let work_dir = &work_path.path;
         info!(
             "Working directory is '{}' on '{}'",
             work_dir.display(),
             work_path.drive.display()
         );
+
+        let log_path = if let Some(log_dev) = config.migrate.get_log_device() {
+            match lsblk_info.get_devinfo_from_partition(log_dev) {
+                Ok((log_drive, log_part)) => {
+                    if let Some(ref fstype) = log_part.fstype {
+                        info!(
+                            "Found log device '{}' with file system type '{}'",
+                            log_dev.display(),
+                            fstype
+                        );
+                        Some((log_drive.clone(), log_part.clone()))
+                    } else {
+                        warn!("Could not determine file system type for log partition '{}' - ignoring", log_dev.display());
+                        None
+                    }
+                }
+                Err(why) => {
+                    warn!(
+                        "failed to find lsblk info for log device '{}', error: {:?}",
+                        log_dev.display(),
+                        why
+                    );
+                    None
+                }
+            }
+        } else {
+            None
+        };
 
         let os_image = match config.balena.get_image_path() {
             ImageType::Flasher(ref flasher_img) => {
@@ -187,10 +182,9 @@ impl MigrateInfo {
             }
         };
 
-        let config_info = config.balena.get_config_path();
-        let config_file = if let Some(file_info) = FileInfo::new(&config_info, &work_dir)? {
-            // TODO: process digest
-            // Make sure balena config is in workdir and on its mount
+        let config_file = if let Some(file_info) =
+            FileInfo::new(config.balena.get_config_path(), &work_dir)?
+        {
             if let None = file_info.rel_path {
                 error!("The balena OS config was found outside of the working directory. This setup is not supported");
                 return Err(MigError::displayed());
