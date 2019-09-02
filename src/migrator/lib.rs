@@ -63,8 +63,8 @@ pub fn stage2() -> Result<(), MigError> {
         Ok(())
     });
 
-    if let Err(_) = res {
-        error!("A panic occurred in stage2");
+    if let Err(why) = res {
+        error!("A panic occurred in stage2 {:?}", why);
         Logger::flush();
         sync();
         let _res = Stage2::default_exit();

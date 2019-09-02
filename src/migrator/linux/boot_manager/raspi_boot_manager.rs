@@ -478,6 +478,6 @@ impl BootManager for RaspiBootManager {
 
     fn restore(&self, _mounts: &Mounts, _config: &Stage2Config) -> bool {
         // TODO: remove kernel & initramfs, dtb  too
-        unimplemented!()
+        false
     }
 }

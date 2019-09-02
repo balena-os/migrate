@@ -445,7 +445,7 @@ impl<'a> BootManager for GrubBootManager {
         // Nothing to restore with grub-reboot
         // TODO: might be worthwhile to remove kernel / initramfs and grub config
         // TODO: restore backups anyway if they exist
-        unimplemented!()
+        true
     }
     /*
         fn set_bootmgr_path(&self,dev_info:& DeviceInfo, config: &Config, s2_cfg: &mut Stage2ConfigBuilder) -> Result<bool, MigError> {
