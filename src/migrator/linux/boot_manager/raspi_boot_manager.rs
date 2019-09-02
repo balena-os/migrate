@@ -1,5 +1,5 @@
 use failure::{Fail, ResultExt};
-use log::{error, info, trace, warn};
+use log::{debug, error, info, trace, warn};
 use regex::Regex;
 use std::fs::{copy, read_to_string, File};
 use std::io::{BufRead, BufReader, Write};
@@ -222,6 +222,7 @@ impl BootManager for RaspiBootManager {
                     false
                 }
             }) {
+                debug!("Found digest for '{}', checking ", file);
                 match check_digest(&tgt_path, &file_info.hash_info) {
                     Ok(res) => {
                         if !res {

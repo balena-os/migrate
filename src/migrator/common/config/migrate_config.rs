@@ -329,7 +329,7 @@ impl<'a> MigrateConfig {
         }
     }
 
-    pub fn get_dtb_path(&'a self) -> Option<&'a Vec<FileRef>> {
+    pub fn get_dtb_refs(&'a self) -> Option<&'a Vec<FileRef>> {
         if let Some(ref path) = self.device_tree {
             Some(path)
         } else {

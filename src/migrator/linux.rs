@@ -324,6 +324,7 @@ impl<'a> LinuxMigrator {
         // We need this before s2 config as it might still modify migrate_info
         // TODO: make setup take no s2_cfg or immutable s2_cfg and return boot_backup instead
         // TODO: make setup undoable in case something bad happens later on
+
         self.device.setup(
             &self.cmds,
             &mut self.mig_info,

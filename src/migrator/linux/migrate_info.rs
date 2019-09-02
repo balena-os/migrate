@@ -242,8 +242,9 @@ impl MigrateInfo {
             return Err(MigError::displayed());
         };
 
-        let initrd_info = config.migrate.get_initrd_path();
-        let initrd_file = if let Some(file_info) = FileInfo::new(&initrd_info, work_dir)? {
+        let initrd_file = if let Some(file_info) =
+            FileInfo::new(config.migrate.get_initrd_path(), work_dir)?
+        {
             file_info.expect_type(&cmds, &FileType::InitRD)?;
             info!(
                 "The balena migrate initramfs looks ok: '{}'",
@@ -255,10 +256,10 @@ impl MigrateInfo {
             return Err(MigError::displayed());
         };
 
-        let dtb_files = if let Some(dtb_path) = config.migrate.get_dtb_path() {
+        let dtb_files = if let Some(dtb_refs) = config.migrate.get_dtb_refs() {
             let mut dtb_files: Vec<FileInfo> = Vec::new();
-            for path in dtb_path {
-                if let Some(file_info) = FileInfo::new(path, work_dir)? {
+            for dtb_ref in dtb_refs {
+                if let Some(file_info) = FileInfo::new(dtb_ref, work_dir)? {
                     file_info.expect_type(&cmds, &FileType::DTB)?;
                     info!(
                         "The balena migrate device tree blob looks ok: '{}'",
@@ -266,7 +267,7 @@ impl MigrateInfo {
                     );
                     dtb_files.push(file_info);
                 } else {
-                    error!("The migrate device tree blob '{}' cannot be accessed. Automatic download is not yet implemented, so you need to specify and supply all required files", path.path.display());
+                    error!("The migrate device tree blob '{}' cannot be accessed. Automatic download is not yet implemented, so you need to specify and supply all required files", dtb_ref.path.display());
                     return Err(MigError::displayed());
                 }
             }
