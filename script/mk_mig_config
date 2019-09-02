@@ -21,6 +21,12 @@
 
 set -e
 
+function verbose {
+  if [ "${VERBOSE}" == 1 ]; then
+    echo "${1}"
+  fi
+}
+
 function fail {
   echo "${1}"
   # clean
@@ -54,7 +60,6 @@ TARGET_DIR="$(pwd)/migrate"
 
 while [[ $# -gt 0 ]]; do
   arg=$1
-  echo "looking at \"${arg}\""
   case $arg in
       -h|--help)
         printHelp
@@ -65,7 +70,7 @@ while [[ $# -gt 0 ]]; do
             fail "\"$1\" argument needs a value."
           fi
           DEVICE_TYPE="$2"
-          echo "using device type ${DEVICE_TYPE}"
+          verbose "using device type ${DEVICE_TYPE}"
           shift
       ;;
       -w|--work-dir)
@@ -76,7 +81,7 @@ while [[ $# -gt 0 ]]; do
           cd "${2}"
           PROJECT_ROOT="$(pwd)"
           cd "${CURR_DIR}"
-          echo "using working directory ${PROJECT_ROOT}"
+          verbose "using working directory ${PROJECT_ROOT}"
           shift
       ;;
       -t|--target-dir)
@@ -84,8 +89,12 @@ while [[ $# -gt 0 ]]; do
             fail "\"$1\" argument needs a value."
           fi
           TARGET_DIR="${2}"
-          echo "using target directory ${TARGET_DIR}"
+          verbose "using target directory ${TARGET_DIR}"
           shift
+      ;;
+      -v|--verbose)
+          VERBOSE=1
+          verbose "Operating in verbose mode"
       ;;
       *)
         fail "invalid parameter \"$1\""
@@ -105,8 +114,7 @@ bcm2708-rpi-cm.dtb \
 bcm2709-rpi-2-b.dtb \
 bcm2710-rpi-3-b.dtb \
 bcm2710-rpi-3-b-plus.dtb \
-bcm2710-rpi-cm3.dtb \
-balena-migrate.yml"
+bcm2710-rpi-cm3.dtb"
     RELEASE_DIR="${PROJECT_ROOT}/target/armv7-unknown-linux-musleabihf/release"
     ;;
   *)
@@ -130,16 +138,23 @@ cd "${CURR_DIR}"
 SOURCE_INITRD="${BOOT_DIR}/balena.initrd.cpio.gz"
 TARGET_INITRD="${TARGET_DIR}/balena.initrd.cpio.gz"
 
-echo "project root:               ${PROJECT_ROOT}"
-echo "target dir:                 ${TARGET_DIR}"
-echo "boot files are expected in: ${BOOT_DIR}"
-echo "source initrd:              ${SOURCE_INITRD}"
-echo "target initrd:              ${TARGET_INITRD}"
+verbose "project root:               ${PROJECT_ROOT}"
+verbose "target dir:                 ${TARGET_DIR}"
+verbose "boot files are expected in: ${BOOT_DIR}"
+verbose "source initrd:              ${SOURCE_INITRD}"
+verbose "target initrd:              ${TARGET_INITRD}"
 
+echo "copying dtb files"
 for file in ${COPY_FILES}
 do
   cp "${BOOT_DIR}/$file" "${TARGET_DIR}/"
 done
+
+if [ ! -f "${TARGET_DIR}/balena-migrate.yml" ] ; then
+  echo "copying default balena-migrate.yml"
+  cp "${BOOT_DIR}/balena-migrate.yml" "${TARGET_DIR}/"
+fi
+
 
 cp "${RELEASE_DIR}/balena-migrate" "${TARGET_DIR}/"
 
@@ -156,9 +171,9 @@ rm -rf ${UNPACK_DIR}/init.d/8*
 rm -rf ${UNPACK_DIR}/init.d/9*
 
 echo "copying ${PROJECT_ROOT}/script/82-migrate to init.d"
-cp ${PROJECT_ROOT}/script/82-migrate ${PROJECT_ROOT}/init.d
-echo "copying ${PROJECT_ROOT}/script/85-scripted to init.d"
-cp ${PROJECT_ROOT}/script/85-scripted ${PROJECT_ROOT}/init.d
+cp ${PROJECT_ROOT}/script/82-migrate ${UNPACK_DIR}/init.d
+# echo "copying ${PROJECT_ROOT}/script/85-scripted to init.d"
+# cp ${PROJECT_ROOT}/script/85-scripted ${UNPACK_DIR}/init.d
 echo "copying ${RELEASE_DIR}/balena-stage2 to bin"
 cp ${RELEASE_DIR}/balena-stage2 ${UNPACK_DIR}/bin
 
@@ -169,3 +184,6 @@ find . | cpio --quiet -o -H newc | gzip -c > ${TARGET_INITRD}
 cd ${CURR_DIR}
 
 rm -rf ${UNPACK_DIR}
+
+echo "copying balena-migrate"
+cp  ${RELEASE_DIR}/balena-migrate ${TARGET_DIR}/
