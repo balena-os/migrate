@@ -122,6 +122,18 @@ bcm2710-rpi-cm3.dtb"
     COPY_FILES="balena.zImage"
     RELEASE_DIR="${PROJECT_ROOT}/target/x86_64-unknown-linux-musl/release"
     ;;
+  beaglebone-green)
+    BOOT_DIR="${PROJECT_ROOT}/balena-boot/beaglebone-green"
+    COPY_FILES="balena.zImage \
+    balena.dtb"
+    RELEASE_DIR="${PROJECT_ROOT}/target/armv7-unknown-linux-gnueabihf/release"
+    ;;
+  beagleboard-xm)
+    BOOT_DIR="${PROJECT_ROOT}/balena-boot/beagleboard-xm"
+    COPY_FILES="balena.zImage \
+    balena.dtb"
+    RELEASE_DIR="${PROJECT_ROOT}/target/armv7-unknown-linux-gnueabihf/release"
+    ;;
   *)
     fail "invalid device type \"$DEVICE_TYPE\""
     ;;
@@ -192,3 +204,5 @@ rm -rf ${UNPACK_DIR}
 
 echo "copying balena-migrate"
 cp  ${RELEASE_DIR}/balena-migrate ${TARGET_DIR}/
+
+# TODO: chown target dir to users recursively
