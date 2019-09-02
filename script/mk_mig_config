@@ -36,7 +36,7 @@ function fail {
 function printHelp {
   cat << EOI
 
-  extract - extract balena OS image and grub config from balena OS flasher image
+  mk_mig_config - create a basic migration configuration
     USAGE mk_mig_config [OPTIONS]
     please run as root.
     OPTIONS:
