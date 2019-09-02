@@ -49,7 +49,7 @@ to be present and configured.
 - **extract** - extract partitions from image and store their contents as tar files to allow file system 
 level writing of balena OS. Will produce a configuration snippet for balena-migrate.yml  
 
-The folowing options are concepts that have been disccussed but are not implemented:
+The following options are concepts that have been disccussed but are not implemented:
 - connected - check requirements for migration and try to retrieve missing files from the balena cloud. 
 Migrate immediately once all requirements are met. This mode is not implemented yet. 
 - agent - Connect to balena cloud and install ```balena-migrate``` as a service. 
@@ -64,7 +64,31 @@ of ```balena-stage2``` and possibly one or more device tree blob files. These fi
 #### Providing the Stage 2 Boot Configuration
 
 The current version of the migrator provides pre build kernel and initramfs files as well as DTB files for all supported 
-devices. The script ```mk_mig_config``` can be used to create a basic migrator config. 
+devices. The script ```mk_mig_config``` can be used to create a basic migrator config. The script will copy the kernel 
+and other necessary files to the target directory. It expects to be run from withinth migrator project directory with 
+a successful build present for the target plattform. For intel-nuc and raspberrypi devices a static linked **musl** build 
+is required. The tools necessary for cross compiling and compiling for musl must be installed.
+
+For intel-nuc build:
+ 
+```cargo build --target=x86_64-unknown-linux-musl --release```
+
+For beaglebone / beagleboard build:
+ 
+```cargo build --target=armv7-unknown-linux-gnueabihf --release```
+
+For raspberrypi build 
+
+``` cargo build --target=armv7-unknown-linux-musleabihf --release```
+
+The raspberry pi build currently does not work for me as cross compiled musl build. Instead I compile this version on a 
+raspberry pi natively. 
+
+Once libgcc is integrated in the migration initramfs the musl builds will be obsolete.   
+
+```mk_mig_config``` configures a migration initramfs by unpacking the standard migrate initramfs, deleting and injecting
+ initramfs scripts in init.d and adding the ```balena-stage2``` executable to the bin folder. The initramfs is then repacked
+ and copied to the target folder.  
 
 ```shell script
   mk_mig_config - create a basic migration configuration
@@ -83,6 +107,7 @@ devices. The script ```mk_mig_config``` can be used to create a basic migrator c
 ```shell script
 sudo ./script/mk_mig_config -d raspberrypi3 -t migrate-rpi3/
 ``` 
+
 
 The above will create a basic configuration in ```migrate-rpi3``` that needs to be completed by supplying and configuring a balenaOS image,
 and a config.json file as well as further configuration as required.
