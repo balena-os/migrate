@@ -107,6 +107,7 @@ pub(crate) struct MigrateConfig {
     nwmgr_files: Option<Vec<PathBuf>>,
     require_nwmgr_config: Option<bool>,
     gzip_internal: Option<bool>,
+    tar_internal: Option<bool>,
     extract_device: Option<String>,
     watchdogs: Option<Vec<WatchdogCfg>>,
     delay: Option<u64>,
@@ -116,7 +117,6 @@ pub(crate) struct MigrateConfig {
 
 impl<'a> MigrateConfig {
     // TODO: implement log & backup config getters
-
     pub fn default() -> MigrateConfig {
         MigrateConfig {
             work_dir: None,
@@ -133,6 +133,7 @@ impl<'a> MigrateConfig {
             nwmgr_files: None,
             require_nwmgr_config: None,
             gzip_internal: None,
+            tar_internal: None,
             extract_device: None,
             watchdogs: None,
             delay: None,
@@ -179,6 +180,14 @@ impl<'a> MigrateConfig {
 
     pub fn is_gzip_internal(&self) -> bool {
         if let Some(val) = self.gzip_internal {
+            val
+        } else {
+            true
+        }
+    }
+
+    pub fn is_tar_internal(&self) -> bool {
+        if let Some(val) = self.tar_internal {
             val
         } else {
             true
