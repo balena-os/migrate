@@ -33,7 +33,7 @@ pub(crate) mod stage2;
 pub(crate) mod ensured_cmds;
 pub(crate) use ensured_cmds::{
     EnsuredCmds, CHMOD_CMD, DF_CMD, FILE_CMD, GRUB_REBOOT_CMD, GRUB_UPDT_CMD, LSBLK_CMD,
-    MKTEMP_CMD, MOKUTIL_CMD, MOUNT_CMD, REBOOT_CMD, UNAME_CMD,
+    MKTEMP_CMD, MOKUTIL_CMD, MOUNT_CMD, REBOOT_CMD, TAR_CMD, UNAME_CMD,
 };
 
 pub(crate) mod migrate_info;
@@ -46,7 +46,7 @@ pub(crate) use linux_common::is_admin;
 use mod_logger::{LogDestination, Logger};
 
 const REQUIRED_CMDS: &'static [&'static str] = &[
-    DF_CMD, LSBLK_CMD, FILE_CMD, UNAME_CMD, MOUNT_CMD, REBOOT_CMD, CHMOD_CMD, MKTEMP_CMD,
+    DF_CMD, LSBLK_CMD, FILE_CMD, UNAME_CMD, MOUNT_CMD, REBOOT_CMD, CHMOD_CMD, MKTEMP_CMD, TAR_CMD,
 ];
 
 pub(crate) struct LinuxMigrator {
@@ -268,16 +268,14 @@ impl<'a> LinuxMigrator {
 
         let backup_path = path_append(work_dir, BACKUP_FILE);
 
-        self.stage2_config.set_has_backup(
-            if self.config.migrate.is_tar_internal() {
-                backup::create(
+        self.stage2_config
+            .set_has_backup(if self.config.migrate.is_tar_internal() {
+                backup::create(&backup_path, self.config.migrate.get_backup_volumes())?
+            } else {
+                backup::create_ext(
+                    &self.cmds,
                     &backup_path,
                     self.config.migrate.get_backup_volumes(),
-                )?
-            } else {
-                backup::create_ext(&self.cmds,
-                                   &backup_path,
-                                   self.config.migrate.get_backup_volumes(),
                 )?
             });
 

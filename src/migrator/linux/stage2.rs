@@ -155,7 +155,6 @@ impl<'a> Stage2 {
         info!("Setting log level to {:?}", stage2_cfg.get_log_level());
         Logger::set_default_level(&stage2_cfg.get_log_level());
 
-
         // Mount all remaining drives - work and log
         match mounts.mount_from_config(&stage2_cfg, &cmds) {
             Ok(_) => {
