@@ -751,6 +751,8 @@ impl<'a> Stage2 {
         Logger::flush();
         sync();
 
+        thread::sleep(Duration::from_secs(1));
+
         match fail_mode {
             FailMode::Reboot => {
                 let reboot_cmd = whereis(REBOOT_CMD)?;

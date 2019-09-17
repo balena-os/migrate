@@ -132,7 +132,7 @@ bcm2710-rpi-cm3.dtb"
     BOOT_DIR="${PROJECT_ROOT}/balena-boot/beagleboard-xm"
     COPY_FILES="balena.zImage \
     balena.dtb"
-    RELEASE_DIR="${PROJECT_ROOT}/target/armv7-unknown-linux-gnueabihf/release"
+    RELEASE_DIR="${PROJECT_ROOT}/target/armv7-unknown-linux-musleabihf/release"
     ;;
   *)
     fail "invalid device type \"$DEVICE_TYPE\""
