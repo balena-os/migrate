@@ -19,17 +19,17 @@ const MODULE: &str = "linux_common::path_info";
 pub(crate) struct PathInfo {
     // the absolute path
     pub path: PathBuf,
-    // the partition device path
+    // the drive device path
     pub drive: PathBuf,
-    // the partition fs type
+    // the drive size
     pub drive_size: u64,
-    // the partition fs type
+    // the partition device path
     pub device: PathBuf,
     // the partition index
     pub index: u16,
-    // the devices mountpoint
+    // the partition mountpoint
     pub mountpoint: PathBuf,
-    // the drive device path
+    // the file system type
     pub fs_type: String,
     // the partition read only flag
     // pub mount_ro: bool,

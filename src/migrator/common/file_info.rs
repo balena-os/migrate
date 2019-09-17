@@ -129,6 +129,7 @@ impl FileInfo {
             MigErrorKind::Upstream,
             &format!("Failed to canonicalize path '{}'", checked_path.display()),
         ))?;
+
         let metadata = abs_path.metadata().context(MigErrCtx::from_remark(
             MigErrorKind::Upstream,
             &format!("failed to retrieve metadata for path {:?}", abs_path),
