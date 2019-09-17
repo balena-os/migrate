@@ -214,7 +214,7 @@ impl MigrateInfo {
                 "The balena config file looks ok: '{}'",
                 balena_cfg.get_rel_path().display()
             );
-
+            //balena_cfg.check()
             balena_cfg
         } else {
             error!("The balena config has not been specified or cannot be accessed. Automatic download is not yet implemented, so you need to specify and supply all required files");
