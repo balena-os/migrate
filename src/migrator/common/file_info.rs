@@ -8,7 +8,7 @@ use std::path::{Path, PathBuf};
 
 // ******************************************************************
 // Find location and size of file as absolute or relative to workdir
-// make a guess on file contents / type and conpare to expected value
+// make a guess on file contents / type and compare to expected value
 // ******************************************************************
 
 // file on ubuntu-14.04 reports x86 boot sector for image and kernel files
