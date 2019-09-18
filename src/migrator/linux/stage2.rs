@@ -155,7 +155,6 @@ impl<'a> Stage2 {
         info!("Setting log level to {:?}", stage2_cfg.get_log_level());
         Logger::set_default_level(&stage2_cfg.get_log_level());
 
-
         // Mount all remaining drives - work and log
         match mounts.mount_from_config(&stage2_cfg, &cmds) {
             Ok(_) => {
@@ -499,7 +498,9 @@ impl<'a> Stage2 {
         // Write our buffered log to workdir before unmounting if we are not flashing anyway
 
         if self.config.is_no_flash() {
-            // Logger::flush();
+            info!("Not flashing due to config parameter no_flash");
+            Logger::flush();
+            sync();
             // let _res = Logger::set_log_dest(&LogDestination::StreamStderr, NO_STREAM);
             let log_dest = if self.config.is_log_console() {
                 LogDestination::Stderr
@@ -532,7 +533,6 @@ impl<'a> Stage2 {
         }
 
         if self.config.is_no_flash() {
-            info!("Not flashing due to config parameter no_flash");
             Stage2::exit(&FailMode::Reboot)?;
         }
 
@@ -750,6 +750,8 @@ impl<'a> Stage2 {
 
         Logger::flush();
         sync();
+
+        thread::sleep(Duration::from_secs(1));
 
         match fail_mode {
             FailMode::Reboot => {
