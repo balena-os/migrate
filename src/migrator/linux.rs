@@ -18,6 +18,8 @@ use crate::{
     defs::{BACKUP_FILE, MIN_DISK_SIZE, SYSTEM_CONNECTIONS_DIR},
 };
 
+pub(crate) mod linux_os_info;
+
 pub(crate) mod linux_defs;
 
 pub(crate) mod device;
@@ -36,6 +38,10 @@ pub(crate) use ensured_cmds::{
     MKTEMP_CMD, MOKUTIL_CMD, MOUNT_CMD, REBOOT_CMD, TAR_CMD, UNAME_CMD,
 };
 
+const REQUIRED_CMDS: &'static [&'static str] = &[
+    DF_CMD, LSBLK_CMD, FILE_CMD, UNAME_CMD, MOUNT_CMD, REBOOT_CMD, CHMOD_CMD, MKTEMP_CMD, TAR_CMD,
+];
+
 pub(crate) mod migrate_info;
 pub(crate) use migrate_info::MigrateInfo;
 
@@ -45,9 +51,6 @@ use crate::defs::STAGE2_CFG_FILE;
 pub(crate) use linux_common::is_admin;
 use mod_logger::{LogDestination, Logger};
 
-const REQUIRED_CMDS: &'static [&'static str] = &[
-    DF_CMD, LSBLK_CMD, FILE_CMD, UNAME_CMD, MOUNT_CMD, REBOOT_CMD, CHMOD_CMD, MKTEMP_CMD, TAR_CMD,
-];
 
 pub(crate) struct LinuxMigrator {
     cmds: EnsuredCmds,

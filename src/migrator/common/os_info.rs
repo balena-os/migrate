@@ -3,7 +3,7 @@ use std::path::{Path};
 use crate::{
     common::{MigError, file_info::FileType},
     defs::{OSArch},
-}
+};
 
 #[derive(Debug, Clone, PartialEq)]
 pub struct PathInfo {
@@ -18,6 +18,8 @@ pub trait OSInfo {
 
     // TODO: call command interface incl ensured commands
 
+    fn get_mem_info(&self) -> Result<(u64, u64), MigError>;
+
     // Disk specific calls
     fn get_path_info(&self, path: &Path ) -> Result<PathInfo, MigError>;
     fn get_boot_info(&self) -> Result<PathInfo, MigError>;
@@ -25,5 +27,4 @@ pub trait OSInfo {
 
     // file types
     fn is_file_type(&self, ftype: FileType) -> Result<bool, MigError>;
-
 }

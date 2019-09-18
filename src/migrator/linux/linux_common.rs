@@ -24,18 +24,11 @@ const WHEREIS_CMD: &str = "whereis";
 
 const MOKUTIL_ARGS_SB_STATE: [&str; 1] = ["--sb-state"];
 
-const UNAME_ARGS_OS_ARCH: [&str; 1] = ["-m"];
 
 const BIN_DIRS: &[&str] = &["/bin", "/usr/bin", "/sbin", "/usr/sbin"];
 
 const OS_RELEASE_FILE: &str = "/etc/os-release";
 const OS_NAME_REGEX: &str = r#"^PRETTY_NAME="([^"]+)"$"#;
-
-pub(crate) fn is_admin() -> Result<bool, MigError> {
-    trace!("LinuxMigrator::is_admin: entered");
-    let admin = Some(unsafe { getuid() } == 0);
-    Ok(admin.unwrap())
-}
 
 pub(crate) fn whereis(cmd: &str) -> Result<String, MigError> {
     // try manually first
@@ -86,55 +79,6 @@ pub(crate) fn whereis(cmd: &str) -> Result<String, MigError> {
                 cmd_res.status.code().unwrap_or(0)
             ),
         ))
-    }
-}
-
-pub(crate) fn get_os_arch(cmds: &EnsuredCmds) -> Result<OSArch, MigError> {
-    trace!("get_os_arch: entered");
-    let cmd_res =
-        cmds.call(UNAME_CMD, &UNAME_ARGS_OS_ARCH, true)
-            .context(MigErrCtx::from_remark(
-                MigErrorKind::Upstream,
-                &format!("get_os_arch: call {}", UNAME_CMD),
-            ))?;
-
-    if cmd_res.status.success() {
-        if cmd_res.stdout.to_lowercase() == "x86_64" {
-            Ok(OSArch::AMD64)
-        } else if cmd_res.stdout.to_lowercase() == "i386" {
-            Ok(OSArch::I386)
-        } else if cmd_res.stdout.to_lowercase() == "armv7l" {
-            Ok(OSArch::ARMHF)
-        } else {
-            Err(MigError::from_remark(
-                MigErrorKind::InvParam,
-                &format!(
-                    "{}::get_os_arch: unsupported architectute '{}'",
-                    MODULE, cmd_res.stdout
-                ),
-            ))
-        }
-    } else {
-        Err(MigError::from_remark(
-            MigErrorKind::ExecProcess,
-            &format!(
-                "{}::get_os_arch: command failed: {} {:?}",
-                MODULE, UNAME_CMD, cmd_res
-            ),
-        ))
-    }
-}
-
-pub(crate) fn get_mem_info() -> Result<(u64, u64), MigError> {
-    trace!("get_mem_info: entered");
-    // TODO: could add loads, uptime if needed
-    use std::mem;
-    let mut s_info: libc::sysinfo = unsafe { mem::uninitialized() };
-    let res = unsafe { libc::sysinfo(&mut s_info) };
-    if res == 0 {
-        Ok((s_info.totalram as u64, s_info.freeram as u64))
-    } else {
-        Err(MigError::from(MigErrorKind::NotImpl))
     }
 }
 
@@ -192,38 +136,6 @@ pub(crate) fn mktemp<P: AsRef<Path>>(
     }
 }
 
-/******************************************************************
- * Get OS name from /etc/os-release
- ******************************************************************/
-
-pub(crate) fn get_os_name() -> Result<String, MigError> {
-    trace!("get_os_name: entered");
-
-    // TODO: implement other source as fallback
-
-    if file_exists(OS_RELEASE_FILE) {
-        // TODO: ensure availabilty of method / file exists
-        if let Some(os_name) = parse_file(OS_RELEASE_FILE, &Regex::new(OS_NAME_REGEX).unwrap())? {
-            Ok(os_name[1].clone())
-        } else {
-            Err(MigError::from_remark(
-                MigErrorKind::NotFound,
-                &format!(
-                    "{}::get_os_name: could not be located in file {}",
-                    MODULE, OS_RELEASE_FILE
-                ),
-            ))
-        }
-    } else {
-        Err(MigError::from_remark(
-            MigErrorKind::NotFound,
-            &format!(
-                "{}::get_os_name: could not locate file {}",
-                MODULE, OS_RELEASE_FILE
-            ),
-        ))
-    }
-}
 
 /******************************************************************
  * Try to find out if secure boot is enabled using mokutil
