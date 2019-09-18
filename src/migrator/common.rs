@@ -32,6 +32,8 @@ pub(crate) mod stage2_config;
 
 pub(crate) mod wifi_config;
 
+pub(crate) mod migrate_info;
+
 //pub mod logger;
 //pub(crate) use logger::Logger;
 

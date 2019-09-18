@@ -32,18 +32,13 @@ const GZIP_TAR_FTYPE_REGEX: &str = r#"^(POSIX tar archive \(GNU\)).*\(gzip compr
 // TODO: make hash_info optional again
 // creating a digest in stage1 for check in stage2 does not mae a lot of sense.
 
-use crate::common::{
-    file_exists,
-    MigErrCtx,
-    MigError,
-    MigErrorKind,
-    //file_digest::check_digest
-};
+use crate::common::{file_exists, MigErrCtx, MigError, MigErrorKind, path_append};
 
 use crate::common::config::balena_config::FileRef;
 use crate::common::file_digest::{check_digest, get_default_digest, HashInfo};
 #[cfg(target_os = "linux")]
 use crate::linux::{EnsuredCmds, FILE_CMD};
+use crate::common::os_info::{PathInfo, OSInfo};
 
 #[derive(Debug, Clone)]
 pub(crate) enum FileType {
@@ -96,10 +91,11 @@ pub(crate) struct RelFileInfo {
 impl FileInfo {
     pub fn new<P: AsRef<Path>>(
         file_ref: &FileRef,
-        work_dir: P,
+        work_dir: & impl PathInfo,
+        os_info: & impl OSInfo,
     ) -> Result<Option<FileInfo>, MigError> {
         let file_path = &file_ref.path;
-        let work_path = work_dir.as_ref();
+        let work_path = work_dir.get_path();
         trace!(
             "FileInfo::new: entered with file: '{}', work_dir: '{}'",
             file_path.display(),
@@ -112,7 +108,7 @@ impl FileInfo {
             PathBuf::from(file_path)
         } else {
             if !file_path.is_absolute() {
-                let search_path = work_path.join(file_path);
+                let search_path = path_append(work_path, file_path);
                 if search_path.exists() {
                     search_path
                 } else {
@@ -125,23 +121,26 @@ impl FileInfo {
             }
         };
 
-        let abs_path = checked_path.canonicalize().context(MigErrCtx::from_remark(
-            MigErrorKind::Upstream,
-            &format!("Failed to canonicalize path '{}'", checked_path.display()),
-        ))?;
+        let path_info = os_info.path_info_from_path(checked_path.as_path())?;
+        let abs_path = path_info.get_path();
+        let rel_path = if path_info.get_mountpoint() == work_dir.get_mountpoint() {
+            match abs_path.strip_prefix(work_path) {
+                Ok(rel_path) => Some(PathBuf::from(rel_path)),
+                Err(_why) => None,
+            }
+       } else {
+            debug!("The file '{}' resides on a different mount from workdir '{}'", file_path.display(), work_path.display());
+            None
+        };
 
         let metadata = abs_path.metadata().context(MigErrCtx::from_remark(
             MigErrorKind::Upstream,
-            &format!("failed to retrieve metadata for path {:?}", abs_path),
+            &format!("failed to retrieve metadata for path {:?}", file_path.display()),
         ))?;
 
-        let rel_path = match abs_path.strip_prefix(work_path) {
-            Ok(rel_path) => Some(PathBuf::from(rel_path)),
-            Err(_why) => None,
-        };
 
         let hash_info = if let Some(ref hash_info) = file_ref.hash {
-            if !check_digest(&file_ref.path, hash_info)? {
+            if !check_digest(abs_path, hash_info)? {
                 error!(
                     "Failed to check file digest for file '{}': {:?}",
                     file_ref.path.display(),
@@ -152,12 +151,12 @@ impl FileInfo {
                 hash_info.clone()
             }
         } else {
-            debug!("Created digest for file: '{}'", file_ref.path.display());
-            get_default_digest(&file_ref.path)?
+            debug!("Created digest for file: '{}'", abs_path.display());
+            get_default_digest(&abs_path)?
         };
 
         Ok(Some(FileInfo {
-            path: abs_path,
+            path: abs_path.to_path_buf(),
             rel_path,
             size: metadata.len(),
             hash_info,

@@ -32,26 +32,18 @@ use extract::Extractor;
 
 pub(crate) mod stage2;
 
-pub(crate) mod ensured_cmds;
-pub(crate) use ensured_cmds::{
-    EnsuredCmds, CHMOD_CMD, DF_CMD, FILE_CMD, GRUB_REBOOT_CMD, GRUB_UPDT_CMD, LSBLK_CMD,
-    MKTEMP_CMD, MOKUTIL_CMD, MOUNT_CMD, REBOOT_CMD, TAR_CMD, UNAME_CMD,
-};
 
 const REQUIRED_CMDS: &'static [&'static str] = &[
     DF_CMD, LSBLK_CMD, FILE_CMD, UNAME_CMD, MOUNT_CMD, REBOOT_CMD, CHMOD_CMD, MKTEMP_CMD, TAR_CMD,
 ];
 
-pub(crate) mod migrate_info;
-pub(crate) use migrate_info::MigrateInfo;
 
 pub(crate) mod linux_common;
 use crate::common::stage2_config::MountConfig;
 use crate::defs::STAGE2_CFG_FILE;
+use crate::linux::linux_os_info::LinuxOSInfo;
 pub(crate) use linux_common::is_admin;
 use mod_logger::{LogDestination, Logger};
-use crate::linux::linux_os_info::LinuxOSInfo;
-
 
 pub(crate) struct LinuxMigrator {
     cmds: EnsuredCmds,
@@ -106,7 +98,7 @@ impl<'a> LinuxMigrator {
             Ok(os_info) => os_info,
             Err(why) => {
                 error!("Failed to create LinuxOSInfo, error: {}", why);
-                return Err(MigError::displayed())
+                return Err(MigError::displayed());
             }
         };
 
@@ -344,8 +336,6 @@ impl<'a> LinuxMigrator {
         )?;
 
         trace!("stage2 config");
-
-        
 
         // dbg!("setting up stage2_cfg");
         // *****************************************************************************************

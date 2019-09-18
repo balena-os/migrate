@@ -24,11 +24,7 @@ const WHEREIS_CMD: &str = "whereis";
 
 const MOKUTIL_ARGS_SB_STATE: [&str; 1] = ["--sb-state"];
 
-
 const BIN_DIRS: &[&str] = &["/bin", "/usr/bin", "/sbin", "/usr/sbin"];
-
-const OS_RELEASE_FILE: &str = "/etc/os-release";
-const OS_NAME_REGEX: &str = r#"^PRETTY_NAME="([^"]+)"$"#;
 
 pub(crate) fn whereis(cmd: &str) -> Result<String, MigError> {
     // try manually first
@@ -135,7 +131,6 @@ pub(crate) fn mktemp<P: AsRef<Path>>(
         ))
     }
 }
-
 
 /******************************************************************
  * Try to find out if secure boot is enabled using mokutil

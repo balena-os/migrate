@@ -9,12 +9,9 @@ use crate::{
         stage2_config::{CheckedFSDump, CheckedImageType, CheckedPartDump},
         wifi_config::WifiConfig,
         Config, FileInfo, FileType, MigError, MigErrorKind,
+        os_info::{PathInfo, OSInfo},
     },
     defs::OSArch,
-    linux::{
-        linux_common::{get_os_arch, get_os_name},
-        EnsuredCmds,
-    },
 };
 
 // *************************************************************************************************
@@ -22,12 +19,7 @@ use crate::{
 // * from device required for stage1 of migration
 // *************************************************************************************************
 
-pub(crate) mod lsblk_info;
-pub(crate) use lsblk_info::{LsblkDevice, LsblkInfo, LsblkPartition};
-
-pub(crate) mod path_info;
 use crate::common::config::balena_config::FileRef;
-pub(crate) use path_info::PathInfo;
 
 //use crate::linux::migrate_info::lsblk_info::;
 
@@ -36,11 +28,9 @@ pub(crate) struct MigrateInfo {
     pub os_name: String,
     pub os_arch: OSArch,
 
-    pub lsblk_info: LsblkInfo,
-    // pub root_path: PathInfo,
-    // pub boot_path: PathInfo,
     pub work_path: PathInfo,
-    pub log_path: Option<(LsblkDevice, LsblkPartition)>,
+
+    pub log_path: Option<PathInfo>,
 
     pub nwmgr_files: Vec<FileInfo>,
     pub wifis: Vec<WifiConfig>,
@@ -58,27 +48,13 @@ pub(crate) struct MigrateInfo {
 // TODO: sort out error reporting with Displayed
 
 impl MigrateInfo {
-    pub(crate) fn new(config: &Config, cmds: &mut EnsuredCmds) -> Result<MigrateInfo, MigError> {
+    pub(crate) fn new(config: &Config, os_info: & impl OSInfo) -> Result<MigrateInfo, MigError> {
         trace!("new: entered");
-        let os_arch = get_os_arch(&cmds)?;
+        let os_arch = os_info.get_os_arch()?;
 
-        let lsblk_info = LsblkInfo::all(&cmds)?;
+        let work_path = os_info.path_info_from_path( config.migrate.get_work_dir())?;
 
-        let work_path = if let Some(path_info) =
-            PathInfo::new(&cmds, config.migrate.get_work_dir(), &lsblk_info)?
-        {
-            path_info
-        } else {
-            return Err(MigError::from_remark(
-                MigErrorKind::NotFound,
-                &format!(
-                    "the device for path '{}' could not be established",
-                    config.migrate.get_work_dir().display()
-                ),
-            ));
-        };
-
-        let work_dir = &work_path.path;
+        let work_dir = work_path.get_path();
         info!(
             "Working directory is '{}' on '{}'",
             work_dir.display(),
@@ -86,29 +62,7 @@ impl MigrateInfo {
         );
 
         let log_path = if let Some(log_dev) = config.migrate.get_log_device() {
-            match lsblk_info.get_devinfo_from_partition(log_dev) {
-                Ok((log_drive, log_part)) => {
-                    if let Some(ref fstype) = log_part.fstype {
-                        info!(
-                            "Found log device '{}' with file system type '{}'",
-                            log_dev.display(),
-                            fstype
-                        );
-                        Some((log_drive.clone(), log_part.clone()))
-                    } else {
-                        warn!("Could not determine file system type for log partition '{}' - ignoring", log_dev.display());
-                        None
-                    }
-                }
-                Err(why) => {
-                    warn!(
-                        "failed to find lsblk info for log device '{}', error: {:?}",
-                        log_dev.display(),
-                        why
-                    );
-                    None
-                }
-            }
+            Some(os_info.path_info_from_partition(log_dev)?)
         } else {
             None
         };
@@ -119,8 +73,7 @@ impl MigrateInfo {
                     &flasher_img,
                     &FileType::GZipOSImage,
                     &work_path,
-                    cmds,
-                    &lsblk_info,
+                    &os_info
                 )?;
 
                 CheckedImageType::Flasher(checked_ref)
@@ -360,15 +313,13 @@ impl MigrateInfo {
     fn check_dump(
         dump: &PartDump,
         work_path: &PathInfo,
-        cmds: &EnsuredCmds,
-        lsblk_info: &LsblkInfo,
+        os_info: &OSInfo,
     ) -> Result<RelFileInfo, MigError> {
         Ok(MigrateInfo::check_file(
             &dump.archive,
             &FileType::GZipTar,
             work_path,
-            cmds,
-            lsblk_info,
+            os_info,
         )?)
     }
 
@@ -376,10 +327,9 @@ impl MigrateInfo {
         file_ref: &FileRef,
         expected_type: &FileType,
         work_path: &PathInfo,
-        cmds: &EnsuredCmds,
-        lsblk_info: &LsblkInfo,
+        os_info: & impl OSInfo,
     ) -> Result<RelFileInfo, MigError> {
-        if let Some(file_info) = FileInfo::new(&file_ref, &work_path.path)? {
+        if let Some(file_info) = FileInfo::new(&file_ref, &work_path)? {
             // make sure files are present and in /workdir, generate total size and partitioning config in miginfo
             let rel_path = if let Some(ref rel_path) = file_info.rel_path {
                 rel_path.clone()
