@@ -199,6 +199,7 @@ fn archive_dir<'a>(
         filter
     );
     let mut written = false;
+
     for entry in read_dir(dir_path).context(MigErrCtx::from_remark(
         MigErrorKind::Upstream,
         &format!(
@@ -220,12 +221,14 @@ fn archive_dir<'a>(
                 ))?;
 
                 if metadata.is_dir() {
-                    archive_dir(
+                    if archive_dir(
                         &source_path,
                         &path_append(&target_path, &source_file),
                         archiver,
                         &filter,
-                    )?;
+                    )? {
+                        written = true;
+                    }
                 } else {
                     if let Some(filter) = filter {
                         if filter.is_match(&source_path.to_string_lossy()) {
@@ -399,5 +402,6 @@ fn create_int<'a>(
         "Failed to create backup archive",
     ))?;
 
+    debug!("create_int: returning {}", written);
     Ok(written)
 }

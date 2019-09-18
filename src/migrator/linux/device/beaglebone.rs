@@ -337,8 +337,7 @@ impl<'a> Device for BeagleboardXM {
     }
 
     fn get_device_slug(&self) -> &'static str {
-        // beagleboard xM masquerades as beaglebone-black
-        "beaglebone-black"
+        "beagleboard-xm"
     }
 
     fn get_boot_type(&self) -> BootType {
