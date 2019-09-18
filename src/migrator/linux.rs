@@ -50,6 +50,7 @@ use crate::common::stage2_config::MountConfig;
 use crate::defs::STAGE2_CFG_FILE;
 pub(crate) use linux_common::is_admin;
 use mod_logger::{LogDestination, Logger};
+use crate::linux::linux_os_info::LinuxOSInfo;
 
 
 pub(crate) struct LinuxMigrator {
@@ -101,11 +102,12 @@ impl<'a> LinuxMigrator {
 
         info!("migrate mode: {:?}", config.migrate.get_mig_mode());
 
-        let mut cmds = EnsuredCmds::new();
-
-        if let Err(why) = cmds.ensure_cmds(REQUIRED_CMDS) {
-            error!("Failed to ensure required commands: {:?}", why);
-            return Err(MigError::displayed());
+        let mut os_info = match LinuxOSInfo::new(REQUIRED_CMDS) {
+            Ok(os_info) => os_info,
+            Err(why) => {
+                error!("Failed to create LinuxOSInfo, error: {}", why);
+                return Err(MigError::displayed())
+            }
         };
 
         // **********************************************************************
