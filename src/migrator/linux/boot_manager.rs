@@ -2,9 +2,11 @@ use crate::{
     common::{
         stage2_config::{Stage2Config, Stage2ConfigBuilder},
         Config, MigError, MigErrorKind,
+        migrate_info::{MigrateInfo},
+        path_info::PathInfo,
     },
     defs::BootType,
-    linux::{migrate_info::PathInfo, stage2::mounts::Mounts, MigrateInfo},
+    linux::{stage2::mounts::Mounts,},
 };
 
 pub(crate) mod u_boot_manager;

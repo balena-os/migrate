@@ -28,7 +28,7 @@ use crate::{
         },
         linux_defs::NIX_NONE,
         linux_defs::{FAT_CHK_CMD, UDEVADM_CMD},
-        migrate_info::LsblkInfo,
+        lsblk_info::LsblkInfo,
     },
 };
 

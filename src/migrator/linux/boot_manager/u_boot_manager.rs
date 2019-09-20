@@ -14,6 +14,8 @@ use crate::{
         call, file_exists, format_size_with_unit, is_balena_file, path_append,
         stage2_config::{Stage2Config, Stage2ConfigBuilder},
         Config, MigErrCtx, MigError, MigErrorKind,
+        migrate_info::{MigrateInfo, },
+        path_info::PathInfo,
     },
     defs::{BootType, BALENA_FILE_TAG, MIG_DTB_NAME, MIG_INITRD_NAME, MIG_KERNEL_NAME},
     linux::{
@@ -23,10 +25,10 @@ use crate::{
             BOOT_PATH, MLO_FILE_NAME, NIX_NONE, ROOT_PATH, UBOOT_FILE_NAME, UENV_FILE_NAME,
         },
         linux_defs::{CHMOD_CMD, MKTEMP_CMD},
-        migrate_info::{path_info::PathInfo, MigrateInfo},
         stage2::mounts::Mounts,
     },
 };
+use crate::linux::lsblk_info::LsblkInfo;
 
 // TODO: this might be a bit of a tight fit, allow (s|h)d([a-z])(\d+) too ?
 const UBOOT_DRIVE_FILTER_REGEX: &str = r#"^mmcblk\d+$"#;
@@ -90,7 +92,7 @@ impl UBootManager {
 
     */
 
-    fn find_bootmgr_path(&self, mig_info: &MigrateInfo) -> Result<PathInfo, MigError> {
+    fn find_bootmgr_path(&self, mig_info: &MigrateInfo, lsblk_info: &LsblkInfo) -> Result<PathInfo, MigError> {
         lazy_static! {
             // same as ab
             static ref BOOT_DRIVE_RE: Regex = Regex::new(UBOOT_DRIVE_FILTER_REGEX).unwrap();
@@ -101,18 +103,18 @@ impl UBootManager {
         if file_exists(path_append(ROOT_PATH, MLO_FILE_NAME))
             || file_exists(path_append(ROOT_PATH, UBOOT_FILE_NAME))
         {
-            return Ok(PathInfo::new(ROOT_PATH, &mig_info.lsblk_info)?.unwrap());
+            return Ok(PathInfo::from_path(ROOT_PATH, lsblk_info)?.unwrap());
         }
 
         if file_exists(path_append(BOOT_PATH, MLO_FILE_NAME))
             || file_exists(path_append(BOOT_PATH, UBOOT_FILE_NAME))
         {
-            return Ok(PathInfo::new(BOOT_PATH, &mig_info.lsblk_info)?.unwrap());
+            return Ok(PathInfo::from_path(BOOT_PATH, lsblk_info)?.unwrap());
         }
 
         let mut tmp_mountpoint: Option<PathBuf> = None;
 
-        for blk_device in mig_info.lsblk_info.get_blk_devices() {
+        for blk_device in lsblk_info.get_blk_devices() {
             if !BOOT_DRIVE_RE.is_match(&*blk_device.name) {
                 debug!("Ignoring: '{}'", blk_device.get_path().display());
                 continue;
@@ -231,7 +233,7 @@ impl UBootManager {
 
         debug!("No u-boot boot files found, assuming '{}'", ROOT_PATH);
 
-        Ok(PathInfo::new(ROOT_PATH, &mig_info.lsblk_info)?.unwrap())
+        Ok(PathInfo::from_path(ROOT_PATH, lsblk_info)?.unwrap())
     }
 }
 
@@ -263,8 +265,9 @@ impl<'a> BootManager for UBootManager {
 
         // find the u-boot boot device
         // this is where uEnv.txt has to go
+        let lsblk_info = LsblkInfo::all()?;
 
-        let bootmgr_path = self.find_bootmgr_path(mig_info)?;
+        let bootmgr_path = self.find_bootmgr_path(mig_info, &lsblk_info)?;
         info!(
             "Found boot manager '{}', mounpoint: '{}', fs type: {}, free space: {}",
             bootmgr_path.device.display(),
@@ -301,7 +304,7 @@ impl<'a> BootManager for UBootManager {
         if bootmgr_path.fs_free < boot_req_space {
             // find alt location for boot config
 
-            if let Some(boot_path) = PathInfo::new(BOOT_PATH, &mig_info.lsblk_info)? {
+            if let Some(boot_path) = PathInfo::from_path(BOOT_PATH, &lsblk_info)? {
                 if boot_path.fs_free > boot_req_space {
                     info!(
                         "Found boot '{}', mounpoint: '{}', fs type: {}, free space: {}",
@@ -315,7 +318,7 @@ impl<'a> BootManager for UBootManager {
                     self.boot_path = Some(boot_path);
                 }
             } else {
-                if let Some(boot_path) = PathInfo::new(ROOT_PATH, &mig_info.lsblk_info)? {
+                if let Some(boot_path) = PathInfo::from_path(ROOT_PATH, &lsblk_info)? {
                     if boot_path.fs_free > boot_req_space {
                         info!(
                             "Found boot '{}', mounpoint: '{}', fs type: {}, free space: {}",

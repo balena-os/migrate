@@ -5,7 +5,6 @@ use std::fs::{read_to_string, File};
 use std::io::Write;
 use std::path::Path;
 
-use crate::linux::migrate_info::PathInfo;
 use crate::{
     common::{
         call, dir_exists,
@@ -14,6 +13,8 @@ use crate::{
         file_exists, format_size_with_unit, path_append,
         stage2_config::{Stage2Config, Stage2ConfigBuilder},
         Config, MigErrCtx, MigError, MigErrorKind,
+        migrate_info::{MigrateInfo, },
+        path_info::PathInfo,
     },
     defs::{BootType, MIG_INITRD_NAME, MIG_KERNEL_NAME},
     linux::{
@@ -23,8 +24,8 @@ use crate::{
             ROOT_PATH,
         },
         linux_defs::{CHMOD_CMD, GRUB_REBOOT_CMD, GRUB_UPDT_CMD},
-        migrate_info::MigrateInfo,
         stage2::mounts::Mounts,
+        lsblk_info::LsblkInfo,
     },
 };
 
@@ -133,7 +134,14 @@ impl<'a> BootManager for GrubBootManager {
             return Ok(false);
         }
 
-        let boot_path = PathInfo::new(BOOT_PATH, &mig_info.lsblk_info)?.unwrap();
+        let lsblk_info = LsblkInfo::all()?;
+
+        let boot_path = if let Some(boot_path) = PathInfo::from_path(BOOT_PATH, &lsblk_info)? {
+            boot_path
+        } else {
+            error!("Could not find boot path '{}'", BOOT_PATH);
+            return Err(MigError::displayed())
+        };
 
         let grub_version = GrubBootManager::get_grub_version()?;
         info!(

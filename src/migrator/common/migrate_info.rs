@@ -1,14 +1,18 @@
-use log::{debug, error, info, trace, warn};
+use log::{debug, error, info, trace,};
 
 use crate::{
     common::{
-        balena_cfg_json::BalenaCfgJson,
-        config::balena_config::{ImageType, PartDump},
-        config::MigrateWifis,
+        config::{
+            balena_config::{ImageType, PartDump},
+            MigrateWifis,
+            balena_config::FileRef,
+        },
         file_info::RelFileInfo,
         stage2_config::{CheckedFSDump, CheckedImageType, CheckedPartDump},
         wifi_config::WifiConfig,
         Config, FileInfo, MigError, MigErrorKind,
+        os_api::{OSApi},
+        path_info::PathInfo,
     },
     defs::FileType,
     defs::OSArch,
@@ -20,12 +24,10 @@ use crate::{
 // * from device required for stage1 of migration
 // *************************************************************************************************
 
-pub(crate) mod lsblk_info;
-pub(crate) use lsblk_info::{LsblkDevice, LsblkInfo, LsblkPartition};
 
-pub(crate) mod path_info;
-use crate::common::config::balena_config::FileRef;
-pub(crate) use path_info::PathInfo;
+
+pub(crate) mod balena_cfg_json;
+pub(crate) use balena_cfg_json::BalenaCfgJson;
 
 //use crate::linux::migrate_info::lsblk_info::;
 
@@ -34,11 +36,8 @@ pub(crate) struct MigrateInfo {
     pub os_name: String,
     pub os_arch: OSArch,
 
-    pub lsblk_info: LsblkInfo,
-    // pub root_path: PathInfo,
-    // pub boot_path: PathInfo,
     pub work_path: PathInfo,
-    pub log_path: Option<(LsblkDevice, LsblkPartition)>,
+    pub log_path: Option<PathInfo>,
 
     pub nwmgr_files: Vec<FileInfo>,
     pub wifis: Vec<WifiConfig>,
@@ -56,25 +55,11 @@ pub(crate) struct MigrateInfo {
 // TODO: sort out error reporting with Displayed
 
 impl MigrateInfo {
-    pub(crate) fn new(config: &Config) -> Result<MigrateInfo, MigError> {
+    pub(crate) fn new(config: &Config, os_api: & impl OSApi) -> Result<MigrateInfo, MigError> {
         trace!("new: entered");
         let os_arch = get_os_arch()?;
 
-        let lsblk_info = LsblkInfo::all()?;
-
-        let work_path =
-            if let Some(path_info) = PathInfo::new(config.migrate.get_work_dir(), &lsblk_info)? {
-                path_info
-            } else {
-                return Err(MigError::from_remark(
-                    MigErrorKind::NotFound,
-                    &format!(
-                        "the device for path '{}' could not be established",
-                        config.migrate.get_work_dir().display()
-                    ),
-                ));
-            };
-
+        let work_path = os_api.path_info_from_path(config.migrate.get_work_dir())?;
         let work_dir = &work_path.path;
         info!(
             "Working directory is '{}' on '{}'",
@@ -83,29 +68,7 @@ impl MigrateInfo {
         );
 
         let log_path = if let Some(log_dev) = config.migrate.get_log_device() {
-            match lsblk_info.get_devinfo_from_partition(log_dev) {
-                Ok((log_drive, log_part)) => {
-                    if let Some(ref fstype) = log_part.fstype {
-                        info!(
-                            "Found log device '{}' with file system type '{}'",
-                            log_dev.display(),
-                            fstype
-                        );
-                        Some((log_drive.clone(), log_part.clone()))
-                    } else {
-                        warn!("Could not determine file system type for log partition '{}' - ignoring", log_dev.display());
-                        None
-                    }
-                }
-                Err(why) => {
-                    warn!(
-                        "failed to find lsblk info for log device '{}', error: {:?}",
-                        log_dev.display(),
-                        why
-                    );
-                    None
-                }
-            }
+            Some(os_api.path_info_from_partition(log_dev)?)
         } else {
             None
         };
@@ -116,7 +79,7 @@ impl MigrateInfo {
                     &flasher_img,
                     &FileType::GZipOSImage,
                     &work_path,
-                    &lsblk_info,
+                    os_api,
                 )?;
 
                 CheckedImageType::Flasher(checked_ref)
@@ -130,23 +93,23 @@ impl MigrateInfo {
                     mkfs_direct: fs_dump.mkfs_direct.clone(),
                     extended_blocks: fs_dump.extended_blocks,
                     boot: CheckedPartDump {
-                        archive: MigrateInfo::check_dump(&fs_dump.boot, &work_path, &lsblk_info)?,
+                        archive: MigrateInfo::check_dump(&fs_dump.boot, &work_path, os_api)?,
                         blocks: fs_dump.boot.blocks,
                     },
                     root_a: CheckedPartDump {
-                        archive: MigrateInfo::check_dump(&fs_dump.root_a, &work_path, &lsblk_info)?,
+                        archive: MigrateInfo::check_dump(&fs_dump.root_a, &work_path, os_api)?,
                         blocks: fs_dump.root_a.blocks,
                     },
                     root_b: CheckedPartDump {
-                        archive: MigrateInfo::check_dump(&fs_dump.root_b, &work_path, &lsblk_info)?,
+                        archive: MigrateInfo::check_dump(&fs_dump.root_b, &work_path, os_api)?,
                         blocks: fs_dump.root_b.blocks,
                     },
                     state: CheckedPartDump {
-                        archive: MigrateInfo::check_dump(&fs_dump.state, &work_path, &lsblk_info)?,
+                        archive: MigrateInfo::check_dump(&fs_dump.state, &work_path, os_api)?,
                         blocks: fs_dump.state.blocks,
                     },
                     data: CheckedPartDump {
-                        archive: MigrateInfo::check_dump(&fs_dump.data, &work_path, &lsblk_info)?,
+                        archive: MigrateInfo::check_dump(&fs_dump.data, &work_path, os_api)?,
                         blocks: fs_dump.data.blocks,
                     },
                 })
@@ -161,8 +124,8 @@ impl MigrateInfo {
                 return Err(MigError::displayed());
             }
 
-            let (_cfg_drive, cfg_part) = lsblk_info.get_path_info(&file_info.path)?;
-            if cfg_part.get_path() != work_path.device {
+            let cfg_path_info = os_api.path_info_from_path(&file_info.path)?;
+            if cfg_path_info.mountpoint != work_path.mountpoint {
                 error!("The balena OS config appears to reside on a different partition from the working directory. This setup is not supported");
                 return Err(MigError::displayed());
             }
@@ -311,7 +274,6 @@ impl MigrateInfo {
         let result = MigrateInfo {
             os_name: get_os_name()?,
             os_arch,
-            lsblk_info,
             work_path,
             log_path,
             image_file: os_image,
@@ -331,13 +293,13 @@ impl MigrateInfo {
     fn check_dump(
         dump: &PartDump,
         work_path: &PathInfo,
-        lsblk_info: &LsblkInfo,
+        os_api: & impl OSApi
     ) -> Result<RelFileInfo, MigError> {
         Ok(MigrateInfo::check_file(
             &dump.archive,
             &FileType::GZipTar,
             work_path,
-            lsblk_info,
+            os_api,
         )?)
     }
 
@@ -345,7 +307,7 @@ impl MigrateInfo {
         file_ref: &FileRef,
         expected_type: &FileType,
         work_path: &PathInfo,
-        lsblk_info: &LsblkInfo,
+        os_api: &impl OSApi,
     ) -> Result<RelFileInfo, MigError> {
         if let Some(file_info) = FileInfo::new(&file_ref, &work_path.path)? {
             // make sure files are present and in /workdir, generate total size and partitioning config in miginfo
@@ -356,8 +318,8 @@ impl MigrateInfo {
                 return Err(MigError::displayed());
             };
 
-            let (_img_drive, img_part) = lsblk_info.get_path_info(&file_info.path)?;
-            if img_part.get_path() != work_path.device {
+            let file_path_info = os_api.path_info_from_path(&file_info.path)?;
+            if file_path_info.mountpoint != work_path.mountpoint {
                 error!("The file '{}' appears to reside on a different partition from the working directory. This setup is not supported", file_ref.path.display());
                 return Err(MigError::displayed());
             }

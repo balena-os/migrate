@@ -14,6 +14,7 @@ use crate::{
         dir_exists, format_size_with_unit, path_append,
         stage2_config::{PathType, Stage2ConfigBuilder, Stage2LogConfig},
         Config, MigErrCtx, MigError, MigErrorKind, MigMode,
+        migrate_info::MigrateInfo,
     },
     defs::{BACKUP_FILE, MIN_DISK_SIZE, SYSTEM_CONNECTIONS_DIR},
 };
@@ -33,8 +34,11 @@ use extract::Extractor;
 
 pub(crate) mod stage2;
 
-pub(crate) mod migrate_info;
-pub(crate) use migrate_info::MigrateInfo;
+pub(crate) mod linux_api;
+use linux_api::LinuxAPI;
+
+pub(crate) mod lsblk_info;
+//pub(crate) use lsblk_info::LsblkInfo;
 
 pub(crate) mod linux_common;
 use crate::common::stage2_config::MountConfig;
@@ -42,6 +46,7 @@ use crate::defs::STAGE2_CFG_FILE;
 use crate::linux::linux_common::whereis;
 pub(crate) use linux_common::is_admin;
 use mod_logger::{LogDestination, Logger};
+use crate::linux::lsblk_info::LsblkInfo;
 
 const REQUIRED_CMDS: &'static [&'static str] = &[
     // TODO: check this
@@ -53,6 +58,7 @@ pub(crate) struct LinuxMigrator {
     config: Config,
     stage2_config: Stage2ConfigBuilder,
     device: Box<dyn Device>,
+    lsblk_info: LsblkInfo,
 }
 
 impl<'a> LinuxMigrator {
@@ -114,7 +120,9 @@ impl<'a> LinuxMigrator {
         // Get os architecture & name & disk properties, check required paths
         // find wifis etc..
 
-        let mig_info = match MigrateInfo::new(&config) {
+        let lsblk_info = LsblkInfo::all()?;
+        let linux_api = LinuxAPI::new(&lsblk_info);
+        let mig_info = match MigrateInfo::new(&config,&linux_api) {
             Ok(mig_info) => {
                 info!(
                     "OS Architecture is {}, OS Name is '{}'",
@@ -230,6 +238,7 @@ impl<'a> LinuxMigrator {
             config,
             device,
             stage2_config,
+            lsblk_info,
         })
     }
 
@@ -256,7 +265,7 @@ impl<'a> LinuxMigrator {
             self.stage2_config
                 .set_work_path(&PathType::Path(self.mig_info.work_path.path.clone()));
         } else {
-            let (_lsblk_device, lsblk_part) = self.mig_info.lsblk_info.get_path_info(&work_dir)?;
+            let (_lsblk_device, lsblk_part) = self.lsblk_info.get_path_devs(&work_dir)?;
             self.stage2_config
                 .set_work_path(&PathType::Mount(MountConfig::new(
                     &lsblk_part.get_alt_path(),
@@ -376,27 +385,20 @@ impl<'a> LinuxMigrator {
         self.stage2_config
             .set_log_level(String::from(self.config.migrate.get_log_level()));
 
-        if let Some((ref log_drive, ref log_part)) = self.mig_info.log_path {
-            if log_drive.get_path() != boot_device.drive {
-                if let Some(ref fstype) = log_part.fstype {
-                    info!(
-                        "Set up log device as '{}' with file system type '{}'",
-                        log_part.get_alt_path().display(),
-                        fstype
-                    );
+        if let Some(ref log_path) = self.mig_info.log_path {
+            if log_path.device != boot_device.device {
+                info!(
+                    "Set up log device as '{}' with file system type '{}'",
+                    log_path.get_alt_path().display(),
+                    log_path.fs_type
+                );
 
-                    self.stage2_config.set_log_to(Stage2LogConfig {
-                        device: log_part.get_alt_path(),
-                        fstype: fstype.clone(),
-                    });
-                } else {
-                    warn!(
-                        "Could not determine file system type for log partition '{}'  - ignoring",
-                        log_part.get_path().display()
-                    );
-                }
+                self.stage2_config.set_log_to(Stage2LogConfig {
+                    device: log_path.get_alt_path(),
+                    fstype: log_path.fs_type.clone(),
+                });
             } else {
-                warn!("Log partition '{}' is not on a distinct drive from flash drive: '{}' - ignoring", log_part.get_path().display(), boot_device.drive.display());
+                warn!("Log partition '{}' is not on a distinct drive from flash drive: '{}' - ignoring", log_path.device.display(), boot_device.drive.display());
             }
         }
 

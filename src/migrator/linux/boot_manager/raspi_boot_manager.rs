@@ -13,13 +13,17 @@ use crate::{
         file_exists, is_balena_file, path_append,
         stage2_config::{Stage2Config, Stage2ConfigBuilder},
         Config, MigErrCtx, MigError, MigErrorKind,
+        migrate_info::{MigrateInfo},
+        path_info::PathInfo,
     },
     defs::{BootType, BALENA_FILE_TAG},
     linux::{
-        boot_manager::BootManager, linux_defs::BOOT_PATH, migrate_info::PathInfo,
-        stage2::mounts::Mounts, MigrateInfo, CHMOD_CMD,
+        linux_defs::CHMOD_CMD,
+        boot_manager::BootManager, linux_defs::BOOT_PATH,
+        stage2::mounts::Mounts,
     },
 };
+use crate::linux::lsblk_info::LsblkInfo;
 
 // TODO: copy rpi dtb's , backup orig dtbs
 
@@ -82,7 +86,13 @@ impl BootManager for RaspiBootManager {
             return Ok(false);
         }
 
-        self.bootmgr_path = Some(PathInfo::new(BOOT_PATH, &mig_info.lsblk_info)?.unwrap());
+        let lsblk_info = LsblkInfo::all()?;
+        self.bootmgr_path = if let Some(boot_path) = PathInfo::from_path(BOOT_PATH, &lsblk_info)? {
+            Some(boot_path)
+        } else {
+            error!("Could not get path info from '{}'", BOOT_PATH);
+            return Err(MigError::displayed())
+        };
 
         // TODO: provide a way to supply digests for DTB files
         for file in &RPI_DTB_FILES {

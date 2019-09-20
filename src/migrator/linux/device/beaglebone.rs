@@ -5,14 +5,14 @@ use crate::{
     common::{
         stage2_config::{Stage2Config, Stage2ConfigBuilder},
         Config, MigError, MigErrorKind,
+        migrate_info::{MigrateInfo, },
+        path_info::PathInfo,
     },
     defs::{BootType, DeviceType},
     linux::{
         boot_manager::{from_boot_type, BootManager, UBootManager},
         device::Device,
-        migrate_info::PathInfo,
         stage2::mounts::Mounts,
-        MigrateInfo,
     },
 };
 

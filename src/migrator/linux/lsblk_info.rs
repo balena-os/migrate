@@ -6,7 +6,7 @@ use std::path::{Path, PathBuf};
 
 use crate::linux::linux_common::to_std_device_path;
 use crate::{
-    common::{call, path_append, MigErrCtx, MigError, MigErrorKind},
+    common::{call, path_append, MigErrCtx, MigError, MigErrorKind,},
     defs::{DISK_BY_LABEL_PATH, DISK_BY_PARTUUID_PATH, DISK_BY_UUID_PATH},
     linux::linux_defs::LSBLK_CMD,
 };
@@ -159,7 +159,8 @@ impl<'a> LsblkInfo {
         Ok(lsblk_info)
     }
 
-    pub fn get_path_info<P: AsRef<Path>>(
+
+    pub fn get_path_devs<P: AsRef<Path>>(
         &'a self,
         path: P,
     ) -> Result<(&'a LsblkDevice, &'a LsblkPartition), MigError> {

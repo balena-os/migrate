@@ -18,11 +18,10 @@ use crate::common::{
     MigErrCtx,
     MigError,
     MigErrorKind,
+    config::balena_config::FileRef,
+    file_digest::{check_digest, get_default_digest, HashInfo},
     //file_digest::check_digest
 };
-
-use crate::common::config::balena_config::FileRef;
-use crate::common::file_digest::{check_digest, get_default_digest, HashInfo};
 
 // #[cfg(target_os = "linux")]
 
