@@ -36,7 +36,8 @@ const DEFAULT_PARTITION_ALIGNMENT_KIB: u64 = 4096; // KiB
                                                    // TODO: true might be the better default but can be very slow in combination with mkfs_direct_io
 const DEFAULT_MAX_DATA: bool = true;
 
-pub const REQUIRED_CMDS: &[&str] = &[
+// TODO: replace removed command checks ?
+/*pub const REQUIRED_CMDS: &[&str] = &[
     EXT_FMT_CMD,
     FAT_FMT_CMD,
     TAR_CMD,
@@ -44,7 +45,7 @@ pub const REQUIRED_CMDS: &[&str] = &[
     PARTPROBE_CMD,
     // SFDISK_CMD,
     PARTED_CMD,
-];
+];*/
 
 pub(crate) fn write_balena_os(
     device: &Path,

@@ -23,7 +23,7 @@ use crate::{
     linux::{
         device,
         linux_common::{get_mem_info, whereis},
-        linux_defs::{FAT_CHK_CMD, REBOOT_CMD, UDEVADM_CMD},
+        linux_defs::{REBOOT_CMD, },
         linux_defs::{MIGRATE_LOG_FILE, STAGE2_MEM_THRESHOLD},
     },
 };
@@ -52,7 +52,8 @@ const INIT_LOG_LEVEL: Level = Level::Trace;
 
 const MIGRATE_TEMP_DIR: &str = "/migrate_tmp";
 
-const MIG_REQUIRED_CMDS: &[&str] = &[REBOOT_CMD, UDEVADM_CMD, FAT_CHK_CMD];
+// TODO: replace removed command checks ?
+//const MIG_REQUIRED_CMDS: &[&str] = &[REBOOT_CMD, UDEVADM_CMD, FAT_CHK_CMD];
 
 const BALENA_IMAGE_FILE: &str = "balenaOS.img.gz";
 const BALENA_CONFIG_FILE: &str = "config.json";

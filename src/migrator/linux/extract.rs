@@ -100,7 +100,7 @@ impl Extractor {
 
         for command in REQUIRED_CMDS {
             match whereis(command) {
-                Ok(cmd_path) => (),
+                Ok(_cmd_path) => (),
                 Err(why) => {
                     error!(
                         "Could not find required command: '{}': error: {:?}",

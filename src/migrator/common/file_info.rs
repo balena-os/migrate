@@ -9,6 +9,7 @@ use std::path::{Path, PathBuf};
 // make a guess on file contents / type and compare to expected value
 // ******************************************************************
 
+
 // TODO: make hash_info optional again
 // creating a digest in stage1 for check in stage2 does not mae a lot of sense.
 
@@ -24,6 +25,7 @@ use crate::common::config::balena_config::FileRef;
 use crate::common::file_digest::{check_digest, get_default_digest, HashInfo};
 
 // #[cfg(target_os = "linux")]
+
 
 #[derive(Debug, Clone)]
 pub(crate) struct FileInfo {
@@ -110,5 +112,21 @@ impl FileInfo {
             size: metadata.len(),
             hash_info,
         }))
+    }
+
+    pub fn to_rel_fileinfo(&self) -> Result<RelFileInfo, MigError> {
+        if let Some(ref rel_path) = self.rel_path {
+            Ok(RelFileInfo {
+                rel_path: rel_path.clone(),
+                size: self.size,
+                hash_info: self.hash_info.clone(),
+            })
+        } else {
+            error!(
+                "The file '{}' was not found in the working directory",
+                self.path.display()
+            );
+            return Err(MigError::displayed());
+        }
     }
 }
