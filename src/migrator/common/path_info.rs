@@ -1,18 +1,17 @@
 use failure::ResultExt;
-use std::path::{Path,PathBuf};
 use log::error;
+use std::path::{Path, PathBuf};
 
 use crate::{
-    common::{MigError, MigErrorKind, MigErrCtx, path_append},
-    defs::{DISK_BY_PARTUUID_PATH, DISK_BY_UUID_PATH, DISK_BY_LABEL_PATH} ,
+    common::{path_append, MigErrCtx, MigError, MigErrorKind},
+    defs::{DISK_BY_LABEL_PATH, DISK_BY_PARTUUID_PATH, DISK_BY_UUID_PATH},
 };
 
 #[cfg(target_os = "linux")]
-use crate::linux::lsblk_info::LsblkInfo;
-#[cfg(target_os = "linux")]
 use crate::linux::linux_common::get_fs_space;
+#[cfg(target_os = "linux")]
+use crate::linux::lsblk_info::LsblkInfo;
 use crate::linux::lsblk_info::{LsblkDevice, LsblkPartition};
-
 
 #[derive(Debug, Clone)]
 pub(crate) struct PathInfo {
@@ -76,19 +75,27 @@ impl PathInfo {
     }
 
     #[cfg(target_os = "linux")]
-    pub fn from_path<P: AsRef<Path>>(path: P, lsblk_info: &LsblkInfo) -> Result<Option<PathInfo>, MigError> {
+    pub fn from_path<P: AsRef<Path>>(
+        path: P,
+        lsblk_info: &LsblkInfo,
+    ) -> Result<Option<PathInfo>, MigError> {
         if !path.as_ref().exists() {
             return Ok(None);
         }
 
-        let abs_path = path.as_ref().canonicalize().context(MigErrCtx::from_remark(
-            MigErrorKind::Upstream,
-            &format!("failed to canonicalize path: '{}'", path.as_ref().display()),
-        ))?;
+        let abs_path = path
+            .as_ref()
+            .canonicalize()
+            .context(MigErrCtx::from_remark(
+                MigErrorKind::Upstream,
+                &format!("failed to canonicalize path: '{}'", path.as_ref().display()),
+            ))?;
 
         let (drive, partition) = lsblk_info.get_path_devs(path.as_ref())?;
         if let Some(ref mountpoint) = partition.mountpoint {
-            Ok(Some(PathInfo::from_parts(abs_path, mountpoint, drive, partition)?))
+            Ok(Some(PathInfo::from_parts(
+                abs_path, mountpoint, drive, partition,
+            )?))
         } else {
             error!("Refusing to create PathInfo from unmounted partiontion");
             return Err(MigError::displayed());
@@ -96,19 +103,32 @@ impl PathInfo {
     }
 
     #[cfg(target_os = "linux")]
-    pub fn from_mounted<P1: AsRef<Path>,P2: AsRef<Path>>(path: P1, mountpoint: P2, drive: &LsblkDevice, partition: &LsblkPartition) -> Result<PathInfo, MigError> {
-        let abs_path = path.as_ref().canonicalize().context(MigErrCtx::from_remark(
-            MigErrorKind::Upstream,
-            &format!("failed to canonicalize path: '{}'", path.as_ref().display()),
-        ))?;
+    pub fn from_mounted<P1: AsRef<Path>, P2: AsRef<Path>>(
+        path: P1,
+        mountpoint: P2,
+        drive: &LsblkDevice,
+        partition: &LsblkPartition,
+    ) -> Result<PathInfo, MigError> {
+        let abs_path = path
+            .as_ref()
+            .canonicalize()
+            .context(MigErrCtx::from_remark(
+                MigErrorKind::Upstream,
+                &format!("failed to canonicalize path: '{}'", path.as_ref().display()),
+            ))?;
         PathInfo::from_parts(abs_path, mountpoint.as_ref(), drive, partition)
     }
 
     #[cfg(target_os = "linux")]
-    fn from_parts(abs_path: PathBuf, mountpoint: &Path, drive: &LsblkDevice, partition: &LsblkPartition,) -> Result<PathInfo, MigError> {
+    fn from_parts(
+        abs_path: PathBuf,
+        mountpoint: &Path,
+        drive: &LsblkDevice,
+        partition: &LsblkPartition,
+    ) -> Result<PathInfo, MigError> {
         let (fs_size, fs_free) = get_fs_space(&abs_path)?;
 
-        Ok(PathInfo{
+        Ok(PathInfo {
             path: abs_path,
             drive: drive.get_path(),
             drive_size: if let Some(size) = drive.size {
@@ -146,5 +166,4 @@ impl PathInfo {
             fs_free,
         })
     }
-
-    }
+}

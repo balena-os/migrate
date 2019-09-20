@@ -4,10 +4,10 @@ use std::fs::read_to_string;
 
 use crate::{
     common::{
+        migrate_info::MigrateInfo,
+        path_info::PathInfo,
         stage2_config::{Stage2Config, Stage2ConfigBuilder},
         Config, MigErrCtx, MigError, MigErrorKind,
-        migrate_info::{MigrateInfo, },
-        path_info::PathInfo,
     },
     defs::{BootType, DeviceType, OSArch},
     linux::stage2::mounts::Mounts,

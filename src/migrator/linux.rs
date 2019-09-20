@@ -11,10 +11,11 @@ use crate::{
     common::{
         backup, call,
         config::balena_config::ImageType,
-        dir_exists, format_size_with_unit, path_append,
+        dir_exists, format_size_with_unit,
+        migrate_info::MigrateInfo,
+        path_append,
         stage2_config::{PathType, Stage2ConfigBuilder, Stage2LogConfig},
         Config, MigErrCtx, MigError, MigErrorKind, MigMode,
-        migrate_info::MigrateInfo,
     },
     defs::{BACKUP_FILE, MIN_DISK_SIZE, SYSTEM_CONNECTIONS_DIR},
 };
@@ -44,9 +45,9 @@ pub(crate) mod linux_common;
 use crate::common::stage2_config::MountConfig;
 use crate::defs::STAGE2_CFG_FILE;
 use crate::linux::linux_common::whereis;
+use crate::linux::lsblk_info::LsblkInfo;
 pub(crate) use linux_common::is_admin;
 use mod_logger::{LogDestination, Logger};
-use crate::linux::lsblk_info::LsblkInfo;
 
 const REQUIRED_CMDS: &'static [&'static str] = &[
     // TODO: check this
@@ -122,7 +123,7 @@ impl<'a> LinuxMigrator {
 
         let lsblk_info = LsblkInfo::all()?;
         let linux_api = LinuxAPI::new(&lsblk_info);
-        let mig_info = match MigrateInfo::new(&config,&linux_api) {
+        let mig_info = match MigrateInfo::new(&config, &linux_api) {
             Ok(mig_info) => {
                 info!(
                     "OS Architecture is {}, OS Name is '{}'",

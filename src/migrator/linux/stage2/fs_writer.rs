@@ -23,8 +23,8 @@ use crate::{
     defs::{DEF_BLOCK_SIZE, PART_NAME},
     linux::{
         linux_defs::{EXT_FMT_CMD, FAT_FMT_CMD, LSBLK_CMD, PARTED_CMD, PARTPROBE_CMD, TAR_CMD},
+        lsblk_info::{LsblkDevice, LsblkInfo},
         stage2::{mounts::Mounts, FlashResult},
-        lsblk_info::{LsblkInfo, LsblkDevice}
     },
 };
 

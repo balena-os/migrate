@@ -9,13 +9,15 @@ use std::io::Write;
 use std::path::PathBuf;
 
 use crate::common::file_digest::check_digest;
+use crate::linux::lsblk_info::LsblkInfo;
 use crate::{
     common::{
-        call, file_exists, format_size_with_unit, is_balena_file, path_append,
+        call, file_exists, format_size_with_unit, is_balena_file,
+        migrate_info::MigrateInfo,
+        path_append,
+        path_info::PathInfo,
         stage2_config::{Stage2Config, Stage2ConfigBuilder},
         Config, MigErrCtx, MigError, MigErrorKind,
-        migrate_info::{MigrateInfo, },
-        path_info::PathInfo,
     },
     defs::{BootType, BALENA_FILE_TAG, MIG_DTB_NAME, MIG_INITRD_NAME, MIG_KERNEL_NAME},
     linux::{
@@ -28,7 +30,6 @@ use crate::{
         stage2::mounts::Mounts,
     },
 };
-use crate::linux::lsblk_info::LsblkInfo;
 
 // TODO: this might be a bit of a tight fit, allow (s|h)d([a-z])(\d+) too ?
 const UBOOT_DRIVE_FILTER_REGEX: &str = r#"^mmcblk\d+$"#;
@@ -92,7 +93,11 @@ impl UBootManager {
 
     */
 
-    fn find_bootmgr_path(&self, mig_info: &MigrateInfo, lsblk_info: &LsblkInfo) -> Result<PathInfo, MigError> {
+    fn find_bootmgr_path(
+        &self,
+        mig_info: &MigrateInfo,
+        lsblk_info: &LsblkInfo,
+    ) -> Result<PathInfo, MigError> {
         lazy_static! {
             // same as ab
             static ref BOOT_DRIVE_RE: Regex = Regex::new(UBOOT_DRIVE_FILTER_REGEX).unwrap();

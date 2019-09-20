@@ -1,18 +1,18 @@
-use log::{debug, error, info, trace,};
+use log::{debug, error, info, trace};
 
 use crate::{
     common::{
         config::{
+            balena_config::FileRef,
             balena_config::{ImageType, PartDump},
             MigrateWifis,
-            balena_config::FileRef,
         },
         file_info::RelFileInfo,
+        os_api::OSApi,
+        path_info::PathInfo,
         stage2_config::{CheckedFSDump, CheckedImageType, CheckedPartDump},
         wifi_config::WifiConfig,
         Config, FileInfo, MigError, MigErrorKind,
-        os_api::{OSApi},
-        path_info::PathInfo,
     },
     defs::FileType,
     defs::OSArch,
@@ -23,8 +23,6 @@ use crate::{
 // * Digested / Checked device-type independent properties from config and information retrieved
 // * from device required for stage1 of migration
 // *************************************************************************************************
-
-
 
 pub(crate) mod balena_cfg_json;
 pub(crate) use balena_cfg_json::BalenaCfgJson;
@@ -55,7 +53,7 @@ pub(crate) struct MigrateInfo {
 // TODO: sort out error reporting with Displayed
 
 impl MigrateInfo {
-    pub(crate) fn new(config: &Config, os_api: & impl OSApi) -> Result<MigrateInfo, MigError> {
+    pub(crate) fn new(config: &Config, os_api: &impl OSApi) -> Result<MigrateInfo, MigError> {
         trace!("new: entered");
         let os_arch = get_os_arch()?;
 
@@ -293,7 +291,7 @@ impl MigrateInfo {
     fn check_dump(
         dump: &PartDump,
         work_path: &PathInfo,
-        os_api: & impl OSApi
+        os_api: &impl OSApi,
     ) -> Result<RelFileInfo, MigError> {
         Ok(MigrateInfo::check_file(
             &dump.archive,

@@ -10,11 +10,12 @@ use crate::{
         call, dir_exists,
         disk_util::LabelType,
         file_digest::check_digest,
-        file_exists, format_size_with_unit, path_append,
+        file_exists, format_size_with_unit,
+        migrate_info::MigrateInfo,
+        path_append,
+        path_info::PathInfo,
         stage2_config::{Stage2Config, Stage2ConfigBuilder},
         Config, MigErrCtx, MigError, MigErrorKind,
-        migrate_info::{MigrateInfo, },
-        path_info::PathInfo,
     },
     defs::{BootType, MIG_INITRD_NAME, MIG_KERNEL_NAME},
     linux::{
@@ -24,8 +25,8 @@ use crate::{
             ROOT_PATH,
         },
         linux_defs::{CHMOD_CMD, GRUB_REBOOT_CMD, GRUB_UPDT_CMD},
-        stage2::mounts::Mounts,
         lsblk_info::LsblkInfo,
+        stage2::mounts::Mounts,
     },
 };
 
@@ -140,7 +141,7 @@ impl<'a> BootManager for GrubBootManager {
             boot_path
         } else {
             error!("Could not find boot path '{}'", BOOT_PATH);
-            return Err(MigError::displayed())
+            return Err(MigError::displayed());
         };
 
         let grub_version = GrubBootManager::get_grub_version()?;

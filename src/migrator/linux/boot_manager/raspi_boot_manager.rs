@@ -6,24 +6,24 @@ use std::io::{BufRead, BufReader, Write};
 
 use std::time::SystemTime;
 
+use crate::linux::lsblk_info::LsblkInfo;
 use crate::{
     common::{
         call, dir_exists,
         file_digest::check_digest,
-        file_exists, is_balena_file, path_append,
+        file_exists, is_balena_file,
+        migrate_info::MigrateInfo,
+        path_append,
+        path_info::PathInfo,
         stage2_config::{Stage2Config, Stage2ConfigBuilder},
         Config, MigErrCtx, MigError, MigErrorKind,
-        migrate_info::{MigrateInfo},
-        path_info::PathInfo,
     },
     defs::{BootType, BALENA_FILE_TAG},
     linux::{
-        linux_defs::CHMOD_CMD,
-        boot_manager::BootManager, linux_defs::BOOT_PATH,
+        boot_manager::BootManager, linux_defs::BOOT_PATH, linux_defs::CHMOD_CMD,
         stage2::mounts::Mounts,
     },
 };
-use crate::linux::lsblk_info::LsblkInfo;
 
 // TODO: copy rpi dtb's , backup orig dtbs
 
@@ -91,7 +91,7 @@ impl BootManager for RaspiBootManager {
             Some(boot_path)
         } else {
             error!("Could not get path info from '{}'", BOOT_PATH);
-            return Err(MigError::displayed())
+            return Err(MigError::displayed());
         };
 
         // TODO: provide a way to supply digests for DTB files

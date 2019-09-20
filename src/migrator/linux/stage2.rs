@@ -23,7 +23,7 @@ use crate::{
     linux::{
         device,
         linux_common::{get_mem_info, whereis},
-        linux_defs::{REBOOT_CMD, },
+        linux_defs::REBOOT_CMD,
         linux_defs::{MIGRATE_LOG_FILE, STAGE2_MEM_THRESHOLD},
     },
 };

@@ -9,22 +9,20 @@ use std::path::{Path, PathBuf};
 // make a guess on file contents / type and compare to expected value
 // ******************************************************************
 
-
 // TODO: make hash_info optional again
 // creating a digest in stage1 for check in stage2 does not mae a lot of sense.
 
 use crate::common::{
+    config::balena_config::FileRef,
+    file_digest::{check_digest, get_default_digest, HashInfo},
+    //file_digest::check_digest
     file_exists,
     MigErrCtx,
     MigError,
     MigErrorKind,
-    config::balena_config::FileRef,
-    file_digest::{check_digest, get_default_digest, HashInfo},
-    //file_digest::check_digest
 };
 
 // #[cfg(target_os = "linux")]
-
 
 #[derive(Debug, Clone)]
 pub(crate) struct FileInfo {
