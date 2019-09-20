@@ -8,13 +8,11 @@ use crate::{
         file_info::RelFileInfo,
         stage2_config::{CheckedFSDump, CheckedImageType, CheckedPartDump},
         wifi_config::WifiConfig,
-        Config, FileInfo, FileType, MigError, MigErrorKind,
+        Config, FileInfo, MigError, MigErrorKind,
     },
+    defs::FileType,
     defs::OSArch,
-    linux::{
-        linux_common::{get_os_arch, get_os_name},
-        EnsuredCmds,
-    },
+    linux::linux_common::{expect_type, get_os_arch, get_os_name},
 };
 
 // *************************************************************************************************
@@ -58,25 +56,24 @@ pub(crate) struct MigrateInfo {
 // TODO: sort out error reporting with Displayed
 
 impl MigrateInfo {
-    pub(crate) fn new(config: &Config, cmds: &mut EnsuredCmds) -> Result<MigrateInfo, MigError> {
+    pub(crate) fn new(config: &Config) -> Result<MigrateInfo, MigError> {
         trace!("new: entered");
-        let os_arch = get_os_arch(&cmds)?;
+        let os_arch = get_os_arch()?;
 
-        let lsblk_info = LsblkInfo::all(&cmds)?;
+        let lsblk_info = LsblkInfo::all()?;
 
-        let work_path = if let Some(path_info) =
-            PathInfo::new(&cmds, config.migrate.get_work_dir(), &lsblk_info)?
-        {
-            path_info
-        } else {
-            return Err(MigError::from_remark(
-                MigErrorKind::NotFound,
-                &format!(
-                    "the device for path '{}' could not be established",
-                    config.migrate.get_work_dir().display()
-                ),
-            ));
-        };
+        let work_path =
+            if let Some(path_info) = PathInfo::new(config.migrate.get_work_dir(), &lsblk_info)? {
+                path_info
+            } else {
+                return Err(MigError::from_remark(
+                    MigErrorKind::NotFound,
+                    &format!(
+                        "the device for path '{}' could not be established",
+                        config.migrate.get_work_dir().display()
+                    ),
+                ));
+            };
 
         let work_dir = &work_path.path;
         info!(
@@ -119,7 +116,6 @@ impl MigrateInfo {
                     &flasher_img,
                     &FileType::GZipOSImage,
                     &work_path,
-                    cmds,
                     &lsblk_info,
                 )?;
 
@@ -134,48 +130,23 @@ impl MigrateInfo {
                     mkfs_direct: fs_dump.mkfs_direct.clone(),
                     extended_blocks: fs_dump.extended_blocks,
                     boot: CheckedPartDump {
-                        archive: MigrateInfo::check_dump(
-                            &fs_dump.boot,
-                            &work_path,
-                            cmds,
-                            &lsblk_info,
-                        )?,
+                        archive: MigrateInfo::check_dump(&fs_dump.boot, &work_path, &lsblk_info)?,
                         blocks: fs_dump.boot.blocks,
                     },
                     root_a: CheckedPartDump {
-                        archive: MigrateInfo::check_dump(
-                            &fs_dump.root_a,
-                            &work_path,
-                            cmds,
-                            &lsblk_info,
-                        )?,
+                        archive: MigrateInfo::check_dump(&fs_dump.root_a, &work_path, &lsblk_info)?,
                         blocks: fs_dump.root_a.blocks,
                     },
                     root_b: CheckedPartDump {
-                        archive: MigrateInfo::check_dump(
-                            &fs_dump.root_b,
-                            &work_path,
-                            cmds,
-                            &lsblk_info,
-                        )?,
+                        archive: MigrateInfo::check_dump(&fs_dump.root_b, &work_path, &lsblk_info)?,
                         blocks: fs_dump.root_b.blocks,
                     },
                     state: CheckedPartDump {
-                        archive: MigrateInfo::check_dump(
-                            &fs_dump.state,
-                            &work_path,
-                            cmds,
-                            &lsblk_info,
-                        )?,
+                        archive: MigrateInfo::check_dump(&fs_dump.state, &work_path, &lsblk_info)?,
                         blocks: fs_dump.state.blocks,
                     },
                     data: CheckedPartDump {
-                        archive: MigrateInfo::check_dump(
-                            &fs_dump.data,
-                            &work_path,
-                            cmds,
-                            &lsblk_info,
-                        )?,
+                        archive: MigrateInfo::check_dump(&fs_dump.data, &work_path, &lsblk_info)?,
                         blocks: fs_dump.data.blocks,
                     },
                 })
@@ -197,7 +168,7 @@ impl MigrateInfo {
             }
 
             // ensure expected type
-            match file_info.expect_type(&cmds, &FileType::Json) {
+            match expect_type(&file_info.path, &FileType::Json) {
                 Ok(_) => (),
                 Err(_why) => {
                     error!(
@@ -223,8 +194,8 @@ impl MigrateInfo {
 
         let kernel_info = config.migrate.get_kernel_path();
         let kernel_file = if let Some(file_info) = FileInfo::new(&kernel_info, work_dir)? {
-            file_info.expect_type(
-                &cmds,
+            expect_type(
+                &file_info.path,
                 match os_arch {
                     OSArch::AMD64 => &FileType::KernelAMD64,
                     OSArch::ARMHF => &FileType::KernelARMHF,
@@ -245,7 +216,7 @@ impl MigrateInfo {
         let initrd_file = if let Some(file_info) =
             FileInfo::new(config.migrate.get_initrd_path(), work_dir)?
         {
-            file_info.expect_type(&cmds, &FileType::InitRD)?;
+            expect_type(&file_info.path, &FileType::InitRD)?;
             info!(
                 "The balena migrate initramfs looks ok: '{}'",
                 file_info.path.display()
@@ -260,7 +231,7 @@ impl MigrateInfo {
             let mut dtb_files: Vec<FileInfo> = Vec::new();
             for dtb_ref in dtb_refs {
                 if let Some(file_info) = FileInfo::new(dtb_ref, work_dir)? {
-                    file_info.expect_type(&cmds, &FileType::DTB)?;
+                    expect_type(&file_info.path, &FileType::DTB)?;
                     info!(
                         "The balena migrate device tree blob looks ok: '{}'",
                         file_info.path.display()
@@ -286,7 +257,7 @@ impl MigrateInfo {
                 },
                 &work_dir,
             )? {
-                file_info.expect_type(&cmds, &FileType::Text)?;
+                expect_type(&file_info.path, &FileType::Text)?;
                 info!(
                     "Adding network manager config: '{}'",
                     file_info.path.display()
@@ -360,14 +331,12 @@ impl MigrateInfo {
     fn check_dump(
         dump: &PartDump,
         work_path: &PathInfo,
-        cmds: &EnsuredCmds,
         lsblk_info: &LsblkInfo,
     ) -> Result<RelFileInfo, MigError> {
         Ok(MigrateInfo::check_file(
             &dump.archive,
             &FileType::GZipTar,
             work_path,
-            cmds,
             lsblk_info,
         )?)
     }
@@ -376,7 +345,6 @@ impl MigrateInfo {
         file_ref: &FileRef,
         expected_type: &FileType,
         work_path: &PathInfo,
-        cmds: &EnsuredCmds,
         lsblk_info: &LsblkInfo,
     ) -> Result<RelFileInfo, MigError> {
         if let Some(file_info) = FileInfo::new(&file_ref, &work_path.path)? {
@@ -395,7 +363,7 @@ impl MigrateInfo {
             }
 
             // ensure expected type
-            match file_info.expect_type(&cmds, expected_type) {
+            match expect_type(&file_info.path, expected_type) {
                 Ok(_) => {
                     info!("The file '{}' image looks ok", file_info.path.display());
                 }

@@ -120,3 +120,34 @@ impl FailMode {
         &FailMode::Reboot
     }
 }
+
+#[derive(Debug, Clone)]
+pub(crate) enum FileType {
+    GZipOSImage,
+    OSImage,
+    KernelAMD64,
+    KernelARMHF,
+    KernelI386,
+    InitRD,
+    Json,
+    Text,
+    DTB,
+    GZipTar,
+}
+
+impl FileType {
+    pub fn get_descr(&self) -> &str {
+        match self {
+            FileType::GZipOSImage => "gzipped balena OS image",
+            FileType::OSImage => "balena OS image",
+            FileType::KernelAMD64 => "balena migrate kernel image for AMD64",
+            FileType::KernelARMHF => "balena migrate kernel image for ARMHF",
+            FileType::KernelI386 => "balena migrate kernel image for I386",
+            FileType::InitRD => "balena migrate initramfs",
+            FileType::DTB => "Device Tree Blob",
+            FileType::Json => "balena config.json file",
+            FileType::Text => "Text file",
+            FileType::GZipTar => "Gzipped Tar file",
+        }
+    }
+}

@@ -16,6 +16,7 @@ use serde_yaml;
 use crate::{
     common::disk_util::PartitionType,
     common::{
+        call,
         config::balena_config::ImageType,
         config::balena_config::{FSDump, FileRef, PartDump},
         disk_util::{Disk, PartitionIterator, PartitionReader}, //  , ImageFile, GZipFile, PlainFile },
@@ -23,19 +24,16 @@ use crate::{
         path_append,
         Config,
         FileInfo,
-        FileType,
         MigErrCtx,
         MigError,
         MigErrorKind,
     },
+    defs::FileType,
     defs::{PART_FSTYPE, PART_NAME},
     linux::{
-        ensured_cmds::{
-            EnsuredCmds, BLKID_CMD, FILE_CMD, LOSETUP_CMD, LSBLK_CMD, MKTEMP_CMD, MOUNT_CMD,
-            TAR_CMD,
-        },
-        linux_common::mktemp,
+        linux_common::{is_file_type, mktemp, whereis},
         linux_defs::NIX_NONE,
+        linux_defs::{BLKID_CMD, FILE_CMD, LOSETUP_CMD, LSBLK_CMD, MKTEMP_CMD, MOUNT_CMD, TAR_CMD},
     },
 };
 
@@ -73,7 +71,6 @@ pub(crate) struct Partition {
 }
 
 pub(crate) struct Extractor {
-    cmds: EnsuredCmds,
     config: Config,
     device_slug: String,
     disk: Disk,
@@ -101,13 +98,17 @@ impl Extractor {
             return Err(MigError::displayed());
         };
 
-        let mut cmds = EnsuredCmds::new();
-        if let Err(why) = cmds.ensure_cmds(REQUIRED_CMDS) {
-            error!(
-                "Some Required commands could not be found, error: {:?}",
-                why
-            );
-            return Err(MigError::displayed());
+        for command in REQUIRED_CMDS {
+            match whereis(command) {
+                Ok(cmd_path) => (),
+                Err(why) => {
+                    error!(
+                        "Could not find required command: '{}': error: {:?}",
+                        command, why
+                    );
+                    return Err(MigError::displayed());
+                }
+            }
         }
 
         // TODO: check hash if present, create hash
@@ -128,12 +129,11 @@ impl Extractor {
 
         if let Some(image_info) = image_info {
             debug!("new: working with file '{}'", image_info.path.display());
-            if image_info.is_type(&cmds, &FileType::GZipOSImage)? {
+            if is_file_type(&image_info.path, &FileType::GZipOSImage)? {
                 match Disk::from_gzip_img(&image_info.path) {
                     Ok(gzip_img) => {
                         debug!("new: is gzipped image '{}'", image_info.path.display());
                         return Ok(Extractor {
-                            cmds,
                             config,
                             disk: gzip_img,
                             device_slug: String::from(extract_device),
@@ -149,12 +149,11 @@ impl Extractor {
                     }
                 }
             } else {
-                if image_info.is_type(&cmds, &FileType::OSImage)? {
+                if is_file_type(&image_info.path, &FileType::OSImage)? {
                     match Disk::from_drive_file(&image_info.path, None) {
                         Ok(plain_img) => {
                             debug!("new: is plain image '{}'", image_info.path.display());
                             return Ok(Extractor {
-                                cmds,
                                 config,
                                 disk: plain_img,
                                 device_slug: extract_device,
@@ -190,7 +189,7 @@ impl Extractor {
         trace!("extract: entered");
         let work_dir = self.config.migrate.get_work_dir();
 
-        let mountpoint = match mktemp(&self.cmds, true, Some(MOUNTPOINT_TEMPLATE), Some(work_dir)) {
+        let mountpoint = match mktemp(true, Some(MOUNTPOINT_TEMPLATE), Some(work_dir)) {
             Ok(path) => path,
             Err(why) => {
                 error!(
@@ -202,12 +201,7 @@ impl Extractor {
         };
 
         // make file name
-        let tmp_name = match mktemp(
-            &self.cmds,
-            false,
-            Some(EXTRACT_FILE_TEMPLATE),
-            Some(work_dir),
-        ) {
+        let tmp_name = match mktemp(false, Some(EXTRACT_FILE_TEMPLATE), Some(work_dir)) {
             Ok(path) => path,
             Err(why) => {
                 error!(
@@ -264,7 +258,6 @@ impl Extractor {
                 PartitionReader::from_part_iterator(&raw_part, &mut part_iterator);
 
             match Extractor::write_partition(
-                &self.cmds,
                 &self.config,
                 &mut part_reader,
                 &mut partition,
@@ -379,7 +372,6 @@ impl Extractor {
     }
 
     fn write_partition(
-        cmds: &EnsuredCmds,
         config: &Config,
         part_reader: &mut PartitionReader,
         partition: &mut Partition,
@@ -447,7 +439,7 @@ impl Extractor {
             );
         }
 
-        let cmd_res = cmds.call(LOSETUP_CMD, &["-f", &tmp_name.to_string_lossy()], true)?;
+        let cmd_res = call(LOSETUP_CMD, &["-f", &tmp_name.to_string_lossy()], true)?;
 
         if !cmd_res.status.success() {
             return Err(MigError::from_remark(
@@ -459,7 +451,7 @@ impl Extractor {
             ));
         }
 
-        let cmd_res = cmds.call(
+        let cmd_res = call(
             LOSETUP_CMD,
             &["-O", "name", "-j", &tmp_name.to_string_lossy()],
             true,
@@ -518,7 +510,7 @@ impl Extractor {
 
         // TODO: Try to archive using rust builtin tar / gzip have to traverse directories myself
 
-        let cmd_res = cmds.call(
+        let cmd_res = call(
             TAR_CMD,
             &[
                 "-czf",
@@ -549,7 +541,7 @@ impl Extractor {
             &format!("failed to unmount '{}'", mountpoint.display()),
         ))?;
 
-        let cmd_res = cmds.call(LOSETUP_CMD, &["-d", &device], true)?;
+        let cmd_res = call(LOSETUP_CMD, &["-d", &device], true)?;
 
         if !cmd_res.status.success() {
             return Err(MigError::from_remark(

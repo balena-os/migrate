@@ -11,7 +11,7 @@ use std::path::PathBuf;
 use crate::common::file_digest::check_digest;
 use crate::{
     common::{
-        file_exists, format_size_with_unit, is_balena_file, path_append,
+        call, file_exists, format_size_with_unit, is_balena_file, path_append,
         stage2_config::{Stage2Config, Stage2ConfigBuilder},
         Config, MigErrCtx, MigError, MigErrorKind,
     },
@@ -22,9 +22,9 @@ use crate::{
         linux_defs::{
             BOOT_PATH, MLO_FILE_NAME, NIX_NONE, ROOT_PATH, UBOOT_FILE_NAME, UENV_FILE_NAME,
         },
+        linux_defs::{CHMOD_CMD, MKTEMP_CMD},
         migrate_info::{path_info::PathInfo, MigrateInfo},
         stage2::mounts::Mounts,
-        EnsuredCmds, CHMOD_CMD, MKTEMP_CMD,
     },
 };
 
@@ -90,11 +90,7 @@ impl UBootManager {
 
     */
 
-    fn find_bootmgr_path(
-        &self,
-        cmds: &EnsuredCmds,
-        mig_info: &MigrateInfo,
-    ) -> Result<PathInfo, MigError> {
+    fn find_bootmgr_path(&self, mig_info: &MigrateInfo) -> Result<PathInfo, MigError> {
         lazy_static! {
             // same as ab
             static ref BOOT_DRIVE_RE: Regex = Regex::new(UBOOT_DRIVE_FILTER_REGEX).unwrap();
@@ -105,13 +101,13 @@ impl UBootManager {
         if file_exists(path_append(ROOT_PATH, MLO_FILE_NAME))
             || file_exists(path_append(ROOT_PATH, UBOOT_FILE_NAME))
         {
-            return Ok(PathInfo::new(cmds, ROOT_PATH, &mig_info.lsblk_info)?.unwrap());
+            return Ok(PathInfo::new(ROOT_PATH, &mig_info.lsblk_info)?.unwrap());
         }
 
         if file_exists(path_append(BOOT_PATH, MLO_FILE_NAME))
             || file_exists(path_append(BOOT_PATH, UBOOT_FILE_NAME))
         {
-            return Ok(PathInfo::new(cmds, BOOT_PATH, &mig_info.lsblk_info)?.unwrap());
+            return Ok(PathInfo::new(BOOT_PATH, &mig_info.lsblk_info)?.unwrap());
         }
 
         let mut tmp_mountpoint: Option<PathBuf> = None;
@@ -138,7 +134,7 @@ impl UBootManager {
                             // make mountpoint directory if none exists
                             if let None = tmp_mountpoint {
                                 debug!("creating mountpoint");
-                                let cmd_res = cmds.call(
+                                let cmd_res = call(
                                     MKTEMP_CMD,
                                     &["-d", "-p", &mig_info.work_path.path.to_string_lossy()],
                                     true,
@@ -214,7 +210,7 @@ impl UBootManager {
                         || file_exists(path_append(mountpoint, UBOOT_FILE_NAME))
                     {
                         return Ok(PathInfo::from_mounted(
-                            cmds, mountpoint, mountpoint, blk_device, &partition,
+                            mountpoint, mountpoint, blk_device, &partition,
                         )?);
                     } else {
                         if mounted {
@@ -235,7 +231,7 @@ impl UBootManager {
 
         debug!("No u-boot boot files found, assuming '{}'", ROOT_PATH);
 
-        Ok(PathInfo::new(cmds, ROOT_PATH, &mig_info.lsblk_info)?.unwrap())
+        Ok(PathInfo::new(ROOT_PATH, &mig_info.lsblk_info)?.unwrap())
     }
 }
 
@@ -258,7 +254,6 @@ impl<'a> BootManager for UBootManager {
 
     fn can_migrate(
         &mut self,
-        cmds: &mut EnsuredCmds,
         mig_info: &MigrateInfo,
         _config: &Config,
         _s2_cfg: &mut Stage2ConfigBuilder,
@@ -269,7 +264,7 @@ impl<'a> BootManager for UBootManager {
         // find the u-boot boot device
         // this is where uEnv.txt has to go
 
-        let bootmgr_path = self.find_bootmgr_path(cmds, mig_info)?;
+        let bootmgr_path = self.find_bootmgr_path(mig_info)?;
         info!(
             "Found boot manager '{}', mounpoint: '{}', fs type: {}, free space: {}",
             bootmgr_path.device.display(),
@@ -306,7 +301,7 @@ impl<'a> BootManager for UBootManager {
         if bootmgr_path.fs_free < boot_req_space {
             // find alt location for boot config
 
-            if let Some(boot_path) = PathInfo::new(cmds, BOOT_PATH, &mig_info.lsblk_info)? {
+            if let Some(boot_path) = PathInfo::new(BOOT_PATH, &mig_info.lsblk_info)? {
                 if boot_path.fs_free > boot_req_space {
                     info!(
                         "Found boot '{}', mounpoint: '{}', fs type: {}, free space: {}",
@@ -320,7 +315,7 @@ impl<'a> BootManager for UBootManager {
                     self.boot_path = Some(boot_path);
                 }
             } else {
-                if let Some(boot_path) = PathInfo::new(cmds, ROOT_PATH, &mig_info.lsblk_info)? {
+                if let Some(boot_path) = PathInfo::new(ROOT_PATH, &mig_info.lsblk_info)? {
                     if boot_path.fs_free > boot_req_space {
                         info!(
                             "Found boot '{}', mounpoint: '{}', fs type: {}, free space: {}",
@@ -352,7 +347,6 @@ impl<'a> BootManager for UBootManager {
 
     fn setup(
         &self,
-        cmds: &EnsuredCmds,
         mig_info: &MigrateInfo,
         s2_cfg: &mut Stage2ConfigBuilder,
         kernel_opts: &str,
@@ -419,7 +413,7 @@ impl<'a> BootManager for UBootManager {
             kernel_path.display()
         );
 
-        cmds.call(CHMOD_CMD, &["+x", &kernel_path.to_string_lossy()], false)?;
+        call(CHMOD_CMD, &["+x", &kernel_path.to_string_lossy()], false)?;
 
         let initrd_path = path_append(&boot_path.path, MIG_INITRD_NAME);
         std::fs::copy(&mig_info.initrd_file.path, &initrd_path).context(MigErrCtx::from_remark(

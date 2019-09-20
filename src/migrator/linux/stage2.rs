@@ -22,8 +22,8 @@ use crate::{
     defs::{FailMode, BACKUP_FILE, SYSTEM_CONNECTIONS_DIR},
     linux::{
         device,
-        ensured_cmds::{EnsuredCmds, FAT_CHK_CMD, REBOOT_CMD, UDEVADM_CMD},
         linux_common::{get_mem_info, whereis},
+        linux_defs::{FAT_CHK_CMD, REBOOT_CMD, UDEVADM_CMD},
         linux_defs::{MIGRATE_LOG_FILE, STAGE2_MEM_THRESHOLD},
     },
 };
@@ -72,7 +72,6 @@ pub(crate) enum FlashResult {
 }
 
 pub(crate) struct Stage2 {
-    pub cmds: RefCell<EnsuredCmds>,
     pub mounts: RefCell<Mounts>,
     config: Stage2Config,
     pub recoverable_state: bool,
@@ -102,13 +101,10 @@ impl<'a> Stage2 {
             }
         }
 
-        let mut cmds = EnsuredCmds::new();
-        if let Err(why) = cmds.ensure_cmds(MIG_REQUIRED_CMDS) {
-            warn!("Not all required commands were found: {:?}", why);
-        }
+        // TODO: create replacement for ensured commands
 
         // mount boot device containing BALENA_STAGE2_CFG for starters
-        let mut mounts = match Mounts::new(&mut cmds) {
+        let mut mounts = match Mounts::new() {
             Ok(mounts) => {
                 debug!(
                     "Successfully mounted boot file system: '{}' on '{:?}'",
@@ -156,7 +152,7 @@ impl<'a> Stage2 {
         Logger::set_default_level(&stage2_cfg.get_log_level());
 
         // Mount all remaining drives - work and log
-        match mounts.mount_from_config(&stage2_cfg, &cmds) {
+        match mounts.mount_from_config(&stage2_cfg) {
             Ok(_) => {
                 info!("mounted all configured drives");
             }
@@ -203,7 +199,6 @@ impl<'a> Stage2 {
         }
 
         return Ok(Stage2 {
-            cmds: RefCell::new(cmds),
             mounts: RefCell::new(mounts),
             config: stage2_cfg,
             recoverable_state: false,
@@ -267,6 +262,8 @@ impl<'a> Stage2 {
 
         info!("migrating {:?} boot type: {:?}", device_type, boot_type);
 
+        // TODO: replace ?
+        /*
         if let Err(why) =
             if let CheckedImageType::Flasher(ref _image_path) = self.config.get_balena_image() {
                 flasher::check_commands(&mut self.cmds.borrow_mut(), &self.config)
@@ -277,6 +274,7 @@ impl<'a> Stage2 {
             error!("Some programs required to write the OS image to disk could not be located, error: '{:?}", why);
             return Err(MigError::displayed());
         }
+        */
 
         let work_path = if let Some(work_path) = self.mounts.borrow().get_work_path() {
             work_path.to_path_buf()
@@ -570,7 +568,6 @@ impl<'a> Stage2 {
 
                 match flasher::flash_balena_os(
                     &target_path,
-                    &self.cmds.borrow(),
                     &mut self.mounts.borrow_mut(),
                     &self.config,
                     &image_path,
@@ -606,7 +603,6 @@ impl<'a> Stage2 {
 
                 match fs_writer::write_balena_os(
                     &target_path,
-                    &self.cmds.borrow(),
                     &mut self.mounts.borrow_mut(),
                     &self.config,
                     &base_path,

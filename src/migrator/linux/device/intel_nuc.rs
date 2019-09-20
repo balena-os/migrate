@@ -12,7 +12,7 @@ use crate::{
         linux_common::is_secure_boot,
         migrate_info::PathInfo,
         stage2::mounts::Mounts,
-        EnsuredCmds, MigrateInfo,
+        MigrateInfo,
     },
 };
 
@@ -22,7 +22,6 @@ pub(crate) struct IntelNuc {
 
 impl IntelNuc {
     pub fn from_config(
-        cmds: &mut EnsuredCmds,
         mig_info: &MigrateInfo,
         config: &Config,
         s2_cfg: &mut Stage2ConfigBuilder,
@@ -73,7 +72,7 @@ impl IntelNuc {
         }
 
         let mut boot_manager = GrubBootManager::new();
-        if boot_manager.can_migrate(cmds, mig_info, config, s2_cfg)? {
+        if boot_manager.can_migrate(mig_info, config, s2_cfg)? {
             Ok(IntelNuc {
                 boot_manager: Box::new(boot_manager),
             })
@@ -114,7 +113,6 @@ impl<'a> Device for IntelNuc {
 
     fn setup(
         &self,
-        cmds: &EnsuredCmds,
         dev_info: &mut MigrateInfo,
         config: &Config,
         s2_cfg: &mut Stage2ConfigBuilder,
@@ -127,8 +125,7 @@ impl<'a> Device for IntelNuc {
             String::from("")
         };
 
-        self.boot_manager
-            .setup(cmds, dev_info, s2_cfg, &kernel_opts)
+        self.boot_manager.setup(dev_info, s2_cfg, &kernel_opts)
     }
 
     fn restore_boot(&self, mounts: &Mounts, config: &Stage2Config) -> bool {

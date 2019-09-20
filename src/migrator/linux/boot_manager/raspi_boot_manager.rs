@@ -8,7 +8,7 @@ use std::time::SystemTime;
 
 use crate::{
     common::{
-        dir_exists,
+        call, dir_exists,
         file_digest::check_digest,
         file_exists, is_balena_file, path_append,
         stage2_config::{Stage2Config, Stage2ConfigBuilder},
@@ -17,7 +17,7 @@ use crate::{
     defs::{BootType, BALENA_FILE_TAG},
     linux::{
         boot_manager::BootManager, linux_defs::BOOT_PATH, migrate_info::PathInfo,
-        stage2::mounts::Mounts, EnsuredCmds, MigrateInfo, CHMOD_CMD,
+        stage2::mounts::Mounts, MigrateInfo, CHMOD_CMD,
     },
 };
 
@@ -71,7 +71,6 @@ impl BootManager for RaspiBootManager {
 
     fn can_migrate(
         &mut self,
-        cmds: &mut EnsuredCmds,
         mig_info: &MigrateInfo,
         _config: &Config,
         _s2_cfg: &mut Stage2ConfigBuilder,
@@ -83,7 +82,7 @@ impl BootManager for RaspiBootManager {
             return Ok(false);
         }
 
-        self.bootmgr_path = Some(PathInfo::new(cmds, BOOT_PATH, &mig_info.lsblk_info)?.unwrap());
+        self.bootmgr_path = Some(PathInfo::new(BOOT_PATH, &mig_info.lsblk_info)?.unwrap());
 
         // TODO: provide a way to supply digests for DTB files
         for file in &RPI_DTB_FILES {
@@ -101,7 +100,6 @@ impl BootManager for RaspiBootManager {
 
     fn setup(
         &self,
-        cmds: &EnsuredCmds,
         mig_info: &MigrateInfo,
         s2_cfg: &mut Stage2ConfigBuilder,
         kernel_opts: &str,
@@ -137,7 +135,7 @@ impl BootManager for RaspiBootManager {
             RPI_MIG_KERNEL_PATH
         );
 
-        cmds.call(CHMOD_CMD, &["+x", RPI_MIG_KERNEL_PATH], false)?;
+        call(CHMOD_CMD, &["+x", RPI_MIG_KERNEL_PATH], false)?;
 
         // **********************************************************************
         // ** copy new iniramfs

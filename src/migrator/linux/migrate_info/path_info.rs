@@ -9,7 +9,6 @@ use crate::{
         linux_common::{get_fs_space, get_kernel_root_info},
         linux_defs::ROOT_PATH,
         migrate_info::lsblk_info::{LsblkDevice, LsblkInfo, LsblkPartition},
-        EnsuredCmds,
     },
 };
 
@@ -69,7 +68,6 @@ impl PathInfo {
     }
 
     pub fn from_mounted<P1: AsRef<Path>, P2: AsRef<Path>>(
-        cmds: &EnsuredCmds,
         abs_path: &P1,
         mountpoint: &P2,
         device: &LsblkDevice,
@@ -84,7 +82,7 @@ impl PathInfo {
 
         // get filesystem space for device
 
-        let (fs_size, fs_free) = get_fs_space(cmds, &path)?;
+        let (fs_size, fs_free) = get_fs_space(&path)?;
 
         let result = PathInfo {
             path: path,
@@ -154,7 +152,6 @@ impl PathInfo {
     }
 
     pub fn new<P: AsRef<Path>>(
-        cmds: &EnsuredCmds,
         path: P,
         lsblk_info: &LsblkInfo,
     ) -> Result<Option<PathInfo>, MigError> {
@@ -177,7 +174,7 @@ impl PathInfo {
 
         debug!("looking fo path: '{}'", abs_path.display());
 
-        let (device, partition) = if abs_path == Path::new(ROOT_PATH) {
+        let (device, partition) = if abs_path == PathBuf::from(ROOT_PATH) {
             let (root_device, _root_fs_type) = get_kernel_root_info()?;
             lsblk_info.get_devinfo_from_partition(root_device)?
         } else {
@@ -186,7 +183,7 @@ impl PathInfo {
 
         if let Some(ref mountpoint) = partition.mountpoint {
             Ok(Some(PathInfo::from_mounted(
-                cmds, &abs_path, mountpoint, &device, &partition,
+                &abs_path, mountpoint, &device, &partition,
             )?))
         } else {
             Err(MigError::from_remark(

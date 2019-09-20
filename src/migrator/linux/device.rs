@@ -8,7 +8,7 @@ use crate::{
         Config, MigErrCtx, MigError, MigErrorKind,
     },
     defs::{BootType, DeviceType, OSArch},
-    linux::{migrate_info::PathInfo, stage2::mounts::Mounts, EnsuredCmds, MigrateInfo},
+    linux::{migrate_info::PathInfo, stage2::mounts::Mounts, MigrateInfo},
 };
 
 mod beaglebone;
@@ -26,7 +26,6 @@ pub(crate) trait Device {
 
     fn setup(
         &self,
-        cmds: &EnsuredCmds,
         dev_info: &mut MigrateInfo,
         config: &Config,
         s2_cfg: &mut Stage2ConfigBuilder,
@@ -62,7 +61,6 @@ pub(crate) fn from_config(
 }
 
 pub(crate) fn get_device(
-    cmds: &mut EnsuredCmds,
     mig_info: &MigrateInfo,
     config: &Config,
     s2_cfg: &mut Stage2ConfigBuilder,
@@ -78,15 +76,11 @@ pub(crate) fn get_device(
                     ),
                 ))?;
 
-            if let Some(device) =
-                raspberrypi::is_rpi(cmds, mig_info, config, s2_cfg, &dev_tree_model)?
-            {
+            if let Some(device) = raspberrypi::is_rpi(mig_info, config, s2_cfg, &dev_tree_model)? {
                 return Ok(device);
             }
 
-            if let Some(device) =
-                beaglebone::is_bb(cmds, mig_info, config, s2_cfg, &dev_tree_model)?
-            {
+            if let Some(device) = beaglebone::is_bb(mig_info, config, s2_cfg, &dev_tree_model)? {
                 return Ok(device);
             }
 
@@ -99,7 +93,7 @@ pub(crate) fn get_device(
         }
         OSArch::AMD64 => {
             return Ok(Box::new(intel_nuc::IntelNuc::from_config(
-                cmds, mig_info, config, s2_cfg,
+                mig_info, config, s2_cfg,
             )?))
         }
         /*            OSArch::I386 => {

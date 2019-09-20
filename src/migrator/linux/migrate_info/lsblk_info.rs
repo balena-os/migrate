@@ -6,9 +6,9 @@ use std::path::{Path, PathBuf};
 
 use crate::linux::linux_common::to_std_device_path;
 use crate::{
-    common::{path_append, MigErrCtx, MigError, MigErrorKind},
+    common::{call, path_append, MigErrCtx, MigError, MigErrorKind},
     defs::{DISK_BY_LABEL_PATH, DISK_BY_PARTUUID_PATH, DISK_BY_UUID_PATH},
-    linux::{EnsuredCmds, LSBLK_CMD},
+    linux::linux_defs::LSBLK_CMD,
 };
 use std::collections::HashMap;
 
@@ -105,8 +105,8 @@ pub(crate) struct LsblkInfo {
 }
 
 impl<'a> LsblkInfo {
-    pub fn for_device(device: &Path, cmds: &EnsuredCmds) -> Result<LsblkDevice, MigError> {
-        let lsblk_info = LsblkInfo::call_lsblk(Some(device), cmds)?;
+    pub fn for_device(device: &Path) -> Result<LsblkDevice, MigError> {
+        let lsblk_info = LsblkInfo::call_lsblk(Some(device))?;
         if lsblk_info.blockdevices.len() == 1 {
             Ok(lsblk_info.blockdevices[0].clone())
         } else {
@@ -120,8 +120,8 @@ impl<'a> LsblkInfo {
         }
     }
 
-    pub fn all(cmds: &EnsuredCmds) -> Result<LsblkInfo, MigError> {
-        let mut lsblk_info = LsblkInfo::call_lsblk(None, cmds)?;
+    pub fn all() -> Result<LsblkInfo, MigError> {
+        let mut lsblk_info = LsblkInfo::call_lsblk(None)?;
 
         // filter by maj block device numbers from https://www.kernel.org/doc/Documentation/admin-guide/devices.txt
         // other candidates:
@@ -263,7 +263,7 @@ impl<'a> LsblkInfo {
         }
     }
 
-    fn call_lsblk(device: Option<&Path>, cmds: &EnsuredCmds) -> Result<LsblkInfo, MigError> {
+    fn call_lsblk(device: Option<&Path>) -> Result<LsblkInfo, MigError> {
         #[allow(unused_assignments)]
         let mut dev_name = String::new();
         let args = if let Some(device) = device {
@@ -284,7 +284,7 @@ impl<'a> LsblkInfo {
             ]
         };
 
-        let cmd_res = cmds.call(LSBLK_CMD, &args, true)?;
+        let cmd_res = call(LSBLK_CMD, &args, true)?;
         if cmd_res.status.success() {
             Ok(LsblkInfo::from_list(&cmd_res.stdout)?)
         } else {

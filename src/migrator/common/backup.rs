@@ -10,12 +10,11 @@ use tar::Builder;
 use std::os::unix::fs::symlink;
 
 use crate::common::{
-    config::migrate_config::VolumeConfig, dir_exists, path_append, MigErrCtx, MigError,
+    call, config::migrate_config::VolumeConfig, dir_exists, path_append, MigErrCtx, MigError,
     MigErrorKind,
 };
 use crate::defs::BACKUP_FILE;
-use crate::linux::ensured_cmds::TAR_CMD;
-use crate::linux::{EnsuredCmds, MKTEMP_CMD};
+use crate::linux::linux_defs::{MKTEMP_CMD, TAR_CMD};
 
 // Recurse through directories
 
@@ -69,21 +68,18 @@ impl Archiver for RustTarArchiver {
 }
 
 #[cfg(target_os = "linux")]
-pub struct ExtTarArchiver<'a> {
-    cmds: &'a EnsuredCmds,
+pub struct ExtTarArchiver {
     tmp_dir: PathBuf,
     archive: PathBuf,
 }
 
 #[cfg(target_os = "linux")]
-impl ExtTarArchiver<'_> {
-    fn new<P: AsRef<Path>>(cmds: &EnsuredCmds, file: P) -> Result<ExtTarArchiver, MigError> {
-        let cmd_res = cmds
-            .call(MKTEMP_CMD, &["-d"], true)
-            .context(MigErrCtx::from_remark(
-                MigErrorKind::Upstream,
-                "failed to create temporary directory for backup",
-            ))?;
+impl ExtTarArchiver {
+    fn new<P: AsRef<Path>>(file: P) -> Result<ExtTarArchiver, MigError> {
+        let cmd_res = call(MKTEMP_CMD, &["-d"], true).context(MigErrCtx::from_remark(
+            MigErrorKind::Upstream,
+            "failed to create temporary directory for backup",
+        ))?;
 
         if !cmd_res.status.success() {
             error!("Failed to create temporary directory");
@@ -91,7 +87,6 @@ impl ExtTarArchiver<'_> {
         }
 
         Ok(ExtTarArchiver {
-            cmds,
             tmp_dir: PathBuf::from(cmd_res.stdout),
             archive: PathBuf::from(file.as_ref()),
         })
@@ -99,7 +94,7 @@ impl ExtTarArchiver<'_> {
 }
 
 #[cfg(target_os = "linux")]
-impl Archiver for ExtTarArchiver<'_> {
+impl Archiver for ExtTarArchiver {
     fn add_file(&mut self, target: &Path, source: &Path) -> Result<(), MigError> {
         debug!(
             "ExtTarArchiver::add_file: '{}' , '{}'",
@@ -143,27 +138,25 @@ impl Archiver for ExtTarArchiver<'_> {
     }
 
     fn finish(&mut self) -> Result<(), MigError> {
-        let cmd_res = self
-            .cmds
-            .call(
-                TAR_CMD,
-                &[
-                    "-h",
-                    "-czf",
-                    BACKUP_FILE,
-                    "-C",
-                    &*self.tmp_dir.to_string_lossy(),
-                    ".",
-                ],
-                true,
-            )
-            .context(MigErrCtx::from_remark(
-                MigErrorKind::Upstream,
-                &format!(
-                    "Failed to create backup archive '{}'",
-                    self.archive.display()
-                ),
-            ))?;
+        let cmd_res = call(
+            TAR_CMD,
+            &[
+                "-h",
+                "-czf",
+                BACKUP_FILE,
+                "-C",
+                &*self.tmp_dir.to_string_lossy(),
+                ".",
+            ],
+            true,
+        )
+        .context(MigErrCtx::from_remark(
+            MigErrorKind::Upstream,
+            &format!(
+                "Failed to create backup archive '{}'",
+                self.archive.display()
+            ),
+        ))?;
 
         if !cmd_res.status.success() {
             error!(
@@ -286,14 +279,10 @@ fn archive_dir<'a>(
 }
 
 #[cfg(target_os = "linux")]
-pub(crate) fn create_ext<'a>(
-    cmds: &'a EnsuredCmds,
-    file: &Path,
-    config: &[VolumeConfig],
-) -> Result<bool, MigError> {
+pub(crate) fn create_ext<'a>(file: &Path, config: &[VolumeConfig]) -> Result<bool, MigError> {
     if config.len() > 0 {
         debug!("creating new backup in '{}", file.display());
-        let mut archiver = ExtTarArchiver::new(cmds, file)?;
+        let mut archiver = ExtTarArchiver::new(file)?;
         create_int(&mut archiver, config)
     } else {
         info!("The backup configuration was empty - nothing backed up");

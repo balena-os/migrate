@@ -4,7 +4,7 @@ use crate::{
         Config, MigError, MigErrorKind,
     },
     defs::BootType,
-    linux::{migrate_info::PathInfo, stage2::mounts::Mounts, EnsuredCmds, MigrateInfo},
+    linux::{migrate_info::PathInfo, stage2::mounts::Mounts, MigrateInfo},
 };
 
 pub(crate) mod u_boot_manager;
@@ -31,14 +31,12 @@ pub(crate) trait BootManager {
     fn get_boot_type(&self) -> BootType;
     fn can_migrate(
         &mut self,
-        cmds: &mut EnsuredCmds,
         mig_info: &MigrateInfo,
         config: &Config,
         s2_cfg: &mut Stage2ConfigBuilder,
     ) -> Result<bool, MigError>;
     fn setup(
         &self,
-        cmds: &EnsuredCmds,
         mig_info: &MigrateInfo,
         s2_cfg: &mut Stage2ConfigBuilder,
         kernel_opts: &str,
@@ -74,7 +72,6 @@ impl BootManager for EfiBootManager {
 
     fn can_migrate(
         &mut self,
-        _cmds: &mut EnsuredCmds,
         _dev_info: &MigrateInfo,
         _config: &Config,
         _s2_cfg: &mut Stage2ConfigBuilder,
@@ -83,7 +80,6 @@ impl BootManager for EfiBootManager {
     }
     fn setup(
         &self,
-        _cmds: &EnsuredCmds,
         _dev_info: &MigrateInfo,
         _s2_cfg: &mut Stage2ConfigBuilder,
         _kernel_opts: &str,

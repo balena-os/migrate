@@ -9,7 +9,7 @@ use std::time::Duration;
 
 use crate::{
     common::{
-        backup,
+        backup, call,
         config::balena_config::ImageType,
         dir_exists, format_size_with_unit, path_append,
         stage2_config::{PathType, Stage2ConfigBuilder, Stage2LogConfig},
@@ -19,6 +19,9 @@ use crate::{
 };
 
 pub(crate) mod linux_defs;
+use linux_defs::{
+    CHMOD_CMD, DF_CMD, FILE_CMD, LSBLK_CMD, MKTEMP_CMD, MOUNT_CMD, REBOOT_CMD, TAR_CMD, UNAME_CMD,
+};
 
 pub(crate) mod device;
 pub(crate) use device::Device;
@@ -30,27 +33,22 @@ use extract::Extractor;
 
 pub(crate) mod stage2;
 
-pub(crate) mod ensured_cmds;
-pub(crate) use ensured_cmds::{
-    EnsuredCmds, CHMOD_CMD, DF_CMD, FILE_CMD, GRUB_REBOOT_CMD, GRUB_UPDT_CMD, LSBLK_CMD,
-    MKTEMP_CMD, MOKUTIL_CMD, MOUNT_CMD, REBOOT_CMD, TAR_CMD, UNAME_CMD, WHEREIS_CMD,
-};
-
 pub(crate) mod migrate_info;
 pub(crate) use migrate_info::MigrateInfo;
 
 pub(crate) mod linux_common;
 use crate::common::stage2_config::MountConfig;
 use crate::defs::STAGE2_CFG_FILE;
+use crate::linux::linux_common::whereis;
 pub(crate) use linux_common::is_admin;
 use mod_logger::{LogDestination, Logger};
 
 const REQUIRED_CMDS: &'static [&'static str] = &[
+    // TODO: check this
     DF_CMD, LSBLK_CMD, FILE_CMD, UNAME_CMD, MOUNT_CMD, REBOOT_CMD, CHMOD_CMD, MKTEMP_CMD, TAR_CMD,
 ];
 
 pub(crate) struct LinuxMigrator {
-    cmds: EnsuredCmds,
     mig_info: MigrateInfo,
     config: Config,
     stage2_config: Stage2ConfigBuilder,
@@ -98,18 +96,25 @@ impl<'a> LinuxMigrator {
 
         info!("migrate mode: {:?}", config.migrate.get_mig_mode());
 
-        let mut cmds = EnsuredCmds::new();
-
-        if let Err(why) = cmds.ensure_cmds(REQUIRED_CMDS) {
-            error!("Failed to ensure required commands: {:?}", why);
-            return Err(MigError::displayed());
-        };
+        // A simple replacement for ensured commands
+        for command in REQUIRED_CMDS {
+            match whereis(command) {
+                Ok(cmd_path) => (),
+                Err(why) => {
+                    error!(
+                        "Could not find required command: '{}': error: {:?}",
+                        command, why
+                    );
+                    return Err(MigError::displayed());
+                }
+            }
+        }
 
         // **********************************************************************
         // Get os architecture & name & disk properties, check required paths
         // find wifis etc..
 
-        let mig_info = match MigrateInfo::new(&config, &mut cmds) {
+        let mig_info = match MigrateInfo::new(&config) {
             Ok(mig_info) => {
                 info!(
                     "OS Architecture is {}, OS Name is '{}'",
@@ -136,7 +141,7 @@ impl<'a> LinuxMigrator {
 
         let mut stage2_config = Stage2ConfigBuilder::default();
 
-        let device = match device::get_device(&mut cmds, &mig_info, &config, &mut stage2_config) {
+        let device = match device::get_device(&mig_info, &config, &mut stage2_config) {
             Ok(device) => {
                 let dev_type = device.get_device_type();
                 let boot_type = device.get_boot_type();
@@ -221,7 +226,6 @@ impl<'a> LinuxMigrator {
         }
 
         Ok(LinuxMigrator {
-            cmds,
             mig_info,
             config,
             device,
@@ -272,11 +276,7 @@ impl<'a> LinuxMigrator {
             .set_has_backup(if self.config.migrate.is_tar_internal() {
                 backup::create(&backup_path, self.config.migrate.get_backup_volumes())?
             } else {
-                backup::create_ext(
-                    &self.cmds,
-                    &backup_path,
-                    self.config.migrate.get_backup_volumes(),
-                )?
+                backup::create_ext(&backup_path, self.config.migrate.get_backup_volumes())?
             });
 
         // TODO: compare total transfer size (kernel, initramfs, backup, configs )  to memory size (needs to fit in ramfs)
@@ -331,16 +331,10 @@ impl<'a> LinuxMigrator {
         // TODO: make setup take no s2_cfg or immutable s2_cfg and return boot_backup instead
         // TODO: make setup undoable in case something bad happens later on
 
-        self.device.setup(
-            &self.cmds,
-            &mut self.mig_info,
-            &self.config,
-            &mut self.stage2_config,
-        )?;
+        self.device
+            .setup(&mut self.mig_info, &self.config, &mut self.stage2_config)?;
 
         trace!("stage2 config");
-
-        
 
         // dbg!("setting up stage2_cfg");
         // *****************************************************************************************
@@ -422,7 +416,7 @@ impl<'a> LinuxMigrator {
             let delay = Duration::new(*delay, 0);
             thread::sleep(delay);
             println!("Rebooting now..");
-            self.cmds.call(REBOOT_CMD, &["-f"], false)?;
+            call(REBOOT_CMD, &["-f"], false)?;
         }
 
         trace!("done");

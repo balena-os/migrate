@@ -12,7 +12,7 @@ use crate::{
         device::Device,
         migrate_info::PathInfo,
         stage2::mounts::Mounts,
-        EnsuredCmds, MigrateInfo,
+        MigrateInfo,
     },
 };
 
@@ -45,7 +45,6 @@ const BB_MODEL_REGEX: &str = r#"^((\S+\s+)*\S+)\s+Beagle(Bone|Board)\s+(\S+)$"#;
 // TODO: check location of uEnv.txt or other files files to improve reliability
 
 pub(crate) fn is_bb(
-    cmds: &mut EnsuredCmds,
     dev_info: &MigrateInfo,
     config: &Config,
     s2_cfg: &mut Stage2ConfigBuilder,
@@ -67,19 +66,19 @@ pub(crate) fn is_bb(
             "xM" => {
                 debug!("match found for BeagleboardXM");
                 Ok(Some(Box::new(BeagleboardXM::from_config(
-                    cmds, dev_info, config, s2_cfg,
+                    dev_info, config, s2_cfg,
                 )?)))
             }
             "Green" => {
                 debug!("match found for BeagleboneGreen");
                 Ok(Some(Box::new(BeagleboneGreen::from_config(
-                    cmds, dev_info, config, s2_cfg,
+                    dev_info, config, s2_cfg,
                 )?)))
             }
             "Black" => {
                 debug!("match found for BeagleboneBlack");
                 Ok(Some(Box::new(BeagleboneBlack::from_config(
-                    cmds, dev_info, config, s2_cfg,
+                    dev_info, config, s2_cfg,
                 )?)))
             }
             _ => {
@@ -101,7 +100,6 @@ pub(crate) struct BeagleboneBlack {
 impl BeagleboneGreen {
     // this is used in stage1
     fn from_config(
-        cmds: &mut EnsuredCmds,
         mig_info: &MigrateInfo,
         config: &Config,
         s2_cfg: &mut Stage2ConfigBuilder,
@@ -115,7 +113,7 @@ impl BeagleboneGreen {
             // use config.migrate.flash_device
             //
 
-            if boot_manager.can_migrate(cmds, mig_info, config, s2_cfg)? {
+            if boot_manager.can_migrate(mig_info, config, s2_cfg)? {
                 Ok(BeagleboneGreen {
                     boot_manager: Box::new(boot_manager),
                 })
@@ -160,7 +158,6 @@ impl Device for BeagleboneGreen {
 
     fn setup(
         &self,
-        cmds: &EnsuredCmds,
         dev_info: &mut MigrateInfo,
         config: &Config,
         s2_cfg: &mut Stage2ConfigBuilder,
@@ -174,8 +171,7 @@ impl Device for BeagleboneGreen {
             String::from(BBG_KOPTS)
         };
 
-        self.boot_manager
-            .setup(cmds, dev_info, s2_cfg, &kernel_opts)
+        self.boot_manager.setup(dev_info, s2_cfg, &kernel_opts)
     }
 
     fn restore_boot(&self, mounts: &Mounts, config: &Stage2Config) -> bool {
@@ -194,7 +190,6 @@ pub(crate) struct BeagleboneGreen {
 impl BeagleboneBlack {
     // this is used in stage1
     fn from_config(
-        cmds: &mut EnsuredCmds,
         mig_info: &MigrateInfo,
         config: &Config,
         s2_cfg: &mut Stage2ConfigBuilder,
@@ -204,7 +199,7 @@ impl BeagleboneBlack {
         if let Some(_idx) = SUPPORTED_OSSES.iter().position(|&r| r == os_name) {
             let mut boot_manager = UBootManager::new();
 
-            if boot_manager.can_migrate(cmds, mig_info, config, s2_cfg)? {
+            if boot_manager.can_migrate(mig_info, config, s2_cfg)? {
                 Ok(BeagleboneBlack {
                     boot_manager: Box::new(boot_manager),
                 })
@@ -249,7 +244,6 @@ impl Device for BeagleboneBlack {
 
     fn setup(
         &self,
-        cmds: &EnsuredCmds,
         dev_info: &mut MigrateInfo,
         config: &Config,
         s2_cfg: &mut Stage2ConfigBuilder,
@@ -263,8 +257,7 @@ impl Device for BeagleboneBlack {
             String::from(BBB_KOPTS)
         };
 
-        self.boot_manager
-            .setup(cmds, dev_info, s2_cfg, &kernel_opts)
+        self.boot_manager.setup(dev_info, s2_cfg, &kernel_opts)
     }
 
     fn restore_boot(&self, mounts: &Mounts, config: &Stage2Config) -> bool {
@@ -284,7 +277,6 @@ impl BeagleboardXM {
     // this is used in stage1
 
     fn from_config(
-        cmds: &mut EnsuredCmds,
         mig_info: &MigrateInfo,
         config: &Config,
         s2_cfg: &mut Stage2ConfigBuilder,
@@ -301,7 +293,7 @@ impl BeagleboardXM {
                             return Err(MigError::from_remark(MigErrorKind::InvState, &msg));
                         }
             */
-            if boot_manager.can_migrate(cmds, mig_info, config, s2_cfg)? {
+            if boot_manager.can_migrate(mig_info, config, s2_cfg)? {
                 Ok(BeagleboardXM {
                     boot_manager: Box::new(boot_manager),
                 })
@@ -350,7 +342,6 @@ impl<'a> Device for BeagleboardXM {
 
     fn setup(
         &self,
-        cmds: &EnsuredCmds,
         mig_info: &mut MigrateInfo,
         config: &Config,
         s2_cfg: &mut Stage2ConfigBuilder,
@@ -364,8 +355,7 @@ impl<'a> Device for BeagleboardXM {
             String::from(BBXM_KOPTS)
         };
 
-        self.boot_manager
-            .setup(cmds, mig_info, s2_cfg, &kernel_opts)
+        self.boot_manager.setup(mig_info, s2_cfg, &kernel_opts)
     }
 
     fn get_boot_device(&self) -> PathInfo {

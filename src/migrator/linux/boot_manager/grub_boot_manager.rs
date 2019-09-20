@@ -8,7 +8,7 @@ use std::path::Path;
 use crate::linux::migrate_info::PathInfo;
 use crate::{
     common::{
-        dir_exists,
+        call, dir_exists,
         disk_util::LabelType,
         file_digest::check_digest,
         file_exists, format_size_with_unit, path_append,
@@ -22,9 +22,9 @@ use crate::{
             BOOT_PATH, GRUB_CONFIG_DIR, GRUB_CONFIG_FILE, GRUB_MIN_VERSION, KERNEL_CMDLINE_PATH,
             ROOT_PATH,
         },
+        linux_defs::{CHMOD_CMD, GRUB_REBOOT_CMD, GRUB_UPDT_CMD},
         migrate_info::MigrateInfo,
         stage2::mounts::Mounts,
-        EnsuredCmds, CHMOD_CMD, GRUB_REBOOT_CMD, GRUB_UPDT_CMD,
     },
 };
 
@@ -64,16 +64,11 @@ impl<'a> GrubBootManager {
      * as (major,minor)
      ******************************************************************/
 
-    fn get_grub_version(cmds: &mut EnsuredCmds) -> Result<(String, String), MigError> {
+    fn get_grub_version() -> Result<(String, String), MigError> {
         trace!("get_grub_version: entered");
 
-        let _dummy = cmds.ensure(GRUB_REBOOT_CMD)?;
-
-        let _dummy = cmds.ensure(GRUB_UPDT_CMD)?;
-
-        let cmd_res = cmds
-            .call(GRUB_UPDT_CMD, &GRUB_UPDT_VERSION_ARGS, true)
-            .context(MigErrCtx::from_remark(
+        let cmd_res =
+            call(GRUB_UPDT_CMD, &GRUB_UPDT_VERSION_ARGS, true).context(MigErrCtx::from_remark(
                 MigErrorKind::Upstream,
                 &format!(
                     "get_grub_version: call '{} {:?}'",
@@ -124,7 +119,6 @@ impl<'a> BootManager for GrubBootManager {
 
     fn can_migrate(
         &mut self,
-        cmds: &mut EnsuredCmds,
         mig_info: &MigrateInfo,
         _config: &Config,
         _s2_cfg: &mut Stage2ConfigBuilder,
@@ -139,9 +133,9 @@ impl<'a> BootManager for GrubBootManager {
             return Ok(false);
         }
 
-        let boot_path = PathInfo::new(cmds, BOOT_PATH, &mig_info.lsblk_info)?.unwrap();
+        let boot_path = PathInfo::new(BOOT_PATH, &mig_info.lsblk_info)?.unwrap();
 
-        let grub_version = GrubBootManager::get_grub_version(cmds)?;
+        let grub_version = GrubBootManager::get_grub_version()?;
         info!(
             "grub-install version is {}.{}",
             grub_version.0, grub_version.1
@@ -188,7 +182,6 @@ impl<'a> BootManager for GrubBootManager {
 
     fn setup(
         &self,
-        cmds: &EnsuredCmds,
         mig_info: &MigrateInfo,
         _s2_cfg: &mut Stage2ConfigBuilder,
         kernel_opts: &str,
@@ -329,7 +322,7 @@ impl<'a> BootManager for GrubBootManager {
                 &format!("Failed to write to grub config file '{}'", GRUB_CONFIG_FILE),
             ))?;
 
-        let cmd_res = cmds.call(CHMOD_CMD, &["+x", GRUB_CONFIG_FILE], true)?;
+        let cmd_res = call(CHMOD_CMD, &["+x", GRUB_CONFIG_FILE], true)?;
         if !cmd_res.status.success() {
             return Err(MigError::from_remark(
                 MigErrorKind::ExecProcess,
@@ -370,7 +363,7 @@ impl<'a> BootManager for GrubBootManager {
             kernel_path.display()
         );
 
-        cmds.call(CHMOD_CMD, &["+x", &kernel_path.to_string_lossy()], false)?;
+        call(CHMOD_CMD, &["+x", &kernel_path.to_string_lossy()], false)?;
 
         let initrd_path = path_append(&boot_path.path, MIG_INITRD_NAME);
         std::fs::copy(&mig_info.initrd_file.path, &initrd_path).context(MigErrCtx::from_remark(
@@ -401,12 +394,10 @@ impl<'a> BootManager for GrubBootManager {
 
         info!("calling '{}'", GRUB_UPDT_CMD);
 
-        let cmd_res = cmds
-            .call(GRUB_UPDT_CMD, &[], true)
-            .context(MigErrCtx::from_remark(
-                MigErrorKind::Upstream,
-                "Failed to set up boot configuration'",
-            ))?;
+        let cmd_res = call(GRUB_UPDT_CMD, &[], true).context(MigErrCtx::from_remark(
+            MigErrorKind::Upstream,
+            "Failed to set up boot configuration'",
+        ))?;
 
         if !cmd_res.status.success() {
             return Err(MigError::from_remark(
@@ -417,9 +408,8 @@ impl<'a> BootManager for GrubBootManager {
 
         info!("calling '{}'", GRUB_REBOOT_CMD);
 
-        let cmd_res = cmds
-            .call(GRUB_REBOOT_CMD, &["balena-migrate"], true)
-            .context(MigErrCtx::from_remark(
+        let cmd_res =
+            call(GRUB_REBOOT_CMD, &["balena-migrate"], true).context(MigErrCtx::from_remark(
                 MigErrorKind::Upstream,
                 &format!(
                     "Failed to activate boot configuration using '{}'",

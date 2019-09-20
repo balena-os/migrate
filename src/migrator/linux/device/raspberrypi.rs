@@ -13,14 +13,13 @@ use crate::{
         linux_common::restore_backups,
         migrate_info::PathInfo,
         stage2::mounts::Mounts,
-        EnsuredCmds, MigrateInfo,
+        MigrateInfo,
     },
 };
 
 const RPI_MODEL_REGEX: &str = r#"^Raspberry\s+Pi\s+(\S+)\s+Model\s+(.*)$"#;
 
 pub(crate) fn is_rpi(
-    cmds: &mut EnsuredCmds,
     dev_info: &MigrateInfo,
     config: &Config,
     s2_cfg: &mut Stage2ConfigBuilder,
@@ -43,7 +42,7 @@ pub(crate) fn is_rpi(
             "3" => {
                 info!("Identified RaspberryPi3: model {}", model);
                 Ok(Some(Box::new(RaspberryPi3::from_config(
-                    cmds, dev_info, config, s2_cfg,
+                    dev_info, config, s2_cfg,
                 )?)))
             }
             _ => {
@@ -64,7 +63,6 @@ pub(crate) struct RaspberryPi3 {
 
 impl RaspberryPi3 {
     pub fn from_config(
-        cmds: &mut EnsuredCmds,
         mig_info: &MigrateInfo,
         config: &Config,
         s2_cfg: &mut Stage2ConfigBuilder,
@@ -79,7 +77,7 @@ impl RaspberryPi3 {
 
         if let Some(_n) = SUPPORTED_OSSES.iter().position(|&r| r == os_name) {
             let mut boot_manager = RaspiBootManager::new();
-            if boot_manager.can_migrate(cmds, mig_info, config, s2_cfg)? {
+            if boot_manager.can_migrate(mig_info, config, s2_cfg)? {
                 Ok(RaspberryPi3 {
                     boot_manager: Box::new(boot_manager),
                 })
@@ -115,7 +113,6 @@ impl<'a> Device for RaspberryPi3 {
 
     fn setup(
         &self,
-        cmds: &EnsuredCmds,
         dev_info: &mut MigrateInfo,
         config: &Config,
         s2_cfg: &mut Stage2ConfigBuilder,
@@ -126,8 +123,7 @@ impl<'a> Device for RaspberryPi3 {
             String::from("")
         };
 
-        self.boot_manager
-            .setup(cmds, dev_info, s2_cfg, &kernel_opts)
+        self.boot_manager.setup(dev_info, s2_cfg, &kernel_opts)
     }
 
     fn restore_boot(&self, mounts: &Mounts, config: &Stage2Config) -> bool {
