@@ -20,7 +20,7 @@ use crate::{
 const RPI_MODEL_REGEX: &str = r#"^Raspberry\s+Pi\s+(\S+)\s+Model\s+(.*)$"#;
 
 pub(crate) fn is_rpi(
-    dev_info: &MigrateInfo,
+    mig_info: &MigrateInfo,
     config: &Config,
     s2_cfg: &mut Stage2ConfigBuilder,
     model_string: &str,
@@ -42,7 +42,7 @@ pub(crate) fn is_rpi(
             "3" => {
                 info!("Identified RaspberryPi3: model {}", model);
                 Ok(Some(Box::new(RaspberryPi3::from_config(
-                    dev_info, config, s2_cfg,
+                    mig_info, config, s2_cfg,
                 )?)))
             }
             _ => {
@@ -113,7 +113,7 @@ impl<'a> Device for RaspberryPi3 {
 
     fn setup(
         &self,
-        dev_info: &mut MigrateInfo,
+        mig_info: &mut MigrateInfo,
         config: &Config,
         s2_cfg: &mut Stage2ConfigBuilder,
     ) -> Result<(), MigError> {
@@ -123,7 +123,7 @@ impl<'a> Device for RaspberryPi3 {
             String::from("")
         };
 
-        self.boot_manager.setup(dev_info, s2_cfg, &kernel_opts)
+        self.boot_manager.setup(mig_info, s2_cfg, &kernel_opts)
     }
 
     fn restore_boot(&self, mounts: &Mounts, config: &Stage2Config) -> bool {

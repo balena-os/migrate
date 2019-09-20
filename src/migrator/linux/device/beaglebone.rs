@@ -45,7 +45,7 @@ const BB_MODEL_REGEX: &str = r#"^((\S+\s+)*\S+)\s+Beagle(Bone|Board)\s+(\S+)$"#;
 // TODO: check location of uEnv.txt or other files files to improve reliability
 
 pub(crate) fn is_bb(
-    dev_info: &MigrateInfo,
+    mig_info: &MigrateInfo,
     config: &Config,
     s2_cfg: &mut Stage2ConfigBuilder,
     model_string: &str,
@@ -66,19 +66,19 @@ pub(crate) fn is_bb(
             "xM" => {
                 debug!("match found for BeagleboardXM");
                 Ok(Some(Box::new(BeagleboardXM::from_config(
-                    dev_info, config, s2_cfg,
+                    mig_info, config, s2_cfg,
                 )?)))
             }
             "Green" => {
                 debug!("match found for BeagleboneGreen");
                 Ok(Some(Box::new(BeagleboneGreen::from_config(
-                    dev_info, config, s2_cfg,
+                    mig_info, config, s2_cfg,
                 )?)))
             }
             "Black" => {
                 debug!("match found for BeagleboneBlack");
                 Ok(Some(Box::new(BeagleboneBlack::from_config(
-                    dev_info, config, s2_cfg,
+                    mig_info, config, s2_cfg,
                 )?)))
             }
             _ => {
@@ -158,7 +158,7 @@ impl Device for BeagleboneGreen {
 
     fn setup(
         &self,
-        dev_info: &mut MigrateInfo,
+        mig_info: &mut MigrateInfo,
         config: &Config,
         s2_cfg: &mut Stage2ConfigBuilder,
     ) -> Result<(), MigError> {
@@ -171,7 +171,7 @@ impl Device for BeagleboneGreen {
             String::from(BBG_KOPTS)
         };
 
-        self.boot_manager.setup(dev_info, s2_cfg, &kernel_opts)
+        self.boot_manager.setup(mig_info, s2_cfg, &kernel_opts)
     }
 
     fn restore_boot(&self, mounts: &Mounts, config: &Stage2Config) -> bool {
@@ -244,7 +244,7 @@ impl Device for BeagleboneBlack {
 
     fn setup(
         &self,
-        dev_info: &mut MigrateInfo,
+        mig_info: &mut MigrateInfo,
         config: &Config,
         s2_cfg: &mut Stage2ConfigBuilder,
     ) -> Result<(), MigError> {
@@ -257,7 +257,7 @@ impl Device for BeagleboneBlack {
             String::from(BBB_KOPTS)
         };
 
-        self.boot_manager.setup(dev_info, s2_cfg, &kernel_opts)
+        self.boot_manager.setup(mig_info, s2_cfg, &kernel_opts)
     }
 
     fn restore_boot(&self, mounts: &Mounts, config: &Stage2Config) -> bool {
