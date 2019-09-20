@@ -30,9 +30,6 @@ pub(crate) use device::Device;
 
 pub(crate) mod boot_manager;
 
-mod extract;
-use extract::Extractor;
-
 pub(crate) mod stage2;
 
 pub(crate) mod linux_api;
@@ -75,18 +72,12 @@ impl<'a> LinuxMigrator {
         }
 
         match config.migrate.get_mig_mode() {
-            MigMode::Extract => {
-                let mut extractor = Extractor::new(config)?;
-                extractor.extract(None)?;
-                Ok(())
-            }
             _ => {
                 let mut migrator = LinuxMigrator::try_init(config)?;
                 let res = match migrator.config.migrate.get_mig_mode() {
                     MigMode::Immediate => migrator.do_migrate(),
                     MigMode::Pretend => Ok(()),
-                    MigMode::Agent => Err(MigError::from(MigErrorKind::NotImpl)),
-                    MigMode::Extract => panic!("impossible MigMode here"),
+                    //MigMode::Agent => Err(MigError::from(MigErrorKind::NotImpl)),
                 };
                 Logger::flush();
                 res

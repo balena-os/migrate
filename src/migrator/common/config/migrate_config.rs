@@ -16,22 +16,19 @@ const NO_BACKUP_VOLUMES: &[VolumeConfig] = &[];
 
 #[derive(Debug, PartialEq, Deserialize, Clone)]
 pub(crate) enum MigMode {
-    #[serde(rename = "agent")]
-    Agent,
+    //    #[serde(rename = "agent")]
+    //    Agent,
     #[serde(rename = "immediate")]
     Immediate,
     #[serde(rename = "pretend")]
     Pretend,
-    #[serde(rename = "extract")]
-    Extract,
 }
 
 impl MigMode {
     pub fn from_str(mode: &str) -> Result<Self, MigError> {
         match mode.to_lowercase().as_str() {
-            "extract" => Ok(MigMode::Extract),
             "immediate" => Ok(MigMode::Immediate),
-            "agent" => Ok(MigMode::Agent),
+            //            "agent" => Ok(MigMode::Agent),
             "pretend" => Ok(MigMode::Pretend),
             _ => {
                 return Err(MigError::from_remark(
@@ -144,19 +141,7 @@ impl<'a> MigrateConfig {
 
     pub fn check(&self) -> Result<(), MigError> {
         match self.get_mig_mode() {
-            MigMode::Agent => Err(MigError::from(MigErrorKind::NotImpl)),
-            MigMode::Extract => {
-                if let None = self.work_dir {
-                    error!("A required parameter was not found: 'work_dir'");
-                    return Err(MigError::displayed());
-                }
-
-                if let None = self.extract_device {
-                    error!("A required parameter was not found: 'extract_device'");
-                    return Err(MigError::displayed());
-                }
-                Ok(())
-            }
+            //MigMode::Agent => Err(MigError::from(MigErrorKind::NotImpl)),
             _ => {
                 if let None = self.work_dir {
                     error!("A required parameter was not found: 'work_dir'");

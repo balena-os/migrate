@@ -16,6 +16,9 @@ mod mswin;
 mod linux;
 
 #[cfg(target_os = "linux")]
+mod extract;
+#[cfg(target_os = "linux")]
+#[cfg(target_os = "linux")]
 use linux::stage2::Stage2;
 
 pub(crate) mod defs;
@@ -30,6 +33,11 @@ pub fn migrate() -> Result<(), MigError> {
 #[cfg(target_os = "linux")]
 pub fn migrate() -> Result<(), MigError> {
     Ok(linux::LinuxMigrator::migrate()?)
+}
+
+#[cfg(target_os = "linux")]
+pub fn extract() -> Result<(), MigError> {
+    extract::extract()
 }
 
 #[cfg(target_os = "linux")]

@@ -31,7 +31,7 @@ use crate::{
     defs::FileType,
     defs::{PART_FSTYPE, PART_NAME},
     linux::{
-        linux_common::{is_file_type, mktemp, whereis},
+        linux_common::{is_admin, is_file_type, mktemp, whereis},
         linux_defs::NIX_NONE,
         linux_defs::{BLKID_CMD, FILE_CMD, LOSETUP_CMD, LSBLK_CMD, MKTEMP_CMD, MOUNT_CMD, TAR_CMD},
     },
@@ -79,8 +79,21 @@ pub(crate) struct Extractor {
 // TODO: Extractor could modify config / save new ImageType
 // TODO: Save ImageType as yml file
 
+pub fn extract() -> Result<(), MigError> {
+    let config = Config::new()?;
+
+    if !is_admin()? {
+        error!("please run this program as root");
+        return Err(MigError::from(MigErrorKind::Displayed));
+    }
+
+    let mut extractor = Extractor::new(config)?;
+    extractor.do_extract(None)?;
+    Ok(())
+}
+
 impl Extractor {
-    pub fn new(config: Config) -> Result<Extractor, MigError> {
+    fn new(config: Config) -> Result<Extractor, MigError> {
         trace!("new: entered");
 
         // TODO: support more devices
@@ -185,7 +198,7 @@ impl Extractor {
         }
     }
 
-    pub fn extract(&mut self, output_path: Option<&Path>) -> Result<ImageType, MigError> {
+    pub fn do_extract(&mut self, output_path: Option<&Path>) -> Result<ImageType, MigError> {
         trace!("extract: entered");
         let work_dir = self.config.migrate.get_work_dir();
 

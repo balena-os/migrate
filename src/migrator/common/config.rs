@@ -229,17 +229,6 @@ impl<'a> Config {
             }
         }
 
-        if let MigMode::Extract = config.migrate.get_mig_mode() {
-            if arg_matches.is_present("device-type") {
-                if let Some(dev_type) = arg_matches.value_of("device-type") {
-                    config.migrate.set_extract_device(dev_type);
-                }
-            } else {
-                error!("device-type option is mandatory for mode EXTRACT. Please specify a device type using the --device-type or -d option");
-                return Err(MigError::displayed());
-            }
-        }
-
         debug!(
             "{}::new: migrate mode: {:?}",
             MODULE,

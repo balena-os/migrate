@@ -11,14 +11,20 @@ edition = "2018"
 [lib]
 path = "src/migrator/lib.rs"
 
-[[bin]]
-name = "balena-migrate"
-path = "src/balena_migrate.rs"
+#[[bin]]
+#name = "balena-migrate"
+#path = "src/balena_migrate.rs"
 
-[[bin]]
+#[[bin]]
 # TODO: only on linux
-name = "balena-stage2"
-path = "src/balena_stage2.rs"
+#name = "balena-stage2"#
+#path = "src/balena_stage2.rs"
+
+#[target.'cfg(target_os = "windows")']
+#[[bin]]
+# TODO: only on linux
+#name = "balena-extract"
+#path = "src/balena_extract.rs"
 
 # [profile.dev]
 # panic = "abort"

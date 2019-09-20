@@ -601,7 +601,7 @@ pub(crate) fn get_kernel_root_info() -> Result<(PathBuf, Option<String>), MigErr
 }
 
 pub(crate) fn expect_type<P: AsRef<Path>>(file: P, ftype: &FileType) -> Result<(), MigError> {
-    if is_file_type(file.as_ref(), ftype)? {
+    if !is_file_type(file.as_ref(), ftype)? {
         error!(
             "Could not determine expected file type '{}' for file '{}'",
             ftype.get_descr(),

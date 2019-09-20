@@ -1,4 +1,4 @@
-use log::{debug, error, info, trace};
+use log::{debug, error, info, trace, warn};
 
 use crate::{
     common::{
@@ -66,7 +66,15 @@ impl MigrateInfo {
         );
 
         let log_path = if let Some(log_dev) = config.migrate.get_log_device() {
-            Some(os_api.path_info_from_partition(log_dev)?)
+            if log_dev.exists() {
+                Some(os_api.path_info_from_partition(log_dev)?)
+            } else {
+                warn!(
+                    "Configured log drive '{}' could not be found",
+                    log_dev.display()
+                );
+                None
+            }
         } else {
             None
         };
