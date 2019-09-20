@@ -5,6 +5,7 @@ use crate::{
 use log::{trace, warn};
 use std::collections::HashMap;
 
+pub const WHEREIS_CMD: &str = "whereis";
 pub const CHMOD_CMD: &str = "chmod";
 pub const DD_CMD: &str = "dd";
 pub const DF_CMD: &str = "df";

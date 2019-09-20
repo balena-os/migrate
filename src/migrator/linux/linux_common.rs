@@ -13,14 +13,11 @@ use crate::{
     defs::{OSArch, DISK_BY_LABEL_PATH, DISK_BY_PARTUUID_PATH, DISK_BY_UUID_PATH},
     linux::{
         linux_defs::{KERNEL_CMDLINE_PATH, SYS_UEFI_DIR},
-        EnsuredCmds, DF_CMD, MKTEMP_CMD, MOKUTIL_CMD, UNAME_CMD,
+        EnsuredCmds, DF_CMD, MKTEMP_CMD, MOKUTIL_CMD, UNAME_CMD, WHEREIS_CMD,
     },
 };
 
 use crate::common::dir_exists;
-
-const MODULE: &str = "linux_common";
-const WHEREIS_CMD: &str = "whereis";
 
 const MOKUTIL_ARGS_SB_STATE: [&str; 1] = ["--sb-state"];
 
@@ -46,15 +43,15 @@ pub(crate) fn whereis(cmd: &str) -> Result<String, MigError> {
         }
     }
 
-    // else try wheris command
+    // else try whereis command
     let args: [&str; 2] = ["-b", cmd];
     let cmd_res = match call(WHEREIS_CMD, &args, true) {
         Ok(cmd_res) => cmd_res,
-        Err(_why) => {
+        Err(why) => {
             // manually try the usual suspects
             return Err(MigError::from_remark(
                 MigErrorKind::NotFound,
-                &format!("could not find command: '{}'", cmd),
+                &format!("whereis failed to execute for: {:?}, error: {:?}", args, why),
             ));
         }
     };
@@ -63,7 +60,7 @@ pub(crate) fn whereis(cmd: &str) -> Result<String, MigError> {
         if cmd_res.stdout.is_empty() {
             Err(MigError::from_remark(
                 MigErrorKind::InvParam,
-                &format!("{}::whereis: no command output for {}", MODULE, cmd),
+                &format!("whereis: no command output for {}", cmd),
             ))
         } else {
             let mut words = cmd_res.stdout.split(" ");
@@ -72,7 +69,7 @@ pub(crate) fn whereis(cmd: &str) -> Result<String, MigError> {
             } else {
                 Err(MigError::from_remark(
                     MigErrorKind::NotFound,
-                    &format!("{}::whereis: command not found: '{}'", MODULE, cmd),
+                    &format!("whereis: command not found: '{}'", cmd),
                 ))
             }
         }
@@ -80,8 +77,7 @@ pub(crate) fn whereis(cmd: &str) -> Result<String, MigError> {
         Err(MigError::from_remark(
             MigErrorKind::ExecProcess,
             &format!(
-                "{}::whereis: command failed for {}: {}",
-                MODULE,
+                "whereis: command failed for {}: {}",
                 cmd,
                 cmd_res.status.code().unwrap_or(0)
             ),
@@ -109,8 +105,8 @@ pub(crate) fn get_os_arch(cmds: &EnsuredCmds) -> Result<OSArch, MigError> {
             Err(MigError::from_remark(
                 MigErrorKind::InvParam,
                 &format!(
-                    "{}::get_os_arch: unsupported architectute '{}'",
-                    MODULE, cmd_res.stdout
+                    "get_os_arch: unsupported architectute '{}'",
+                    cmd_res.stdout
                 ),
             ))
         }
@@ -118,8 +114,8 @@ pub(crate) fn get_os_arch(cmds: &EnsuredCmds) -> Result<OSArch, MigError> {
         Err(MigError::from_remark(
             MigErrorKind::ExecProcess,
             &format!(
-                "{}::get_os_arch: command failed: {} {:?}",
-                MODULE, UNAME_CMD, cmd_res
+                "get_os_arch: command failed: {} {:?}",
+                UNAME_CMD, cmd_res
             ),
         ))
     }
@@ -147,7 +143,7 @@ pub(crate) fn is_efi_boot() -> Result<bool, MigError> {
             std::io::ErrorKind::NotFound => Ok(false),
             _ => Err(MigError::from(why.context(MigErrCtx::from_remark(
                 MigErrorKind::Upstream,
-                &format!("{}::is_uefi_boot: access {}", MODULE, SYS_UEFI_DIR),
+                &format!("is_uefi_boot: access {}", SYS_UEFI_DIR),
             )))),
         },
     }
@@ -209,8 +205,8 @@ pub(crate) fn get_os_name() -> Result<String, MigError> {
             Err(MigError::from_remark(
                 MigErrorKind::NotFound,
                 &format!(
-                    "{}::get_os_name: could not be located in file {}",
-                    MODULE, OS_RELEASE_FILE
+                    "get_os_name: could not be located in file {}",
+                     OS_RELEASE_FILE
                 ),
             ))
         }
@@ -218,8 +214,8 @@ pub(crate) fn get_os_name() -> Result<String, MigError> {
         Err(MigError::from_remark(
             MigErrorKind::NotFound,
             &format!(
-                "{}::get_os_name: could not locate file {}",
-                MODULE, OS_RELEASE_FILE
+                "get_os_name: could not locate file {}",
+                OS_RELEASE_FILE
             ),
         ))
     }
@@ -231,7 +227,7 @@ pub(crate) fn get_os_name() -> Result<String, MigError> {
  ******************************************************************/
 
 pub(crate) fn is_secure_boot() -> Result<bool, MigError> {
-    trace!("{}::is_secure_boot: entered", MODULE);
+    trace!("is_secure_boot: entered");
 
     // TODO: check for efi vars
 
@@ -258,12 +254,12 @@ pub(crate) fn is_secure_boot() -> Result<bool, MigError> {
             }
         }
         error!(
-            "{}::is_secure_boot: failed to parse command output: '{}'",
-            MODULE, cmd_res.stdout
+            "is_secure_boot: failed to parse command output: '{}'",
+            cmd_res.stdout
         );
         Err(MigError::from_remark(
             MigErrorKind::InvParam,
-            &format!("{}::is_secure_boot: failed to parse command output", MODULE),
+            &format!("is_secure_boot: failed to parse command output"),
         ))
     } else {
         Ok(false)

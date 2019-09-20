@@ -33,7 +33,7 @@ pub(crate) mod stage2;
 pub(crate) mod ensured_cmds;
 pub(crate) use ensured_cmds::{
     EnsuredCmds, CHMOD_CMD, DF_CMD, FILE_CMD, GRUB_REBOOT_CMD, GRUB_UPDT_CMD, LSBLK_CMD,
-    MKTEMP_CMD, MOKUTIL_CMD, MOUNT_CMD, REBOOT_CMD, TAR_CMD, UNAME_CMD,
+    MKTEMP_CMD, MOKUTIL_CMD, MOUNT_CMD, REBOOT_CMD, TAR_CMD, UNAME_CMD, WHEREIS_CMD,
 };
 
 pub(crate) mod migrate_info;
