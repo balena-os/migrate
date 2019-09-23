@@ -31,7 +31,7 @@ use crate::{
     linux::{
         linux_common::{is_admin, is_file_type, mktemp, whereis},
         linux_defs::NIX_NONE,
-        linux_defs::{BLKID_CMD, FILE_CMD, LOSETUP_CMD, LSBLK_CMD, MKTEMP_CMD, MOUNT_CMD, TAR_CMD},
+        linux_defs::{FILE_CMD, LOSETUP_CMD, MKTEMP_CMD, TAR_CMD},
     },
 };
 
@@ -47,12 +47,9 @@ use crate::{
 
 const REQUIRED_CMDS: &[&str] = &[
     FILE_CMD,
-    MOUNT_CMD,
     MKTEMP_CMD,
     TAR_CMD,
-    LSBLK_CMD,
     LOSETUP_CMD,
-    BLKID_CMD,
 ];
 const DEF_BUFFER_SIZE: usize = 1024 * 1024;
 
