@@ -24,6 +24,7 @@ pub(crate) trait Device {
     fn get_device_type(&self) -> DeviceType;
     fn get_boot_type(&self) -> BootType;
     // TODO: make return reference
+    // TODO: return device_info instead of path_info
     fn get_boot_device(&self) -> PathInfo;
 
     fn setup(

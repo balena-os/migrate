@@ -383,7 +383,7 @@ impl BootManager for RaspiBootManager {
 
                 trace!("cmdline: '{}'", cmdline);
                 // Add or replace root command to cmdline
-                let cmd_fragment = format!(" root={} ", &boot_path.get_kernel_cmd());
+                let cmd_fragment = format!(" root={} ", &boot_path.device_info.get_kernel_cmd());
                 let cmd_len = cmd_fragment.len();
 
                 let mut mod_cmdline = String::from(
@@ -399,7 +399,7 @@ impl BootManager for RaspiBootManager {
                 trace!("cmdline: '{}'", mod_cmdline);
 
                 // Add root fs type to cmdline
-                let cmd_fragment = format!(" rootfstype={} ", &boot_path.fs_type);
+                let cmd_fragment = format!(" rootfstype={} ", &boot_path.device_info.fs_type);
                 let cmd_len = cmd_fragment.len();
                 mod_cmdline = String::from(
                     Regex::new(r#"rootfstype=\S+(\s+|$)"#)

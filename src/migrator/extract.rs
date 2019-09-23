@@ -1,5 +1,7 @@
+use clap::{App, Arg};
 use failure::ResultExt;
 use log::{debug, error, info, trace, warn};
+use mod_logger::{Level, LogDestination, Logger, NO_STREAM};
 use nix::{
     mount::{mount, umount, MsFlags},
     unistd::sync,
@@ -9,8 +11,6 @@ use std::io::{Read, Write};
 use std::path::{Path, PathBuf};
 use std::thread;
 use std::time::Duration;
-use mod_logger::{Logger, Level, LogDestination, NO_STREAM};
-use clap::{App, Arg};
 
 use serde_yaml;
 
@@ -18,13 +18,13 @@ use crate::{
     common::disk_util::PartitionType,
     common::{
         call,
+        config::balena_config::{FSDump, FileRef, ImageType, PartDump},
         disk_util::{Disk, PartitionIterator, PartitionReader}, //  , ImageFile, GZipFile, PlainFile },
         file_digest::get_default_digest,
         path_append,
         MigErrCtx,
         MigError,
         MigErrorKind,
-        config::balena_config::{ImageType,FileRef, PartDump, FSDump},
     },
     defs::FileType,
     defs::{PART_FSTYPE, PART_NAME},
@@ -35,7 +35,6 @@ use crate::{
     },
 };
 
-
 // mod image_file;
 // use image_file::ImageFile;
 
@@ -45,12 +44,7 @@ use crate::{
 // mod plain_file;
 // use plain_file::PlainFile;
 
-const REQUIRED_CMDS: &[&str] = &[
-    FILE_CMD,
-    MKTEMP_CMD,
-    TAR_CMD,
-    LOSETUP_CMD,
-];
+const REQUIRED_CMDS: &[&str] = &[FILE_CMD, MKTEMP_CMD, TAR_CMD, LOSETUP_CMD];
 const DEF_BUFFER_SIZE: usize = 1024 * 1024;
 
 const EXTRACT_FILE_TEMPLATE: &str = "extract.XXXXXXXXXX";
@@ -121,8 +115,10 @@ impl Extractor {
             )
             .get_matches();
 
-
-        println!("Logger set, level  {}", arg_matches.occurrences_of("verbose"));
+        println!(
+            "Logger set, level  {}",
+            arg_matches.occurrences_of("verbose")
+        );
 
         match arg_matches.occurrences_of("verbose") {
             0 => (),
@@ -131,7 +127,12 @@ impl Extractor {
             _ => Logger::set_default_level(&Level::Trace),
         }
 
-        let work_dir = PathBuf::from(".").canonicalize().context(MigErrCtx::from_remark(MigErrorKind::Upstream, "Failed to cannonicalize path '.'", ))?;
+        let work_dir = PathBuf::from(".")
+            .canonicalize()
+            .context(MigErrCtx::from_remark(
+                MigErrorKind::Upstream,
+                "Failed to cannonicalize path '.'",
+            ))?;
         info!("Using working directory '{}'", work_dir.display());
 
         // TODO: support more devices
@@ -145,7 +146,7 @@ impl Extractor {
                 }
             }
         } else {
-            error!("Missing the mandatory parameter extract-device", );
+            error!("Missing the mandatory parameter extract-device",);
             return Err(MigError::displayed());
         };
 
@@ -154,14 +155,17 @@ impl Extractor {
         let image_file = if let Some(value) = arg_matches.value_of("image") {
             let file = PathBuf::from(value);
             if file.exists() {
-                file.canonicalize().context(MigErrCtx::from_remark(MigErrorKind::Upstream, &format!("Failed to cannonicalize path '{}'", file.display())))?
+                file.canonicalize().context(MigErrCtx::from_remark(
+                    MigErrorKind::Upstream,
+                    &format!("Failed to cannonicalize path '{}'", file.display()),
+                ))?
             } else {
                 error!("Could not find image file: '{}'", value);
-                return Err(MigError::displayed())
+                return Err(MigError::displayed());
             }
         } else {
             error!("No image file was specified.");
-            return Err(MigError::displayed())
+            return Err(MigError::displayed());
         };
         info!("Using image file '{}'", image_file.display());
 
@@ -545,10 +549,7 @@ impl Extractor {
         let arch_name = if let Some(output_path) = output_path {
             path_append(output_path, &format!("{}.tgz", partition.name))
         } else {
-            path_append(
-                work_dir,
-                &format!("{}.tgz", partition.name),
-            )
+            path_append(work_dir, &format!("{}.tgz", partition.name))
         };
 
         // TODO: Try to archive using rust builtin tar / gzip have to traverse directories myself

@@ -191,12 +191,12 @@ impl<'a> LinuxMigrator {
         // Pick the current root device as flash device
 
         let boot_info = device.get_boot_device();
-        let flash_device = &boot_info.drive;
-        let flash_dev_size = boot_info.drive_size;
+        let flash_device = &boot_info.device_info.drive;
+        let flash_dev_size = boot_info.device_info.drive_size;
 
         info!(
             "The install drive is {}, size: {}",
-            boot_info.drive.display(),
+            boot_info.device_info.drive.display(),
             format_size_with_unit(flash_dev_size)
         );
 
@@ -253,7 +253,7 @@ impl<'a> LinuxMigrator {
 
         let boot_device = self.device.get_boot_device();
 
-        if &self.mig_info.work_path.device == &boot_device.device {
+        if &self.mig_info.work_path.device_info.device == &boot_device.device_info.device {
             self.stage2_config
                 .set_work_path(&PathType::Path(self.mig_info.work_path.path.clone()));
         } else {
@@ -378,7 +378,7 @@ impl<'a> LinuxMigrator {
             .set_log_level(String::from(self.config.migrate.get_log_level()));
 
         if let Some(ref log_path) = self.mig_info.log_path {
-            if log_path.device != boot_device.device {
+            if log_path.device != boot_device.device_info.device {
                 info!(
                     "Set up log device as '{}' with file system type '{}'",
                     log_path.get_alt_path().display(),
@@ -390,7 +390,7 @@ impl<'a> LinuxMigrator {
                     fstype: log_path.fs_type.clone(),
                 });
             } else {
-                warn!("Log partition '{}' is not on a distinct drive from flash drive: '{}' - ignoring", log_path.device.display(), boot_device.drive.display());
+                warn!("Log partition '{}' is not on a distinct drive from flash drive: '{}' - ignoring", log_path.device.display(), boot_device.device_info.drive.display());
             }
         }
 

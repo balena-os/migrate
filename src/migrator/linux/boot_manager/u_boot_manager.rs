@@ -275,9 +275,9 @@ impl<'a> BootManager for UBootManager {
         let bootmgr_path = self.find_bootmgr_path(mig_info, &lsblk_info)?;
         info!(
             "Found boot manager '{}', mounpoint: '{}', fs type: {}, free space: {}",
-            bootmgr_path.device.display(),
+            bootmgr_path.device_info.device.display(),
             bootmgr_path.mountpoint.display(),
-            bootmgr_path.fs_type,
+            bootmgr_path.device_info.fs_type,
             format_size_with_unit(bootmgr_path.fs_free)
         );
 
@@ -313,9 +313,9 @@ impl<'a> BootManager for UBootManager {
                 if boot_path.fs_free > boot_req_space {
                     info!(
                         "Found boot '{}', mounpoint: '{}', fs type: {}, free space: {}",
-                        boot_path.device.display(),
+                        boot_path.device_info.device.display(),
                         boot_path.mountpoint.display(),
-                        boot_path.fs_type,
+                        boot_path.device_info.fs_type,
                         format_size_with_unit(boot_path.fs_free)
                     );
 
@@ -327,9 +327,9 @@ impl<'a> BootManager for UBootManager {
                     if boot_path.fs_free > boot_req_space {
                         info!(
                             "Found boot '{}', mounpoint: '{}', fs type: {}, free space: {}",
-                            boot_path.device.display(),
+                            boot_path.device_info.device.display(),
                             boot_path.mountpoint.display(),
-                            boot_path.fs_type,
+                            boot_path.device_info.fs_type,
                             format_size_with_unit(boot_path.fs_free)
                         );
 
@@ -370,7 +370,7 @@ impl<'a> BootManager for UBootManager {
         };
 
         let drive_num = {
-            let dev_name = &boot_path.device;
+            let dev_name = &boot_path.device_info.device;
 
             if let Some(captures) = Regex::new(UBOOT_DRIVE_REGEX)
                 .unwrap()
@@ -575,8 +575,8 @@ impl<'a> BootManager for UBootManager {
         uenv_text = uenv_text.replace("__DTB_PATH__", &dtb_path.to_string_lossy());
         uenv_text = uenv_text.replace("__DRIVE__", &drive_num.0);
         uenv_text = uenv_text.replace("__PARTITION__", &drive_num.1);
-        uenv_text = uenv_text.replace("__ROOT_DEV__", &bootmgr_path.get_kernel_cmd());
-        uenv_text = uenv_text.replace("__ROOT_FSTYPE__", &bootmgr_path.fs_type);
+        uenv_text = uenv_text.replace("__ROOT_DEV__", &bootmgr_path.device_info.get_kernel_cmd());
+        uenv_text = uenv_text.replace("__ROOT_FSTYPE__", &bootmgr_path.device_info.fs_type);
         uenv_text = uenv_text.replace("__MISC_OPTS__", kernel_opts);
 
         debug!("writing uEnv.txt as:\n {}", uenv_text);

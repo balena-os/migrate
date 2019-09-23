@@ -2,7 +2,7 @@ use log::error;
 use std::path::Path;
 
 use crate::{
-    common::{os_api::OSApi, path_info::PathInfo, MigError},
+    common::{device_info::DeviceInfo, os_api::OSApi, path_info::PathInfo, MigError},
     defs::OSArch,
     linux::{linux_common::get_os_arch, lsblk_info::LsblkInfo},
 };
@@ -34,21 +34,8 @@ impl OSApi for LinuxAPI<'_> {
         }
     }
 
-    fn path_info_from_partition<P: AsRef<Path>>(&self, part: P) -> Result<PathInfo, MigError> {
+    fn device_info_from_partition<P: AsRef<Path>>(&self, part: P) -> Result<DeviceInfo, MigError> {
         let (drive, partition) = self.lsblk_info.get_devinfo_from_partition(part.as_ref())?;
-        if let Some(ref mountpoint) = partition.mountpoint {
-            Ok(PathInfo::from_mounted(
-                mountpoint.as_path(),
-                mountpoint.as_path(),
-                drive,
-                partition,
-            )?)
-        } else {
-            error!(
-                "Unable to create path info from unmounted partition '{}'",
-                part.as_ref().display()
-            );
-            Err(MigError::displayed())
-        }
+        Ok(DeviceInfo::new(drive, partition)?)
     }
 }

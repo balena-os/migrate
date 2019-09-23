@@ -7,6 +7,7 @@ use crate::{
             balena_config::{ImageType, PartDump},
             MigrateWifis,
         },
+        device_info::DeviceInfo,
         file_info::RelFileInfo,
         os_api::OSApi,
         path_info::PathInfo,
@@ -35,7 +36,7 @@ pub(crate) struct MigrateInfo {
     pub os_arch: OSArch,
 
     pub work_path: PathInfo,
-    pub log_path: Option<PathInfo>,
+    pub log_path: Option<DeviceInfo>,
 
     pub nwmgr_files: Vec<FileInfo>,
     pub wifis: Vec<WifiConfig>,
@@ -62,12 +63,12 @@ impl MigrateInfo {
         info!(
             "Working directory is '{}' on '{}'",
             work_dir.display(),
-            work_path.drive.display()
+            work_path.device_info.drive.display()
         );
 
         let log_path = if let Some(log_dev) = config.migrate.get_log_device() {
             if log_dev.exists() {
-                Some(os_api.path_info_from_partition(log_dev)?)
+                Some(os_api.device_info_from_partition(log_dev)?)
             } else {
                 warn!(
                     "Configured log drive '{}' could not be found",

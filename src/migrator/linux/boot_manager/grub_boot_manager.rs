@@ -214,13 +214,16 @@ impl<'a> BootManager for GrubBootManager {
             &boot_path.path
         };
 
-        let part_type = match LabelType::from_device(&boot_path.drive)? {
+        let part_type = match LabelType::from_device(&boot_path.device_info.drive)? {
             LabelType::GPT => "gpt",
             LabelType::Dos => "msdos",
             _ => {
                 return Err(MigError::from_remark(
                     MigErrorKind::InvParam,
-                    &format!("Invalid partition type for '{}'", boot_path.drive.display()),
+                    &format!(
+                        "Invalid partition type for '{}'",
+                        boot_path.device_info.drive.display()
+                    ),
                 ));
             }
         };
@@ -229,25 +232,25 @@ impl<'a> BootManager for GrubBootManager {
 
         info!(
             "Boot partition type for '{}' is '{}'",
-            boot_path.drive.display(),
+            boot_path.device_info.drive.display(),
             part_mod
         );
 
-        let root_cmd = if let Some(ref uuid) = boot_path.uuid {
+        let root_cmd = if let Some(ref uuid) = boot_path.device_info.uuid {
             // TODO: try partuuid too ?local setRootA="set root='${GRUB_BOOT_DEV},msdos${ROOT_PART_NO}'"
             format!("search --no-floppy --fs-uuid --set=root {}", uuid)
         } else {
             format!(
                 "search --no-floppy --fs-uuid --set=root {},{}{}",
-                boot_path.drive.to_string_lossy(),
+                boot_path.device_info.drive.to_string_lossy(),
                 part_type,
-                boot_path.index
+                boot_path.device_info.index
             )
         };
 
         debug!("root set to '{}", root_cmd);
 
-        let fstype_mod = match boot_path.fs_type.as_str() {
+        let fstype_mod = match boot_path.device_info.fs_type.as_str() {
             "ext2" | "ext3" | "ext4" => "ext2",
             "vfat" => "fat",
             _ => {
@@ -255,7 +258,7 @@ impl<'a> BootManager for GrubBootManager {
                     MigErrorKind::InvParam,
                     &format!(
                         "Cannot determine grub mod for boot fs type '{}'",
-                        boot_path.fs_type
+                        boot_path.device_info.fs_type
                     ),
                 ));
             }
@@ -298,7 +301,7 @@ impl<'a> BootManager for GrubBootManager {
 
         linux.push_str(&format!(
             " rootfstype={} console=tty0 debug",
-            boot_path.fs_type
+            boot_path.device_info.fs_type
         ));
 
         if !kernel_opts.is_empty() {
