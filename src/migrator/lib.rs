@@ -18,7 +18,6 @@ mod linux;
 #[cfg(target_os = "linux")]
 mod extract;
 #[cfg(target_os = "linux")]
-#[cfg(target_os = "linux")]
 use linux::stage2::Stage2;
 
 pub(crate) mod defs;
@@ -40,6 +39,7 @@ pub fn extract() -> Result<(), MigError> {
     extract::extract()
 }
 
+// TODO: move to stage 2 - leave only wrapper as above
 #[cfg(target_os = "linux")]
 pub fn stage2() -> Result<(), MigError> {
     let res = panic::catch_unwind(|| -> Result<(), MigError> {

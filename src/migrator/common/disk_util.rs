@@ -117,7 +117,7 @@ impl LabelType {
 }
 
 pub(crate) struct Disk {
-    disk: Box<ImageFile>,
+    disk: Box<dyn ImageFile>,
     // writable: bool,
     block_size: u64,
 }

@@ -6,27 +6,25 @@ use nix::{
 };
 use std::fs::{remove_dir, remove_file, OpenOptions};
 use std::io::{Read, Write};
-use std::path::Path;
+use std::path::{Path, PathBuf};
 use std::thread;
 use std::time::Duration;
+use mod_logger::{Logger, Level, LogDestination, NO_STREAM};
+use clap::{App, Arg};
 
-// use serde::{Deserialize, Serialize};
 use serde_yaml;
 
 use crate::{
     common::disk_util::PartitionType,
     common::{
         call,
-        config::balena_config::ImageType,
-        config::balena_config::{FSDump, FileRef, PartDump},
         disk_util::{Disk, PartitionIterator, PartitionReader}, //  , ImageFile, GZipFile, PlainFile },
         file_digest::get_default_digest,
         path_append,
-        Config,
-        FileInfo,
         MigErrCtx,
         MigError,
         MigErrorKind,
+        config::balena_config::{ImageType,FileRef, PartDump, FSDump},
     },
     defs::FileType,
     defs::{PART_FSTYPE, PART_NAME},
@@ -36,6 +34,7 @@ use crate::{
         linux_defs::{BLKID_CMD, FILE_CMD, LOSETUP_CMD, LSBLK_CMD, MKTEMP_CMD, MOUNT_CMD, TAR_CMD},
     },
 };
+
 
 // mod image_file;
 // use image_file::ImageFile;
@@ -71,7 +70,7 @@ pub(crate) struct Partition {
 }
 
 pub(crate) struct Extractor {
-    config: Config,
+    work_dir: PathBuf,
     device_slug: String,
     disk: Disk,
 }
@@ -80,36 +79,94 @@ pub(crate) struct Extractor {
 // TODO: Save ImageType as yml file
 
 pub fn extract() -> Result<(), MigError> {
-    let config = Config::new()?;
+    Logger::create();
+    Logger::set_color(true);
+    Logger::set_log_dest(&LogDestination::BufferStderr, NO_STREAM).context(
+        MigErrCtx::from_remark(MigErrorKind::Upstream, "failed to set up logging"),
+    )?;
 
     if !is_admin()? {
         error!("please run this program as root");
         return Err(MigError::from(MigErrorKind::Displayed));
     }
 
-    let mut extractor = Extractor::new(config)?;
+    let mut extractor = Extractor::new()?;
     extractor.do_extract(None)?;
     Ok(())
 }
 
 impl Extractor {
-    fn new(config: Config) -> Result<Extractor, MigError> {
+    fn new() -> Result<Extractor, MigError> {
         trace!("new: entered");
 
+        let arg_matches = App::new("balena-extract")
+            .version("0.1")
+            .author("Thomas Runte <thomasr@balena.io>")
+            .about("Extracts features from balena OS Images")
+            .arg(
+                Arg::with_name("image")
+                    .required(true)
+                    .help("use balena OS image"),
+            )
+            .arg(
+                Arg::with_name("verbose")
+                    .short("v")
+                    .multiple(true)
+                    .help("Sets the level of verbosity"),
+            )
+            .arg(
+                Arg::with_name("device-type")
+                    .short("d")
+                    .long("device-type")
+                    .value_name("type")
+                    .required(true)
+                    .help("specify image device slug for extraction"),
+            )
+            .get_matches();
+
+
+        println!("Logger set, level  {}", arg_matches.occurrences_of("verbose"));
+
+        match arg_matches.occurrences_of("verbose") {
+            0 => (),
+            1 => Logger::set_default_level(&Level::Info),
+            2 => Logger::set_default_level(&Level::Debug),
+            _ => Logger::set_default_level(&Level::Trace),
+        }
+
+        let work_dir = PathBuf::from(".").canonicalize().context(MigErrCtx::from_remark(MigErrorKind::Upstream, "Failed to cannonicalize path '.'", ))?;
+        info!("Using working directory '{}'", work_dir.display());
+
         // TODO: support more devices
-        let extract_device = if let Some(extract_device) = config.migrate.get_extract_device() {
-            match extract_device {
-                "beaglebone-black" => String::from(extract_device),
-                "beaglebone-green" => String::from(extract_device),
+        let extract_device = if let Some(value) = arg_matches.value_of("device-type") {
+            match value {
+                "beaglebone-black" => String::from(value),
+                "beaglebone-green" => String::from(value),
                 _ => {
-                    error!("Unsupported device type for extract: {}", extract_device);
+                    error!("Unsupported device type for extract: {}", value);
                     return Err(MigError::displayed());
                 }
             }
         } else {
-            error!("Missing the mandatory parameter extract-device",);
+            error!("Missing the mandatory parameter extract-device", );
             return Err(MigError::displayed());
         };
+
+        info!("Device type set to '{}'", extract_device);
+
+        let image_file = if let Some(value) = arg_matches.value_of("image") {
+            let file = PathBuf::from(value);
+            if file.exists() {
+                file.canonicalize().context(MigErrCtx::from_remark(MigErrorKind::Upstream, &format!("Failed to cannonicalize path '{}'", file.display())))?
+            } else {
+                error!("Could not find image file: '{}'", value);
+                return Err(MigError::displayed())
+            }
+        } else {
+            error!("No image file was specified.");
+            return Err(MigError::displayed())
+        };
+        info!("Using image file '{}'", image_file.display());
 
         for command in REQUIRED_CMDS {
             match whereis(command) {
@@ -124,83 +181,59 @@ impl Extractor {
             }
         }
 
-        // TODO: check hash if present, create hash
-        let image_file = if let ImageType::Flasher(image_file) = config.balena.get_image_path() {
-            image_file
+        debug!("new: working with file '{}'", image_file.display());
+        if is_file_type(&image_file, &FileType::GZipOSImage)? {
+            match Disk::from_gzip_img(&image_file) {
+                Ok(gzip_img) => {
+                    debug!("new: is gzipped image '{}'", image_file.display());
+                    return Ok(Extractor {
+                        work_dir,
+                        disk: gzip_img,
+                        device_slug: extract_device,
+                    });
+                }
+                Err(why) => {
+                    error!(
+                        "Unable to open the gzipped image file '{}', error: {:?}",
+                        image_file.display(),
+                        why
+                    );
+                    return Err(MigError::displayed());
+                }
+            }
         } else {
-            error!("The image path already points to an extracted configuration",);
-            return Err(MigError::displayed());
-        };
-
-        let image_info = FileInfo::new(
-            &FileRef {
-                path: image_file.path.clone(),
-                hash: None,
-            },
-            config.migrate.get_work_dir(),
-        )?;
-
-        if let Some(image_info) = image_info {
-            debug!("new: working with file '{}'", image_info.path.display());
-            if is_file_type(&image_info.path, &FileType::GZipOSImage)? {
-                match Disk::from_gzip_img(&image_info.path) {
-                    Ok(gzip_img) => {
-                        debug!("new: is gzipped image '{}'", image_info.path.display());
+            if is_file_type(&image_file, &FileType::OSImage)? {
+                match Disk::from_drive_file(&image_file, None) {
+                    Ok(plain_img) => {
+                        debug!("new: is plain image '{}'", image_file.display());
                         return Ok(Extractor {
-                            config,
-                            disk: gzip_img,
-                            device_slug: String::from(extract_device),
+                            work_dir,
+                            disk: plain_img,
+                            device_slug: extract_device,
                         });
                     }
                     Err(why) => {
                         error!(
-                            "Unable to open the gzipped image file '{}', error: {:?}",
-                            image_info.path.display(),
+                            "Unable to open the image file '{}', error: {:?}",
+                            image_file.display(),
                             why
                         );
                         return Err(MigError::displayed());
                     }
                 }
             } else {
-                if is_file_type(&image_info.path, &FileType::OSImage)? {
-                    match Disk::from_drive_file(&image_info.path, None) {
-                        Ok(plain_img) => {
-                            debug!("new: is plain image '{}'", image_info.path.display());
-                            return Ok(Extractor {
-                                config,
-                                disk: plain_img,
-                                device_slug: extract_device,
-                            });
-                        }
-                        Err(why) => {
-                            error!(
-                                "Unable to open the image file '{}', error: {:?}",
-                                image_info.path.display(),
-                                why
-                            );
-                            return Err(MigError::displayed());
-                        }
-                    }
-                } else {
-                    error!(
-                        "Found an unexpected file type in '{}', not an OS image",
-                        image_info.path.display()
-                    );
-                    return Err(MigError::displayed());
-                }
+                error!(
+                    "Unable to open the image file '{}', an unexpected file type was found",
+                    image_file.display(),
+                );
+                return Err(MigError::displayed());
             }
-        } else {
-            error!(
-                "The image file could not be found: '{}'",
-                image_file.path.display()
-            );
-            Err(MigError::displayed())
         }
     }
 
     pub fn do_extract(&mut self, output_path: Option<&Path>) -> Result<ImageType, MigError> {
         trace!("extract: entered");
-        let work_dir = self.config.migrate.get_work_dir();
+        let work_dir = &self.work_dir;
 
         let mountpoint = match mktemp(true, Some(MOUNTPOINT_TEMPLATE), Some(work_dir)) {
             Ok(path) => path,
@@ -271,7 +304,7 @@ impl Extractor {
                 PartitionReader::from_part_iterator(&raw_part, &mut part_iterator);
 
             match Extractor::write_partition(
-                &self.config,
+                self.work_dir.as_path(),
                 &mut part_reader,
                 &mut partition,
                 &tmp_name,
@@ -385,7 +418,7 @@ impl Extractor {
     }
 
     fn write_partition(
-        config: &Config,
+        work_dir: &Path,
         part_reader: &mut PartitionReader,
         partition: &mut Partition,
         tmp_name: &Path,
@@ -516,7 +549,7 @@ impl Extractor {
             path_append(output_path, &format!("{}.tgz", partition.name))
         } else {
             path_append(
-                config.migrate.get_work_dir(),
+                work_dir,
                 &format!("{}.tgz", partition.name),
             )
         };

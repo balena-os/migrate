@@ -17,7 +17,7 @@ use crate::{
 };
 
 pub(crate) struct IntelNuc {
-    boot_manager: Box<BootManager>,
+    boot_manager: Box<dyn BootManager>,
 }
 
 impl IntelNuc {

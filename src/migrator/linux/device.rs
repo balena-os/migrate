@@ -38,7 +38,7 @@ pub(crate) trait Device {
 pub(crate) fn from_config(
     device_type: &DeviceType,
     boot_type: &BootType,
-) -> Result<Box<Device>, MigError> {
+) -> Result<Box<dyn Device>, MigError> {
     match device_type {
         DeviceType::BeagleboneGreen => Ok(Box::new(beaglebone::BeagleboneGreen::from_boot_type(
             boot_type,
@@ -66,7 +66,7 @@ pub(crate) fn get_device(
     mig_info: &MigrateInfo,
     config: &Config,
     s2_cfg: &mut Stage2ConfigBuilder,
-) -> Result<Box<Device>, MigError> {
+) -> Result<Box<dyn Device>, MigError> {
     match mig_info.os_arch {
         OSArch::ARMHF => {
             let dev_tree_model =

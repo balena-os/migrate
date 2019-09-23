@@ -24,7 +24,7 @@ pub(crate) fn is_rpi(
     config: &Config,
     s2_cfg: &mut Stage2ConfigBuilder,
     model_string: &str,
-) -> Result<Option<Box<Device>>, MigError> {
+) -> Result<Option<Box<dyn Device>>, MigError> {
     trace!(
         "raspberrypi::is_rpi: entered with model string: '{}'",
         model_string
@@ -58,7 +58,7 @@ pub(crate) fn is_rpi(
 }
 
 pub(crate) struct RaspberryPi3 {
-    boot_manager: Box<BootManager>,
+    boot_manager: Box<dyn BootManager>,
 }
 
 impl RaspberryPi3 {

@@ -105,7 +105,6 @@ pub(crate) struct MigrateConfig {
     require_nwmgr_config: Option<bool>,
     gzip_internal: Option<bool>,
     tar_internal: Option<bool>,
-    extract_device: Option<String>,
     watchdogs: Option<Vec<WatchdogCfg>>,
     delay: Option<u64>,
     kernel_opts: Option<String>,
@@ -131,7 +130,6 @@ impl<'a> MigrateConfig {
             require_nwmgr_config: None,
             gzip_internal: None,
             tar_internal: None,
-            extract_device: None,
             watchdogs: None,
             delay: None,
             kernel_opts: None,
@@ -270,18 +268,6 @@ impl<'a> MigrateConfig {
             } else {
                 MigrateWifis::None
             }
-        }
-    }
-
-    pub fn set_extract_device(&mut self, device: &str) {
-        self.extract_device = Some(String::from(device));
-    }
-
-    pub fn get_extract_device(&'a self) -> Option<&'a str> {
-        if let Some(ref device) = self.extract_device {
-            Some(device)
-        } else {
-            None
         }
     }
 

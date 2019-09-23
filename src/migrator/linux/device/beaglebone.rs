@@ -49,7 +49,7 @@ pub(crate) fn is_bb(
     config: &Config,
     s2_cfg: &mut Stage2ConfigBuilder,
     model_string: &str,
-) -> Result<Option<Box<Device>>, MigError> {
+) -> Result<Option<Box<dyn Device>>, MigError> {
     trace!(
         "Beaglebone::is_bb: entered with model string: '{}'",
         model_string
@@ -94,7 +94,7 @@ pub(crate) fn is_bb(
 }
 
 pub(crate) struct BeagleboneBlack {
-    boot_manager: Box<BootManager>,
+    boot_manager: Box<dyn BootManager>,
 }
 
 impl BeagleboneGreen {
@@ -184,7 +184,7 @@ impl Device for BeagleboneGreen {
 }
 
 pub(crate) struct BeagleboneGreen {
-    boot_manager: Box<BootManager>,
+    boot_manager: Box<dyn BootManager>,
 }
 
 impl BeagleboneBlack {
@@ -270,7 +270,7 @@ impl Device for BeagleboneBlack {
 }
 
 pub(crate) struct BeagleboardXM {
-    boot_manager: Box<BootManager>,
+    boot_manager: Box<dyn BootManager>,
 }
 
 impl BeagleboardXM {

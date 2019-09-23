@@ -82,23 +82,10 @@ impl<'a> Config {
                     .help("Work directory"),
             )
             .arg(
-                Arg::with_name("test")
-                    .short("t")
-                    .long("test")
-                    .help("tests what currently needs testing"),
-            )
-            .arg(
                 Arg::with_name("verbose")
                     .short("v")
                     .multiple(true)
                     .help("Sets the level of verbosity"),
-            )
-            .arg(
-                Arg::with_name("device-type")
-                    .short("d")
-                    .long("device-type")
-                    .value_name("type")
-                    .help("specify image device slug for extraction"),
             )
             .get_matches();
 

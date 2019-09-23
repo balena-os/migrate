@@ -16,7 +16,7 @@ pub(crate) use grub_boot_manager::GrubBootManager;
 pub(crate) mod raspi_boot_manager;
 pub(crate) use raspi_boot_manager::RaspiBootManager;
 
-pub(crate) fn from_boot_type(boot_type: &BootType) -> Box<BootManager> {
+pub(crate) fn from_boot_type(boot_type: &BootType) -> Box<dyn BootManager> {
     match boot_type {
         BootType::UBoot => Box::new(UBootManager::new()),
         BootType::Grub => Box::new(GrubBootManager::new()),
