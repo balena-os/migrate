@@ -718,13 +718,23 @@ impl<'a> Mounts {
 
                 if fstype == "vfat" {
                     debug!("checking fat file system on '{}'", device.display());
-                    let cmd_res = call(FAT_CHK_CMD, &["-a", &device.to_string_lossy()], true)?;
-                    if !cmd_res.status.success() {
-                        warn!(
-                            "Failed to check file system '{}': {} ",
-                            device.display(),
-                            cmd_res.stderr
-                        );
+                    match call(FAT_CHK_CMD, &["-a", &device.to_string_lossy()], true) {
+                        Ok(cmd_res) => {
+                            if !cmd_res.status.success() {
+                                warn!(
+                                    "Failed to check file system '{}': {} ",
+                                    device.display(),
+                                    cmd_res.stderr
+                                );
+                            }
+                        },
+                        Err(why) => {
+                            warn!(
+                                "Failed to check file system '{}': {:?} ",
+                                device.display(),
+                                why
+                            );
+                        }
                     }
                 }
 
@@ -738,7 +748,7 @@ impl<'a> Mounts {
                     .context(MigErrCtx::from_remark(
                         MigErrorKind::Upstream,
                         &format!(
-                            "Failed to mount previous boot manager device '{}' to '{}' with fstype: {:?}",
+                            "Failed to mount device '{}' to '{}' with fstype: {:?}",
                             &device.display(),
                             &mountpoint.display(),
                             fstype
