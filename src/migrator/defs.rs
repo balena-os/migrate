@@ -85,6 +85,7 @@ pub(crate) enum DeviceType {
     BeagleboardXM,
     IntelNuc,
     RaspberryPi3,
+    RaspberryPi4,
 }
 
 #[derive(Debug, Clone)]
