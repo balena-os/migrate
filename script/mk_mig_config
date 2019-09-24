@@ -117,6 +117,11 @@ bcm2710-rpi-3-b-plus.dtb \
 bcm2710-rpi-cm3.dtb"
     RELEASE_DIR="${PROJECT_ROOT}/target/armv7-unknown-linux-musleabihf/release"
     ;;
+  raspberrypi4)
+    BOOT_DIR="${PROJECT_ROOT}/balena-boot/raspberrypi3"
+    COPY_FILES="balena.zImage bcm2711-rpi-4-b.dtb"
+    RELEASE_DIR="${PROJECT_ROOT}/target/aarch64-unknown-linux-musl/release"
+    ;;
   intel-nuc)
     BOOT_DIR="${PROJECT_ROOT}/balena-boot/intel-nuc"
     COPY_FILES="balena.zImage"
