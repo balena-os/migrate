@@ -18,7 +18,7 @@ use crate::{
         stage2_config::{Stage2Config, Stage2ConfigBuilder},
         Config, MigErrCtx, MigError, MigErrorKind,
     },
-    defs::{BootType, BALENA_FILE_TAG},
+    defs::{BootType, BALENA_FILE_TAG,},
     linux::{
         boot_manager::BootManager, linux_defs::BOOT_PATH, linux_defs::CHMOD_CMD,
         stage2::mounts::Mounts,
@@ -38,7 +38,7 @@ const RPI_CMDLINE_TXT: &str = "cmdline.txt";
 const RPI_BOOT_PATH: &str = "/boot";
 
 // TODO: more specific lists for PRI types ?
-const RPI_DTB_FILES: [&str; 8] = [
+const RPI3_DTB_FILES: &[&str] = &[
     "bcm2708-rpi-0-w.dtb",
     "bcm2708-rpi-b.dtb",
     "bcm2708-rpi-b-plus.dtb",
@@ -49,19 +49,38 @@ const RPI_DTB_FILES: [&str; 8] = [
     "bcm2710-rpi-cm3.dtb",
 ];
 
-pub(crate) struct RaspiBootManager {
+const RPI4_64_DTB_FILES: &[&str] = &[ "bcm2711-rpi-4-b.dtb" ];
+
+pub(crate) struct RaspiBootManager<'a> {
     bootmgr_path: Option<PathInfo>,
+    boot_type: BootType,
+    dtb_files: &'a[&'a str],
 }
 
-impl RaspiBootManager {
-    pub fn new() -> RaspiBootManager {
-        RaspiBootManager { bootmgr_path: None }
+impl RaspiBootManager<'_> {
+    pub fn new(boot_type: BootType) -> Result<impl BootManager + 'static, MigError> {
+        match boot_type {
+             BootType::Raspi => Ok(RaspiBootManager {
+                  bootmgr_path: None,
+                  dtb_files: RPI3_DTB_FILES,
+                  boot_type,
+                }),
+            BootType::Raspi64 => Ok(RaspiBootManager {
+                bootmgr_path: None,
+                dtb_files: RPI4_64_DTB_FILES,
+                boot_type,
+            }),
+            _ => {
+                error!("Invalid boot type encountered for RaspiBootManager: {:?}", boot_type);
+                return Err(MigError::displayed());
+            }
+        }
     }
 }
 
-impl BootManager for RaspiBootManager {
+impl BootManager for RaspiBootManager<'_> {
     fn get_boot_type(&self) -> BootType {
-        BootType::Raspi
+        self.boot_type.clone()
     }
 
     fn get_bootmgr_path(&self) -> PathInfo {
@@ -95,7 +114,8 @@ impl BootManager for RaspiBootManager {
         };
 
         // TODO: provide a way to supply digests for DTB files
-        for file in &RPI_DTB_FILES {
+
+        for file in self.dtb_files {
             if !file_exists(path_append(&mig_info.work_path.path, file)) {
                 error!(
                     "The file '{}' could not be found in the working directory",
@@ -114,7 +134,7 @@ impl BootManager for RaspiBootManager {
         s2_cfg: &mut Stage2ConfigBuilder,
         kernel_opts: &str,
     ) -> Result<(), MigError> {
-        trace!("setup: entered with type: RaspberryPi3",);
+        trace!("setup: entered with type: {:?}", self.boot_type);
 
         // **********************************************************************
         // ** copy new kernel
@@ -196,7 +216,7 @@ impl BootManager for RaspiBootManager {
 
         let mut boot_cfg_bckup: Vec<(String, String)> = Vec::new();
 
-        for file in &RPI_DTB_FILES {
+        for file in self.dtb_files {
             let src_path = path_append(&mig_info.work_path.path, file);
             let tgt_path = path_append(&RPI_BOOT_PATH, file);
 
@@ -211,7 +231,7 @@ impl BootManager for RaspiBootManager {
                         backup_path.display()
                     ),
                 ))?;
-                boot_cfg_bckup.push((String::from(*file), backup_file));
+                boot_cfg_bckup.push((file.to_string(), backup_file));
             }
 
             copy(&src_path, &tgt_path).context(MigErrCtx::from_remark(

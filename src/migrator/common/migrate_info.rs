@@ -17,7 +17,6 @@ use crate::{
     },
     defs::FileType,
     defs::OSArch,
-    linux::linux_common::{expect_type, get_os_arch, get_os_name},
 };
 
 // *************************************************************************************************
@@ -56,7 +55,7 @@ pub(crate) struct MigrateInfo {
 impl MigrateInfo {
     pub(crate) fn new(config: &Config, os_api: &impl OSApi) -> Result<MigrateInfo, MigError> {
         trace!("new: entered");
-        let os_arch = get_os_arch()?;
+        let os_arch = os_api.get_os_arch()?;
 
         let work_path = os_api.path_info_from_path(config.migrate.get_work_dir())?;
         let work_dir = &work_path.path;
@@ -138,7 +137,7 @@ impl MigrateInfo {
             }
 
             // ensure expected type
-            match expect_type(&file_info.path, &FileType::Json) {
+            match os_api.expect_type(&file_info.path, &FileType::Json) {
                 Ok(_) => (),
                 Err(_why) => {
                     error!(
@@ -162,17 +161,11 @@ impl MigrateInfo {
             return Err(MigError::displayed());
         };
 
-        let kernel_info = config.migrate.get_kernel_path();
-        let kernel_file = if let Some(file_info) = FileInfo::new(&kernel_info, work_dir)? {
-            expect_type(
-                &file_info.path,
-                match os_arch {
-                    OSArch::AMD64 => &FileType::KernelAMD64,
-                    OSArch::ARMHF => &FileType::KernelARMHF,
-                    OSArch::I386 => &FileType::KernelI386,
-                },
-            )?;
 
+        let kernel_info = config.migrate.get_kernel_path();
+
+        let kernel_file = if let Some(file_info) = FileInfo::new(&kernel_info, work_dir)? {
+            // TODO: check later, when target arch is known
             info!(
                 "The balena migrate kernel looks ok: '{}'",
                 file_info.path.display()
@@ -186,7 +179,7 @@ impl MigrateInfo {
         let initrd_file = if let Some(file_info) =
             FileInfo::new(config.migrate.get_initrd_path(), work_dir)?
         {
-            expect_type(&file_info.path, &FileType::InitRD)?;
+            os_api.expect_type(&file_info.path, &FileType::InitRD)?;
             info!(
                 "The balena migrate initramfs looks ok: '{}'",
                 file_info.path.display()
@@ -201,7 +194,7 @@ impl MigrateInfo {
             let mut dtb_files: Vec<FileInfo> = Vec::new();
             for dtb_ref in dtb_refs {
                 if let Some(file_info) = FileInfo::new(dtb_ref, work_dir)? {
-                    expect_type(&file_info.path, &FileType::DTB)?;
+                    os_api.expect_type(&file_info.path, &FileType::DTB)?;
                     info!(
                         "The balena migrate device tree blob looks ok: '{}'",
                         file_info.path.display()
@@ -227,7 +220,7 @@ impl MigrateInfo {
                 },
                 &work_dir,
             )? {
-                expect_type(&file_info.path, &FileType::Text)?;
+                os_api.expect_type(&file_info.path, &FileType::Text)?;
                 info!(
                     "Adding network manager config: '{}'",
                     file_info.path.display()
@@ -279,7 +272,7 @@ impl MigrateInfo {
         }
 
         let result = MigrateInfo {
-            os_name: get_os_name()?,
+            os_name: os_api.get_os_name()?,
             os_arch,
             work_path,
             log_path,
@@ -332,7 +325,7 @@ impl MigrateInfo {
             }
 
             // ensure expected type
-            match expect_type(&file_info.path, expected_type) {
+            match os_api.expect_type(&file_info.path, expected_type) {
                 Ok(_) => {
                     info!("The file '{}' image looks ok", file_info.path.display());
                 }

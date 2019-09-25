@@ -7,11 +7,11 @@ use crate::{
         stage2_config::{Stage2Config, Stage2ConfigBuilder},
         Config, MigError, MigErrorKind,
     },
-    defs::{BootType, DeviceType},
+    defs::{BootType, DeviceType, FileType},
     linux::{
         boot_manager::{from_boot_type, BootManager, GrubBootManager},
         device::Device,
-        linux_common::is_secure_boot,
+        linux_common::{is_secure_boot, expect_type},
         stage2::mounts::Mounts,
     },
 };
@@ -36,6 +36,9 @@ impl IntelNuc {
         ];
 
         let os_name = &mig_info.os_name;
+
+        expect_type(&mig_info.kernel_file.path,&FileType::KernelAMD64 )?;
+
         if let None = SUPPORTED_OSSES.iter().position(|&r| r == os_name) {
             let message = format!(
                 "The OS '{}' is not supported for device type IntelNuc",

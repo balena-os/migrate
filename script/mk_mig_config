@@ -118,8 +118,8 @@ bcm2710-rpi-cm3.dtb"
     RELEASE_DIR_MIGRATE="${PROJECT_ROOT}/target/armv7-unknown-linux-musleabihf/release"
     RELEASE_DIR_STAGE2="${PROJECT_ROOT}/target/armv7-unknown-linux-musleabihf/release"
     ;;
-  raspberrypi4)
-    BOOT_DIR="${PROJECT_ROOT}/balena-boot/raspberrypi3"
+  raspberrypi4-64)
+    BOOT_DIR="${PROJECT_ROOT}/balena-boot/raspberrypi4-64"
     COPY_FILES="balena.zImage bcm2711-rpi-4-b.dtb"
     RELEASE_DIR_MIGRATE="${PROJECT_ROOT}/target/armv7-unknown-linux-musleabihf/release"
     RELEASE_DIR_STAGE2="${PROJECT_ROOT}/target/aarch64-unknown-linux-musl/release"
@@ -212,7 +212,7 @@ cd ${CURR_DIR}
 
 rm -rf ${UNPACK_DIR}
 
-echo "copying balena-migrate"
+echo "copying ${RELEASE_DIR_MIGRATE}/balena-migrate to ${TARGET_DIR}/balena-migrate"
 cp  ${RELEASE_DIR_MIGRATE}/balena-migrate ${TARGET_DIR}/
 
 # TODO: chown target dir to users recursively

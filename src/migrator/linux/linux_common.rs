@@ -40,7 +40,9 @@ const OS_CFG_FTYPE_REGEX: &str = r#"^(ASCII text|JSON data).*$"#;
 const KERNEL_AMD64_FTYPE_REGEX: &str =
     r#"^(Linux kernel x86 boot executable bzImage|x86 boot sector).*$"#;
 const KERNEL_ARMHF_FTYPE_REGEX: &str = r#"^Linux kernel ARM boot executable zImage.*$"#;
-const KERNEL_I386_FTYPE_REGEX: &str = r#"^Linux kernel i386 boot executable bzImage.*$"#;
+//const KERNEL_I386_FTYPE_REGEX: &str = r#"^Linux kernel i386 boot executable bzImage.*$"#;
+const KERNEL_AARCH64_FTYPE_REGEX: &str = r#"^MS-DOS executable.*$"#;
+
 const TEXT_FTYPE_REGEX: &str = r#"^ASCII text.*$"#;
 
 const DTB_FTYPE_REGEX: &str = r#"^(Device Tree Blob|data).*$"#;
@@ -120,6 +122,7 @@ pub(crate) fn get_os_arch() -> Result<OSArch, MigError> {
         } else if cmd_res.stdout.to_lowercase() == "i386" {
             Ok(OSArch::I386)
         } else if cmd_res.stdout.to_lowercase() == "armv7l" {
+            // TODO: try to determine the CPU Architecture
             Ok(OSArch::ARMHF)
         } else {
             Err(MigError::from_remark(
@@ -633,7 +636,8 @@ pub(crate) fn is_file_type<P: AsRef<Path>>(file: P, ftype: &FileType) -> Result<
         static ref TEXT_FTYPE_RE: Regex = Regex::new(TEXT_FTYPE_REGEX).unwrap();
         static ref KERNEL_AMD64_FTYPE_RE: Regex = Regex::new(KERNEL_AMD64_FTYPE_REGEX).unwrap();
         static ref KERNEL_ARMHF_FTYPE_RE: Regex = Regex::new(KERNEL_ARMHF_FTYPE_REGEX).unwrap();
-        static ref KERNEL_I386_FTYPE_RE: Regex = Regex::new(KERNEL_I386_FTYPE_REGEX).unwrap();
+        static ref KERNEL_AARCH64_FTYPE_RE: Regex = Regex::new(KERNEL_AARCH64_FTYPE_REGEX).unwrap();
+        //static ref KERNEL_I386_FTYPE_RE: Regex = Regex::new(KERNEL_I386_FTYPE_REGEX).unwrap();
         static ref DTB_FTYPE_RE: Regex = Regex::new(DTB_FTYPE_REGEX).unwrap();
         static ref GZIP_TAR_FTYPE_RE: Regex = Regex::new(GZIP_TAR_FTYPE_REGEX).unwrap();
     }
@@ -649,7 +653,8 @@ pub(crate) fn is_file_type<P: AsRef<Path>>(file: P, ftype: &FileType) -> Result<
         FileType::InitRD => Ok(INITRD_FTYPE_RE.is_match(&cmd_res.stdout)),
         FileType::KernelARMHF => Ok(KERNEL_ARMHF_FTYPE_RE.is_match(&cmd_res.stdout)),
         FileType::KernelAMD64 => Ok(KERNEL_AMD64_FTYPE_RE.is_match(&cmd_res.stdout)),
-        FileType::KernelI386 => Ok(KERNEL_I386_FTYPE_RE.is_match(&cmd_res.stdout)),
+        //FileType::KernelI386 => Ok(KERNEL_I386_FTYPE_RE.is_match(&cmd_res.stdout)),
+        FileType::KernelAARCH64 => Ok(KERNEL_AARCH64_FTYPE_RE.is_match(&cmd_res.stdout)),
         FileType::Json => Ok(OS_CFG_FTYPE_RE.is_match(&cmd_res.stdout)),
         FileType::Text => Ok(TEXT_FTYPE_RE.is_match(&cmd_res.stdout)),
         FileType::DTB => Ok(DTB_FTYPE_RE.is_match(&cmd_res.stdout)),

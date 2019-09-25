@@ -9,6 +9,7 @@ pub const UENV_FILE_NAME: &str = "uEnv.txt";
 pub const UBOOT_FILE_NAME: &str = "u-boot.img";
 
 pub const KERNEL_CMDLINE_PATH: &str = "/proc/cmdline";
+pub const KERNEL_OSRELEASE_PATH: &str ="/proc/sys/kernel/osrelease"
 
 pub const GRUB_CONFIG_DIR: &str = "/etc/grub.d";
 pub const GRUB_CONFIG_FILE: &str = "/etc/grub.d/43_balena-migrate";

@@ -22,7 +22,8 @@ pub(crate) fn from_boot_type(boot_type: &BootType) -> Box<dyn BootManager> {
         BootType::Grub => Box::new(GrubBootManager::new()),
         BootType::Efi => Box::new(EfiBootManager::new(false)),
         BootType::MSWEfi => Box::new(EfiBootManager::new(true)),
-        BootType::Raspi => Box::new(RaspiBootManager::new()),
+        BootType::Raspi => Box::new(RaspiBootManager::new(boot_type.clone()).unwrap()),
+        BootType::Raspi64 => Box::new(RaspiBootManager::new(boot_type.clone()).unwrap()),
         BootType::MSWBootMgr => panic!("BootType::MSWBootMgr is not implemented"),
     }
 }

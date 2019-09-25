@@ -53,7 +53,7 @@ pub(crate) fn from_config(
         DeviceType::RaspberryPi3 => Ok(Box::new(raspberrypi::RaspberryPi3::from_boot_type(
             boot_type,
         ))),
-        DeviceType::RaspberryPi4 => Ok(Box::new(raspberrypi::RaspberryPi4::from_boot_type(
+        DeviceType::RaspberryPi4_64 => Ok(Box::new(raspberrypi::RaspberryPi4_64::from_boot_type(
             boot_type,
         ))),
         DeviceType::IntelNuc => Ok(Box::new(intel_nuc::IntelNuc::from_boot_type(boot_type))),

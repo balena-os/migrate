@@ -8,11 +8,12 @@ use crate::{
         stage2_config::{Stage2Config, Stage2ConfigBuilder},
         Config, MigError, MigErrorKind,
     },
-    defs::{BootType, DeviceType},
+    defs::{BootType, DeviceType, FileType},
     linux::{
         boot_manager::{from_boot_type, BootManager, UBootManager},
         device::Device,
         stage2::mounts::Mounts,
+        linux_common::expect_type,
     },
 };
 
@@ -106,6 +107,9 @@ impl BeagleboneGreen {
     ) -> Result<BeagleboneGreen, MigError> {
         let os_name = &mig_info.os_name;
 
+        expect_type(&mig_info.kernel_file.path,&FileType::KernelARMHF )?;
+
+
         if let Some(_idx) = SUPPORTED_OSSES.iter().position(|&r| r == os_name) {
             let mut boot_manager = UBootManager::new();
 
@@ -196,6 +200,8 @@ impl BeagleboneBlack {
     ) -> Result<BeagleboneBlack, MigError> {
         let os_name = &mig_info.os_name;
 
+        expect_type(&mig_info.kernel_file.path,&FileType::KernelARMHF )?;
+
         if let Some(_idx) = SUPPORTED_OSSES.iter().position(|&r| r == os_name) {
             let mut boot_manager = UBootManager::new();
 
@@ -282,6 +288,7 @@ impl BeagleboardXM {
         s2_cfg: &mut Stage2ConfigBuilder,
     ) -> Result<BeagleboardXM, MigError> {
         let os_name = &mig_info.os_name;
+        expect_type(&mig_info.kernel_file.path,&FileType::KernelARMHF )?;
 
         if let Some(_idx) = SUPPORTED_OSSES.iter().position(|&r| r == os_name) {
             let mut boot_manager = UBootManager::new();

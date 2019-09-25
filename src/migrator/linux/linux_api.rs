@@ -3,8 +3,8 @@ use std::path::Path;
 
 use crate::{
     common::{device_info::DeviceInfo, os_api::OSApi, path_info::PathInfo, MigError},
-    defs::OSArch,
-    linux::{linux_common::get_os_arch, lsblk_info::LsblkInfo},
+    defs::{OSArch, FileType},
+    linux::{ linux_common::{get_os_arch, get_os_name, expect_type}, lsblk_info::LsblkInfo},
 };
 
 pub(crate) struct LinuxAPI<'a> {
@@ -18,8 +18,12 @@ impl LinuxAPI<'_> {
 }
 
 impl OSApi for LinuxAPI<'_> {
-    fn get_os_arch() -> Result<OSArch, MigError> {
+    fn get_os_arch(&self) -> Result<OSArch, MigError> {
         get_os_arch()
+    }
+
+    fn get_os_name(&self) -> Result<String, MigError> {
+        get_os_name()
     }
 
     fn path_info_from_path<P: AsRef<Path>>(&self, path: P) -> Result<PathInfo, MigError> {
@@ -37,5 +41,9 @@ impl OSApi for LinuxAPI<'_> {
     fn device_info_from_partition<P: AsRef<Path>>(&self, part: P) -> Result<DeviceInfo, MigError> {
         let (drive, partition) = self.lsblk_info.get_devinfo_from_partition(part.as_ref())?;
         Ok(DeviceInfo::new(drive, partition)?)
+    }
+
+    fn expect_type<P: AsRef<Path>>(&self, file: P, ftype: &FileType) -> Result<(), MigError> {
+        expect_type(file.as_ref(), ftype)
     }
 }

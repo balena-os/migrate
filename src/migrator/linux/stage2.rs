@@ -3,7 +3,7 @@ use log::{debug, error, info, trace, warn, Level};
 use mod_logger::{LogDestination, Logger, NO_STREAM};
 use nix::unistd::sync;
 
-use std::fs::{copy, create_dir, read_dir};
+use std::fs::{copy, create_dir, read_dir, read_to_string};
 
 use std::path::Path;
 use std::thread;
@@ -23,7 +23,7 @@ use crate::{
     linux::{
         device,
         linux_common::{get_mem_info, whereis},
-        linux_defs::REBOOT_CMD,
+        linux_defs::{REBOOT_CMD,KERNEL_OSRELEASE_PATH},
         linux_defs::{MIGRATE_LOG_FILE, STAGE2_MEM_THRESHOLD},
     },
 };
@@ -100,6 +100,13 @@ impl<'a> Stage2 {
                 println!("failed to initalize logger");
                 println!("Balena Migrate Stage 2 rev {} initializing", S2_REV);
             }
+        }
+
+
+        if let Ok(krelease) = read_to_string(KERNEL_OSRELEASE_PATH) {
+            info!("Running stage2 on kernel version: '{}'", krelease);
+        } else {
+            warn!("Failed to retrieve kernel release");
         }
 
         // TODO: create replacement for ensured commands

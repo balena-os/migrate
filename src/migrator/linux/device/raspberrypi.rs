@@ -8,11 +8,11 @@ use crate::{
         stage2_config::{Stage2Config, Stage2ConfigBuilder},
         Config, MigError, MigErrorKind,
     },
-    defs::{BootType, DeviceType},
+    defs::{BootType, DeviceType, FileType},
     linux::{
         boot_manager::{from_boot_type, BootManager, RaspiBootManager},
         device::Device,
-        linux_common::restore_backups,
+        linux_common::{restore_backups, expect_type},
         stage2::mounts::Mounts,
     },
 };
@@ -46,8 +46,8 @@ pub(crate) fn is_rpi(
                 )?)))
             }
             "4" => {
-                info!("Identified RaspberryPi3: model {}", model);
-                Ok(Some(Box::new(RaspberryPi4::from_config(
+                info!("Identified RaspberryPi4: model {}", model);
+                Ok(Some(Box::new(RaspberryPi4_64::from_config(
                     mig_info, config, s2_cfg,
                 )?)))
             },
@@ -81,8 +81,10 @@ impl RaspberryPi3 {
 
         let os_name = &mig_info.os_name;
 
+        expect_type(&mig_info.kernel_file.path,&FileType::KernelARMHF )?;
+
         if let Some(_n) = SUPPORTED_OSSES.iter().position(|&r| r == os_name) {
-            let mut boot_manager = RaspiBootManager::new();
+            let mut boot_manager = RaspiBootManager::new(BootType::Raspi)?;
             if boot_manager.can_migrate(mig_info, config, s2_cfg)? {
                 Ok(RaspberryPi3 {
                     boot_manager: Box::new(boot_manager),
@@ -142,16 +144,16 @@ impl<'a> Device for RaspberryPi3 {
     }
 }
 
-pub(crate) struct RaspberryPi4 {
+pub(crate) struct RaspberryPi4_64 {
     boot_manager: Box<dyn BootManager>,
 }
 
-impl RaspberryPi4 {
+impl RaspberryPi4_64 {
     pub fn from_config(
         mig_info: &MigrateInfo,
         config: &Config,
         s2_cfg: &mut Stage2ConfigBuilder,
-    ) -> Result<RaspberryPi3, MigError> {
+    ) -> Result<RaspberryPi4_64, MigError> {
         const SUPPORTED_OSSES: &'static [&'static str] = &[
             "Raspbian GNU/Linux 8 (jessie)",
             "Raspbian GNU/Linux 9 (stretch)",
@@ -160,10 +162,12 @@ impl RaspberryPi4 {
 
         let os_name = &mig_info.os_name;
 
+        expect_type(&mig_info.kernel_file.path,&FileType::KernelAARCH64 )?;
+
         if let Some(_n) = SUPPORTED_OSSES.iter().position(|&r| r == os_name) {
-            let mut boot_manager = RaspiBootManager::new();
+            let mut boot_manager = RaspiBootManager::new(BootType::Raspi64)?;
             if boot_manager.can_migrate(mig_info, config, s2_cfg)? {
-                Ok(RaspberryPi3 {
+                Ok(RaspberryPi4_64 {
                     boot_manager: Box::new(boot_manager),
                 })
             } else {
@@ -176,20 +180,20 @@ impl RaspberryPi4 {
         }
     }
 
-    pub fn from_boot_type(boot_type: &BootType) -> RaspberryPi4 {
-        RaspberryPi4 {
+    pub fn from_boot_type(boot_type: &BootType) -> RaspberryPi4_64 {
+        RaspberryPi4_64 {
             boot_manager: from_boot_type(boot_type),
         }
     }
 }
 
-impl<'a> Device for RaspberryPi4 {
+impl<'a> Device for RaspberryPi4_64 {
     fn get_device_slug(&self) -> &'static str {
-        "raspberrypi4"
+        "raspberrypi4-64"
     }
 
     fn get_device_type(&self) -> DeviceType {
-        DeviceType::RaspberryPi4
+        DeviceType::RaspberryPi4_64
     }
 
     fn get_boot_type(&self) -> BootType {
