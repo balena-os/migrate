@@ -38,15 +38,10 @@ const RPI_CMDLINE_TXT: &str = "cmdline.txt";
 const RPI_BOOT_PATH: &str = "/boot";
 
 // TODO: more specific lists for PRI types ?
+
 const RPI3_DTB_FILES: &[&str] = &[
-    "bcm2708-rpi-0-w.dtb",
-    "bcm2708-rpi-b.dtb",
-    "bcm2708-rpi-b-plus.dtb",
-    "bcm2708-rpi-cm.dtb",
-    "bcm2709-rpi-2-b.dtb",
     "bcm2710-rpi-3-b.dtb",
     "bcm2710-rpi-3-b-plus.dtb",
-    "bcm2710-rpi-cm3.dtb",
 ];
 
 const RPI4_64_DTB_FILES: &[&str] = &[ "bcm2711-rpi-4-b.dtb" ];

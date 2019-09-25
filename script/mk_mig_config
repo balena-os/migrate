@@ -106,15 +106,7 @@ done
 case ${DEVICE_TYPE} in
   raspberrypi3)
     BOOT_DIR="${PROJECT_ROOT}/balena-boot/raspberrypi3"
-    COPY_FILES="balena.zImage \
-bcm2708-rpi-0-w.dtb \
-bcm2708-rpi-b.dtb \
-bcm2708-rpi-b-plus.dtb \
-bcm2708-rpi-cm.dtb \
-bcm2709-rpi-2-b.dtb \
-bcm2710-rpi-3-b.dtb \
-bcm2710-rpi-3-b-plus.dtb \
-bcm2710-rpi-cm3.dtb"
+    COPY_FILES="balena.zImage bcm2710-rpi-3-b.dtb bcm2710-rpi-3-b-plus.dtb"
     RELEASE_DIR_MIGRATE="${PROJECT_ROOT}/target/armv7-unknown-linux-musleabihf/release"
     RELEASE_DIR_STAGE2="${PROJECT_ROOT}/target/armv7-unknown-linux-musleabihf/release"
     ;;
