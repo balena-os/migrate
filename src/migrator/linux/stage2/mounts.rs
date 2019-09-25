@@ -727,7 +727,7 @@ impl<'a> Mounts {
                                     cmd_res.stderr
                                 );
                             }
-                        },
+                        }
                         Err(why) => {
                             warn!(
                                 "Failed to check file system '{}': {:?} ",
@@ -745,15 +745,15 @@ impl<'a> Mounts {
                     MsFlags::empty(),
                     NIX_NONE,
                 )
-                    .context(MigErrCtx::from_remark(
-                        MigErrorKind::Upstream,
-                        &format!(
-                            "Failed to mount device '{}' to '{}' with fstype: {:?}",
-                            &device.display(),
-                            &mountpoint.display(),
-                            fstype
-                        ),
-                    ))?;
+                .context(MigErrCtx::from_remark(
+                    MigErrorKind::Upstream,
+                    &format!(
+                        "Failed to mount device '{}' to '{}' with fstype: {:?}",
+                        &device.display(),
+                        &mountpoint.display(),
+                        fstype
+                    ),
+                ))?;
 
                 return Ok(mountpoint);
             } else {

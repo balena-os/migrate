@@ -12,6 +12,7 @@ use crate::common::file_digest::check_digest;
 use crate::linux::lsblk_info::LsblkInfo;
 use crate::{
     common::{
+        boot_manager::BootManager,
         call, file_exists, format_size_with_unit, is_balena_file,
         migrate_info::MigrateInfo,
         path_append,
@@ -21,7 +22,6 @@ use crate::{
     },
     defs::{BootType, BALENA_FILE_TAG, MIG_DTB_NAME, MIG_INITRD_NAME, MIG_KERNEL_NAME},
     linux::{
-        boot_manager::BootManager,
         linux_common::restore_backups,
         linux_defs::{
             BOOT_PATH, MLO_FILE_NAME, NIX_NONE, ROOT_PATH, UBOOT_FILE_NAME, UENV_FILE_NAME,

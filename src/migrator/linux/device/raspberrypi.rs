@@ -3,6 +3,7 @@ use regex::Regex;
 
 use crate::{
     common::{
+        boot_manager::BootManager,
         migrate_info::MigrateInfo,
         path_info::PathInfo,
         stage2_config::{Stage2Config, Stage2ConfigBuilder},
@@ -10,9 +11,9 @@ use crate::{
     },
     defs::{BootType, DeviceType, FileType},
     linux::{
-        boot_manager::{from_boot_type, BootManager, RaspiBootManager},
+        boot_manager::{from_boot_type, RaspiBootManager},
         device::Device,
-        linux_common::{restore_backups, expect_type},
+        linux_common::{expect_type, restore_backups},
         stage2::mounts::Mounts,
     },
 };
@@ -50,7 +51,7 @@ pub(crate) fn is_rpi(
                 Ok(Some(Box::new(RaspberryPi4_64::from_config(
                     mig_info, config, s2_cfg,
                 )?)))
-            },
+            }
             _ => {
                 let message = format!("The raspberry pi type reported by your device ('{} {}') is not supported by balena-migrate", pitype, model);
                 error!("{}", message);
@@ -81,10 +82,10 @@ impl RaspberryPi3 {
 
         let os_name = &mig_info.os_name;
 
-        expect_type(&mig_info.kernel_file.path,&FileType::KernelARMHF )?;
+        expect_type(&mig_info.kernel_file.path, &FileType::KernelARMHF)?;
 
         if let Some(_n) = SUPPORTED_OSSES.iter().position(|&r| r == os_name) {
-            let mut boot_manager = RaspiBootManager::new(BootType::Raspi)?;
+            let mut boot_manager = RaspiBootManager::new(&BootType::Raspi)?;
             if boot_manager.can_migrate(mig_info, config, s2_cfg)? {
                 Ok(RaspberryPi3 {
                     boot_manager: Box::new(boot_manager),
@@ -162,10 +163,10 @@ impl RaspberryPi4_64 {
 
         let os_name = &mig_info.os_name;
 
-        expect_type(&mig_info.kernel_file.path,&FileType::KernelAARCH64 )?;
+        expect_type(&mig_info.kernel_file.path, &FileType::KernelAARCH64)?;
 
         if let Some(_n) = SUPPORTED_OSSES.iter().position(|&r| r == os_name) {
-            let mut boot_manager = RaspiBootManager::new(BootType::Raspi64)?;
+            let mut boot_manager = RaspiBootManager::new(&BootType::Raspi64)?;
             if boot_manager.can_migrate(mig_info, config, s2_cfg)? {
                 Ok(RaspberryPi4_64 {
                     boot_manager: Box::new(boot_manager),

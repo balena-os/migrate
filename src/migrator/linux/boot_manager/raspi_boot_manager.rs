@@ -3,12 +3,14 @@ use log::{debug, error, info, trace, warn};
 use regex::Regex;
 use std::fs::{copy, read_to_string, File};
 use std::io::{BufRead, BufReader, Write};
+use std::path::PathBuf;
 
 use std::time::SystemTime;
 
 use crate::linux::lsblk_info::LsblkInfo;
 use crate::{
     common::{
+        boot_manager::BootManager,
         call, dir_exists,
         file_digest::check_digest,
         file_exists, is_balena_file,
@@ -18,11 +20,8 @@ use crate::{
         stage2_config::{Stage2Config, Stage2ConfigBuilder},
         Config, MigErrCtx, MigError, MigErrorKind,
     },
-    defs::{BootType, BALENA_FILE_TAG,},
-    linux::{
-        boot_manager::BootManager, linux_defs::BOOT_PATH, linux_defs::CHMOD_CMD,
-        stage2::mounts::Mounts,
-    },
+    defs::{BootType, BALENA_FILE_TAG},
+    linux::{linux_defs::BOOT_PATH, linux_defs::CHMOD_CMD, stage2::mounts::Mounts},
 };
 
 // TODO: copy rpi dtb's , backup orig dtbs
@@ -39,34 +38,34 @@ const RPI_BOOT_PATH: &str = "/boot";
 
 // TODO: more specific lists for PRI types ?
 
-const RPI3_DTB_FILES: &[&str] = &[
-    "bcm2710-rpi-3-b.dtb",
-    "bcm2710-rpi-3-b-plus.dtb",
-];
+const RPI3_DTB_FILES: &[&str] = &["bcm2710-rpi-3-b.dtb", "bcm2710-rpi-3-b-plus.dtb"];
 
-const RPI4_64_DTB_FILES: &[&str] = &[ "bcm2711-rpi-4-b.dtb" ];
+const RPI4_64_DTB_FILES: &[&str] = &["bcm2711-rpi-4-b.dtb"];
 
 pub(crate) struct RaspiBootManager<'a> {
     bootmgr_path: Option<PathInfo>,
     boot_type: BootType,
-    dtb_files: &'a[&'a str],
+    dtb_files: &'a [&'a str],
 }
 
 impl RaspiBootManager<'_> {
-    pub fn new(boot_type: BootType) -> Result<impl BootManager + 'static, MigError> {
+    pub fn new(boot_type: &BootType) -> Result<impl BootManager + 'static, MigError> {
         match boot_type {
-             BootType::Raspi => Ok(RaspiBootManager {
-                  bootmgr_path: None,
-                  dtb_files: RPI3_DTB_FILES,
-                  boot_type,
-                }),
+            BootType::Raspi => Ok(RaspiBootManager {
+                bootmgr_path: None,
+                dtb_files: RPI3_DTB_FILES,
+                boot_type: boot_type.clone(),
+            }),
             BootType::Raspi64 => Ok(RaspiBootManager {
                 bootmgr_path: None,
                 dtb_files: RPI4_64_DTB_FILES,
-                boot_type,
+                boot_type: boot_type.clone(),
             }),
             _ => {
-                error!("Invalid boot type encountered for RaspiBootManager: {:?}", boot_type);
+                error!(
+                    "Invalid boot type encountered for RaspiBootManager: {:?}",
+                    boot_type
+                );
                 return Err(MigError::displayed());
             }
         }
@@ -111,6 +110,17 @@ impl BootManager for RaspiBootManager<'_> {
         // TODO: provide a way to supply digests for DTB files
 
         for file in self.dtb_files {
+            if let None = mig_info
+                .dtb_file
+                .iter()
+                .find(|file_info| file_info.path == PathBuf::from(file))
+            {
+                warn!(
+                    "Required DTB file '{}' was not found in files configured in device_tree",
+                    file
+                );
+            }
+
             if !file_exists(path_append(&mig_info.work_path.path, file)) {
                 error!(
                     "The file '{}' could not be found in the working directory",

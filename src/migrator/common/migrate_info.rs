@@ -161,7 +161,6 @@ impl MigrateInfo {
             return Err(MigError::displayed());
         };
 
-
         let kernel_info = config.migrate.get_kernel_path();
 
         let kernel_file = if let Some(file_info) = FileInfo::new(&kernel_info, work_dir)? {

@@ -11,6 +11,7 @@ use crate::{
     common::{
         backup, call,
         config::balena_config::ImageType,
+        device::Device,
         dir_exists, format_size_with_unit,
         migrate_info::MigrateInfo,
         path_append,
@@ -26,7 +27,6 @@ use linux_defs::{
 };
 
 pub(crate) mod device;
-pub(crate) use device::Device;
 
 pub(crate) mod boot_manager;
 

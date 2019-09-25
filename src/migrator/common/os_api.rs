@@ -1,8 +1,8 @@
 use std::path::Path;
 
 use crate::{
-    defs::{FileType,},
-    common::{device_info::DeviceInfo, path_info::PathInfo, MigError,},
+    common::{device_info::DeviceInfo, path_info::PathInfo, MigError},
+    defs::FileType,
     defs::OSArch,
 };
 

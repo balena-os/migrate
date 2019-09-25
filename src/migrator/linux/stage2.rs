@@ -23,7 +23,7 @@ use crate::{
     linux::{
         device,
         linux_common::{get_mem_info, whereis},
-        linux_defs::{REBOOT_CMD,KERNEL_OSRELEASE_PATH},
+        linux_defs::{KERNEL_OSRELEASE_PATH, REBOOT_CMD},
         linux_defs::{MIGRATE_LOG_FILE, STAGE2_MEM_THRESHOLD},
     },
 };
@@ -102,9 +102,8 @@ impl<'a> Stage2 {
             }
         }
 
-
         if let Ok(krelease) = read_to_string(KERNEL_OSRELEASE_PATH) {
-            info!("Running stage2 on kernel version: '{}'", krelease);
+            info!("Running stage2 on kernel version: '{}'", krelease.trim());
         } else {
             warn!("Failed to retrieve kernel release");
         }

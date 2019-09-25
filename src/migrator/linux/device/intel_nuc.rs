@@ -2,6 +2,7 @@ use log::{error, info, trace};
 
 use crate::{
     common::{
+        boot_manager::BootManager,
         migrate_info::MigrateInfo,
         path_info::PathInfo,
         stage2_config::{Stage2Config, Stage2ConfigBuilder},
@@ -9,9 +10,9 @@ use crate::{
     },
     defs::{BootType, DeviceType, FileType},
     linux::{
-        boot_manager::{from_boot_type, BootManager, GrubBootManager},
+        boot_manager::{from_boot_type, GrubBootManager},
         device::Device,
-        linux_common::{is_secure_boot, expect_type},
+        linux_common::{expect_type, is_secure_boot},
         stage2::mounts::Mounts,
     },
 };
@@ -37,7 +38,7 @@ impl IntelNuc {
 
         let os_name = &mig_info.os_name;
 
-        expect_type(&mig_info.kernel_file.path,&FileType::KernelAMD64 )?;
+        expect_type(&mig_info.kernel_file.path, &FileType::KernelAMD64)?;
 
         if let None = SUPPORTED_OSSES.iter().position(|&r| r == os_name) {
             let message = format!(

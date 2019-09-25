@@ -1,5 +1,6 @@
 use crate::{
     common::{
+        boot_manager::BootManager,
         migrate_info::MigrateInfo,
         path_info::PathInfo,
         stage2_config::{Stage2Config, Stage2ConfigBuilder},
@@ -22,34 +23,13 @@ pub(crate) fn from_boot_type(boot_type: &BootType) -> Box<dyn BootManager> {
         BootType::Grub => Box::new(GrubBootManager::new()),
         BootType::Efi => Box::new(EfiBootManager::new(false)),
         BootType::MSWEfi => Box::new(EfiBootManager::new(true)),
-        BootType::Raspi => Box::new(RaspiBootManager::new(boot_type.clone()).unwrap()),
-        BootType::Raspi64 => Box::new(RaspiBootManager::new(boot_type.clone()).unwrap()),
+        BootType::Raspi => Box::new(RaspiBootManager::new(boot_type).unwrap()),
+        BootType::Raspi64 => Box::new(RaspiBootManager::new(boot_type).unwrap()),
         BootType::MSWBootMgr => panic!("BootType::MSWBootMgr is not implemented"),
     }
 }
 
 // TODO: support configured / device specific command line options
-
-pub(crate) trait BootManager {
-    fn get_boot_type(&self) -> BootType;
-    fn can_migrate(
-        &mut self,
-        mig_info: &MigrateInfo,
-        config: &Config,
-        s2_cfg: &mut Stage2ConfigBuilder,
-    ) -> Result<bool, MigError>;
-    fn setup(
-        &self,
-        mig_info: &MigrateInfo,
-        s2_cfg: &mut Stage2ConfigBuilder,
-        kernel_opts: &str,
-    ) -> Result<(), MigError>;
-
-    fn restore(&self, mounts: &Mounts, config: &Stage2Config) -> bool;
-    // TODO: make return reference
-    fn get_bootmgr_path(&self) -> PathInfo;
-    fn get_boot_path(&self) -> PathInfo;
-}
 
 pub(crate) struct EfiBootManager {
     #[allow(dead_code)]

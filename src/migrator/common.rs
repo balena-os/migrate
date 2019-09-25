@@ -17,6 +17,9 @@ pub(crate) mod os_release;
 
 pub(crate) mod os_api;
 
+pub(crate) mod boot_manager;
+pub(crate) mod device;
+
 pub(crate) mod device_info;
 pub(crate) mod path_info;
 

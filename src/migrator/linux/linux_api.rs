@@ -3,8 +3,11 @@ use std::path::Path;
 
 use crate::{
     common::{device_info::DeviceInfo, os_api::OSApi, path_info::PathInfo, MigError},
-    defs::{OSArch, FileType},
-    linux::{ linux_common::{get_os_arch, get_os_name, expect_type}, lsblk_info::LsblkInfo},
+    defs::{FileType, OSArch},
+    linux::{
+        linux_common::{expect_type, get_os_arch, get_os_name},
+        lsblk_info::LsblkInfo,
+    },
 };
 
 pub(crate) struct LinuxAPI<'a> {

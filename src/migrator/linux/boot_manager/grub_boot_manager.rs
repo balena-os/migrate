@@ -7,6 +7,7 @@ use std::path::Path;
 
 use crate::{
     common::{
+        boot_manager::BootManager,
         call, dir_exists,
         disk_util::LabelType,
         file_digest::check_digest,
@@ -19,7 +20,6 @@ use crate::{
     },
     defs::{BootType, MIG_INITRD_NAME, MIG_KERNEL_NAME},
     linux::{
-        boot_manager::BootManager,
         linux_defs::{
             BOOT_PATH, GRUB_CONFIG_DIR, GRUB_CONFIG_FILE, GRUB_MIN_VERSION, KERNEL_CMDLINE_PATH,
             ROOT_PATH,
