@@ -1,7 +1,7 @@
 use failure::{Fail, ResultExt};
 use log::{debug, error, info, trace, warn};
 use nix::unistd::sync;
-use std::fs::{copy, create_dir};
+use std::fs::{copy, create_dir, read_dir};
 use std::thread;
 use std::time::Duration;
 
@@ -18,7 +18,9 @@ use crate::{
         stage2_config::{PathType, Stage2ConfigBuilder, Stage2LogConfig},
         Config, MigErrCtx, MigError, MigErrorKind, MigMode,
     },
-    defs::{BACKUP_FILE, MIN_DISK_SIZE, SYSTEM_CONNECTIONS_DIR},
+    defs::{
+        BACKUP_FILE, MIN_DISK_SIZE, STAGE1_MEM_THRESHOLD, STAGE2_CFG_FILE, SYSTEM_CONNECTIONS_DIR,
+    },
 };
 
 pub(crate) mod linux_defs;
@@ -39,9 +41,9 @@ pub(crate) mod lsblk_info;
 //pub(crate) use lsblk_info::LsblkInfo;
 
 pub(crate) mod linux_common;
+use crate::common::file_size;
 use crate::common::stage2_config::MountConfig;
-use crate::defs::STAGE2_CFG_FILE;
-use crate::linux::linux_common::whereis;
+use crate::linux::linux_common::{get_mem_info, whereis};
 use crate::linux::lsblk_info::LsblkInfo;
 pub(crate) use linux_common::is_admin;
 use mod_logger::{LogDestination, Logger};
@@ -273,14 +275,13 @@ impl<'a> LinuxMigrator {
 
         let backup_path = path_append(work_dir, BACKUP_FILE);
 
-        self.stage2_config
-            .set_has_backup(if self.config.migrate.is_tar_internal() {
-                backup::create(&backup_path, self.config.migrate.get_backup_volumes())?
-            } else {
-                backup::create_ext(&backup_path, self.config.migrate.get_backup_volumes())?
-            });
-
-        // TODO: compare total transfer size (kernel, initramfs, backup, configs )  to memory size (needs to fit in ramfs)
+        let has_backup =
+            self.stage2_config
+                .set_has_backup(if self.config.migrate.is_tar_internal() {
+                    backup::create(&backup_path, self.config.migrate.get_backup_volumes())?
+                } else {
+                    backup::create_ext(&backup_path, self.config.migrate.get_backup_volumes())?
+                });
 
         // TODO: this might not be a smart place to put things, everything in system-connections
         // will end up in /mnt/boot/system-connections
@@ -324,6 +325,46 @@ impl<'a> LinuxMigrator {
             for wifi in &self.mig_info.wifis {
                 index = wifi.create_nwmgr_file(&nwmgr_path, index)?;
             }
+        }
+
+        let (mem_tot, mem_avail) = get_mem_info()?;
+        info!(
+            "Memory available is {} of {}",
+            format_size_with_unit(mem_avail),
+            format_size_with_unit(mem_tot),
+        );
+
+        let mut required_size: u64 = self.mig_info.image_file.get_required_space();
+
+        required_size += self.mig_info.config_file.get_size();
+
+        if has_backup {
+            required_size += file_size(&backup_path)?;
+        }
+
+        let read_dir = read_dir(&nwmgr_path).context(MigErrCtx::from_remark(
+            MigErrorKind::Upstream,
+            &format!("Failed to read directory '{}'", nwmgr_path.display()),
+        ))?;
+
+        for entry in read_dir {
+            required_size += file_size(
+                &entry
+                    .context(MigErrCtx::from_remark(
+                        MigErrorKind::Upstream,
+                        "Failed to read directory entry",
+                    ))?
+                    .path(),
+            )?;
+        }
+
+        info!(
+            "Memory required for copying files is {}",
+            format_size_with_unit(required_size)
+        );
+
+        if mem_tot - required_size < STAGE1_MEM_THRESHOLD {
+            warn!("The memory used to copy files to initramfs might not be available.");
         }
 
         trace!("device setup");

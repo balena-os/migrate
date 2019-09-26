@@ -39,6 +39,8 @@ pub const MIN_DISK_SIZE: u64 = 2 * 1024 * 1024 * 1024; // 2 GiB
 
 pub const DEF_BLOCK_SIZE: usize = 512;
 
+pub const STAGE1_MEM_THRESHOLD: u64 = 1024 * 1024 * 100; // 100 MB
+
 // Default balena partition labels and FS types
 pub const BALENA_BOOT_PART: &str = "resin-boot";
 pub const BALENA_BOOT_FSTYPE: &str = "vfat";

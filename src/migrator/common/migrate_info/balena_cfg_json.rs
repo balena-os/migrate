@@ -194,6 +194,10 @@ impl BalenaCfgJson {
         Ok(())
     }
 
+    pub fn get_size(&self) -> u64 {
+        self.file.size
+    }
+
     pub fn get_rel_path(&self) -> &PathBuf {
         &self.file.rel_path
     }

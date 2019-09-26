@@ -447,8 +447,9 @@ impl<'a> Stage2ConfigBuilder {
         self.boot_bckup.set(boot_backup);
     }
 
-    pub fn set_has_backup(&mut self, val: bool) {
+    pub fn set_has_backup(&mut self, val: bool) -> bool {
         self.has_backup.set(val);
+        val
     }
 
     pub fn set_gzip_internal(&mut self, val: bool) {
