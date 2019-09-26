@@ -26,9 +26,9 @@ use linux_defs::{
     CHMOD_CMD, DF_CMD, FILE_CMD, LSBLK_CMD, MKTEMP_CMD, MOUNT_CMD, REBOOT_CMD, TAR_CMD, UNAME_CMD,
 };
 
-pub(crate) mod device;
+pub(crate) mod device_impl;
 
-pub(crate) mod boot_manager;
+pub(crate) mod boot_manager_impl;
 
 pub(crate) mod stage2;
 
@@ -137,11 +137,11 @@ impl<'a> LinuxMigrator {
 
         // **********************************************************************
         // Run the architecture dependent part of initialization
-        // Add further architectures / functons in device.rs
+        // Add further architectures / functons in device_impl.rs
 
         let mut stage2_config = Stage2ConfigBuilder::default();
 
-        let device = match device::get_device(&mig_info, &config, &mut stage2_config) {
+        let device = match device_impl::get_device(&mig_info, &config, &mut stage2_config) {
             Ok(device) => {
                 let dev_type = device.get_device_type();
                 let boot_type = device.get_boot_type();

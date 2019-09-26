@@ -109,15 +109,24 @@ impl BootManager for RaspiBootManager<'_> {
 
         // TODO: provide a way to supply digests for DTB files
 
+        debug!("configured dtb files: {}", mig_info.dtb_file.len());
+
         for file in self.dtb_files {
-            if let None = mig_info
-                .dtb_file
-                .iter()
-                .find(|file_info| file_info.path == PathBuf::from(file))
-            {
+            if let None = mig_info.dtb_file.iter().find(|file_info| {
+                debug!(
+                    "looking for: '{}' - cmp: '{}'",
+                    file,
+                    file_info.path.display()
+                );
+                if let Some(ref rel_path) = file_info.rel_path {
+                    rel_path == &PathBuf::from(file)
+                } else {
+                    false
+                }
+            }) {
                 warn!(
                     "Required DTB file '{}' was not found in files configured in device_tree",
-                    file
+                    file,
                 );
             }
 
@@ -139,7 +148,7 @@ impl BootManager for RaspiBootManager<'_> {
         s2_cfg: &mut Stage2ConfigBuilder,
         kernel_opts: &str,
     ) -> Result<(), MigError> {
-        trace!("setup: entered with type: {:?}", self.boot_type);
+        debug!("setup: entered with type: {:?}", self.boot_type);
 
         // **********************************************************************
         // ** copy new kernel
@@ -308,13 +317,9 @@ impl BootManager for RaspiBootManager<'_> {
         }
 
         let initrd_re = Regex::new(r#"^\s*initramfs"#).unwrap();
-        let mut initrd_found = false;
-
         let kernel_re = Regex::new(r#"^\s*kernel"#).unwrap();
-        let mut kernel_found = false;
-
         let uart_re = Regex::new(r#"^\s*enable_uart"#).unwrap();
-        let mut uart_found = false;
+        let sixty4_bits_re = Regex::new(r#"^\s*arm_64bit"#).unwrap();
 
         let mut config_str = String::new();
 
@@ -332,27 +337,16 @@ impl BootManager for RaspiBootManager<'_> {
                     Ok(line) => {
                         // TODO: more modifications to /boot/config.txt
                         if initrd_re.is_match(&line) {
-                            // save commented version anyway
                             config_str.push_str(&format!("# {}\n", line));
-                            if !initrd_found {
-                                config_str.push_str(&format!(
-                                    "initramfs {} followkernel\n",
-                                    RPI_MIG_INITRD_NAME
-                                ));
-                                initrd_found = true;
-                            }
                         } else if kernel_re.is_match(&line) {
-                            // save commented version anyway
                             config_str.push_str(&format!("# {}\n", line));
-                            if !kernel_found {
-                                config_str.push_str(&format!("kernel {}\n", RPI_MIG_KERNEL_NAME));
-                                kernel_found = true;
-                            }
                         } else if uart_re.is_match(&line) {
                             config_str.push_str(&format!("# {}\n", line));
-                            if !uart_found {
-                                config_str.push_str("enable_uart=1\n");
-                                uart_found = true;
+                        } else if let BootType::Raspi64 = self.boot_type {
+                            if sixty4_bits_re.is_match(&line) {
+                                config_str.push_str(&format!("# {}\n", line));
+                            } else {
+                                config_str.push_str(&format!("{}\n", &line));
                             }
                         } else {
                             config_str.push_str(&format!("{}\n", &line));
@@ -368,15 +362,13 @@ impl BootManager for RaspiBootManager<'_> {
             }
         }
 
-        if !initrd_found {
-            // add it if it did not exist
-            config_str.push_str(&format!("initramfs {} followkernel\n", RPI_MIG_INITRD_NAME));
+        if let BootType::Raspi64 = self.boot_type {
+            config_str.push_str("arm_64bit=1\n");
         }
 
-        if !kernel_found {
-            // add it if it did not exist
-            config_str.push_str(&format!("kernel {}\n", RPI_MIG_KERNEL_NAME));
-        }
+        config_str.push_str("enable_uart=1\n");
+        config_str.push_str(&format!("initramfs {} followkernel\n", RPI_MIG_INITRD_NAME));
+        config_str.push_str(&format!("kernel {}\n", RPI_MIG_KERNEL_NAME));
 
         info!(
             "Modified '{}' to boot migrate environment",

@@ -11,8 +11,8 @@ use crate::{
     },
     defs::{BootType, DeviceType, FileType},
     linux::{
-        boot_manager::{from_boot_type, UBootManager},
-        device::Device,
+        boot_manager_impl::{from_boot_type, UBootManager},
+        device_impl::Device,
         linux_common::expect_type,
         stage2::mounts::Mounts,
     },

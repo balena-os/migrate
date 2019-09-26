@@ -11,8 +11,8 @@ use crate::{
     },
     defs::{BootType, DeviceType, FileType},
     linux::{
-        boot_manager::{from_boot_type, RaspiBootManager},
-        device::Device,
+        boot_manager_impl::{from_boot_type, RaspiBootManager},
+        device_impl::Device,
         linux_common::{expect_type, restore_backups},
         stage2::mounts::Mounts,
     },

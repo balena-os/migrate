@@ -284,7 +284,7 @@ impl MigrateInfo {
             wifis,
         };
 
-        debug!("Diskinfo: {:?}", result);
+        debug!("MigrateInfo: {:?}", result);
 
         Ok(result)
     }

@@ -21,7 +21,7 @@ use crate::{
     },
     defs::{FailMode, BACKUP_FILE, SYSTEM_CONNECTIONS_DIR},
     linux::{
-        device,
+        device_impl,
         linux_common::{get_mem_info, whereis},
         linux_defs::{KERNEL_OSRELEASE_PATH, REBOOT_CMD},
         linux_defs::{MIGRATE_LOG_FILE, STAGE2_MEM_THRESHOLD},
@@ -254,7 +254,7 @@ impl<'a> Stage2 {
             info!("Done waiting, continuing now");
         }
 
-        let device = device::from_config(device_type, boot_type)?;
+        let device = device_impl::from_config(device_type, boot_type)?;
         if device.restore_boot(&self.mounts.borrow(), &self.config) {
             info!("Boot configuration was restored sucessfully");
             // boot config restored can reboot
