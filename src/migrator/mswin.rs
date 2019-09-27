@@ -11,16 +11,23 @@ use crate::{
     common::{
         dir_exists, path_append, stage2_config::Stage2ConfigBuilder, Config, MigErrCtx, MigError,
         MigErrorKind, MigMode,
+        migrate_info::{MigrateInfo, balena_cfg_json::BalenaCfgJson},
+        boot_manager::BootManager,
+        device::Device,
     },
     defs::{DeviceType, OSArch, STAGE2_CFG_FILE},
     mswin::util::to_linux_path,
+    mswin::wmi_utils::WmiUtils,
 };
 
 pub(crate) mod msw_defs;
 // use defs::{STAGE2_CFG_FILE, STAGE2_CFG_DIR};
 
+mod mswin_api;
+
 mod powershell;
 use powershell::PSInfo;
+
 //pub(crate) mod win_api;
 // pub mod drive_info;
 mod win_api;
@@ -29,11 +36,11 @@ mod util;
 
 mod wmi_utils;
 
-mod migrate_info;
-use migrate_info::MigrateInfo;
+//mod migrate_info;
+//use migrate_info::MigrateInfo;
 
-mod boot_manager;
-use boot_manager::{BootManager, EfiBootManager};
+// mod boot_manager;
+//use boot_manager::{BootManager, EfiBootManager};
 
 pub struct MSWMigrator {
     config: Config,
@@ -72,6 +79,9 @@ impl<'a> MSWMigrator {
             error!("Please run this program with adminstrator privileges");
             return Err(MigError::displayed());
         }
+
+        let wmi_info = WmiUtils::get_os_info()?;
+
 
         let mig_info = match MigrateInfo::new(&config, &mut ps_info) {
             Ok(mig_info) => mig_info,

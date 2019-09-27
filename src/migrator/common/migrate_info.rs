@@ -3,9 +3,8 @@ use log::{debug, error, info, trace, warn};
 use crate::{
     common::{
         config::{
-            balena_config::FileRef,
-            balena_config::{ImageType, PartDump},
-            MigrateWifis,
+            balena_config::{FileRef, ImageType, PartDump},
+            migrate_config::{MigrateWifis},
         },
         device_info::DeviceInfo,
         file_info::RelFileInfo,

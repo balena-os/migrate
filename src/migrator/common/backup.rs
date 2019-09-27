@@ -14,6 +14,8 @@ use crate::common::{
     MigErrorKind,
 };
 use crate::defs::BACKUP_FILE;
+
+#[cfg(target_os = "linux")]
 use crate::linux::linux_defs::{MKTEMP_CMD, TAR_CMD};
 
 // Recurse through directories
