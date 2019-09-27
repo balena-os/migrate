@@ -1,8 +1,13 @@
+#[cfg(target_os = "linux")]
 #[macro_use]
 extern crate nix;
 
-use log::error;
+#[cfg(target_os = "linux")]
 use nix::unistd::sync;
+
+use log::error;
+
+
 use std::panic;
 
 use mod_logger::Logger;
