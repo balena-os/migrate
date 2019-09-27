@@ -12,6 +12,8 @@ mod mswin;
 mod linux;
 
 #[cfg(target_os = "linux")]
+mod extract;
+#[cfg(target_os = "linux")]
 use linux::stage2::Stage2;
 
 pub(crate) mod defs;
@@ -28,6 +30,12 @@ pub fn migrate() -> Result<(), MigError> {
     Ok(linux::LinuxMigrator::migrate()?)
 }
 
+#[cfg(target_os = "linux")]
+pub fn extract() -> Result<(), MigError> {
+    extract::extract()
+}
+
+// TODO: move to stage 2 - leave only wrapper as above
 #[cfg(target_os = "linux")]
 pub fn stage2() -> Result<(), MigError> {
     use nix::unistd::sync;
@@ -65,8 +73,8 @@ pub fn stage2() -> Result<(), MigError> {
         Ok(())
     });
 
-    if let Err(_) = res {
-        error!("A panic occurred in stage2");
+    if let Err(why) = res {
+        error!("A panic occurred in stage2 {:?}", why);
         Logger::flush();
         sync();
         let _res = Stage2::default_exit();

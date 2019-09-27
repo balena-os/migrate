@@ -6,6 +6,7 @@ use crate::{
     defs::FailMode,
 };
 
+use crate::common::config::balena_config::FileRef;
 use serde::{Deserialize, Serialize};
 
 const MODULE: &str = "common::config::migrate_config";
@@ -15,19 +16,20 @@ const NO_BACKUP_VOLUMES: &[VolumeConfig] = &[];
 
 #[derive(Debug, PartialEq, Deserialize, Clone)]
 pub(crate) enum MigMode {
-    AGENT,
-    IMMEDIATE,
-    PRETEND,
-    EXTRACT,
+    //    #[serde(rename = "agent")]
+    //    Agent,
+    #[serde(rename = "immediate")]
+    Immediate,
+    #[serde(rename = "pretend")]
+    Pretend,
 }
 
 impl MigMode {
     pub fn from_str(mode: &str) -> Result<Self, MigError> {
         match mode.to_lowercase().as_str() {
-            "extract" => Ok(MigMode::EXTRACT),
-            "immediate" => Ok(MigMode::IMMEDIATE),
-            "agent" => Ok(MigMode::AGENT),
-            "pretend" => Ok(MigMode::PRETEND),
+            "immediate" => Ok(MigMode::Immediate),
+            //            "agent" => Ok(MigMode::Agent),
+            "pretend" => Ok(MigMode::Pretend),
             _ => {
                 return Err(MigError::from_remark(
                     MigErrorKind::InvParam,
@@ -41,7 +43,7 @@ impl MigMode {
     }
 }
 
-const DEFAULT_MIG_MODE: MigMode = MigMode::PRETEND;
+const DEFAULT_MIG_MODE: MigMode = MigMode::Pretend;
 
 #[derive(Debug, Deserialize, Serialize, Clone)]
 pub(crate) struct WatchdogCfg {
@@ -72,9 +74,9 @@ pub(crate) struct VolumeConfig {
 
 #[derive(Debug, PartialEq, Clone)]
 pub(crate) enum MigrateWifis {
-    NONE,
-    ALL,
-    SOME(Vec<String>),
+    None,
+    All,
+    List(Vec<String>),
 }
 
 #[derive(Debug, Deserialize)]
@@ -92,27 +94,25 @@ pub(crate) struct MigrateConfig {
     all_wifis: Option<bool>,
     wifis: Option<Vec<String>>,
     log: Option<LogConfig>,
-    kernel_path: Option<PathBuf>,
-    initrd_path: Option<PathBuf>,
-    dtb_path: Option<PathBuf>,
-    force_slug: Option<String>,
+    kernel: Option<FileRef>,
+    initrd: Option<FileRef>,
+    device_tree: Option<Vec<FileRef>>,
+    // TODO: check fail mode processing
     fail_mode: Option<FailMode>,
     backup: Option<Vec<VolumeConfig>>,
+    // TODO: find a good way to do digests on NetworkManager files
     nwmgr_files: Option<Vec<PathBuf>>,
     require_nwmgr_config: Option<bool>,
     gzip_internal: Option<bool>,
-    extract_device: Option<String>,
+    tar_internal: Option<bool>,
     watchdogs: Option<Vec<WatchdogCfg>>,
     delay: Option<u64>,
     kernel_opts: Option<String>,
     force_flash_device: Option<PathBuf>,
-    uboot_env: Option<UBootEnv>,
-    // COPY_NMGR_FILES="eth0_static enp2s0_static enp3s0_static"
 }
 
 impl<'a> MigrateConfig {
     // TODO: implement log & backup config getters
-
     pub fn default() -> MigrateConfig {
         MigrateConfig {
             work_dir: None,
@@ -121,39 +121,37 @@ impl<'a> MigrateConfig {
             all_wifis: None,
             wifis: None,
             log: None,
-            kernel_path: None,
-            initrd_path: None,
-            dtb_path: None,
-            force_slug: None,
+            kernel: None,
+            initrd: None,
+            device_tree: None,
             fail_mode: None,
             backup: None,
             nwmgr_files: None,
             require_nwmgr_config: None,
             gzip_internal: None,
-            extract_device: None,
+            tar_internal: None,
             watchdogs: None,
             delay: None,
             kernel_opts: None,
             force_flash_device: None,
-            uboot_env: None,
         }
     }
 
     pub fn check(&self) -> Result<(), MigError> {
         match self.get_mig_mode() {
-            MigMode::AGENT => Err(MigError::from(MigErrorKind::NotImpl)),
+            //MigMode::Agent => Err(MigError::from(MigErrorKind::NotImpl)),
             _ => {
                 if let None = self.work_dir {
                     error!("A required parameter was not found: 'work_dir'");
                     return Err(MigError::displayed());
                 }
 
-                if let None = self.kernel_path {
+                if let None = self.kernel {
                     error!("A required parameter was not found: 'kernel_path'");
                     return Err(MigError::displayed());
                 }
 
-                if let None = self.initrd_path {
+                if let None = self.initrd {
                     error!("A required parameter was not found: 'initrd_path'");
                     return Err(MigError::displayed());
                 }
@@ -165,6 +163,14 @@ impl<'a> MigrateConfig {
 
     pub fn is_gzip_internal(&self) -> bool {
         if let Some(val) = self.gzip_internal {
+            val
+        } else {
+            true
+        }
+    }
+
+    pub fn is_tar_internal(&self) -> bool {
+        if let Some(val) = self.tar_internal {
             val
         } else {
             true
@@ -188,7 +194,7 @@ impl<'a> MigrateConfig {
 
     pub fn get_nwmgr_files(&'a self) -> &'a [PathBuf] {
         if let Some(ref val) = self.nwmgr_files {
-            return val.as_ref();
+            return val.as_slice();
         }
         return NO_NMGR_FILES;
     }
@@ -241,16 +247,6 @@ impl<'a> MigrateConfig {
         &self.reboot
     }
 
-    /*
-    pub fn get_force_slug(&self) -> Option<String> {
-        if let Some(ref val) = self.force_slug {
-            Some(val.clone())
-        } else {
-            None
-        }
-    }
-    */
-
     pub fn get_fail_mode(&'a self) -> &'a FailMode {
         if let Some(ref val) = self.fail_mode {
             val
@@ -261,29 +257,17 @@ impl<'a> MigrateConfig {
 
     pub fn get_wifis(&self) -> MigrateWifis {
         if let Some(ref wifis) = self.wifis {
-            MigrateWifis::SOME(wifis.clone())
+            MigrateWifis::List(wifis.clone())
         } else {
             if let Some(ref all_wifis) = self.all_wifis {
                 if *all_wifis {
-                    MigrateWifis::ALL
+                    MigrateWifis::All
                 } else {
-                    MigrateWifis::NONE
+                    MigrateWifis::None
                 }
             } else {
-                MigrateWifis::NONE
+                MigrateWifis::None
             }
-        }
-    }
-
-    pub fn set_extract_device(&mut self, device: &str) {
-        self.extract_device = Some(String::from(device));
-    }
-
-    pub fn get_extract_device(&'a self) -> Option<&'a str> {
-        if let Some(ref device) = self.extract_device {
-            Some(device)
-        } else {
-            None
         }
     }
 
@@ -299,16 +283,6 @@ impl<'a> MigrateConfig {
         }
     }
 
-    /*
-        pub fn get_uboot_env(&'a self) -> Option<&UBootEnv> {
-            if let Some(ref uboot_env) = self.uboot_env {
-                Some(uboot_env)
-            } else {
-                None
-            }
-        }
-    */
-
     // The following functions can only be safely called after check has succeeded
 
     pub fn get_work_dir(&'a self) -> &'a Path {
@@ -319,24 +293,24 @@ impl<'a> MigrateConfig {
         }
     }
 
-    pub fn get_kernel_path(&'a self) -> &'a Path {
-        if let Some(ref path) = self.kernel_path {
+    pub fn get_kernel_path(&'a self) -> &'a FileRef {
+        if let Some(ref path) = self.kernel {
             path
         } else {
             panic!("kernel path is not set");
         }
     }
 
-    pub fn get_initrd_path(&'a self) -> &'a Path {
-        if let Some(ref path) = self.initrd_path {
+    pub fn get_initrd_path(&'a self) -> &'a FileRef {
+        if let Some(ref path) = self.initrd {
             path
         } else {
             panic!("initramfs path is not set");
         }
     }
 
-    pub fn get_dtb_path(&'a self) -> Option<&'a Path> {
-        if let Some(ref path) = self.dtb_path {
+    pub fn get_dtb_refs(&'a self) -> Option<&'a Vec<FileRef>> {
+        if let Some(ref path) = self.device_tree {
             Some(path)
         } else {
             None

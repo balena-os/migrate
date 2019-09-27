@@ -1,0 +1,30 @@
+migrate:
+  mode: immediate
+  work_dir: .
+  all_wifis: true
+  reboot: 5
+  log:
+#    drive: '/dev/sda1'
+    level: debug
+  kernel: 
+    path: balena.zImage
+  initrd: 
+    path: balena.initrd.cpio.gz
+  device_tree: 
+    - path: balena.dtb
+  backup:
+balena:
+  image:
+    dd:  
+      path: <enter image path here> 
+  config: 
+    path: config.json
+  app_name: <enter application name here> 
+  api: 
+    host: "api.balena-cloud.com"
+    port: 443
+    check: true
+  check_vpn: true
+  check_timeout: 20
+debug:
+  no_flash: true

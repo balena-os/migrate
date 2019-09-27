@@ -11,19 +11,19 @@ use std::time::{Duration, SystemTime};
 use nix::unistd::sync;
 
 use crate::common::file_exists;
+use crate::common::stage2_config::CheckedFSDump;
 use crate::{
     common::{
-        config::balena_config::{FSDump, PartCheck},
+        call,
+        config::balena_config::PartCheck,
         path_append,
         stage2_config::{CheckedImageType, Stage2Config},
         MigErrCtx, MigError, MigErrorKind,
     },
     defs::{DEF_BLOCK_SIZE, PART_NAME},
     linux::{
-        ensured_cmds::{
-            EnsuredCmds, EXT_FMT_CMD, FAT_FMT_CMD, LSBLK_CMD, PARTED_CMD, PARTPROBE_CMD, TAR_CMD,
-        },
-        migrate_info::{LsblkDevice, LsblkInfo},
+        linux_defs::{EXT_FMT_CMD, FAT_FMT_CMD, LSBLK_CMD, PARTED_CMD, PARTPROBE_CMD, TAR_CMD},
+        lsblk_info::{LsblkDevice, LsblkInfo},
         stage2::{mounts::Mounts, FlashResult},
     },
 };
@@ -36,7 +36,8 @@ const DEFAULT_PARTITION_ALIGNMENT_KIB: u64 = 4096; // KiB
                                                    // TODO: true might be the better default but can be very slow in combination with mkfs_direct_io
 const DEFAULT_MAX_DATA: bool = true;
 
-pub const REQUIRED_CMDS: &[&str] = &[
+// TODO: replace removed command checks ?
+/*pub const REQUIRED_CMDS: &[&str] = &[
     EXT_FMT_CMD,
     FAT_FMT_CMD,
     TAR_CMD,
@@ -44,24 +45,19 @@ pub const REQUIRED_CMDS: &[&str] = &[
     PARTPROBE_CMD,
     // SFDISK_CMD,
     PARTED_CMD,
-];
-
-pub(crate) fn check_commands(cmds: &mut EnsuredCmds) -> Result<(), MigError> {
-    Ok(cmds.ensure_cmds(REQUIRED_CMDS)?)
-}
+];*/
 
 pub(crate) fn write_balena_os(
     device: &Path,
-    cmds: &EnsuredCmds,
     mounts: &mut Mounts,
     config: &Stage2Config,
     base_path: &Path,
 ) -> FlashResult {
     // make sure we have allrequired commands
-    if let CheckedImageType::FileSystems(ref fs_dump) = config.get_balena_image().image {
-        let res = partition(device, &cmds, fs_dump);
+    if let CheckedImageType::FileSystems(ref fs_dump) = config.get_balena_image() {
+        let res = partition(device, fs_dump);
         if let FlashResult::Ok = res {
-            let lsblk_dev = match part_reread(device, 30, PART_NAME.len(), cmds) {
+            let lsblk_dev = match part_reread(device, 30, PART_NAME.len()) {
                 Ok(lsblk_device) => lsblk_device,
                 Err(why) => {
                     error!(
@@ -74,9 +70,9 @@ pub(crate) fn write_balena_os(
 
             sync();
 
-            if format(&lsblk_dev, cmds, fs_dump) {
+            if format(&lsblk_dev, fs_dump) {
                 // TODO: need partprobe ?
-                if let Err(why) = mounts.mount_balena(true, cmds) {
+                if let Err(why) = mounts.mount_balena(true) {
                     error!(
                         "write_balena_os: failed mount balena partitions, error: {:?}",
                         why
@@ -85,9 +81,9 @@ pub(crate) fn write_balena_os(
                     return FlashResult::FailNonRecoverable;
                 }
 
-                if balena_write(mounts, cmds.get(TAR_CMD).unwrap(), fs_dump, base_path) {
+                if balena_write(mounts, TAR_CMD, fs_dump, base_path) {
                     sync();
-                    match cmds.call(
+                    match call(
                         LSBLK_CMD,
                         &["-o", "name,partuuid", &device.to_string_lossy()],
                         true,
@@ -127,64 +123,59 @@ pub(crate) fn write_balena_os(
     }
 }
 
-fn sub_write(
-    tar_path: &str,
-    mountpoint: &Path,
-    base_path: &Path,
-    archive: &Option<PathBuf>,
-) -> bool {
-    if let Some(archive) = archive {
-        let arch_path = path_append(base_path, archive);
-        let tar_args: &[&str] = &[
-            "-xzf",
-            &arch_path.to_string_lossy(),
-            "-C",
-            &mountpoint.to_string_lossy(),
-        ];
+fn sub_write(tar_path: &str, mountpoint: &Path, base_path: &Path, archive: &PathBuf) -> bool {
+    let arch_path = path_append(base_path, archive);
+    let tar_args: &[&str] = &[
+        "-xzf",
+        &arch_path.to_string_lossy(),
+        "-C",
+        &mountpoint.to_string_lossy(),
+    ];
 
-        debug!("sub_write: invoking '{}' with {:?}", tar_path, tar_args);
+    debug!("sub_write: invoking '{}' with {:?}", tar_path, tar_args);
 
-        match Command::new(tar_path)
-            .stdin(Stdio::piped())
-            .stdout(Stdio::piped())
-            .stderr(Stdio::piped())
-            .args(tar_args)
-            .output()
-        {
-            Ok(cmd_res) => {
-                if cmd_res.status.success() {
-                    info!(
-                        "Successfully wrote '{}' to '{}'",
-                        arch_path.display(),
-                        mountpoint.display()
-                    );
-                    true
-                } else {
-                    error!(
-                        "sub_write: failed to untar archive with {} {:?}, code: {:?} stderr: {:?}",
-                        tar_path,
-                        tar_args,
-                        cmd_res.status.code(),
-                        str::from_utf8(&cmd_res.stderr)
-                    );
-                    false
-                }
-            }
-            Err(why) => {
+    match Command::new(tar_path)
+        .stdin(Stdio::piped())
+        .stdout(Stdio::piped())
+        .stderr(Stdio::piped())
+        .args(tar_args)
+        .output()
+    {
+        Ok(cmd_res) => {
+            if cmd_res.status.success() {
+                info!(
+                    "Successfully wrote '{}' to '{}'",
+                    arch_path.display(),
+                    mountpoint.display()
+                );
+                true
+            } else {
                 error!(
-                    "sub_write: failed to untar archive with {} {:?}, error: {:?}",
-                    tar_path, tar_args, why
+                    "sub_write: failed to untar archive with {} {:?}, code: {:?} stderr: {:?}",
+                    tar_path,
+                    tar_args,
+                    cmd_res.status.code(),
+                    str::from_utf8(&cmd_res.stderr)
                 );
                 false
             }
         }
-    } else {
-        error!("sub_write: a required archive was not found",);
-        false
+        Err(why) => {
+            error!(
+                "sub_write: failed to untar archive with {} {:?}, error: {:?}",
+                tar_path, tar_args, why
+            );
+            false
+        }
     }
 }
 
-fn balena_write(mounts: &Mounts, tar_path: &str, fs_dump: &FSDump, base_path: &Path) -> bool {
+fn balena_write(
+    mounts: &Mounts,
+    tar_path: &str,
+    fs_dump: &CheckedFSDump,
+    base_path: &Path,
+) -> bool {
     // TODO: try use device labels instead
 
     debug!(
@@ -193,7 +184,12 @@ fn balena_write(mounts: &Mounts, tar_path: &str, fs_dump: &FSDump, base_path: &P
     );
 
     if let Some(mountpoint) = mounts.get_balena_boot_mountpoint() {
-        if !sub_write(tar_path, mountpoint, base_path, &fs_dump.boot.archive) {
+        if !sub_write(
+            tar_path,
+            mountpoint,
+            base_path,
+            &fs_dump.boot.archive.rel_path,
+        ) {
             return false;
         }
     } else {
@@ -202,7 +198,12 @@ fn balena_write(mounts: &Mounts, tar_path: &str, fs_dump: &FSDump, base_path: &P
     }
 
     if let Some(mountpoint) = mounts.get_balena_root_a_mountpoint() {
-        if !sub_write(tar_path, mountpoint, base_path, &fs_dump.root_a.archive) {
+        if !sub_write(
+            tar_path,
+            mountpoint,
+            base_path,
+            &fs_dump.root_a.archive.rel_path,
+        ) {
             return false;
         }
     } else {
@@ -210,30 +211,41 @@ fn balena_write(mounts: &Mounts, tar_path: &str, fs_dump: &FSDump, base_path: &P
         return false;
     }
 
-    if let Some(ref _archive) = fs_dump.root_b.archive {
-        if let Some(mountpoint) = mounts.get_balena_root_b_mountpoint() {
-            if !sub_write(tar_path, mountpoint, base_path, &fs_dump.root_b.archive) {
-                return false;
-            }
-        } else {
-            error!("Could not retrieve root_b mountpoint");
+    if let Some(mountpoint) = mounts.get_balena_root_b_mountpoint() {
+        if !sub_write(
+            tar_path,
+            mountpoint,
+            base_path,
+            &fs_dump.root_b.archive.rel_path,
+        ) {
             return false;
         }
+    } else {
+        error!("Could not retrieve root_b mountpoint");
+        return false;
     }
 
-    if let Some(ref _archive) = fs_dump.state.archive {
-        if let Some(mountpoint) = mounts.get_balena_state_mountpoint() {
-            if !sub_write(tar_path, mountpoint, base_path, &fs_dump.state.archive) {
-                return false;
-            }
-        } else {
-            error!("Could not retrieve state mountpoint");
+    if let Some(mountpoint) = mounts.get_balena_state_mountpoint() {
+        if !sub_write(
+            tar_path,
+            mountpoint,
+            base_path,
+            &fs_dump.state.archive.rel_path,
+        ) {
             return false;
         }
+    } else {
+        error!("Could not retrieve state mountpoint");
+        return false;
     }
 
     if let Some(mountpoint) = mounts.get_balena_data_mountpoint() {
-        sub_write(tar_path, mountpoint, base_path, &fs_dump.data.archive)
+        sub_write(
+            tar_path,
+            mountpoint,
+            base_path,
+            &fs_dump.data.archive.rel_path,
+        )
     } else {
         error!("Could not retrieve data mountpoint");
         return false;
@@ -243,7 +255,6 @@ fn balena_write(mounts: &Mounts, tar_path: &str, fs_dump: &FSDump, base_path: &P
 fn sub_format(
     device: &Path,
     label: &str,
-    cmds: &EnsuredCmds,
     is_fat: bool,
     check: &PartCheck,
     direct_io: bool,
@@ -261,17 +272,7 @@ fn sub_format(
         if FORMAT_WITH_LABEL {
             args.append(&mut vec!["-n", label]);
         }
-
-        match cmds.get(FAT_FMT_CMD) {
-            Ok(command) => command,
-            Err(why) => {
-                error!(
-                    "format: the format command was not found  {}, error: {:?}",
-                    FAT_FMT_CMD, why
-                );
-                return false;
-            }
-        }
+        FAT_FMT_CMD
     } else {
         // TODO: sort this out. -O ^64bit is no good on big filesystems +16TB
 
@@ -300,21 +301,12 @@ fn sub_format(
             args.append(&mut vec!["-L", label]);
         }
 
-        match cmds.get(EXT_FMT_CMD) {
-            Ok(command) => command,
-            Err(why) => {
-                error!(
-                    "format: the format command was not found  {}, error: {:?}",
-                    EXT_FMT_CMD, why
-                );
-                return false;
-            }
-        }
+        EXT_FMT_CMD
     };
 
     match check {
         PartCheck::None => (),
-        PartCheck::Read => {
+        PartCheck::ReadOnly => {
             args.push("-c");
         }
         PartCheck::ReadWrite => {
@@ -360,7 +352,7 @@ fn sub_format(
     }
 }
 
-fn format(lsblk_dev: &LsblkDevice, cmds: &EnsuredCmds, fs_dump: &FSDump) -> bool {
+fn format(lsblk_dev: &LsblkDevice, fs_dump: &CheckedFSDump) -> bool {
     if let Some(ref children) = lsblk_dev.children {
         // write an empty /etc/mtab to make mkfs happy
         let mtab_path = PathBuf::from("/etc/mtab");
@@ -387,7 +379,7 @@ fn format(lsblk_dev: &LsblkDevice, cmds: &EnsuredCmds, fs_dump: &FSDump) -> bool
 
         let fat_check = if let PartCheck::ReadWrite = check {
             // mkdosfs does not know about ReadWrite checks
-            &PartCheck::Read
+            &PartCheck::ReadOnly
         } else {
             check
         };
@@ -403,7 +395,6 @@ fn format(lsblk_dev: &LsblkDevice, cmds: &EnsuredCmds, fs_dump: &FSDump) -> bool
                         if !sub_format(
                             &children[dev_idx].get_path(),
                             PART_NAME[part_idx],
-                            cmds,
                             true,
                             fat_check,
                             false,
@@ -427,7 +418,6 @@ fn format(lsblk_dev: &LsblkDevice, cmds: &EnsuredCmds, fs_dump: &FSDump) -> bool
                         if !sub_format(
                             &children[dev_idx].get_path(),
                             PART_NAME[part_idx],
-                            cmds,
                             false,
                             check,
                             direct_io,
@@ -472,7 +462,7 @@ fn format(lsblk_dev: &LsblkDevice, cmds: &EnsuredCmds, fs_dump: &FSDump) -> bool
     }
 }
 
-fn partition(device: &Path, cmds: &EnsuredCmds, fs_dump: &FSDump) -> FlashResult {
+fn partition(device: &Path, fs_dump: &CheckedFSDump) -> FlashResult {
     /*
     parted -s -a none /dev/sdb -- unit s \
     mklabel msdos \
@@ -610,7 +600,7 @@ fn partition(device: &Path, cmds: &EnsuredCmds, fs_dump: &FSDump) -> FlashResult
 
     debug!("using parted with args: {:?}", args);
 
-    match cmds.call(PARTED_CMD, &args, true) {
+    match call(PARTED_CMD, &args, true) {
         Ok(cmd_res) => {
             if !cmd_res.status.success() {
                 error!(
@@ -639,7 +629,6 @@ fn part_reread(
     device: &Path,
     timeout: u64,
     num_partitions: usize,
-    cmds: &EnsuredCmds,
 ) -> Result<LsblkDevice, MigError> {
     debug!(
         "part_reread: entered with: '{}', timeout: {}, num_partitions: {}",
@@ -651,7 +640,7 @@ fn part_reread(
     let start = SystemTime::now();
     thread::sleep(Duration::from_secs(1));
 
-    match cmds.call(PARTPROBE_CMD, &[&device.to_string_lossy()], true) {
+    match call(PARTPROBE_CMD, &[&device.to_string_lossy()], true) {
         Ok(cmd_res) => {
             if !cmd_res.status.success() {
                 warn!(
@@ -679,7 +668,7 @@ fn part_reread(
             "part_reread: calling LsblkInfo::for_device('{}')",
             device.display()
         );
-        let lsblk_dev = LsblkInfo::for_device(device, cmds)?;
+        let lsblk_dev = LsblkInfo::for_device(device)?;
         if let Some(children) = &lsblk_dev.children {
             if children.len() >= num_partitions {
                 debug!(

@@ -117,7 +117,7 @@ impl LabelType {
 }
 
 pub(crate) struct Disk {
-    disk: Box<ImageFile>,
+    disk: Box<dyn ImageFile>,
     // writable: bool,
     block_size: u64,
 }
@@ -527,6 +527,7 @@ mod test {
 
     use mod_logger::{Level, Logger};
 
+    use crate::common::disk_util::PartitionIterator;
     use crate::common::{
         disk_util::{Disk, LabelType},
         MigError,
@@ -538,7 +539,8 @@ mod test {
         let mut disk = Disk::from_gzip_img("./test_data/part.img.gz").unwrap();
         if let LabelType::Dos = disk.get_label().unwrap() {
             let mut count = 0;
-            for partition in disk.get_partition_iterator().unwrap() {
+            let iterator = PartitionIterator::new(&mut disk).unwrap();
+            for partition in iterator {
                 match partition.index {
                     1 => assert_eq!(partition.ptype, 0x0e),
                     4 => assert_eq!(partition.ptype, 0x05),

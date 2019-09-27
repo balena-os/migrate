@@ -9,20 +9,16 @@ use std::path::{Path, PathBuf};
 use libc::getuid;
 
 use crate::{
-    common::{
-        call, file_exists, parse_file, path_append, Config, MigErrCtx, MigError, MigErrorKind,
-    },
+    common::{call, file_exists, parse_file, path_append, MigErrCtx, MigError, MigErrorKind},
+    defs::FileType,
     defs::{OSArch, DISK_BY_LABEL_PATH, DISK_BY_PARTUUID_PATH, DISK_BY_UUID_PATH},
-    linux::{
-        linux_defs::{KERNEL_CMDLINE_PATH, SYS_UEFI_DIR},
-        EnsuredCmds, DF_CMD, MKTEMP_CMD, MOKUTIL_CMD, UNAME_CMD,
+    linux::linux_defs::{
+        DF_CMD, FILE_CMD, KERNEL_CMDLINE_PATH, MKTEMP_CMD, MOKUTIL_CMD, SYS_UEFI_DIR, UNAME_CMD,
+        WHEREIS_CMD,
     },
 };
 
 use crate::common::dir_exists;
-
-const MODULE: &str = "linux_common";
-const WHEREIS_CMD: &str = "whereis";
 
 const MOKUTIL_ARGS_SB_STATE: [&str; 1] = ["--sb-state"];
 
@@ -33,7 +29,27 @@ const BIN_DIRS: &[&str] = &["/bin", "/usr/bin", "/sbin", "/usr/sbin"];
 const OS_RELEASE_FILE: &str = "/etc/os-release";
 const OS_NAME_REGEX: &str = r#"^PRETTY_NAME="([^"]+)"$"#;
 
-pub(crate) fn is_admin(_config: &Config) -> Result<bool, MigError> {
+// file on ubuntu-14.04 reports x86 boot sector for image and kernel files
+
+const OS_IMG_FTYPE_REGEX: &str = r#"^(DOS/MBR boot sector|x86 boot sector)$"#;
+const GZIP_OS_IMG_FTYPE_REGEX: &str =
+    r#"^(DOS/MBR boot sector|x86 boot sector).*\(gzip compressed data.*\)$"#;
+
+const INITRD_FTYPE_REGEX: &str = r#"^ASCII cpio archive.*\(gzip compressed data.*\)$"#;
+const OS_CFG_FTYPE_REGEX: &str = r#"^(ASCII text|JSON data).*$"#;
+const KERNEL_AMD64_FTYPE_REGEX: &str =
+    r#"^(Linux kernel x86 boot executable bzImage|x86 boot sector).*$"#;
+const KERNEL_ARMHF_FTYPE_REGEX: &str = r#"^Linux kernel ARM boot executable zImage.*$"#;
+//const KERNEL_I386_FTYPE_REGEX: &str = r#"^Linux kernel i386 boot executable bzImage.*$"#;
+const KERNEL_AARCH64_FTYPE_REGEX: &str = r#"^MS-DOS executable.*$"#;
+
+const TEXT_FTYPE_REGEX: &str = r#"^ASCII text.*$"#;
+
+const DTB_FTYPE_REGEX: &str = r#"^(Device Tree Blob|data).*$"#;
+
+const GZIP_TAR_FTYPE_REGEX: &str = r#"^(POSIX tar archive \(GNU\)).*\(gzip compressed data.*\)$"#;
+
+pub(crate) fn is_admin() -> Result<bool, MigError> {
     trace!("LinuxMigrator::is_admin: entered");
     let admin = Some(unsafe { getuid() } == 0);
     Ok(admin.unwrap())
@@ -48,15 +64,18 @@ pub(crate) fn whereis(cmd: &str) -> Result<String, MigError> {
         }
     }
 
-    // else try wheris command
+    // else try whereis command
     let args: [&str; 2] = ["-b", cmd];
     let cmd_res = match call(WHEREIS_CMD, &args, true) {
         Ok(cmd_res) => cmd_res,
-        Err(_why) => {
+        Err(why) => {
             // manually try the usual suspects
             return Err(MigError::from_remark(
                 MigErrorKind::NotFound,
-                &format!("could not find command: '{}'", cmd),
+                &format!(
+                    "whereis failed to execute for: {:?}, error: {:?}",
+                    args, why
+                ),
             ));
         }
     };
@@ -65,7 +84,7 @@ pub(crate) fn whereis(cmd: &str) -> Result<String, MigError> {
         if cmd_res.stdout.is_empty() {
             Err(MigError::from_remark(
                 MigErrorKind::InvParam,
-                &format!("{}::whereis: no command output for {}", MODULE, cmd),
+                &format!("whereis: no command output for {}", cmd),
             ))
         } else {
             let mut words = cmd_res.stdout.split(" ");
@@ -74,7 +93,7 @@ pub(crate) fn whereis(cmd: &str) -> Result<String, MigError> {
             } else {
                 Err(MigError::from_remark(
                     MigErrorKind::NotFound,
-                    &format!("{}::whereis: command not found: '{}'", MODULE, cmd),
+                    &format!("whereis: command not found: '{}'", cmd),
                 ))
             }
         }
@@ -82,8 +101,7 @@ pub(crate) fn whereis(cmd: &str) -> Result<String, MigError> {
         Err(MigError::from_remark(
             MigErrorKind::ExecProcess,
             &format!(
-                "{}::whereis: command failed for {}: {}",
-                MODULE,
+                "whereis: command failed for {}: {}",
                 cmd,
                 cmd_res.status.code().unwrap_or(0)
             ),
@@ -91,14 +109,12 @@ pub(crate) fn whereis(cmd: &str) -> Result<String, MigError> {
     }
 }
 
-pub(crate) fn get_os_arch(cmds: &EnsuredCmds) -> Result<OSArch, MigError> {
+pub(crate) fn get_os_arch() -> Result<OSArch, MigError> {
     trace!("get_os_arch: entered");
-    let cmd_res =
-        cmds.call(UNAME_CMD, &UNAME_ARGS_OS_ARCH, true)
-            .context(MigErrCtx::from_remark(
-                MigErrorKind::Upstream,
-                &format!("get_os_arch: call {}", UNAME_CMD),
-            ))?;
+    let cmd_res = call(UNAME_CMD, &UNAME_ARGS_OS_ARCH, true).context(MigErrCtx::from_remark(
+        MigErrorKind::Upstream,
+        &format!("get_os_arch: call {}", UNAME_CMD),
+    ))?;
 
     if cmd_res.status.success() {
         if cmd_res.stdout.to_lowercase() == "x86_64" {
@@ -106,23 +122,18 @@ pub(crate) fn get_os_arch(cmds: &EnsuredCmds) -> Result<OSArch, MigError> {
         } else if cmd_res.stdout.to_lowercase() == "i386" {
             Ok(OSArch::I386)
         } else if cmd_res.stdout.to_lowercase() == "armv7l" {
+            // TODO: try to determine the CPU Architecture
             Ok(OSArch::ARMHF)
         } else {
             Err(MigError::from_remark(
                 MigErrorKind::InvParam,
-                &format!(
-                    "{}::get_os_arch: unsupported architectute '{}'",
-                    MODULE, cmd_res.stdout
-                ),
+                &format!("get_os_arch: unsupported architectute '{}'", cmd_res.stdout),
             ))
         }
     } else {
         Err(MigError::from_remark(
             MigErrorKind::ExecProcess,
-            &format!(
-                "{}::get_os_arch: command failed: {} {:?}",
-                MODULE, UNAME_CMD, cmd_res
-            ),
+            &format!("get_os_arch: command failed: {} {:?}", UNAME_CMD, cmd_res),
         ))
     }
 }
@@ -149,7 +160,7 @@ pub(crate) fn is_efi_boot() -> Result<bool, MigError> {
             std::io::ErrorKind::NotFound => Ok(false),
             _ => Err(MigError::from(why.context(MigErrCtx::from_remark(
                 MigErrorKind::Upstream,
-                &format!("{}::is_uefi_boot: access {}", MODULE, SYS_UEFI_DIR),
+                &format!("is_uefi_boot: access {}", SYS_UEFI_DIR),
             )))),
         },
     }
@@ -157,7 +168,6 @@ pub(crate) fn is_efi_boot() -> Result<bool, MigError> {
 */
 
 pub(crate) fn mktemp<P: AsRef<Path>>(
-    cmds: &EnsuredCmds,
     dir: bool,
     pattern: Option<&str>,
     path: Option<P>,
@@ -179,7 +189,7 @@ pub(crate) fn mktemp<P: AsRef<Path>>(
         cmd_args.push(pattern);
     }
 
-    let cmd_res = cmds.call(MKTEMP_CMD, cmd_args.as_slice(), true)?;
+    let cmd_res = call(MKTEMP_CMD, cmd_args.as_slice(), true)?;
 
     if cmd_res.status.success() {
         Ok(PathBuf::from(cmd_res.stdout))
@@ -211,18 +221,15 @@ pub(crate) fn get_os_name() -> Result<String, MigError> {
             Err(MigError::from_remark(
                 MigErrorKind::NotFound,
                 &format!(
-                    "{}::get_os_name: could not be located in file {}",
-                    MODULE, OS_RELEASE_FILE
+                    "get_os_name: could not be located in file {}",
+                    OS_RELEASE_FILE
                 ),
             ))
         }
     } else {
         Err(MigError::from_remark(
             MigErrorKind::NotFound,
-            &format!(
-                "{}::get_os_name: could not locate file {}",
-                MODULE, OS_RELEASE_FILE
-            ),
+            &format!("get_os_name: could not locate file {}", OS_RELEASE_FILE),
         ))
     }
 }
@@ -233,7 +240,7 @@ pub(crate) fn get_os_name() -> Result<String, MigError> {
  ******************************************************************/
 
 pub(crate) fn is_secure_boot() -> Result<bool, MigError> {
-    trace!("{}::is_secure_boot: entered", MODULE);
+    trace!("is_secure_boot: entered");
 
     // TODO: check for efi vars
 
@@ -260,12 +267,12 @@ pub(crate) fn is_secure_boot() -> Result<bool, MigError> {
             }
         }
         error!(
-            "{}::is_secure_boot: failed to parse command output: '{}'",
-            MODULE, cmd_res.stdout
+            "is_secure_boot: failed to parse command output: '{}'",
+            cmd_res.stdout
         );
         Err(MigError::from_remark(
             MigErrorKind::InvParam,
-            &format!("{}::is_secure_boot: failed to parse command output", MODULE),
+            &format!("is_secure_boot: failed to parse command output"),
         ))
     } else {
         Ok(false)
@@ -279,26 +286,26 @@ pub(crate) fn is_secure_boot() -> Result<bool, MigError> {
 
 // TODO: allow restoring from work_dir to Boot
 
-pub(crate) fn restore_backups(
-    root_path: &Path,
-    backups: &[(String, String)],
-) -> Result<(), MigError> {
+pub(crate) fn restore_backups(root_path: &Path, backups: &[(String, String)]) -> bool {
     // restore boot config backups
+    let mut res = true;
     for backup in backups {
         let src = path_append(root_path, &backup.1);
         let tgt = path_append(root_path, &backup.0);
-        copy(&src, &tgt).context(MigErrCtx::from_remark(
-            MigErrorKind::Upstream,
-            &format!(
-                "Failed to restore '{}' to '{}'",
+        if let Err(why) = copy(&src, &tgt) {
+            error!(
+                "Failed to restore '{}' to '{}', error: {:?}",
                 src.display(),
-                tgt.display()
-            ),
-        ))?;
-        info!("Restored '{}' to '{}'", src.display(), tgt.display())
+                tgt.display(),
+                why
+            );
+            res = false;
+        } else {
+            info!("Restored '{}' to '{}'", src.display(), tgt.display())
+        }
     }
 
-    Ok(())
+    res
 }
 
 pub(crate) fn to_std_device_path(device: &Path) -> Result<PathBuf, MigError> {
@@ -318,7 +325,7 @@ pub(crate) fn to_std_device_path(device: &Path) -> Result<PathBuf, MigError> {
         return Ok(PathBuf::from(device));
     }
 
-    debug!(
+    trace!(
         "to_std_device_path: attempting to dereference as link '{}'",
         device.display()
     );
@@ -332,12 +339,12 @@ pub(crate) fn to_std_device_path(device: &Path) -> Result<PathBuf, MigError> {
                     &format!("failed to canonicalize path from: '{}'", dev_path.display()),
                 ))?);
             } else {
-                debug!("Failed to retrieve parent from  '{}'", device.display());
+                trace!("Failed to retrieve parent from  '{}'", device.display());
                 return Ok(PathBuf::from(device));
             }
         }
         Err(why) => {
-            debug!(
+            trace!(
                 "Failed to dereference file '{}' : {:?}",
                 device.display(),
                 why
@@ -413,10 +420,7 @@ pub(crate) fn get_os_release() -> Result<OSRelease, MigError> {
 }
 */
 
-pub(crate) fn get_fs_space<P: AsRef<Path>>(
-    cmds: &EnsuredCmds,
-    path: P,
-) -> Result<(u64, u64), MigError> {
+pub(crate) fn get_fs_space<P: AsRef<Path>>(path: P) -> Result<(u64, u64), MigError> {
     const SIZE_REGEX: &str = r#"^(\d+)K?$"#;
     let path = path.as_ref();
     trace!("get_fs_space: entered with '{}'", path.display());
@@ -424,7 +428,7 @@ pub(crate) fn get_fs_space<P: AsRef<Path>>(
     let path_str = path.to_string_lossy();
     let args: Vec<&str> = vec!["--block-size=K", "--output=size,used", &path_str];
 
-    let cmd_res = cmds.call(DF_CMD, &args, true)?;
+    let cmd_res = call(DF_CMD, &args, true)?;
 
     if !cmd_res.status.success() || cmd_res.stdout.is_empty() {
         return Err(MigError::from_remark(
@@ -597,4 +601,63 @@ pub(crate) fn get_kernel_root_info() -> Result<(PathBuf, Option<String>), MigErr
         };
 
     Ok((root_device, root_fs_type))
+}
+
+pub(crate) fn expect_type<P: AsRef<Path>>(file: P, ftype: &FileType) -> Result<(), MigError> {
+    if !is_file_type(file.as_ref(), ftype)? {
+        error!(
+            "Could not determine expected file type '{}' for file '{}'",
+            ftype.get_descr(),
+            file.as_ref().display()
+        );
+        Err(MigError::displayed())
+    } else {
+        Ok(())
+    }
+}
+
+pub(crate) fn is_file_type<P: AsRef<Path>>(file: P, ftype: &FileType) -> Result<bool, MigError> {
+    let path_str = file.as_ref().to_string_lossy();
+    let args: Vec<&str> = vec!["-bz", &path_str];
+
+    let cmd_res = call(FILE_CMD, &args, true)?;
+    if !cmd_res.status.success() || cmd_res.stdout.is_empty() {
+        return Err(MigError::from_remark(
+            MigErrorKind::InvParam,
+            &format!("new: failed determine type for file {}", path_str),
+        ));
+    }
+
+    lazy_static! {
+        static ref OS_IMG_FTYPE_RE: Regex = Regex::new(OS_IMG_FTYPE_REGEX).unwrap();
+        static ref GZIP_OS_IMG_FTYPE_RE: Regex = Regex::new(GZIP_OS_IMG_FTYPE_REGEX).unwrap();
+        static ref INITRD_FTYPE_RE: Regex = Regex::new(INITRD_FTYPE_REGEX).unwrap();
+        static ref OS_CFG_FTYPE_RE: Regex = Regex::new(OS_CFG_FTYPE_REGEX).unwrap();
+        static ref TEXT_FTYPE_RE: Regex = Regex::new(TEXT_FTYPE_REGEX).unwrap();
+        static ref KERNEL_AMD64_FTYPE_RE: Regex = Regex::new(KERNEL_AMD64_FTYPE_REGEX).unwrap();
+        static ref KERNEL_ARMHF_FTYPE_RE: Regex = Regex::new(KERNEL_ARMHF_FTYPE_REGEX).unwrap();
+        static ref KERNEL_AARCH64_FTYPE_RE: Regex = Regex::new(KERNEL_AARCH64_FTYPE_REGEX).unwrap();
+        //static ref KERNEL_I386_FTYPE_RE: Regex = Regex::new(KERNEL_I386_FTYPE_REGEX).unwrap();
+        static ref DTB_FTYPE_RE: Regex = Regex::new(DTB_FTYPE_REGEX).unwrap();
+        static ref GZIP_TAR_FTYPE_RE: Regex = Regex::new(GZIP_TAR_FTYPE_REGEX).unwrap();
+    }
+
+    debug!(
+        "FileInfo::is_type: looking for: {}, found {}",
+        ftype.get_descr(),
+        cmd_res.stdout
+    );
+    match ftype {
+        FileType::GZipOSImage => Ok(GZIP_OS_IMG_FTYPE_RE.is_match(&cmd_res.stdout)),
+        FileType::OSImage => Ok(OS_IMG_FTYPE_RE.is_match(&cmd_res.stdout)),
+        FileType::InitRD => Ok(INITRD_FTYPE_RE.is_match(&cmd_res.stdout)),
+        FileType::KernelARMHF => Ok(KERNEL_ARMHF_FTYPE_RE.is_match(&cmd_res.stdout)),
+        FileType::KernelAMD64 => Ok(KERNEL_AMD64_FTYPE_RE.is_match(&cmd_res.stdout)),
+        //FileType::KernelI386 => Ok(KERNEL_I386_FTYPE_RE.is_match(&cmd_res.stdout)),
+        FileType::KernelAARCH64 => Ok(KERNEL_AARCH64_FTYPE_RE.is_match(&cmd_res.stdout)),
+        FileType::Json => Ok(OS_CFG_FTYPE_RE.is_match(&cmd_res.stdout)),
+        FileType::Text => Ok(TEXT_FTYPE_RE.is_match(&cmd_res.stdout)),
+        FileType::DTB => Ok(DTB_FTYPE_RE.is_match(&cmd_res.stdout)),
+        FileType::GZipTar => Ok(GZIP_TAR_FTYPE_RE.is_match(&cmd_res.stdout)),
+    }
 }

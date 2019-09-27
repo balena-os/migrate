@@ -15,11 +15,22 @@ pub(crate) mod mig_error;
 #[cfg(target_os = "windows")]
 pub(crate) mod os_release;
 
+pub(crate) mod os_api;
+
+pub(crate) mod boot_manager;
+pub(crate) mod device;
+
+pub(crate) mod device_info;
+pub(crate) mod path_info;
+
+pub(crate) mod file_digest;
+
 pub(crate) mod disk_util;
 
 pub(crate) mod backup;
 
-pub(crate) mod balena_cfg_json;
+pub(crate) mod migrate_info;
+
 pub(crate) mod config;
 // pub(crate) mod config_helper;
 pub(crate) mod file_info;
@@ -32,7 +43,7 @@ pub(crate) mod wifi_config;
 //pub(crate) use logger::Logger;
 
 pub(crate) use self::config::{Config, MigMode};
-pub(crate) use self::file_info::{FileInfo, FileType};
+pub(crate) use self::file_info::FileInfo;
 pub use self::mig_error::{MigErrCtx, MigError, MigErrorKind};
 
 const MODULE: &str = "migrator::common";

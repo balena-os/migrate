@@ -1,0 +1,210 @@
+#!/bin/bash
+
+## create an migration configuration for
+## RPI3
+## intel-nuc
+## beaglebone-black / green
+## beagleboard xm
+
+## valid balena boot files are expected in
+## ${home_dir}/balena-boot/${device-tag}
+##  as balena.initramfs.cpio.gz - the migration initramfs
+##     balena.zImage            - the kernel
+##     *.dtb                    - device tree files
+## valid device tags are
+## intel-nuc
+## beaglebone-green
+## beaglebone-black
+## beagleboard-xm
+## raspberrypi3
+## ... to be continued
+
+set -e
+
+function verbose {
+  if [ "${VERBOSE}" == 1 ]; then
+    echo "${1}"
+  fi
+}
+
+function fail {
+  echo "${1}"
+  # clean
+  exit 1
+}
+
+function printHelp {
+  cat << EOI
+
+  mk_mig_config - create a basic migration configuration
+    USAGE mk_mig_config [OPTIONS]
+    please run as root.
+    OPTIONS:
+      -h|--help                              - print this help text
+      -d|--device device-slug                - use specified device slug
+      -w|--work-dir path                     - use specified working directory, defaults to .
+      -t|--target-dir path                   - use specified target directory, defaults to ./migrate
+EOI
+  return  0
+}
+
+CURR_DIR=$(pwd)
+
+if [[ $EUID -ne 0 ]]; then
+    echo "This script must be run as root"
+    exit 1
+fi
+
+PROJECT_ROOT="$(pwd)"
+TARGET_DIR="$(pwd)/migrate"
+
+while [[ $# -gt 0 ]]; do
+  arg=$1
+  case $arg in
+      -h|--help)
+        printHelp
+        exit 0
+      ;;
+      -d|--device)
+          if [ -z "$2" ]; then
+            fail "\"$1\" argument needs a value."
+          fi
+          DEVICE_TYPE="$2"
+          verbose "using device type ${DEVICE_TYPE}"
+          shift
+      ;;
+      -w|--work-dir)
+          if [ -z "$2" ]; then
+            fail "\"$1\" argument needs a value."
+          fi
+
+          cd "${2}"
+          PROJECT_ROOT="$(pwd)"
+          cd "${CURR_DIR}"
+          verbose "using working directory ${PROJECT_ROOT}"
+          shift
+      ;;
+      -t|--target-dir)
+          if [ -z "$2" ]; then
+            fail "\"$1\" argument needs a value."
+          fi
+          TARGET_DIR="${2}"
+          verbose "using target directory ${TARGET_DIR}"
+          shift
+      ;;
+      -v|--verbose)
+          VERBOSE=1
+          verbose "Operating in verbose mode"
+      ;;
+      *)
+        fail "invalid parameter \"$1\""
+        ;;
+  esac
+  shift
+done
+
+case ${DEVICE_TYPE} in
+  raspberrypi3)
+    BOOT_DIR="${PROJECT_ROOT}/balena-boot/raspberrypi3"
+    COPY_FILES="balena.zImage bcm2710-rpi-3-b.dtb bcm2710-rpi-3-b-plus.dtb"
+    RELEASE_DIR_MIGRATE="${PROJECT_ROOT}/target/armv7-unknown-linux-musleabihf/release"
+    RELEASE_DIR_STAGE2="${PROJECT_ROOT}/target/armv7-unknown-linux-musleabihf/release"
+    ;;
+  raspberrypi4-64)
+    BOOT_DIR="${PROJECT_ROOT}/balena-boot/raspberrypi4-64"
+    COPY_FILES="balena.zImage bcm2711-rpi-4-b.dtb"
+    RELEASE_DIR_MIGRATE="${PROJECT_ROOT}/target/armv7-unknown-linux-musleabihf/release"
+    RELEASE_DIR_STAGE2="${PROJECT_ROOT}/target/aarch64-unknown-linux-musl/release"
+    ;;
+  intel-nuc)
+    BOOT_DIR="${PROJECT_ROOT}/balena-boot/intel-nuc"
+    COPY_FILES="balena.zImage"
+    RELEASE_DIR_MIGRATE="${PROJECT_ROOT}/target/x86_64-unknown-linux-musl/release"
+    RELEASE_DIR_STAGE2="${PROJECT_ROOT}/target/x86_64-unknown-linux-musl/release"
+    ;;
+  beaglebone-green)
+    BOOT_DIR="${PROJECT_ROOT}/balena-boot/beaglebone-green"
+    COPY_FILES="balena.zImage \
+    balena.dtb"
+    RELEASE_DIR_MIGRATE="${PROJECT_ROOT}/target/armv7-unknown-linux-musleabihf/release"
+    RELEASE_DIR_STAGE2="${PROJECT_ROOT}/target/armv7-unknown-linux-musleabihf/release"
+    ;;
+  beagleboard-xm)
+    BOOT_DIR="${PROJECT_ROOT}/balena-boot/beagleboard-xm"
+    COPY_FILES="balena.zImage \
+    balena.dtb"
+    RELEASE_DIR_MIGRATE="${PROJECT_ROOT}/target/armv7-unknown-linux-musleabihf/release"
+    RELEASE_DIR_STAGE2="${PROJECT_ROOT}/target/armv7-unknown-linux-musleabihf/release"
+    ;;
+  *)
+    fail "invalid device type \"$DEVICE_TYPE\""
+    ;;
+esac
+
+if [ ! -d "${BOOT_DIR}" ]; then
+  fail "the boot file directory does not exist \"${BOOT_DIR}\""
+fi
+
+if [ ! -d "${TARGET_DIR}" ]; then
+  echo "creating target directory \"${TARGET_DIR}\""
+  mkdir -p "${TARGET_DIR}"
+fi
+
+cd "${TARGET_DIR}"
+TARGET_DIR="$(pwd)"
+cd "${CURR_DIR}"
+
+SOURCE_INITRD="${BOOT_DIR}/balena.initrd.cpio.gz"
+TARGET_INITRD="${TARGET_DIR}/balena.initrd.cpio.gz"
+
+verbose "project root:               ${PROJECT_ROOT}"
+verbose "target dir:                 ${TARGET_DIR}"
+verbose "boot files are expected in: ${BOOT_DIR}"
+verbose "source initrd:              ${SOURCE_INITRD}"
+verbose "target initrd:              ${TARGET_INITRD}"
+
+echo "copying dtb files"
+for file in ${COPY_FILES}
+do
+  cp "${BOOT_DIR}/$file" "${TARGET_DIR}/"
+done
+
+if [ ! -f "${TARGET_DIR}/balena-migrate.yml" ] ; then
+  echo "copying default balena-migrate.yml"
+  cp "${BOOT_DIR}/balena-migrate.yml" "${TARGET_DIR}/"
+fi
+
+
+cp "${RELEASE_DIR_STAGE2}/balena-migrate" "${TARGET_DIR}/"
+
+# TODO: create and use abs path for target
+
+UNPACK_DIR=$(mktemp -d)
+echo "using unpack directory ${PROJECT_ROOT}"
+
+echo "unpacking \"${SOURCE_INITRD}\""
+gzip -c -d ${SOURCE_INITRD} | cpio -idmu -D ${UNPACK_DIR}
+
+echo "Removing init.d scripts 8* 9*"
+rm -rf ${UNPACK_DIR}/init.d/8*
+rm -rf ${UNPACK_DIR}/init.d/9*
+
+echo "copying ${PROJECT_ROOT}/script/82-migrate to init.d"
+cp ${PROJECT_ROOT}/script/82-migrate ${UNPACK_DIR}/init.d
+# echo "copying ${PROJECT_ROOT}/script/85-scripted to init.d"
+# cp ${PROJECT_ROOT}/script/85-scripted ${UNPACK_DIR}/init.d
+echo "copying ${RELEASE_DIR_STAGE2}/balena-stage2 to bin"
+cp ${RELEASE_DIR_STAGE2}/balena-stage2 ${UNPACK_DIR}/bin
+
+cd ${UNPACK_DIR}
+
+find . | cpio --quiet -o -H newc | gzip -c > ${TARGET_INITRD}
+
+cd ${CURR_DIR}
+
+rm -rf ${UNPACK_DIR}
+
+echo "copying ${RELEASE_DIR_MIGRATE}/balena-migrate to ${TARGET_DIR}/balena-migrate"
+cp  ${RELEASE_DIR_MIGRATE}/balena-migrate ${TARGET_DIR}/
+
+# TODO: chown target dir to users recursively

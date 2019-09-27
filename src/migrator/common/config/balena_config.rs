@@ -1,8 +1,8 @@
 use super::MigMode;
-use crate::common::{MigError, MigErrorKind};
+use crate::common::{file_digest::HashInfo, MigError, MigErrorKind};
 use log::debug;
 use serde::{Deserialize, Serialize};
-use std::path::{Path, PathBuf};
+use std::path::PathBuf;
 
 const MODULE: &str = "common::config::balena_config";
 
@@ -12,13 +12,16 @@ use crate::defs::DEFAULT_API_CHECK_TIMEOUT;
 #[derive(Debug, Serialize, Deserialize, Clone)]
 pub(crate) struct PartDump {
     pub blocks: u64,
-    pub archive: Option<PathBuf>,
+    pub archive: FileRef,
 }
 
 #[derive(Debug, Serialize, Deserialize, Clone)]
 pub(crate) enum PartCheck {
+    #[serde(rename = "none")]
     None,
-    Read,
+    #[serde(rename = "ro")]
+    ReadOnly,
+    #[serde(rename = "rw")]
     ReadWrite,
 }
 
@@ -36,9 +39,17 @@ pub(crate) struct FSDump {
     pub data: PartDump,
 }
 
+#[derive(Debug, Serialize, Deserialize, Clone, PartialEq)]
+pub(crate) struct FileRef {
+    pub path: PathBuf,
+    pub hash: Option<HashInfo>,
+}
+
 #[derive(Debug, Serialize, Deserialize, Clone)]
 pub(crate) enum ImageType {
-    Flasher(PathBuf),
+    #[serde(rename = "dd")]
+    Flasher(FileRef),
+    #[serde(rename = "fs")]
     FileSystems(FSDump),
 }
 
@@ -53,7 +64,7 @@ pub(crate) struct ApiInfo {
 #[derive(Debug, Deserialize)]
 pub(crate) struct BalenaConfig {
     image: Option<ImageType>,
-    config: Option<PathBuf>,
+    config: Option<FileRef>,
     app_name: Option<String>,
     api: Option<ApiInfo>,
     check_vpn: Option<bool>,
@@ -74,7 +85,7 @@ impl<'a> BalenaConfig {
 
     pub fn check(&self, mig_mode: &MigMode) -> Result<(), MigError> {
         debug!("check: {:?}", self);
-        if let MigMode::IMMEDIATE = mig_mode {
+        if let MigMode::Immediate = mig_mode {
             if let None = self.image {
                 return Err(MigError::from_remark(
                     MigErrorKind::InvParam,
@@ -116,7 +127,10 @@ impl<'a> BalenaConfig {
     }
 
     pub fn set_image_path(&mut self, image_path: &str) {
-        self.image = Some(ImageType::Flasher(PathBuf::from(image_path)));
+        self.image = Some(ImageType::Flasher(FileRef {
+            path: PathBuf::from(image_path),
+            hash: None,
+        }));
     }
 
     // The following functions can only be safely called after check has succeeded
@@ -129,7 +143,7 @@ impl<'a> BalenaConfig {
         }
     }
 
-    pub fn get_config_path(&'a self) -> &'a Path {
+    pub fn get_config_path(&'a self) -> &'a FileRef {
         if let Some(ref path) = self.config {
             path
         } else {

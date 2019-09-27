@@ -14,22 +14,52 @@ const MODULE: &str = "stage2::stage2:config";
 
 use crate::{
     common::{
-        config::balena_config::FSDump, config::migrate_config::WatchdogCfg, MigErrCtx, MigError,
-        MigErrorKind,
+        config::{balena_config::PartCheck, migrate_config::WatchdogCfg},
+        file_info::RelFileInfo,
+        MigErrCtx, MigError, MigErrorKind,
     },
     defs::{BootType, DeviceType, FailMode},
 };
 
 #[derive(Debug, Deserialize, Serialize, Clone)]
-pub(crate) enum CheckedImageType {
-    Flasher(PathBuf),
-    FileSystems(FSDump),
+pub(crate) struct CheckedPartDump {
+    pub blocks: u64,
+    pub archive: RelFileInfo,
 }
 
 #[derive(Debug, Deserialize, Serialize, Clone)]
-pub(crate) struct ImageInfo {
-    pub req_space: u64,
-    pub image: CheckedImageType,
+pub(crate) struct CheckedFSDump {
+    pub extended_blocks: u64,
+    pub device_slug: String,
+    pub check: Option<PartCheck>,
+    pub max_data: Option<bool>,
+    pub mkfs_direct: Option<bool>,
+    pub boot: CheckedPartDump,
+    pub root_a: CheckedPartDump,
+    pub root_b: CheckedPartDump,
+    pub state: CheckedPartDump,
+    pub data: CheckedPartDump,
+}
+
+#[derive(Debug, Deserialize, Serialize, Clone)]
+pub(crate) enum CheckedImageType {
+    Flasher(RelFileInfo),
+    FileSystems(CheckedFSDump),
+}
+
+impl CheckedImageType {
+    pub fn get_required_space(&self) -> u64 {
+        match self {
+            CheckedImageType::Flasher(ref flasher) => flasher.size,
+            CheckedImageType::FileSystems(ref file_systems) => {
+                file_systems.boot.archive.size
+                    + file_systems.root_a.archive.size
+                    + file_systems.root_b.archive.size
+                    + file_systems.state.archive.size
+                    + file_systems.data.archive.size
+            }
+        }
+    }
 }
 
 #[derive(Debug, Deserialize, Serialize, Clone)]
@@ -85,7 +115,7 @@ pub(crate) struct Stage2Config {
     // balena config file
     balena_config: PathBuf,
     // balena OS image file in work_path
-    balena_image: ImageInfo,
+    balena_image: CheckedImageType,
     // working directory  in path on root or mount partition
     work_path: PathType,
     // backed up former boot configuration (from , to) expected in boot manager
@@ -189,7 +219,7 @@ impl<'a> Stage2Config {
         }
     }
 
-    pub fn get_watchdogs(&'a self) -> Option<&'a Vec<WatchdogCfg>> {
+    pub fn get_watchdogs(&self) -> Option<&Vec<WatchdogCfg>> {
         if let Some(ref val) = self.watchdogs {
             Some(val)
         } else {
@@ -205,7 +235,7 @@ impl<'a> Stage2Config {
         &self.device_type
     }
 
-    pub fn get_balena_image(&'a self) -> &'a ImageInfo {
+    pub fn get_balena_image(&'a self) -> &'a CheckedImageType {
         &self.balena_image
     }
 
@@ -247,7 +277,7 @@ impl<T: Clone> Required<T> {
         }
     }
 
-    fn get<'a>(&'a self) -> Result<&'a T, MigError> {
+    fn get<'a>(&self) -> Result<&T, MigError> {
         if let Some(ref val) = self.data {
             Ok(val)
         } else {
@@ -299,7 +329,7 @@ pub(crate) struct Stage2ConfigBuilder {
     no_flash: Required<bool>,
     force_flash_device: Optional<PathBuf>,
     balena_config: Required<PathBuf>,
-    balena_image: Required<ImageInfo>,
+    balena_image: Required<CheckedImageType>,
     work_path: Required<PathType>,
     boot_bckup: Optional<Vec<(String, String)>>,
     has_backup: Required<bool>,
@@ -405,7 +435,7 @@ impl<'a> Stage2ConfigBuilder {
         self.balena_config.set(val);
     }
 
-    pub fn set_balena_image(&mut self, val: ImageInfo) {
+    pub fn set_balena_image(&mut self, val: CheckedImageType) {
         self.balena_image.set(val);
     }
 
@@ -417,8 +447,9 @@ impl<'a> Stage2ConfigBuilder {
         self.boot_bckup.set(boot_backup);
     }
 
-    pub fn set_has_backup(&mut self, val: bool) {
+    pub fn set_has_backup(&mut self, val: bool) -> bool {
         self.has_backup.set(val);
+        val
     }
 
     pub fn set_gzip_internal(&mut self, val: bool) {
@@ -459,16 +490,31 @@ mod tests {
     use super::*;
 
     const TEST_CONFIG: &str = r##"
-migrate:
-  mode: IMMEDIATE
-  all_wifis: true
-  reboot: 10
-  log_to:
-    drive: '/dev/sda1'
-    fs_type: ext4
-balena:
-  image: image.gz
-  config: config.json
+fail_mode: Reboot
+no_flash: true
+force_flash_device: ~
+balena_config: config.json
+balena_image:
+  req_space: 139522865
+  image:
+    Flasher:
+      path: balena-cloud-intel-nuc-2.38.3+rev5-v9.15.7.img.gz
+      hash:
+        Md5: c55a19eacc425c3e75a007ae4249b85d
+work_path:
+  Path: /home/thomas/migrate
+boot_bckup: ~
+has_backup: false
+gzip_internal: true
+log_level: debug
+log_to:
+  device: /dev/sdb1
+  fstype: vfat
+log_console: false
+device_type: IntelNuc
+boot_type: Grub
+migrate_delay: 0
+watchdogs: ~'
 "##;
 
     #[test]

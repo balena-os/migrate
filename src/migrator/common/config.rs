@@ -82,23 +82,10 @@ impl<'a> Config {
                     .help("Work directory"),
             )
             .arg(
-                Arg::with_name("test")
-                    .short("t")
-                    .long("test")
-                    .help("tests what currently needs testing"),
-            )
-            .arg(
                 Arg::with_name("verbose")
                     .short("v")
                     .multiple(true)
                     .help("Sets the level of verbosity"),
-            )
-            .arg(
-                Arg::with_name("device-type")
-                    .short("d")
-                    .long("device-type")
-                    .value_name("type")
-                    .help("specify image device slug for extraction"),
             )
             .get_matches();
 
@@ -229,17 +216,6 @@ impl<'a> Config {
             }
         }
 
-        if let MigMode::EXTRACT = config.migrate.get_mig_mode() {
-            if arg_matches.is_present("device-type") {
-                if let Some(dev_type) = arg_matches.value_of("device-type") {
-                    config.migrate.set_extract_device(dev_type);
-                }
-            } else {
-                error!("device-type option is mandatory for mode EXTRACT. Please specify a device type using the --device-type or -d option");
-                return Err(MigError::displayed());
-            }
-        }
-
         debug!(
             "{}::new: migrate mode: {:?}",
             MODULE,
@@ -313,28 +289,38 @@ impl<'a> Config {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::{common::config::migrate_config::MigrateWifis, defs::FailMode};
+    use crate::{
+        common::config::{balena_config::FileRef, migrate_config::MigrateWifis},
+        defs::FailMode,
+    };
+    use std::path::PathBuf;
 
     // TODO: update this to current config
 
     #[test]
-    fn read_conf_ok() -> () {
-        let config = Config::from_string(TEST_CONFIG_OK).unwrap();
+    fn read_conf_ok1() -> () {
+        let config = Config::from_string(TEST_DD_CONFIG_OK).unwrap();
 
-        assert_eq!(config.migrate.get_mig_mode(), &MigMode::IMMEDIATE);
+        assert_eq!(config.migrate.get_mig_mode(), &MigMode::Immediate);
         assert_eq!(config.migrate.get_work_dir(), Path::new("./work/"));
         match config.migrate.get_wifis() {
-            MigrateWifis::SOME(list) => assert_eq!(list.len(), 3),
+            MigrateWifis::List(list) => assert_eq!(list.len(), 3),
             _ => panic!("unexpected result from get_wifis"),
         };
         assert_eq!(config.migrate.get_reboot(), &Some(10));
         assert_eq!(
             config.migrate.get_kernel_path(),
-            Path::new("balena_x86_64.migrate.kernel")
+            &FileRef {
+                path: PathBuf::from("balena_x86_64.migrate.kernel"),
+                hash: None
+            }
         );
         assert_eq!(
             config.migrate.get_initrd_path(),
-            Path::new("balena_x86_64.migrate.initramfs")
+            &FileRef {
+                path: PathBuf::from("balena_x86_64.migrate.initramfs"),
+                hash: None
+            }
         );
         assert_eq!(config.migrate.get_fail_mode(), &FailMode::Reboot);
         /*        assert_eq!(
@@ -348,7 +334,13 @@ mod tests {
         assert_eq!(bckup_vols.get(0).unwrap().volume, "test volume 1");
 
         // assert_eq!(config.balena.get_image_path(), Path::new("image.gz"));
-        assert_eq!(config.balena.get_config_path(), Path::new("config.json"));
+        assert_eq!(
+            config.balena.get_config_path(),
+            &FileRef {
+                path: PathBuf::from("config.json"),
+                hash: None
+            }
+        );
         /*
         assert_eq!(config.balena.get_app_name(), Some("test"));
         assert_eq!(config.balena.get_api_host(), "api1.balena-cloud.com");
@@ -360,6 +352,11 @@ mod tests {
         assert_eq!(config.balena.get_check_timeout(), 42);
 
         ()
+    }
+
+    #[test]
+    fn read_conf_ok2() -> () {
+        let config = Config::from_string(TEST_FS_CONFIG_OK).unwrap();
     }
 
     /*
@@ -414,7 +411,7 @@ mod tests {
         }
     */
 
-    const TEST_CONFIG_OK: &str = r###"
+    const TEST_DD_CONFIG_OK: &str = r###"
 migrate:
   # mode AGENT, IMMEDIATE, PRETEND
   #  AGENT - not yet implemented, connects to balena-cloud, controlled by dashboard
@@ -422,7 +419,7 @@ migrate:
   #   not yet implemented:
   #     if app, api, api_key, are given in balena section, config & image can be downloaded
   #  PRETEND: only validates conditions for IMMEDIATE, changes nothing
-  mode: IMMEDIATE
+  mode: immediate
   # where all files are expected to be found
   work_dir: './work/'
   # migrate all wifi configurations found on device
@@ -439,9 +436,9 @@ migrate:
     drive: "/dev/sda1"
     fs_type: ext4
   # the migrate kernel, might be downloaded automatically in future versions
-  kernel_file: "balena_x86_64.migrate.kernel"
+  kernel_path: "balena_x86_64.migrate.kernel"
   # the migrate initramfs, might be downloaded automatically in future versions
-  initramfs_file: "balena_x86_64.migrate.initramfs"
+  initrd_path: "balena_x86_64.migrate.initramfs"
   # backup configuration
   backup:
    - volume: "test volume 1"
@@ -470,7 +467,8 @@ balena:
   version:
   ## the balena image to flash
   image:
-    Flasher: image.gz
+    dd:
+      path: image.gz
   ## the balena config file to use (can be auto generated in future versions)
   config: config.json
   ## The balena app name - needed for download (not yet implemented) checked against present config.json
@@ -487,14 +485,122 @@ balena:
   check_timeout: 42
   ## Api key  to use for agent mode, downloads etc
 debug:
-  ## ignore non admin mode
-  fake_admin: true
   ## flash to a device other than the boot device
   force_flash_device: '/dev/sdb'
-  ## skip flashing - only used with force_flash_device
-  skip_flash: false
   ## run migration up to phase2 but stop & reboot before flashing
   no_flash: true
+"###;
+    const TEST_FS_CONFIG_OK: &str = r###"
+migrate:
+  # migrate mode
+  # immediate migrate
+  # pretend : just run stage 1 without modifying anything
+  # extract : do not migrate extract image instead
+  mode: immediate
+  # where required files are expected
+  work_dir: '.'
+  # migrate all found wifi configurations
+  all_wifis: true
+  # automatically reboot into stage 2 after n seconds
+  reboot: 5
+  log:
+    # use this drive for stage2 persistent logging
+    drive: '/dev/sda1'
+    # stage2 log level (trace, debug, info, warn, error)
+    level: 'debug'
+  # path to stage2 kernel - must be a balena os kernel matching the device type
+  kernel_path: 'balena.zImage'
+  # path to stage2 initramfs
+  initrd_path: 'balena.initramfs.cpio.gz'
+  # path to stage2 device tree blob - better be a balena dtb matching the device type
+  dtb_path: 'balena.dtb'
+  # backup configuration, configured files are copied to balena and mounted as volumes
+  backup:
+  # network manager configuration files
+  nwmgr_files:
+    - eth0_static
+    - sprint
+  # use internal gzip with dd
+  gzip_internal: ~
+  # Extra kernel commandline options
+  kernel_opts: "panic=20"
+  # Use the given device instead of the boot device to flash to
+  force_flash_device: ~
+  # delay migration by n seconds - workaround for stem watchdog
+  delay: 60
+  # test kicking watchdogs - work in progress - not currently working
+  watchdogs:
+    # path to watchdog device
+    #- path: /dev/watchdog1
+      # optional interval in seconds - overrides interval read from watchdog device
+      #  interval: ~
+      # optional close, false disables MAGICCLOSE flag read from device
+      # close: false
+balena:
+  image:
+    # use filesystem writes instead of Flasher (dd)
+    fs:
+      # needed for filesystem writes, beagleboard-xm masquerades as beaglebone-black
+      device_slug: beaglebone-black
+      # make mkfs.ext4 check for bad blocks, either
+      # empty / none, -> No test
+      # ro -> Read test
+      # rw -> ReadWrite test (slow)
+      check: ro
+      # maximise resin-data partition, true / false
+      # empty / true -> maximise
+      # false -> do not maximise
+      # Currently required to be empty / true - migration does not succeed with max_data set to false
+      max_data: true
+      # use direct io for mkfs.ext (-D see manpage)
+      # true -> use direct io (slow)
+      # empty / false -> do not use
+      mkfs_direct: ~
+      # extended partition blocks
+      extended_blocks: 2162688
+      # boot partition blocks & tar file
+      boot:
+        blocks: 81920
+        archive:
+          path: resin-boot.tgz
+          hash:
+            md5: 1234567890
+      # rootA partition blocks & tar file
+      root_a:
+        blocks: 638976
+        archive:
+          path: resin-rootA.tgz
+      # rootB partition blocks & tar file
+      root_b:
+        blocks: 638976
+        archive:
+          path: resin-rootB.tgz
+      # state partition blocks & tar file
+      state:
+        blocks: 40960
+        archive:
+          path: resin-state.tgz
+      # data partition blocks & tar file
+      data:
+        blocks: 2105344
+        archive:
+          path: resin-data.tgz
+  # config.json file to inject
+  config: config.json
+  # application name
+  app_name: 'bbtest'
+  # api checks
+  api:
+    host: "api.balena-cloud.com"
+    port: 443
+    check: true
+  # check for vpn connection
+  check_vpn: true
+  # timeout for checks
+  check_timeout: 20
+debug:
+  # don't flash device - terminate stage2 and reboot before flashing
+  no_flash: false
 "###;
 
 }

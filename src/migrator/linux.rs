@@ -1,6 +1,7 @@
 use failure::{Fail, ResultExt};
 use log::{debug, error, info, trace, warn};
-use std::fs::{copy, create_dir};
+use nix::unistd::sync;
+use std::fs::{copy, create_dir, read_dir};
 use std::thread;
 use std::time::Duration;
 
@@ -8,71 +9,77 @@ use std::time::Duration;
 
 use crate::{
     common::{
-        backup,
+        backup, call,
         config::balena_config::ImageType,
-        dir_exists, format_size_with_unit, path_append,
+        device::Device,
+        dir_exists, format_size_with_unit,
+        migrate_info::MigrateInfo,
+        path_append,
         stage2_config::{PathType, Stage2ConfigBuilder, Stage2LogConfig},
         Config, MigErrCtx, MigError, MigErrorKind, MigMode,
     },
-    defs::{BACKUP_FILE, MIN_DISK_SIZE, SYSTEM_CONNECTIONS_DIR},
+    defs::{
+        BACKUP_FILE, MIN_DISK_SIZE, STAGE1_MEM_THRESHOLD, STAGE2_CFG_FILE, SYSTEM_CONNECTIONS_DIR,
+    },
 };
 
 pub(crate) mod linux_defs;
+use linux_defs::{
+    CHMOD_CMD, DF_CMD, FILE_CMD, LSBLK_CMD, MKTEMP_CMD, MOUNT_CMD, REBOOT_CMD, TAR_CMD, UNAME_CMD,
+};
 
-pub(crate) mod device;
-pub(crate) use device::Device;
+pub(crate) mod device_impl;
 
-pub(crate) mod boot_manager;
-
-mod extract;
-use extract::Extractor;
+pub(crate) mod boot_manager_impl;
 
 pub(crate) mod stage2;
 
-pub(crate) mod ensured_cmds;
-pub(crate) use ensured_cmds::{
-    EnsuredCmds, CHMOD_CMD, DF_CMD, FILE_CMD, GRUB_REBOOT_CMD, GRUB_UPDT_CMD, LSBLK_CMD,
-    MKTEMP_CMD, MOKUTIL_CMD, MOUNT_CMD, REBOOT_CMD, UNAME_CMD,
-};
+pub(crate) mod linux_api;
+use linux_api::LinuxAPI;
 
-pub(crate) mod migrate_info;
-pub(crate) use migrate_info::MigrateInfo;
+pub(crate) mod lsblk_info;
+//pub(crate) use lsblk_info::LsblkInfo;
 
 pub(crate) mod linux_common;
+use crate::common::file_size;
 use crate::common::stage2_config::MountConfig;
-use crate::defs::STAGE2_CFG_FILE;
+use crate::linux::linux_common::{get_mem_info, whereis};
+use crate::linux::lsblk_info::LsblkInfo;
 pub(crate) use linux_common::is_admin;
 use mod_logger::{LogDestination, Logger};
 
 const REQUIRED_CMDS: &'static [&'static str] = &[
-    DF_CMD, LSBLK_CMD, FILE_CMD, UNAME_CMD, MOUNT_CMD, REBOOT_CMD, CHMOD_CMD, MKTEMP_CMD,
+    // TODO: check this
+    DF_CMD, LSBLK_CMD, FILE_CMD, UNAME_CMD, MOUNT_CMD, REBOOT_CMD, CHMOD_CMD, MKTEMP_CMD, TAR_CMD,
 ];
 
 pub(crate) struct LinuxMigrator {
-    cmds: EnsuredCmds,
     mig_info: MigrateInfo,
     config: Config,
     stage2_config: Stage2ConfigBuilder,
-    device: Box<Device>,
+    device: Box<dyn Device>,
+    lsblk_info: LsblkInfo,
 }
 
 impl<'a> LinuxMigrator {
     pub fn migrate() -> Result<(), MigError> {
+        // **********************************************************************
+        // We need to be root to do this
+
         let config = Config::new()?;
 
+        if !is_admin()? {
+            error!("please run this program as root");
+            return Err(MigError::from(MigErrorKind::Displayed));
+        }
+
         match config.migrate.get_mig_mode() {
-            MigMode::EXTRACT => {
-                let mut extractor = Extractor::new(config)?;
-                extractor.extract(None)?;
-                Ok(())
-            }
             _ => {
                 let mut migrator = LinuxMigrator::try_init(config)?;
                 let res = match migrator.config.migrate.get_mig_mode() {
-                    MigMode::IMMEDIATE => migrator.do_migrate(),
-                    MigMode::PRETEND => Ok(()),
-                    MigMode::AGENT => Err(MigError::from(MigErrorKind::NotImpl)),
-                    MigMode::EXTRACT => panic!("impossible MigMode here"),
+                    MigMode::Immediate => migrator.do_migrate(),
+                    MigMode::Pretend => Ok(()),
+                    //MigMode::Agent => Err(MigError::from(MigErrorKind::NotImpl)),
                 };
                 Logger::flush();
                 res
@@ -89,27 +96,27 @@ impl<'a> LinuxMigrator {
 
         info!("migrate mode: {:?}", config.migrate.get_mig_mode());
 
-        let mut cmds = EnsuredCmds::new();
-
-        if let Err(why) = cmds.ensure_cmds(REQUIRED_CMDS) {
-            error!("Failed to ensure required commands: {:?}", why);
-            return Err(MigError::displayed());
-        };
-
-        // **********************************************************************
-        // We need to be root to do this
-        // note: fake admin is not honored in release mode
-
-        if !is_admin(&config)? {
-            error!("please run this program as root");
-            return Err(MigError::from(MigErrorKind::Displayed));
+        // A simple replacement for ensured commands
+        for command in REQUIRED_CMDS {
+            match whereis(command) {
+                Ok(_cmd_path) => (),
+                Err(why) => {
+                    error!(
+                        "Could not find required command: '{}': error: {:?}",
+                        command, why
+                    );
+                    return Err(MigError::displayed());
+                }
+            }
         }
 
         // **********************************************************************
         // Get os architecture & name & disk properties, check required paths
         // find wifis etc..
 
-        let mig_info = match MigrateInfo::new(&config, &mut cmds) {
+        let lsblk_info = LsblkInfo::all()?;
+        let linux_api = LinuxAPI::new(&lsblk_info);
+        let mig_info = match MigrateInfo::new(&config, &linux_api) {
             Ok(mig_info) => {
                 info!(
                     "OS Architecture is {}, OS Name is '{}'",
@@ -132,11 +139,11 @@ impl<'a> LinuxMigrator {
 
         // **********************************************************************
         // Run the architecture dependent part of initialization
-        // Add further architectures / functons in device.rs
+        // Add further architectures / functons in device_impl.rs
 
         let mut stage2_config = Stage2ConfigBuilder::default();
 
-        let device = match device::get_device(&mut cmds, &mig_info, &config, &mut stage2_config) {
+        let device = match device_impl::get_device(&mig_info, &config, &mut stage2_config) {
             Ok(device) => {
                 let dev_type = device.get_device_type();
                 let boot_type = device.get_boot_type();
@@ -165,12 +172,12 @@ impl<'a> LinuxMigrator {
         {
             Ok(_dummy) => info!(
                 "The sanity check on '{}' passed",
-                mig_info.config_file.get_path().display()
+                mig_info.config_file.get_rel_path().display()
             ),
             Err(why) => {
                 let message = format!(
                     "The sanity check on '{}' failed: {:?}",
-                    mig_info.config_file.get_path().display(),
+                    mig_info.config_file.get_rel_path().display(),
                     why
                 );
                 error!("{}", message);
@@ -186,12 +193,12 @@ impl<'a> LinuxMigrator {
         // Pick the current root device as flash device
 
         let boot_info = device.get_boot_device();
-        let flash_device = &boot_info.drive;
-        let flash_dev_size = boot_info.drive_size;
+        let flash_device = &boot_info.device_info.drive;
+        let flash_dev_size = boot_info.device_info.drive_size;
 
         info!(
             "The install drive is {}, size: {}",
-            boot_info.drive.display(),
+            boot_info.device_info.drive.display(),
             format_size_with_unit(flash_dev_size)
         );
 
@@ -221,11 +228,11 @@ impl<'a> LinuxMigrator {
         }
 
         Ok(LinuxMigrator {
-            cmds,
             mig_info,
             config,
             device,
             stage2_config,
+            lsblk_info,
         })
     }
 
@@ -248,14 +255,14 @@ impl<'a> LinuxMigrator {
 
         let boot_device = self.device.get_boot_device();
 
-        if &self.mig_info.work_path.device == &boot_device.device {
+        if &self.mig_info.work_path.device_info.device == &boot_device.device_info.device {
             self.stage2_config
                 .set_work_path(&PathType::Path(self.mig_info.work_path.path.clone()));
         } else {
-            let (_lsblk_device, lsblk_part) = self.mig_info.lsblk_info.get_path_info(&work_dir)?;
+            let (_lsblk_device, lsblk_part) = self.lsblk_info.get_path_devs(&work_dir)?;
             self.stage2_config
                 .set_work_path(&PathType::Mount(MountConfig::new(
-                    &lsblk_part.get_path(),
+                    &lsblk_part.get_alt_path(),
                     lsblk_part.fstype.as_ref().unwrap(),
                     work_dir
                         .strip_prefix(lsblk_part.mountpoint.as_ref().unwrap())
@@ -268,12 +275,13 @@ impl<'a> LinuxMigrator {
 
         let backup_path = path_append(work_dir, BACKUP_FILE);
 
-        self.stage2_config.set_has_backup(backup::create(
-            &backup_path,
-            self.config.migrate.get_backup_volumes(),
-        )?);
-
-        // TODO: compare total transfer size (kernel, initramfs, backup, configs )  to memory size (needs to fit in ramfs)
+        let has_backup =
+            self.stage2_config
+                .set_has_backup(if self.config.migrate.is_tar_internal() {
+                    backup::create(&backup_path, self.config.migrate.get_backup_volumes())?
+                } else {
+                    backup::create_ext(&backup_path, self.config.migrate.get_backup_volumes())?
+                });
 
         // TODO: this might not be a smart place to put things, everything in system-connections
         // will end up in /mnt/boot/system-connections
@@ -319,17 +327,54 @@ impl<'a> LinuxMigrator {
             }
         }
 
+        let (mem_tot, mem_avail) = get_mem_info()?;
+        info!(
+            "Memory available is {} of {}",
+            format_size_with_unit(mem_avail),
+            format_size_with_unit(mem_tot),
+        );
+
+        let mut required_size: u64 = self.mig_info.image_file.get_required_space();
+
+        required_size += self.mig_info.config_file.get_size();
+
+        if has_backup {
+            required_size += file_size(&backup_path)?;
+        }
+
+        let read_dir = read_dir(&nwmgr_path).context(MigErrCtx::from_remark(
+            MigErrorKind::Upstream,
+            &format!("Failed to read directory '{}'", nwmgr_path.display()),
+        ))?;
+
+        for entry in read_dir {
+            required_size += file_size(
+                &entry
+                    .context(MigErrCtx::from_remark(
+                        MigErrorKind::Upstream,
+                        "Failed to read directory entry",
+                    ))?
+                    .path(),
+            )?;
+        }
+
+        info!(
+            "Memory required for copying files is {}",
+            format_size_with_unit(required_size)
+        );
+
+        if mem_tot - required_size < STAGE1_MEM_THRESHOLD {
+            warn!("The memory used to copy files to initramfs might not be available.");
+        }
+
         trace!("device setup");
 
         // We need this before s2 config as it might still modify migrate_info
         // TODO: make setup take no s2_cfg or immutable s2_cfg and return boot_backup instead
         // TODO: make setup undoable in case something bad happens later on
-        self.device.setup(
-            &self.cmds,
-            &mut self.mig_info,
-            &self.config,
-            &mut self.stage2_config,
-        )?;
+
+        self.device
+            .setup(&mut self.mig_info, &self.config, &mut self.stage2_config)?;
 
         trace!("stage2 config");
 
@@ -360,7 +405,7 @@ impl<'a> LinuxMigrator {
             .set_balena_image(self.mig_info.image_file.clone());
 
         self.stage2_config
-            .set_balena_config(self.mig_info.config_file.get_rel_path().unwrap().clone());
+            .set_balena_config(self.mig_info.config_file.get_rel_path().clone());
 
         // TODO: setpath if on / mount else set mount
 
@@ -373,27 +418,20 @@ impl<'a> LinuxMigrator {
         self.stage2_config
             .set_log_level(String::from(self.config.migrate.get_log_level()));
 
-        if let Some((ref log_path, ref log_drive, ref log_part)) = self.mig_info.log_path {
-            if log_drive.get_path() != boot_device.drive {
-                if let Some(ref fstype) = log_part.fstype {
-                    self.stage2_config.set_log_to(Stage2LogConfig {
-                        device: log_path.clone(),
-                        fstype: fstype.clone(),
-                    });
+        if let Some(ref log_path) = self.mig_info.log_path {
+            if log_path.device != boot_device.device_info.device {
+                info!(
+                    "Set up log device as '{}' with file system type '{}'",
+                    log_path.get_alt_path().display(),
+                    log_path.fs_type
+                );
 
-                    info!(
-                        "Set up log device as '{}' with file system type '{}'",
-                        log_path.display(),
-                        fstype
-                    );
-                } else {
-                    warn!(
-                        "Could not determine file system type for log partition '{}'  - ignoring",
-                        log_path.display()
-                    );
-                }
+                self.stage2_config.set_log_to(Stage2LogConfig {
+                    device: log_path.get_alt_path(),
+                    fstype: log_path.fs_type.clone(),
+                });
             } else {
-                warn!("Log partition '{}' is not on a distinct drive from flash drive: '{}' - ignoring", log_path.display(), boot_device.drive.display());
+                warn!("Log partition '{}' is not on a distinct drive from flash drive: '{}' - ignoring", log_path.device.display(), boot_device.device_info.drive.display());
             }
         }
 
@@ -409,10 +447,11 @@ impl<'a> LinuxMigrator {
                 "Migration stage 1 was successfull, rebooting system in {} seconds",
                 *delay
             );
+            sync();
             let delay = Duration::new(*delay, 0);
             thread::sleep(delay);
             println!("Rebooting now..");
-            self.cmds.call(REBOOT_CMD, &["-f"], false)?;
+            call(REBOOT_CMD, &["-f"], false)?;
         }
 
         trace!("done");

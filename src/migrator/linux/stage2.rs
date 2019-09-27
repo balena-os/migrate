@@ -3,7 +3,7 @@ use log::{debug, error, info, trace, warn, Level};
 use mod_logger::{LogDestination, Logger, NO_STREAM};
 use nix::unistd::sync;
 
-use std::fs::{copy, create_dir, read_dir};
+use std::fs::{copy, create_dir, read_dir, read_to_string};
 
 use std::path::Path;
 use std::thread;
@@ -11,15 +11,19 @@ use std::time::{Duration, Instant};
 
 use crate::{
     common::{
-        call, dir_exists, file_exists, file_size, format_size_with_unit, path_append,
+        call, dir_exists,
+        file_digest::check_digest,
+        file_exists,
+        file_info::RelFileInfo,
+        file_size, format_size_with_unit, path_append,
         stage2_config::{CheckedImageType, Stage2Config},
         MigErrCtx, MigError, MigErrorKind,
     },
     defs::{FailMode, BACKUP_FILE, SYSTEM_CONNECTIONS_DIR},
     linux::{
-        device,
-        ensured_cmds::{EnsuredCmds, FAT_CHK_CMD, REBOOT_CMD, UDEVADM_CMD},
+        device_impl,
         linux_common::{get_mem_info, whereis},
+        linux_defs::{KERNEL_OSRELEASE_PATH, REBOOT_CMD},
         linux_defs::{MIGRATE_LOG_FILE, STAGE2_MEM_THRESHOLD},
     },
 };
@@ -48,7 +52,8 @@ const INIT_LOG_LEVEL: Level = Level::Trace;
 
 const MIGRATE_TEMP_DIR: &str = "/migrate_tmp";
 
-const MIG_REQUIRED_CMDS: &[&str] = &[REBOOT_CMD, UDEVADM_CMD, FAT_CHK_CMD];
+// TODO: replace removed command checks ?
+//const MIG_REQUIRED_CMDS: &[&str] = &[REBOOT_CMD, UDEVADM_CMD, FAT_CHK_CMD];
 
 const BALENA_IMAGE_FILE: &str = "balenaOS.img.gz";
 const BALENA_CONFIG_FILE: &str = "config.json";
@@ -68,7 +73,6 @@ pub(crate) enum FlashResult {
 }
 
 pub(crate) struct Stage2 {
-    pub cmds: RefCell<EnsuredCmds>,
     pub mounts: RefCell<Mounts>,
     config: Stage2Config,
     pub recoverable_state: bool,
@@ -98,13 +102,16 @@ impl<'a> Stage2 {
             }
         }
 
-        let mut cmds = EnsuredCmds::new();
-        if let Err(why) = cmds.ensure_cmds(MIG_REQUIRED_CMDS) {
-            warn!("Not all required commands were found: {:?}", why);
+        if let Ok(krelease) = read_to_string(KERNEL_OSRELEASE_PATH) {
+            info!("Running stage2 on kernel version: '{}'", krelease.trim());
+        } else {
+            warn!("Failed to retrieve kernel release");
         }
 
+        // TODO: create replacement for ensured commands
+
         // mount boot device containing BALENA_STAGE2_CFG for starters
-        let mut mounts = match Mounts::new(&mut cmds) {
+        let mut mounts = match Mounts::new() {
             Ok(mounts) => {
                 debug!(
                     "Successfully mounted boot file system: '{}' on '{:?}'",
@@ -152,7 +159,7 @@ impl<'a> Stage2 {
         Logger::set_default_level(&stage2_cfg.get_log_level());
 
         // Mount all remaining drives - work and log
-        match mounts.mount_from_config(&stage2_cfg, &cmds) {
+        match mounts.mount_from_config(&stage2_cfg) {
             Ok(_) => {
                 info!("mounted all configured drives");
             }
@@ -199,7 +206,6 @@ impl<'a> Stage2 {
         }
 
         return Ok(Stage2 {
-            cmds: RefCell::new(cmds),
             mounts: RefCell::new(mounts),
             config: stage2_cfg,
             recoverable_state: false,
@@ -248,35 +254,20 @@ impl<'a> Stage2 {
             info!("Done waiting, continuing now");
         }
 
-        let device = device::from_config(device_type, boot_type)?;
-        match device.restore_boot(&self.mounts.borrow(), &self.config) {
-            Ok(_) => {
-                info!("Boot configuration was restored sucessfully");
-                // boot config restored can reboot
-                self.recoverable_state = true;
-            }
-            Err(why) => {
-                warn!(
-                    "Failed to restore boot configuration - trying to migrate anyway. error: {:?}",
-                    why
-                );
-            }
+        let device = device_impl::from_config(device_type, boot_type)?;
+        if device.restore_boot(&self.mounts.borrow(), &self.config) {
+            info!("Boot configuration was restored sucessfully");
+            // boot config restored can reboot
+            self.recoverable_state = true;
+        } else {
+            warn!("Failed to restore boot configuration - trying to migrate anyway.",);
         }
 
         sync();
+        // TODO: debug, remove this
+        thread::sleep(Duration::from_secs(3));
 
         info!("migrating {:?} boot type: {:?}", device_type, boot_type);
-
-        if let Err(why) = if let CheckedImageType::Flasher(ref _image_path) =
-            self.config.get_balena_image().image
-        {
-            flasher::check_commands(&mut self.cmds.borrow_mut(), &self.config)
-        } else {
-            fs_writer::check_commands(&mut self.cmds.borrow_mut())
-        } {
-            error!("Some programs required to write the OS image to disk could not be located, error: '{:?}", why);
-            return Err(MigError::displayed());
-        }
 
         let work_path = if let Some(work_path) = self.mounts.borrow().get_work_path() {
             work_path.to_path_buf()
@@ -295,7 +286,7 @@ impl<'a> Stage2 {
                         format_size_with_unit(mem_tot)
                     );
 
-                    let mut required_size = self.config.get_balena_image().req_space;
+                    let mut required_size = self.config.get_balena_image().get_required_space();
 
                     required_size +=
                         file_size(path_append(&work_path, &self.config.get_balena_config()))?;
@@ -350,9 +341,9 @@ impl<'a> Stage2 {
                 ))?;
             }
 
-            match self.config.get_balena_image().image {
+            match self.config.get_balena_image() {
                 CheckedImageType::Flasher(ref image_file) => {
-                    let src = path_append(&work_path, image_file);
+                    let src = path_append(&work_path, &image_file.rel_path);
                     let tgt = path_append(mig_tmp_dir, BALENA_IMAGE_FILE);
                     copy(&src, &tgt).context(MigErrCtx::from_remark(
                         MigErrorKind::Upstream,
@@ -362,113 +353,57 @@ impl<'a> Stage2 {
                             tgt.display()
                         ),
                     ))?;
+                    info!("Checking digest on copied file '{}'", tgt.display());
+                    if !check_digest(&tgt, &image_file.hash_info)? {
+                        return Err(MigError::from_remark(
+                            MigErrorKind::InvParam,
+                            &format!(
+                                "Failed to check digest on copied file: '{}', {:?} ",
+                                tgt.display(),
+                                image_file.hash_info
+                            ),
+                        ));
+                    }
+
                     info!("copied balena OS image to '{}'", tgt.display());
+                    // check digest
                 }
                 CheckedImageType::FileSystems(ref fs_dump) => {
-                    if let Some(ref archive) = fs_dump.boot.archive {
-                        let src = path_append(&work_path, archive);
-                        let tgt = path_append(mig_tmp_dir, BALENA_BOOT_FS_FILE);
-                        copy(&src, &tgt).context(MigErrCtx::from_remark(
-                            MigErrorKind::Upstream,
-                            &format!(
-                                "failed to copy balena boot fs archive to migrate temp directory, '{}' -> '{}'",
-                                src.display(),
-                                tgt.display()
-                            ),
-                        ))?;
-                        info!(
-                            "copied balena boot archive to '{}' -> '{}'",
-                            src.display(),
-                            tgt.display()
-                        );
-                    } else {
-                        error!(
-                            "The balena boot archive was not configure - cannot partition drive"
-                        );
-                        return Err(MigError::displayed());
-                    }
-
-                    if let Some(ref archive) = fs_dump.root_a.archive {
-                        let src = path_append(&work_path, archive);
-                        let tgt = path_append(mig_tmp_dir, BALENA_ROOTA_FS_FILE);
-                        copy(&src, &tgt).context(MigErrCtx::from_remark(
-                            MigErrorKind::Upstream,
-                            &format!(
-                                "failed to copy balena root a fs archive to migrate temp directory, '{}' -> '{}'",
-                                src.display(),
-                                tgt.display()
-                            ),
-                        ))?;
-                        info!(
-                            "copied balena rootA archive to '{}' -> '{}'",
-                            src.display(),
-                            tgt.display()
-                        );
-                    } else {
-                        error!(
-                            "The balena root_a archive was not configure - cannot partition drive"
-                        );
-                        return Err(MigError::displayed());
-                    }
-
-                    if let Some(ref archive) = fs_dump.root_b.archive {
-                        let src = path_append(&work_path, archive);
-                        let tgt = path_append(mig_tmp_dir, BALENA_ROOTB_FS_FILE);
-                        copy(&src, &tgt).context(MigErrCtx::from_remark(
-                            MigErrorKind::Upstream,
-                            &format!(
-                                "failed to copy balena root b fs archive to migrate temp directory, '{}' -> '{}'",
-                                src.display(),
-                                tgt.display()
-                            ),
-                        ))?;
-                        info!(
-                            "copied balena rootB archive to '{}' -> '{}'",
-                            src.display(),
-                            tgt.display()
-                        );
-                    }
-
-                    if let Some(ref archive) = fs_dump.state.archive {
-                        let src = path_append(&work_path, archive);
-                        let tgt = path_append(mig_tmp_dir, BALENA_STATE_FS_FILE);
-                        copy(&src, &tgt).context(MigErrCtx::from_remark(
-                            MigErrorKind::Upstream,
-                            &format!(
-                                "failed to copy balena state fs archive to migrate temp directory, '{}' -> '{}'",
-                                src.display(),
-                                tgt.display()
-                            ),
-                        ))?;
-                        info!(
-                            "copied balena state archive to '{}' -> '{}'",
-                            src.display(),
-                            tgt.display()
-                        );
-                    }
-
-                    if let Some(ref archive) = fs_dump.data.archive {
-                        let src = path_append(&work_path, archive);
-                        let tgt = path_append(mig_tmp_dir, BALENA_DATA_FS_FILE);
-                        copy(&src, &tgt).context(MigErrCtx::from_remark(
-                            MigErrorKind::Upstream,
-                            &format!(
-                                "failed to copy balena data fs archive to migrate temp directory, '{}' -> '{}'",
-                                src.display(),
-                                tgt.display()
-                            ),
-                        ))?;
-                        info!(
-                            "copied balena data archive to '{}' -> '{}'",
-                            src.display(),
-                            tgt.display()
-                        );
-                    } else {
-                        error!(
-                            "The balena data archive was not configure - cannot partition drive"
-                        );
-                        return Err(MigError::displayed());
-                    }
+                    self.copy_and_check(
+                        &work_path,
+                        &fs_dump.boot.archive,
+                        mig_tmp_dir,
+                        "boot",
+                        BALENA_BOOT_FS_FILE,
+                    )?;
+                    self.copy_and_check(
+                        &work_path,
+                        &fs_dump.root_a.archive,
+                        mig_tmp_dir,
+                        "rootA",
+                        BALENA_ROOTA_FS_FILE,
+                    )?;
+                    self.copy_and_check(
+                        &work_path,
+                        &fs_dump.root_b.archive,
+                        mig_tmp_dir,
+                        "rootB",
+                        BALENA_ROOTB_FS_FILE,
+                    )?;
+                    self.copy_and_check(
+                        &work_path,
+                        &fs_dump.state.archive,
+                        mig_tmp_dir,
+                        "state",
+                        BALENA_STATE_FS_FILE,
+                    )?;
+                    self.copy_and_check(
+                        &work_path,
+                        &fs_dump.data.archive,
+                        mig_tmp_dir,
+                        "data",
+                        BALENA_DATA_FS_FILE,
+                    )?;
                 }
             };
 
@@ -547,13 +482,16 @@ impl<'a> Stage2 {
         } else {
             info!("Files were not copied, work dir is on a separate drive");
             // TODO: adapt path for no copy mode
+            // TODO: check digest anyway ?
             &work_path
         };
 
         // Write our buffered log to workdir before unmounting if we are not flashing anyway
 
         if self.config.is_no_flash() {
-            // Logger::flush();
+            info!("Not flashing due to config parameter no_flash");
+            Logger::flush();
+            sync();
             // let _res = Logger::set_log_dest(&LogDestination::StreamStderr, NO_STREAM);
             let log_dest = if self.config.is_log_console() {
                 LogDestination::Stderr
@@ -586,7 +524,6 @@ impl<'a> Stage2 {
         }
 
         if self.config.is_no_flash() {
-            info!("Not flashing due to config parameter no_flash");
             Stage2::exit(&FailMode::Reboot)?;
         }
 
@@ -594,13 +531,13 @@ impl<'a> Stage2 {
         // Exit in Rescue Shell  Mode to call external script
         // Call external script
 
-        match self.config.get_balena_image().image {
+        match self.config.get_balena_image() {
             CheckedImageType::Flasher(ref image_file) => {
                 // TODO: move some, if not most of this into flasher
 
                 let image_path = if self.mounts.borrow().is_work_no_copy() {
                     if let Some(work_dir) = self.mounts.borrow().get_work_path() {
-                        path_append(work_dir, image_file)
+                        path_append(work_dir, &image_file.rel_path)
                     } else {
                         warn!("Work path not found in no_copy mode, trying mig temp");
                         path_append(mig_tmp_dir, BALENA_IMAGE_FILE)
@@ -624,7 +561,6 @@ impl<'a> Stage2 {
 
                 match flasher::flash_balena_os(
                     &target_path,
-                    &self.cmds.borrow(),
                     &mut self.mounts.borrow_mut(),
                     &self.config,
                     &image_path,
@@ -660,7 +596,6 @@ impl<'a> Stage2 {
 
                 match fs_writer::write_balena_os(
                     &target_path,
-                    &self.cmds.borrow(),
                     &mut self.mounts.borrow_mut(),
                     &self.config,
                     &base_path,
@@ -805,6 +740,8 @@ impl<'a> Stage2 {
         Logger::flush();
         sync();
 
+        thread::sleep(Duration::from_secs(1));
+
         match fail_mode {
             FailMode::Reboot => {
                 let reboot_cmd = whereis(REBOOT_CMD)?;
@@ -838,5 +775,49 @@ impl<'a> Stage2 {
         } else {
             Stage2::exit(&FailMode::RescueShell)
         }
+    }
+
+    fn copy_and_check(
+        &self,
+        source_dir: &Path,
+        archive: &RelFileInfo,
+        target_dir: &Path,
+        tag: &str,
+        target_name: &str,
+    ) -> Result<(), MigError> {
+        let src = path_append(&source_dir, &archive.rel_path);
+        let tgt = path_append(target_dir, target_name);
+        copy(&src, &tgt).context(MigErrCtx::from_remark(
+            MigErrorKind::Upstream,
+            &format!(
+                "failed to copy balena fs archive to migrate temp directory, '{}' -> '{}'",
+                src.display(),
+                tgt.display()
+            ),
+        ))?;
+
+        info!(
+            "copied balena {} archive to '{}' -> '{}'",
+            tag,
+            src.display(),
+            tgt.display()
+        );
+
+        info!(
+            "Checking digest on copied file '{}' - {:?}",
+            tgt.display(),
+            archive.hash_info
+        );
+        if !check_digest(&tgt, &archive.hash_info)? {
+            return Err(MigError::from_remark(
+                MigErrorKind::InvParam,
+                &format!(
+                    "Digest mismatch on file '{}', {:?}",
+                    archive.rel_path.display(),
+                    archive.hash_info
+                ),
+            ));
+        }
+        Ok(())
     }
 }

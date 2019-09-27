@@ -13,9 +13,9 @@ use std::thread;
 use std::time::{Duration, Instant};
 
 use crate::{
-    common::{format_size_with_unit, stage2_config::Stage2Config, MigError},
+    common::{call, format_size_with_unit, stage2_config::Stage2Config},
     linux::{
-        ensured_cmds::{EnsuredCmds, DD_CMD, GZIP_CMD, LSBLK_CMD, PARTPROBE_CMD, UDEVADM_CMD},
+        linux_defs::{DD_CMD, GZIP_CMD, PARTPROBE_CMD, UDEVADM_CMD},
         linux_defs::{POST_PARTPROBE_WAIT_SECS, PRE_PARTPROBE_WAIT_SECS},
         stage2::{mounts::Mounts, FlashResult},
     },
@@ -24,71 +24,47 @@ use crate::{
 const DD_BLOCK_SIZE: usize = 4194304;
 const UDEVADM_PARAMS: &[&str] = &["settle", "-t", "10"];
 
-const REQUIRED_CMDS: &[&str] = &[DD_CMD, PARTPROBE_CMD, UDEVADM_CMD, LSBLK_CMD];
+// TODO: replace removed command checks ?
+//const REQUIRED_CMDS: &[&str] = &[DD_CMD, PARTPROBE_CMD, UDEVADM_CMD];
 
 // TODO: return something else instead (success, (recoverable / not recoverable))
 
-pub(crate) fn check_commands(
-    cmds: &mut EnsuredCmds,
-    config: &Stage2Config,
-) -> Result<(), MigError> {
-    if !config.is_gzip_internal() {
-        cmds.ensure(GZIP_CMD)?;
-    }
-
-    Ok(cmds.ensure_cmds(REQUIRED_CMDS)?)
-}
-
 pub(crate) fn flash_balena_os(
     target_path: &Path,
-    cmds: &EnsuredCmds,
     mounts: &mut Mounts,
     config: &Stage2Config,
     image_path: &Path,
 ) -> FlashResult {
-    if let Ok(ref dd_cmd) = cmds.get(DD_CMD) {
-        debug!("dd found at: {}", dd_cmd);
-        let res = if config.is_gzip_internal() {
-            flash_gzip_internal(dd_cmd, target_path, image_path)
-        } else {
-            flash_gzip_external(dd_cmd, target_path, cmds, image_path)
-        };
-
-        sync();
-
-        info!(
-            "The Balena OS image has been written to the device '{}'",
-            target_path.display()
-        );
-
-        thread::sleep(Duration::from_secs(PRE_PARTPROBE_WAIT_SECS));
-
-        let _res = cmds.call(PARTPROBE_CMD, &[&target_path.to_string_lossy()], true);
-
-        thread::sleep(Duration::from_secs(POST_PARTPROBE_WAIT_SECS));
-
-        let _res = cmds.call(UDEVADM_CMD, UDEVADM_PARAMS, true);
-
-        if let Err(why) = mounts.mount_balena(false, cmds) {
-            error!("Failed to mount balena partitions, error: {:?}", why);
-            return FlashResult::FailNonRecoverable;
-        }
-
-        // TODO:
-
-        res
+    let res = if config.is_gzip_internal() {
+        flash_gzip_internal(DD_CMD, target_path, image_path)
     } else {
-        error!("{} command was not found, cannot flash image", DD_CMD);
-        FlashResult::FailRecoverable
+        flash_gzip_external(DD_CMD, target_path, image_path)
+    };
+
+    sync();
+
+    info!(
+        "The Balena OS image has been written to the device '{}'",
+        target_path.display()
+    );
+
+    thread::sleep(Duration::from_secs(PRE_PARTPROBE_WAIT_SECS));
+
+    let _res = call(PARTPROBE_CMD, &[&target_path.to_string_lossy()], true);
+
+    thread::sleep(Duration::from_secs(POST_PARTPROBE_WAIT_SECS));
+
+    let _res = call(UDEVADM_CMD, UDEVADM_PARAMS, true);
+
+    if let Err(why) = mounts.mount_balena(false) {
+        error!("Failed to mount balena partitions, error: {:?}", why);
+        return FlashResult::FailNonRecoverable;
     }
+
+    res
 }
 
-fn flash_gzip_internal(
-    dd_cmd: &str,
-    target_path: &Path,
-    // cmds: &EnsuredCmds,
-    image_path: &Path,
-) -> FlashResult {
+fn flash_gzip_internal(dd_cmd: &str, target_path: &Path, image_path: &Path) -> FlashResult {
     debug!("opening: '{}'", image_path.display());
 
     let mut decoder = GzDecoder::new(match File::open(&image_path) {
@@ -225,58 +201,47 @@ fn flash_gzip_internal(
     }
 }
 
-fn flash_gzip_external(
-    dd_cmd: &str,
-    target_path: &Path,
-    cmds: &EnsuredCmds,
-    image_path: &Path,
-) -> FlashResult {
-    if let Ok(ref gzip_cmd) = cmds.get(GZIP_CMD) {
-        debug!("gzip found at: {}", gzip_cmd);
-        let gzip_child = match Command::new(gzip_cmd)
-            .args(&["-d", "-c", &image_path.to_string_lossy()])
-            .stdout(Stdio::piped())
-            .spawn()
-        {
-            Ok(gzip_child) => gzip_child,
-            Err(why) => {
-                error!("Failed to create gzip process, error: {:?}", why);
-                return FlashResult::FailRecoverable;
-            }
-        };
-
-        if let Some(stdout) = gzip_child.stdout {
-            debug!("invoking dd");
-            match Command::new(dd_cmd)
-                .args(&[
-                    &format!("of={}", &target_path.to_string_lossy()),
-                    &format!("bs={}", DD_BLOCK_SIZE),
-                ])
-                .stdin(stdout)
-                .output()
-            {
-                Ok(dd_cmd_res) => {
-                    if dd_cmd_res.status.success() == true {
-                        return FlashResult::Ok;
-                    } else {
-                        error!(
-                            "dd terminated with exit code: {:?}",
-                            dd_cmd_res.status.code()
-                        );
-                        return FlashResult::FailNonRecoverable;
-                    }
-                }
-                Err(why) => {
-                    error!("failed to execute command {}, error: {:?}", dd_cmd, why);
-                    return FlashResult::FailRecoverable;
-                }
-            }
-        } else {
-            error!("failed to retrieved gzip stdout)");
+fn flash_gzip_external(dd_cmd: &str, target_path: &Path, image_path: &Path) -> FlashResult {
+    let gzip_child = match Command::new(GZIP_CMD)
+        .args(&["-d", "-c", &image_path.to_string_lossy()])
+        .stdout(Stdio::piped())
+        .spawn()
+    {
+        Ok(gzip_child) => gzip_child,
+        Err(why) => {
+            error!("Failed to create gzip process, error: {:?}", why);
             return FlashResult::FailRecoverable;
         }
+    };
+
+    if let Some(stdout) = gzip_child.stdout {
+        debug!("invoking dd");
+        match Command::new(dd_cmd)
+            .args(&[
+                &format!("of={}", &target_path.to_string_lossy()),
+                &format!("bs={}", DD_BLOCK_SIZE),
+            ])
+            .stdin(stdout)
+            .output()
+        {
+            Ok(dd_cmd_res) => {
+                if dd_cmd_res.status.success() == true {
+                    return FlashResult::Ok;
+                } else {
+                    error!(
+                        "dd terminated with exit code: {:?}",
+                        dd_cmd_res.status.code()
+                    );
+                    return FlashResult::FailNonRecoverable;
+                }
+            }
+            Err(why) => {
+                error!("failed to execute command {}, error: {:?}", dd_cmd, why);
+                return FlashResult::FailRecoverable;
+            }
+        }
     } else {
-        error!("{} command was not found, cannot flash image", GZIP_CMD);
+        error!("failed to retrieved gzip stdout)");
         return FlashResult::FailRecoverable;
     }
 }
