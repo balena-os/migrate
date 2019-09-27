@@ -34,7 +34,10 @@ mod win_api;
 
 mod util;
 
-mod wmi_utils;
+pub(crate) mod wmi_utils;
+
+mod boot_manager_impl;
+use boot_manager_impl::efi_boot_manager::EfiBootManager;
 
 //mod migrate_info;
 //use migrate_info::MigrateInfo;

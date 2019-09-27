@@ -12,8 +12,12 @@ use crate::mswin::wmi_utils::NS_CVIM2;
 
 const QUERY_ALL: &str = "SELECT Directory,Volume FROM Win32_MountPoint";
 
+
 const QUERY_VOL2DIR: &str =
     r#"SELECT Directory FROM Win32_MountPoint where Volume='Win32_Volume.DeviceID=""'"#;
+
+const QUERY_DIR2VOL: &str =
+    r#"SELECT Volume FROM Win32_MountPoint where Directory'Win32_Volume.DeviceID=""'"#;
 
 pub(crate) struct MountPoint {
     directory: PathBuf,
@@ -22,6 +26,12 @@ pub(crate) struct MountPoint {
 
 impl<'a> MountPoint {
     pub fn query_all() -> Result<Vec<MountPoint>, MigError> {
+        Ok(MountPoint::from_query(QUERY_ALL)?)
+    }
+
+    pub fn query_path<P: AsRef<Path>>( path: P) -> Result<Option<Volume>, MigError> {
+
+
         Ok(MountPoint::from_query(QUERY_ALL)?)
     }
 

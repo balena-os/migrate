@@ -15,31 +15,19 @@ use crate::{
         dir_exists, file_exists, path_append,
         stage2_config::{MountConfig, Stage2ConfigBuilder},
         Config, MigErrCtx, MigError, MigErrorKind,
+        boot_manager::BootManager,
+        migrate_info::MigrateInfo,
+        path_info::PathInfo,
+        device_info::DeviceInfo,
     },
     defs::{
         BootType,
         EFI_STARTUP_FILE, MIG_INITRD_NAME, MIG_KERNEL_NAME,
     },
-    mswin::{migrate_info::MigrateInfo, 
-            msw_defs::{ EFI_MS_BOOTMGR, BALENA_EFI_DIR, EFI_BCKUP_DIR, EFI_BOOT_DIR, EFI_DEFAULT_BOOTMGR64 },
+    mswin::{
+        msw_defs::{ EFI_MS_BOOTMGR, BALENA_EFI_DIR, EFI_BCKUP_DIR, EFI_BOOT_DIR, EFI_DEFAULT_BOOTMGR64 },
     },
 };
-
-pub(crate) trait BootManager {
-    fn get_boot_type(&self) -> BootType;
-    fn can_migrate(
-        &mut self,
-        mig_info: &MigrateInfo,
-        config: &Config,
-        s2_cfg: &mut Stage2ConfigBuilder,
-    ) -> Result<bool, MigError>;
-    fn setup(
-        &self,
-        mig_info: &MigrateInfo,
-        config: &Config,
-        s2_cfg: &mut Stage2ConfigBuilder,
-    ) -> Result<(), MigError>;
-}
 
 pub(crate) struct EfiBootManager {
     msw_device: bool,
@@ -88,7 +76,8 @@ impl BootManager for EfiBootManager {
         mig_info: &MigrateInfo,
         _config: &Config,
         s2_cfg: &mut Stage2ConfigBuilder,
-    ) -> Result<(), MigError> {
+        kernel_opts: &str,
+   ) -> Result<(), MigError> {
         trace!("setup: entered");
         // for now:
         // copy our kernel & initramfs to \EFI\balena-migrate
@@ -284,5 +273,12 @@ impl BootManager for EfiBootManager {
                 "No EFI directory found",
             ))
         }
+    }
+
+    fn get_bootmgr_path(&self) -> PathInfo {
+        unimplemented!()
+    }
+    fn get_boot_path(&self) -> PathInfo {
+        unimplemented!()
     }
 }

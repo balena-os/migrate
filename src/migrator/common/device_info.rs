@@ -80,7 +80,13 @@ impl DeviceInfo {
         })
     }
 
-    pub fn get_kernel_cmd(&self) -> String {
+    #[cfg(target_os = "windows")]
+    pub fn new(drive: &LsblkDevice, partition: &LsblkPartition) -> Result<DeviceInfo, MigError> {
+
+    }
+
+
+        pub fn get_kernel_cmd(&self) -> String {
         if let Some(ref partuuid) = self.part_uuid {
             format!("PARTUUID={}", partuuid)
         } else {

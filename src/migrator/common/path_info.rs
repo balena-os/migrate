@@ -10,6 +10,18 @@ use crate::linux::{
     lsblk_info::{LsblkDevice, LsblkInfo, LsblkPartition},
 };
 
+#[cfg(target_os = "windows")]
+use crate::mswin::{
+    wmi_utils::MountPoint,
+};
+
+/*
+Contains full Information on a path including
+- DeviceInfo: what drive & partition the path resides on with drive size
+- File System information: mountpoint FS size & free space
+*/
+
+
 #[derive(Debug, Clone)]
 pub(crate) struct PathInfo {
     // the physical device info
@@ -89,5 +101,26 @@ impl PathInfo {
             fs_size,
             fs_free,
         })
+    }
+
+    #[cfg(target_os = "windows")]
+    pub fn from_path<P: AsRef<Path>>(
+        path: P,
+    ) -> Result<PathInfo, MigError> {
+        if !path.as_ref().exists() {
+            return Ok(None);
+        }
+
+        let abs_path = path
+            .as_ref()
+            .canonicalize()
+            .context(MigErrCtx::from_remark(
+                MigErrorKind::Upstream,
+                &format!("failed to canonicalize path: '{}'", path.as_ref().display()),
+            ))?;
+
+        let mountpoints = MountPoint::query_all()?;
+
+        unimplemented!
     }
 }

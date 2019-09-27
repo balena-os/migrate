@@ -2,14 +2,17 @@ use crate::{
     common::{
         migrate_info::MigrateInfo,
         path_info::PathInfo,
-        stage2_config::{Stage2Config, Stage2ConfigBuilder},
+        stage2_config::{Stage2ConfigBuilder},
         Config, MigError,
     },
     defs::{BootType, DeviceType},
 };
 
 #[cfg(target_os = "linux")]
-use crate::linux::stage2::mounts::Mounts;
+use crate::{
+    common::stage2_config::Stage2Config,
+    linux::stage2::mounts::Mounts,
+};
 
 pub(crate) trait Device {
     fn get_device_slug(&self) -> &'static str;
