@@ -6,11 +6,23 @@ use std::io::Error;
 use std::iter::once;
 use std::os::windows::prelude::*;
 use std::ptr::null_mut;
+use std::path::{Path};
+use std::mem;
 
 use winapi::shared::winerror::ERROR_INVALID_FUNCTION;
 use winapi::um::{
-    fileapi::{FindFirstVolumeW, FindNextVolumeW, FindVolumeClose, QueryDosDeviceW},
-    handleapi::INVALID_HANDLE_VALUE,
+    winioctl::{
+        IOCTL_VOLUME_GET_VOLUME_DISK_EXTENTS.
+        DISK_EXTENT,
+        VOLUME_DISK_EXTENTS,
+    },
+    fileapi::{
+        CreateFileW,
+    },
+    winnt::{GENERIC_READ, GENERIC_WRITE, FILE_SHARE_READ, FILE_SHARE_WRITE, FILE_ATTRIBUTE_NORMAL, LARGE_INTEGER},
+    ioapiset::DeviceIoControl,
+    fileapi::{FindFirstVolumeW, FindNextVolumeW, FindVolumeClose, QueryDosDeviceW, OPEN_EXISTING, },
+    handleapi::{INVALID_HANDLE_VALUE, CloseHandle },
     winbase::GetFirmwareEnvironmentVariableW,
     //winreg::{InitiateSystemShutdownW, },
 };
@@ -28,6 +40,66 @@ pub mod util;
 pub mod wmi_api;
 
 use util::{clip, to_string, to_string_list};
+
+pub(crate) struct DiskExtent {
+    disk_index: u32,
+    start_offset: i64,
+    length: i64
+}
+
+pub(crate) fn get_volume_disk_extents(path: &str) -> Result<Vec<DiskExtent>, MigError>  {
+    let dev_path: Vec<u16> = OsStr::new(path).encode_wide().chain(once(0)).collect();
+    let file_handle = unsafe { CreateFileW(dev_path.as_ptr(),
+                                          GENERIC_READ | GENERIC_WRITE,
+                                           FILE_SHARE_WRITE|FILE_SHARE_READ,
+                                           null_mut(),
+                                           OPEN_EXISTING,
+                                           FILE_ATTRIBUTE_NORMAL,
+                                           null_mut()) };
+
+    if file_handle == INVALID_HANDLE_VALUE {
+        return  Err(MigError::from_remark(MigErrorKind::Upstream, &format!("Failed to open file with CreateFileW: '{}'", path)));
+    }
+
+    // TODO: calling this with only one extent. This will fail for a volume spreading over more than
+    // one extent but the migration will likely fail on logical volumes anyway.
+    // Otherwise call function to retrieve number of extents and then again with an appropriately
+    // sized buffer.
+
+    let mut volumeDiskExtents: VOLUME_DISK_EXTENTS = unsafe { std::mem::MaybeUninit{} };
+    volumeDiskExtents.NumberOfDiskExtents = 0;
+    volumeDiskExtents.Extents[0].DiskNumber = 0;
+    volumeDiskExtents.Extents[0].StartingOffset = LARGE_INTEGER([0]);
+    volumeDiskExtents.Extents[0].ExtentLength = LARGE_INTEGER([0]);
+
+    let dwBytesReturned: u32 = 0;
+    let bResult = unsafe { DeviceIoControl(hHandle,
+                                   IOCTL_VOLUME_GET_VOLUME_DISK_EXTENTS,
+                                   null_mut(),
+                                   0,
+                                   volumeDiskExtents.as_mut_ptr(),
+                                   mem::sizeof(VOLUME_DISK_EXTENTS),
+                                   &dwBytesReturned.as_mut_ptr(),
+                                   null_mut())
+    };
+
+    unsafe { CloseHandle(file_handle) };
+
+    if (!bResult)
+    {
+        // TODO: check  GetLastError if ERROR_MORE_DATA, try again with a larger buffer ??
+        return  Err(MigError::from_remark(MigErrorKind::Upstream, &format!("Failed to issue IOCTRL on: '{}'", path)));
+    }
+
+    let mut result: Vec<DiskExtent> = Vec::new();
+    result.push(unsafe { DiskExtent{
+        disk_index: volumeDiskExtents.Extents[0].DiskNumber,
+        start_offset: volumeDiskExtents.Extents[0].StartingOffset[0],
+        length: volumeDiskExtents.Extents[0].ExtentLength[0],
+    }});
+
+    Ok(result)
+}
 
 fn get_volumes() -> Result<Vec<String>, MigError> {
     debug!("get_volumes: entered",);
