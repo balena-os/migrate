@@ -64,6 +64,8 @@ nix = "*"
 
 [target.'cfg(windows)'.dependencies]
 winapi = {  git = "https://github.com/retep998/winapi-rs.git", branch = "0.3", features = [
+        "winioctl",
+        "ioapiset",
         "handleapi",
         "fileapi",
         "winbase",

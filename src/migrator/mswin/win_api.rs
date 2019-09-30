@@ -9,22 +9,28 @@ use std::ptr::null_mut;
 use std::path::{Path};
 use std::mem;
 
-use winapi::shared::winerror::ERROR_INVALID_FUNCTION;
-use winapi::um::{
-    winioctl::{
-        IOCTL_VOLUME_GET_VOLUME_DISK_EXTENTS.
-        DISK_EXTENT,
-        VOLUME_DISK_EXTENTS,
+use winapi::{
+    ctypes::{c_void},
+    shared::{minwindef::DWORD,
+             winerror::ERROR_INVALID_FUNCTION,
     },
-    fileapi::{
-        CreateFileW,
+    um::{
+        errhandlingapi::{GetLastError},
+        winioctl::{
+            IOCTL_VOLUME_GET_VOLUME_DISK_EXTENTS,
+            DISK_EXTENT,
+            //VOLUME_DISK_EXTENTS,
+        },
+        fileapi::{
+            CreateFileW,
+        },
+        winnt::{GENERIC_READ, GENERIC_WRITE, FILE_SHARE_READ, FILE_SHARE_WRITE, FILE_ATTRIBUTE_NORMAL, LARGE_INTEGER},
+        ioapiset::DeviceIoControl,
+        fileapi::{FindFirstVolumeW, FindNextVolumeW, FindVolumeClose, QueryDosDeviceW, OPEN_EXISTING, },
+        handleapi::{INVALID_HANDLE_VALUE, CloseHandle},
+        winbase::GetFirmwareEnvironmentVariableW,
+        //winreg::{InitiateSystemShutdownW, },
     },
-    winnt::{GENERIC_READ, GENERIC_WRITE, FILE_SHARE_READ, FILE_SHARE_WRITE, FILE_ATTRIBUTE_NORMAL, LARGE_INTEGER},
-    ioapiset::DeviceIoControl,
-    fileapi::{FindFirstVolumeW, FindNextVolumeW, FindVolumeClose, QueryDosDeviceW, OPEN_EXISTING, },
-    handleapi::{INVALID_HANDLE_VALUE, CloseHandle },
-    winbase::GetFirmwareEnvironmentVariableW,
-    //winreg::{InitiateSystemShutdownW, },
 };
 
 use crate::common::{MigErrCtx, MigError, MigErrorKind};
@@ -41,16 +47,24 @@ pub mod wmi_api;
 
 use util::{clip, to_string, to_string_list};
 
+const MAX_DISK_EXTENTS: usize = 10;
+#[allow(non_snake_case)]
+#[repr(C)]
+struct BigVolumeDiskExtents {
+    NumberOfDiskExtents: DWORD,
+    Extents: [DISK_EXTENT; MAX_DISK_EXTENTS],
+}
+
 pub(crate) struct DiskExtent {
     disk_index: u32,
     start_offset: i64,
     length: i64
 }
 
-pub(crate) fn get_volume_disk_extents(path: &str) -> Result<Vec<DiskExtent>, MigError>  {
+pub(crate) fn get_volume_disk_extents(path: &str) -> Result<Vec<DiskExtent>, String>  {
     let dev_path: Vec<u16> = OsStr::new(path).encode_wide().chain(once(0)).collect();
     let file_handle = unsafe { CreateFileW(dev_path.as_ptr(),
-                                          GENERIC_READ | GENERIC_WRITE,
+                                           GENERIC_READ | GENERIC_WRITE,
                                            FILE_SHARE_WRITE|FILE_SHARE_READ,
                                            null_mut(),
                                            OPEN_EXISTING,
@@ -58,45 +72,51 @@ pub(crate) fn get_volume_disk_extents(path: &str) -> Result<Vec<DiskExtent>, Mig
                                            null_mut()) };
 
     if file_handle == INVALID_HANDLE_VALUE {
-        return  Err(MigError::from_remark(MigErrorKind::Upstream, &format!("Failed to open file with CreateFileW: '{}'", path)));
+        let last_err = unsafe { GetLastError() };
+        return  Err(format!("Failed to open file with CreateFileW: '{}', error: 0x{:x}", path, last_err));
     }
 
-    // TODO: calling this with only one extent. This will fail for a volume spreading over more than
-    // one extent but the migration will likely fail on logical volumes anyway.
+
+    // TODO: calling this with a limited number of extents. This will fail for a volume spreading over more than
+    // MAX_DISK_EXTENTS extents but the migration will likely fail on logical volumes anyway.
     // Otherwise call function to retrieve number of extents and then again with an appropriately
     // sized buffer.
 
-    let mut volumeDiskExtents: VOLUME_DISK_EXTENTS = unsafe { std::mem::MaybeUninit{} };
-    volumeDiskExtents.NumberOfDiskExtents = 0;
-    volumeDiskExtents.Extents[0].DiskNumber = 0;
-    volumeDiskExtents.Extents[0].StartingOffset = LARGE_INTEGER([0]);
-    volumeDiskExtents.Extents[0].ExtentLength = LARGE_INTEGER([0]);
+    let mut vol_disk_extents: BigVolumeDiskExtents = unsafe { mem::zeroed() };
+    let extent_ptr: *mut c_void = &mut vol_disk_extents as *mut _  as * mut c_void;
+    let buff_size = mem::size_of::<BigVolumeDiskExtents>() as u32;
+    let mut dw_bytes_returned: u32 = 0;
 
-    let dwBytesReturned: u32 = 0;
-    let bResult = unsafe { DeviceIoControl(hHandle,
-                                   IOCTL_VOLUME_GET_VOLUME_DISK_EXTENTS,
-                                   null_mut(),
-                                   0,
-                                   volumeDiskExtents.as_mut_ptr(),
-                                   mem::sizeof(VOLUME_DISK_EXTENTS),
-                                   &dwBytesReturned.as_mut_ptr(),
-                                   null_mut())
+    let b_result = unsafe { DeviceIoControl( file_handle,
+                                             IOCTL_VOLUME_GET_VOLUME_DISK_EXTENTS,
+                                             null_mut(),
+                                             0,
+                                             extent_ptr,
+                                             buff_size,
+                                             &mut dw_bytes_returned,
+                                             null_mut())
     };
 
     unsafe { CloseHandle(file_handle) };
 
-    if (!bResult)
-    {
-        // TODO: check  GetLastError if ERROR_MORE_DATA, try again with a larger buffer ??
-        return  Err(MigError::from_remark(MigErrorKind::Upstream, &format!("Failed to issue IOCTRL on: '{}'", path)));
+    if b_result == 0  {
+        let last_err = unsafe { GetLastError() };
+        return  Err(format!("Failed to issue IOCTRL on: '{}', error: 0x{:x}", path, last_err));
     }
 
     let mut result: Vec<DiskExtent> = Vec::new();
-    result.push(unsafe { DiskExtent{
-        disk_index: volumeDiskExtents.Extents[0].DiskNumber,
-        start_offset: volumeDiskExtents.Extents[0].StartingOffset[0],
-        length: volumeDiskExtents.Extents[0].ExtentLength[0],
-    }});
+
+    assert!(vol_disk_extents.NumberOfDiskExtents <= MAX_DISK_EXTENTS as u32);
+
+    for i in 0..vol_disk_extents.NumberOfDiskExtents as usize {
+        result.push(unsafe {
+            DiskExtent {
+                disk_index: vol_disk_extents.Extents[i].DiskNumber,
+                start_offset: *vol_disk_extents.Extents[i].StartingOffset.QuadPart(),
+                length: *vol_disk_extents.Extents[i].ExtentLength.QuadPart(),
+            }
+        });
+    }
 
     Ok(result)
 }
