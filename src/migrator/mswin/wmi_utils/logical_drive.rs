@@ -4,7 +4,7 @@ use log::debug;
 use super::QueryRes;
 use crate::{
     common::{MigError, MigErrorKind},
-    mswin::{msw_defs::FileSystem, powershell::PSInfo, win_api::wmi_api::WmiAPI},
+    mswin::{msw_defs::FileSystem, powershell::get_drive_supported_size, win_api::wmi_api::WmiAPI},
 };
 use regex::Regex;
 
@@ -155,10 +155,10 @@ impl<'a> LogicalDrive {
         self.dirty
     }
 
-    pub fn get_supported_sizes(&self, ps_info: &mut PSInfo) -> Result<(u64, u64), MigError> {
+    pub fn get_supported_sizes(&self) -> Result<(u64, u64), MigError> {
         let regex = Regex::new("^([a-zA-Z]):$").unwrap();
         if let Some(cap) = regex.captures(&self.device_id) {
-            Ok(ps_info.get_drive_supported_size(cap.get(1).unwrap().as_str())?)
+            Ok(get_drive_supported_size(cap.get(1).unwrap().as_str())?)
         } else {
             Err(MigError::from_remark(
                 MigErrorKind::InvParam,

@@ -5,13 +5,12 @@ use std::path::{Path, PathBuf};
 use super::QueryRes;
 use crate::{
     common::{MigError, MigErrorKind},
-    mswin::{ win_api::wmi_api::WmiAPI, wmi_utils::volume::Volume},
+    mswin::{win_api::wmi_api::WmiAPI, wmi_utils::volume::Volume},
 };
 
 use crate::mswin::wmi_utils::NS_CVIM2;
 
 const QUERY_ALL: &str = "SELECT Directory,Volume FROM Win32_MountPoint";
-
 
 const QUERY_VOL2DIR: &str =
     r#"SELECT Directory FROM Win32_MountPoint where Volume='Win32_Volume.DeviceID=""'"#;
@@ -29,10 +28,41 @@ impl<'a> MountPoint {
         Ok(MountPoint::from_query(QUERY_ALL)?)
     }
 
-    pub fn query_path<P: AsRef<Path>>( path: P) -> Result<Option<Volume>, MigError> {
+    pub fn query_path<P: AsRef<Path>>(path: P) -> Result<MountPoint, MigError> {
+        let path = path.as_ref();
+        let mountpoints = MountPoint::from_query(QUERY_ALL)?;
+        let mut found_mountpoint: Option<&MountPoint> = None;
 
+        for ref mountpoint in mountpoints {
+            if mountpoint.get_directory()?.starts_with(path) {
+                if let Some(found) = found_mountpoint {
+                    if path.len() > found.get_path().len() {
+                        found_mountpoint = Some(mountpoint);
+                    }
+                } else {
+                    found_mountpoint = Some(mountpoint);
+                }
+            }
+        }
 
-        Ok(MountPoint::from_query(QUERY_ALL)?)
+        // TODO: take precautions for EFI path ?
+
+        if let Some(found_path) = found_mountpoint {
+            //got a mount
+            debug!(
+                "Found mountpoint for path: '{}', Mountpoint: '{}', volume: '{}'",
+                path.display(),
+                found_path.get_directory().display(),
+                found_path.get_volume().get_device_id()
+            );
+
+            Ok(found_path.clone())
+        } else {
+            Err(MigError::from_remark(
+                MigErrorKind::NotFound,
+                &format!("No mount found for path: '{}'", path.display()),
+            ))
+        }
     }
 
     pub fn query_directory_by_volume(volume: &Volume) -> Result<Option<PathBuf>, MigError> {

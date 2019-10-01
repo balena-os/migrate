@@ -1,5 +1,5 @@
 use failure::ResultExt;
-use log::{debug, info, trace, error, warn};
+use log::{debug, error, info, trace, warn};
 use regex::Regex;
 use std::fs::{copy, create_dir_all, rename, File};
 use std::io::Write;
@@ -12,20 +12,18 @@ echo Starting balena Migrate Environment
 
 use crate::{
     common::{
-        dir_exists, file_exists, path_append,
+        boot_manager::BootManager,
+        device_info::DeviceInfo,
+        dir_exists, file_exists,
+        migrate_info::MigrateInfo,
+        path_append,
+        path_info::PathInfo,
         stage2_config::{MountConfig, Stage2ConfigBuilder},
         Config, MigErrCtx, MigError, MigErrorKind,
-        boot_manager::BootManager,
-        migrate_info::MigrateInfo,
-        path_info::PathInfo,
-        device_info::DeviceInfo,
     },
-    defs::{
-        BootType,
-        EFI_STARTUP_FILE, MIG_INITRD_NAME, MIG_KERNEL_NAME,
-    },
-    mswin::{
-        msw_defs::{ EFI_MS_BOOTMGR, BALENA_EFI_DIR, EFI_BCKUP_DIR, EFI_BOOT_DIR, EFI_DEFAULT_BOOTMGR64 },
+    defs::{BootType, EFI_STARTUP_FILE, MIG_INITRD_NAME, MIG_KERNEL_NAME},
+    mswin::msw_defs::{
+        BALENA_EFI_DIR, EFI_BCKUP_DIR, EFI_BOOT_DIR, EFI_DEFAULT_BOOTMGR64, EFI_MS_BOOTMGR,
     },
 };
 
@@ -74,10 +72,9 @@ impl BootManager for EfiBootManager {
     fn setup(
         &self,
         mig_info: &MigrateInfo,
-        _config: &Config,
         s2_cfg: &mut Stage2ConfigBuilder,
         kernel_opts: &str,
-   ) -> Result<(), MigError> {
+    ) -> Result<(), MigError> {
         trace!("setup: entered");
         // for now:
         // copy our kernel & initramfs to \EFI\balena-migrate
@@ -93,9 +90,9 @@ impl BootManager for EfiBootManager {
                 efi_path.get_linux_part().display()
             );
             s2_cfg.set_bootmgr_cfg(MountConfig::new(
-                PathBuf::from(efi_path.get_linux_part()),
-                String::from(efi_path.get_linux_fstype()),
-                PathBuf::from(efi_path.get_path()),
+                efi_path.get_linux_part(),
+                efi_path.get_linux_fstype(),
+                efi_path.get_path(),
             ));
 
             let balena_efi_dir = path_append(efi_path.get_path(), BALENA_EFI_DIR);
