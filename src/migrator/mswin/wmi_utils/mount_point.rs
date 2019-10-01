@@ -18,6 +18,7 @@ const QUERY_VOL2DIR: &str =
 const QUERY_DIR2VOL: &str =
     r#"SELECT Volume FROM Win32_MountPoint where Directory'Win32_Volume.DeviceID=""'"#;
 
+#[derive(Clone)]
 pub(crate) struct MountPoint {
     directory: PathBuf,
     volume: Volume,
@@ -34,9 +35,11 @@ impl<'a> MountPoint {
         let mut found_mountpoint: Option<&MountPoint> = None;
 
         for ref mountpoint in mountpoints {
-            if mountpoint.get_directory()?.starts_with(path) {
+            if mountpoint.get_directory().starts_with(path) {
                 if let Some(found) = found_mountpoint {
-                    if path.len() > found.get_path().len() {
+                    if mountpoint.directory.to_string_lossy().len()
+                        > found.directory.to_string_lossy().len()
+                    {
                         found_mountpoint = Some(mountpoint);
                     }
                 } else {

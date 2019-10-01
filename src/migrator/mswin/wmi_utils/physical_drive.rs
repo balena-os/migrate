@@ -94,12 +94,10 @@ impl<'a> PhysicalDrive {
             compression_method: String::from(res_map.get_string_property("CompressionMethod")?),
             drive_type: DriveType::from_str(res_map.get_string_property("InterfaceType")?),
             disk_index,
-            device: String::from(
-                query_dos_device(Some(&format!("PhysicalDrive{}", disk_index)))?
-                    .get(0)
-                    .unwrap()
-                    .as_ref(),
-            ),
+            device: query_dos_device(Some(&format!("PhysicalDrive{}", disk_index)))?
+                .get(0)
+                .unwrap()
+                .clone(),
         })
     }
 

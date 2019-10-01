@@ -4,32 +4,33 @@ use log::{debug, warn};
 use std::ffi::OsStr;
 use std::io::Error;
 use std::iter::once;
-use std::os::windows::prelude::*;
-use std::ptr::null_mut;
-use std::path::{Path};
 use std::mem;
+use std::os::windows::prelude::*;
+use std::path::Path;
+use std::ptr::null_mut;
 
 use winapi::{
-    ctypes::{c_void},
-    shared::{minwindef::DWORD,
-             winerror::ERROR_INVALID_FUNCTION,
-    },
+    ctypes::c_void,
+    shared::{minwindef::DWORD, winerror::ERROR_INVALID_FUNCTION},
     um::{
-        errhandlingapi::{GetLastError},
-        winioctl::{
-            IOCTL_VOLUME_GET_VOLUME_DISK_EXTENTS,
-            DISK_EXTENT,
-            //VOLUME_DISK_EXTENTS,
-        },
+        errhandlingapi::GetLastError,
+        fileapi::CreateFileW,
         fileapi::{
-            CreateFileW,
+            FindFirstVolumeW, FindNextVolumeW, FindVolumeClose, QueryDosDeviceW, OPEN_EXISTING,
         },
-        winnt::{GENERIC_READ, GENERIC_WRITE, FILE_SHARE_READ, FILE_SHARE_WRITE, FILE_ATTRIBUTE_NORMAL, LARGE_INTEGER},
+        handleapi::{CloseHandle, INVALID_HANDLE_VALUE},
         ioapiset::DeviceIoControl,
-        fileapi::{FindFirstVolumeW, FindNextVolumeW, FindVolumeClose, QueryDosDeviceW, OPEN_EXISTING, },
-        handleapi::{INVALID_HANDLE_VALUE, CloseHandle},
         winbase::GetFirmwareEnvironmentVariableW,
         //winreg::{InitiateSystemShutdownW, },
+        winioctl::{
+            DISK_EXTENT,
+            //VOLUME_DISK_EXTENTS,
+            IOCTL_VOLUME_GET_VOLUME_DISK_EXTENTS,
+        },
+        winnt::{
+            FILE_ATTRIBUTE_NORMAL, FILE_SHARE_READ, FILE_SHARE_WRITE, GENERIC_READ, GENERIC_WRITE,
+            LARGE_INTEGER,
+        },
     },
 };
 
@@ -58,24 +59,33 @@ struct BigVolumeDiskExtents {
 pub(crate) struct DiskExtent {
     disk_index: u32,
     start_offset: i64,
-    length: i64
+    length: i64,
 }
 
-pub(crate) fn get_volume_disk_extents(path: &str) -> Result<Vec<DiskExtent>, String>  {
+pub(crate) fn get_volume_disk_extents(path: &str) -> Result<Vec<DiskExtent>, MigError> {
     let dev_path: Vec<u16> = OsStr::new(path).encode_wide().chain(once(0)).collect();
-    let file_handle = unsafe { CreateFileW(dev_path.as_ptr(),
-                                           GENERIC_READ | GENERIC_WRITE,
-                                           FILE_SHARE_WRITE|FILE_SHARE_READ,
-                                           null_mut(),
-                                           OPEN_EXISTING,
-                                           FILE_ATTRIBUTE_NORMAL,
-                                           null_mut()) };
+    let file_handle = unsafe {
+        CreateFileW(
+            dev_path.as_ptr(),
+            GENERIC_READ | GENERIC_WRITE,
+            FILE_SHARE_WRITE | FILE_SHARE_READ,
+            null_mut(),
+            OPEN_EXISTING,
+            FILE_ATTRIBUTE_NORMAL,
+            null_mut(),
+        )
+    };
 
     if file_handle == INVALID_HANDLE_VALUE {
         let last_err = unsafe { GetLastError() };
-        return  Err(format!("Failed to open file with CreateFileW: '{}', error: 0x{:x}", path, last_err));
+        return Err(MigError::from_remark(
+            MigErrorKind::Upstream,
+            &format!(
+                "Failed to open file with CreateFileW: '{}', error: 0x{:x}",
+                path, last_err
+            ),
+        ));
     }
-
 
     // TODO: calling this with a limited number of extents. This will fail for a volume spreading over more than
     // MAX_DISK_EXTENTS extents but the migration will likely fail on logical volumes anyway.
@@ -83,25 +93,34 @@ pub(crate) fn get_volume_disk_extents(path: &str) -> Result<Vec<DiskExtent>, Str
     // sized buffer.
 
     let mut vol_disk_extents: BigVolumeDiskExtents = unsafe { mem::zeroed() };
-    let extent_ptr: *mut c_void = &mut vol_disk_extents as *mut _  as * mut c_void;
+    let extent_ptr: *mut c_void = &mut vol_disk_extents as *mut _ as *mut c_void;
     let buff_size = mem::size_of::<BigVolumeDiskExtents>() as u32;
     let mut dw_bytes_returned: u32 = 0;
 
-    let b_result = unsafe { DeviceIoControl( file_handle,
-                                             IOCTL_VOLUME_GET_VOLUME_DISK_EXTENTS,
-                                             null_mut(),
-                                             0,
-                                             extent_ptr,
-                                             buff_size,
-                                             &mut dw_bytes_returned,
-                                             null_mut())
+    let b_result = unsafe {
+        DeviceIoControl(
+            file_handle,
+            IOCTL_VOLUME_GET_VOLUME_DISK_EXTENTS,
+            null_mut(),
+            0,
+            extent_ptr,
+            buff_size,
+            &mut dw_bytes_returned,
+            null_mut(),
+        )
     };
 
     unsafe { CloseHandle(file_handle) };
 
-    if b_result == 0  {
+    if b_result == 0 {
         let last_err = unsafe { GetLastError() };
-        return  Err(format!("Failed to issue IOCTRL on: '{}', error: 0x{:x}", path, last_err));
+        return Err(MigError::from_remark(
+            MigErrorKind::Upstream,
+            &format!(
+                "Failed to issue IOCTRL on: '{}', error: 0x{:x}",
+                path, last_err
+            ),
+        ));
     }
 
     let mut result: Vec<DiskExtent> = Vec::new();

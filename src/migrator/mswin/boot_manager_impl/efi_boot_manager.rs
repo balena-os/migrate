@@ -48,7 +48,7 @@ impl BootManager for EfiBootManager {
         _config: &Config,
         _s2_cfg: &mut Stage2ConfigBuilder,
     ) -> Result<bool, MigError> {
-        if let None = mig_info.drive_info.efi_path.get_partuuid() {
+        if let None = mig_infodrive_info.efi_path.get_partuuid() {
             // TODO: add option to override this
             error!("Cowardly refusing to migrate EFI partition without partuuid. Windows to linux drive name mapping is insecure");
             Ok(false)

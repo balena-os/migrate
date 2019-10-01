@@ -70,7 +70,7 @@ impl IntelNuc {
             return Err(MigError::from_remark(MigErrorKind::InvParam, &message));
         }
 
-        if is_efi_boot() {
+        if is_efi_boot()? {
             let mut boot_manager = EfiBootManager::new();
             if boot_manager.can_migrate(mig_info, config, s2_cfg)? {
                 Ok(IntelNuc {

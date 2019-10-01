@@ -1,5 +1,5 @@
 use failure::{Fail, ResultExt};
-use log::{error, info, trace};
+use log::{debug, error, info, trace};
 use std::fs::create_dir_all;
 use std::path::PathBuf;
 use std::thread;
@@ -9,15 +9,17 @@ use std::time::Duration;
 
 use crate::{
     common::{
-        dir_exists, path_append, stage2_config::Stage2ConfigBuilder, Config, MigErrCtx, MigError,
-        MigErrorKind, MigMode,
-        migrate_info::{MigrateInfo, balena_cfg_json::BalenaCfgJson},
         boot_manager::BootManager,
+        config::balena_config::ImageType,
         device::Device,
+        dir_exists, format_size_with_unit,
+        migrate_info::{balena_cfg_json::BalenaCfgJson, MigrateInfo},
+        path_append,
+        stage2_config::Stage2ConfigBuilder,
+        Config, MigErrCtx, MigError, MigErrorKind, MigMode,
     },
-    defs::{DeviceType, OSArch, STAGE2_CFG_FILE},
-    mswin::util::to_linux_path,
-    mswin::wmi_utils::WmiUtils,
+    defs::{DeviceType, OSArch, MIN_DISK_SIZE, STAGE2_CFG_FILE},
+    mswin::{mswin_api::MSWinApi, util::to_linux_path, wmi_utils::WmiUtils},
 };
 
 pub(crate) mod msw_defs;
@@ -26,13 +28,16 @@ pub(crate) mod msw_defs;
 mod mswin_api;
 
 mod powershell;
-use powershell::PSInfo;
+use powershell::{is_admin, is_secure_boot};
 
 //pub(crate) mod win_api;
 // pub mod drive_info;
 mod win_api;
+use win_api::is_efi_boot;
 
 mod util;
+
+mod device_impl;
 
 pub(crate) mod wmi_utils;
 
@@ -48,14 +53,8 @@ use boot_manager_impl::efi_boot_manager::EfiBootManager;
 pub struct MSWMigrator {
     config: Config,
     mig_info: MigrateInfo,
-    ps_info: PSInfo,
+    device: Box<Device>,
     stage2_config: Stage2ConfigBuilder,
-    boot_manager: Box<BootManager>,
-    /*
-        os_info: Option<WMIOSInfo>,
-        efi_boot: Option<bool>,
-        sysinfo: SysInfo,
-    */
 }
 
 impl<'a> MSWMigrator {
@@ -64,29 +63,26 @@ impl<'a> MSWMigrator {
         match migrator.config.migrate.get_mig_mode() {
             MigMode::Immediate => migrator.do_migrate(),
             MigMode::Pretend => Ok(()),
-            MigMode::Agent => Err(MigError::from(MigErrorKind::NotImpl)),
+            //MigMode::Agent => Err(MigError::from(MigErrorKind::NotImpl)),
         }
     }
 
     fn try_init(config: Config) -> Result<MSWMigrator, MigError> {
-        trace!("try_int: entered");
+        trace!("MSWinMigrator::try_init: entered");
 
-        let mut ps_info = PSInfo::try_init()?;
-
-        trace!("PSInfo initialised");
         // **********************************************************************
         // We need to be root to do this
         // note: fake admin is not honored in release mode
 
-        if !ps_info.is_admin()? {
+        if !is_admin()? {
             error!("Please run this program with adminstrator privileges");
             return Err(MigError::displayed());
         }
 
         let wmi_info = WmiUtils::get_os_info()?;
+        let mswin_api = MSWinApi::new(&wmi_info)?;
 
-
-        let mig_info = match MigrateInfo::new(&config, &mut ps_info) {
+        let mig_info = match MigrateInfo::new(&config, &mswin_api) {
             Ok(mig_info) => mig_info,
             Err(why) => {
                 return match why.kind() {
@@ -102,153 +98,213 @@ impl<'a> MSWMigrator {
         };
 
         let mut stage2_config = Stage2ConfigBuilder::default();
-        match mig_info.os_arch {
-            OSArch::AMD64 => stage2_config.set_device_type(&DeviceType::IntelNuc),
-            _ => {
-                error!(
-                    "The {:?} OS architecture is not currently supported on windows devices",
-                    mig_info.os_arch
+        let device = match device_impl::get_device(&mig_info, &config, &mut stage2_config) {
+            Ok(device) => {
+                let dev_type = device.get_device_type();
+                let boot_type = device.get_boot_type();
+                info!("Device Type is {:?}", device.get_device_type());
+                info!("Boot mode is {:?}", boot_type);
+                stage2_config.set_device_type(&dev_type);
+                stage2_config.set_boot_type(&boot_type);
+                device
+            }
+            Err(why) => {
+                return match why.kind() {
+                    MigErrorKind::Displayed => Err(why),
+                    _ => {
+                        error!("Failed to create Device: {:?}", why);
+                        Err(MigError::from(
+                            why.context(MigErrCtx::from(MigErrorKind::Displayed)),
+                        ))
+                    }
+                };
+            }
+        };
+
+        match mig_info
+            .config_file
+            .check(&config, device.get_device_slug())
+        {
+            Ok(_dummy) => info!(
+                "The sanity check on '{}' passed",
+                mig_info.config_file.get_rel_path().display()
+            ),
+            Err(why) => {
+                let message = format!(
+                    "The sanity check on '{}' failed: {:?}",
+                    mig_info.config_file.get_rel_path().display(),
+                    why
                 );
-                return Err(MigError::displayed());
+                error!("{}", message);
+                return Err(MigError::from(
+                    why.context(MigErrCtx::from(MigErrorKind::Displayed)),
+                ));
             }
         }
 
-        let mut boot_manager = if mig_info.efi_boot {
-            Box::new(EfiBootManager::new())
-        } else {
-            panic!("no choices for non efi boot manager");
-        };
+        debug!("Finished architecture dependant initialization");
 
-        if !boot_manager.can_migrate(&mig_info, &config, &mut stage2_config)? {
-            error!("Cannot migrate this device.");
-            return Err(MigError::displayed());
+        // **********************************************************************
+        // Pick the current root device as flash device
+
+        let boot_info = device.get_boot_device();
+        let flash_device = &boot_info.device_info.drive;
+        let flash_dev_size = boot_info.device_info.drive_size;
+
+        info!(
+            "The install drive is {}, size: {}",
+            boot_info.device_info.drive.display(),
+            format_size_with_unit(flash_dev_size)
+        );
+
+        if let ImageType::FileSystems(ref fs_dump) = config.balena.get_image_path() {
+            if fs_dump.device_slug != device.get_device_slug() {
+                error!(
+                    "The device-slug of the image dump configuration differs from the detect device slug '{}' != '{}'",
+                    fs_dump.device_slug,
+                    device.get_device_slug()
+                );
+                return Err(MigError::from(MigErrorKind::Displayed));
+            }
         }
 
-        /* likely to be wrong, let stage2 figure it out from /root device
-        stage2_config.set_flash_device(&PathBuf::from(
-            mig_info.drive_info.boot_path.get_linux_drive(),
-        ));
-        */
+        // TODO: check available space for work files here if work is not on a distinct partition
 
-        stage2_config.set_boot_type(&boot_manager.get_boot_type());
+        // **********************************************************************
+        // Require a minimum disk device size for installation
+
+        if flash_dev_size < MIN_DISK_SIZE {
+            error!(
+                "The size of the install drive '{}' = {} is too small to install balenaOS",
+                flash_device.display(),
+                format_size_with_unit(flash_dev_size)
+            );
+            return Err(MigError::from(MigErrorKind::Displayed));
+        }
 
         // TODO: Don't migrate if we do not have PARTUUIDS
         // TODO: maybe allow hints otherwise  ->
 
         Ok(MSWMigrator {
-            ps_info,
             config,
             mig_info,
+            device,
             stage2_config,
-            boot_manager,
         })
     }
 
     fn do_migrate(&mut self) -> Result<(), MigError> {
         // TODO: take care of backup
-        self.stage2_config.set_has_backup(false);
+        /*
+                self.stage2_config.set_has_backup(false);
 
-        // *****************************************************************************************
-        // Finish Stage2ConfigBuilder & create stage2 config file
+                // *****************************************************************************************
+                // Finish Stage2ConfigBuilder & create stage2 config file
 
-        self.stage2_config
-            .set_failmode(self.config.migrate.get_fail_mode());
+                self.stage2_config
+                    .set_failmode(self.config.migrate.get_fail_mode());
 
-        self.stage2_config
-            .set_no_flash(self.config.debug.is_no_flash());
+                self.stage2_config
+                    .set_no_flash(self.config.debug.is_no_flash());
 
-        self.stage2_config
-            .set_skip_flash(self.config.debug.is_skip_flash());
+                let device =
+                    match device_impl::get_device(&self.mig_info, &self.config, &mut self.stage2_config) {
+                        Ok(device) => {
+                            self.stage2_config.set_boot_type(&device.get_boot_type());
+                            self.stage2_config
+                                .set_device_type(&device.get_device_type());
+                            device
+                        }
+                        Err(why) => {
+                            return match why.kind() {
+                                MigErrorKind::Displayed => Err(why),
+                                _ => {
+                                    error!("Failed to create Device: {:?}", why);
+                                    Err(MigError::from(
+                                        why.context(MigErrCtx::from(MigErrorKind::Displayed)),
+                                    ))
+                                }
+                            };
+                        }
+                    };
 
-        /* No boot device on windows
-        self.stage2_config.set_boot_device(&PathBuf::from(
-            self.mig_info.drive_info.boot_path.get_linux_part(),
-        ));
-        self.stage2_config.set_boot_fstype(&String::from(
-            self.mig_info.drive_info.boot_path.get_linux_fstype(),
-        ));
-        */
+                        self.stage2_config.set_boot_device(&PathBuf::from(
+                            self.mig_info.drive_info.boot_path.get_linux_part(),
+                        ));
+                self.stage2_config.set_boot_fstype(&String::from(
+                    self.mig_info.drive_info.boot_path.get_linux_fstype(),
+                ));
 
-        // later
-        self.stage2_config
-            .set_balena_image(PathBuf::from(&to_linux_path(
-                &self.mig_info.image_file.path,
-            )));
-        self.stage2_config
-            .set_balena_config(PathBuf::from(&to_linux_path(
-                &self.mig_info.config_file.get_path(),
-            )));
 
-        self.stage2_config.set_work_dir(&PathBuf::from(
-            self.mig_info.drive_info.work_path.get_linux_path(),
-        ));
+                // later
+                self.stage2_config
+                    .set_balena_image(self.mig_info.image_file.clone());
 
-        self.stage2_config
-            .set_gzip_internal(self.config.migrate.is_gzip_internal());
+                self.stage2_config
+                    .set_balena_config(PathBuf::from(&to_linux_path(
+                        &self.mig_info.config_file.get_path(),
+                    )));
 
-        self.stage2_config
-            .set_log_level(String::from(self.config.migrate.get_log_level()));
+                self.stage2_config.set_work_dir(&PathBuf::from(
+                    self.mig_info.drive_info.work_path.get_linux_path(),
+                ));
 
-        /*        if let Some((ref device, ref fstype)) = self.mig_info.log_path {
-                    self.stage2_config.set_log_to(Stage2LogConfig {
-                        device: device.clone(),
-                        fstype: fstype.clone(),
-                    });
+                self.stage2_config
+                    .set_gzip_internal(self.config.migrate.is_gzip_internal());
+
+                self.stage2_config
+                    .set_log_level(String::from(self.config.migrate.get_log_level()));
+
+
+                self.stage2_config
+                    .set_gzip_internal(self.config.migrate.is_gzip_internal());
+
+                trace!("device setup");
+
+                match self
+                    .boot_manager
+                    .setup(&self.mig_info, &self.config, &mut self.stage2_config)
+                {
+                    Ok(_s) => info!("The system is set up to boot into the migration environment"),
+                    Err(why) => {
+                        error!(
+                            "Failed to set up the boot configuration for the migration environment: {:?}",
+                            why
+                        );
+                        return Err(MigError::displayed());
+                    }
+                }
+
+                trace!("write stage 2 config");
+
+                let stage2_cfg_path = path_append(
+                    self.mig_info.drive_info.boot_path.get_path(),
+                    STAGE2_CFG_FILE,
+                );
+                let stage2_cfg_dir = stage2_cfg_path.parent().unwrap();
+                if !dir_exists(&stage2_cfg_dir)? {
+                    create_dir_all(&stage2_cfg_dir).context(MigErrCtx::from_remark(
+                        MigErrorKind::Upstream,
+                        &format!("Fauíled to create directory '{}'", stage2_cfg_dir.display()),
+                    ))?;
+                }
+
+                self.stage2_config.write_stage2_cfg_to(&stage2_cfg_path)?;
+
+                if let Some(delay) = self.config.migrate.get_reboot() {
+                    let message = format!(
+                        "Migration stage 1 was successfull, rebooting system in {} seconds",
+                        *delay
+                    );
+                    println!("{}", &message);
+
+                    let delay = Duration::new(*delay, 0);
+                    thread::sleep(delay);
+                    println!("Rebooting now..");
+
+                    let _res = self.ps_info.reboot();
                 }
         */
-
-        self.stage2_config
-            .set_gzip_internal(self.config.migrate.is_gzip_internal());
-
-        trace!("device setup");
-
-        match self
-            .boot_manager
-            .setup(&self.mig_info, &self.config, &mut self.stage2_config)
-        {
-            Ok(_s) => info!("The system is set up to boot into the migration environment"),
-            Err(why) => {
-                error!(
-                    "Failed to set up the boot configuration for the migration environment: {:?}",
-                    why
-                );
-                return Err(MigError::displayed());
-            }
-        }
-
-        trace!("write stage 2 config");
-
-        let stage2_cfg_path = path_append(
-            self.mig_info.drive_info.boot_path.get_path(),
-            STAGE2_CFG_FILE,
-        );
-        let stage2_cfg_dir = stage2_cfg_path.parent().unwrap();
-        if !dir_exists(&stage2_cfg_dir)? {
-            create_dir_all(&stage2_cfg_dir).context(MigErrCtx::from_remark(
-                MigErrorKind::Upstream,
-                &format!(
-                    "Fauíled to create directory '{}'",
-                    stage2_cfg_dir.display()
-                ),
-            ))?;
-        }
-
-        self.stage2_config.write_stage2_cfg_to(&stage2_cfg_path)?;
-
-        if let Some(delay) = self.config.migrate.get_reboot() {
-            let message = format!(
-                "Migration stage 1 was successfull, rebooting system in {} seconds",
-                *delay
-            );
-            println!("{}", &message);
-
-            let delay = Duration::new(*delay, 0);
-            thread::sleep(delay);
-            println!("Rebooting now..");
-
-            let _res = self.ps_info.reboot();
-        }
-
         Ok(())
     }
 }

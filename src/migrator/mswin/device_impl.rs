@@ -16,7 +16,11 @@ pub fn get_device(
     stage2_config: &mut Stage2ConfigBuilder,
 ) -> Result<Box<Device>, MigError> {
     match mig_info.os_arch {
-        OSArch::AMD64 => IntelNuc::from_config(mig_info, config, stage2_config)?,
+        OSArch::AMD64 => Ok(Box::new(IntelNuc::from_config(
+            mig_info,
+            config,
+            stage2_config,
+        )?)),
         _ => Err(MigError::from_remark(
             MigErrorKind::InvParam,
             &format!(

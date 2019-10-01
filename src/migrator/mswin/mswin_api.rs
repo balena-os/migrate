@@ -31,43 +31,25 @@ impl OSApi for MSWinApi<'_> {
 
     fn path_info_from_path<P: AsRef<Path>>(&self, path: P) -> Result<PathInfo, MigError> {
         let path = path.as_ref();
-        let mountpoints = MountPoint::query_all()?;
-        let mut found_mountpoint: Option<&MountPoint> = None;
-
-        for ref mountpoint in mountpoints {
-            let directory = mountpoint.get_directory()?;
-            if directory.starts_with(path) {
-                if let Some(found) = found_mountpoint {
-                    if path.len() > found.get_path().len() {
-                        found_mountpoint = Some(mountpoint);
-                    }
-                } else {
-                    found_mountpoint = Some(mountpoint);
-                }
-            }
+        let mountpoint = MountPoint::query_path(path)?;
+        debug!(
+            "Found mountpoint for path: '{}', Mountpoint: '{}', volume: '{}'",
+            path.display(),
+            mountpoint.get_directory().display(),
+            mountpoint.get_volume().get_device_id()
+        );
+        let disk_extents = get_volume_disk_extents(mountpoint.get_volume().get_device_id())?;
+        if disk_extents.len() != 1 {
+            return Err(MigError::from_remark(
+                MigErrorKind::InvState,
+                &format!(
+                    "Found more than one disk extent on mount: '{}'",
+                    path.display()
+                ),
+            ));
         }
 
-        // TODO: take precautions for EFI path ?
-
-        if let Some(found_path) = found_mountpoint {
-            //got a mount
-            debug!(
-                "Found mountpoint for path: '{}', Mountpoint: '{}', volume: '{}'",
-                path.display(),
-                found_path.get_directory().display(),
-                found_path.get_volume().get_device_id()
-            );
-
-            let disk_extents = get_volume_disk_extents(found_path.get_volume().get_device_id())?;
-            if disk_extents.len() != 1 {}
-
-            Ok(found_path)
-        } else {
-            Err(MigError::from_remark(
-                MigErrorKind::NotFound,
-                &format!("No mount found for path: '{}'", path.display()),
-            ))
-        }
+        unimplemented!()
     }
 
     fn device_info_from_partition<P: AsRef<Path>>(

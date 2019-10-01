@@ -11,16 +11,13 @@ use crate::linux::{
 };
 
 #[cfg(target_os = "windows")]
-use crate::mswin::{
-    wmi_utils::MountPoint,
-};
+use crate::mswin::wmi_utils::MountPoint;
 
 /*
 Contains full Information on a path including
 - DeviceInfo: what drive & partition the path resides on with drive size
 - File System information: mountpoint FS size & free space
 */
-
 
 #[derive(Debug, Clone)]
 pub(crate) struct PathInfo {
@@ -104,11 +101,17 @@ impl PathInfo {
     }
 
     #[cfg(target_os = "windows")]
-    pub fn from_path<P: AsRef<Path>>(
-        path: P,
-    ) -> Result<PathInfo, MigError> {
+    pub fn for_efi<P: AsRef<Path>>(path: P) -> Result<PathInfo, MigError> {
+        unimplemented!()
+    }
+
+    #[cfg(target_os = "windows")]
+    pub fn from_path<P: AsRef<Path>>(path: P) -> Result<PathInfo, MigError> {
         if !path.as_ref().exists() {
-            return Ok(None);
+            return Err(MigError::from_remark(
+                MigErrorKind::NotFound,
+                &format!("The path does not exist: '{}'", path.as_ref().display()),
+            ));
         }
 
         let abs_path = path
@@ -119,8 +122,8 @@ impl PathInfo {
                 &format!("failed to canonicalize path: '{}'", path.as_ref().display()),
             ))?;
 
-        let mountpoints = MountPoint::query_all()?;
+        let mountpoints = MountPoint::query_path(abs_path)?;
 
-        unimplemented!
+        unimplemented!()
     }
 }
