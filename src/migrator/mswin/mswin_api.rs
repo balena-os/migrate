@@ -30,6 +30,7 @@ impl OSApi for MSWinApi<'_> {
     }
 
     fn path_info_from_path<P: AsRef<Path>>(&self, path: P) -> Result<PathInfo, MigError> {
+        //
         let path = path.as_ref();
         let mountpoint = MountPoint::query_path(path)?;
         debug!(
