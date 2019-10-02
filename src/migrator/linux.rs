@@ -198,7 +198,7 @@ impl<'a> LinuxMigrator {
 
         info!(
             "The install drive is {}, size: {}",
-            boot_info.device_info.drive.display(),
+            boot_info.device_info.drive,
             format_size_with_unit(flash_dev_size)
         );
 
@@ -221,7 +221,7 @@ impl<'a> LinuxMigrator {
         if flash_dev_size < MIN_DISK_SIZE {
             error!(
                 "The size of the install drive '{}' = {} is too small to install balenaOS",
-                flash_device.display(),
+                flash_device,
                 format_size_with_unit(flash_dev_size)
             );
             return Err(MigError::from(MigErrorKind::Displayed));
@@ -431,7 +431,7 @@ impl<'a> LinuxMigrator {
                     fstype: log_path.fs_type.clone(),
                 });
             } else {
-                warn!("Log partition '{}' is not on a distinct drive from flash drive: '{}' - ignoring", log_path.device.display(), boot_device.device_info.drive.display());
+                warn!("Log partition '{}' is not on a distinct drive from flash drive: '{}' - ignoring", log_path.device, boot_device.device_info.drive);
             }
         }
 
