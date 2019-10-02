@@ -18,6 +18,7 @@ pub(crate) struct DeviceInfo {
     // the partition device path
     pub device: String,
     // the partition index
+    // TODO: make optional
     pub index: u16,
     // the partition fs type
     pub fs_type: String,

@@ -22,8 +22,11 @@ use crate::{
         Config, MigErrCtx, MigError, MigErrorKind,
     },
     defs::{BootType, EFI_STARTUP_FILE, MIG_INITRD_NAME, MIG_KERNEL_NAME},
-    mswin::msw_defs::{
-        BALENA_EFI_DIR, EFI_BCKUP_DIR, EFI_BOOT_DIR, EFI_DEFAULT_BOOTMGR64, EFI_MS_BOOTMGR,
+    mswin::{
+        drive_info::DriveInfo,
+        msw_defs::{
+            BALENA_EFI_DIR, EFI_BCKUP_DIR, EFI_BOOT_DIR, EFI_DEFAULT_BOOTMGR64, EFI_MS_BOOTMGR,
+        },
     },
 };
 
@@ -48,7 +51,9 @@ impl BootManager for EfiBootManager {
         _config: &Config,
         _s2_cfg: &mut Stage2ConfigBuilder,
     ) -> Result<bool, MigError> {
-        if let None = mig_infodrive_info.efi_path.get_partuuid() {
+        let drive_info = DriveInfo::new()?;
+
+        if let None = drive_info.efi_path.get_partuuid() {
             // TODO: add option to override this
             error!("Cowardly refusing to migrate EFI partition without partuuid. Windows to linux drive name mapping is insecure");
             Ok(false)

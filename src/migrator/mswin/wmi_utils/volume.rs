@@ -181,6 +181,22 @@ impl<'a> Volume {
         &self.device
     }*/
 
+    pub fn get_capacity(&self) -> Option<u64> {
+        self.capacity
+    }
+
+    pub fn get_free_space(&self) -> Option<u64> {
+        self.free_space
+    }
+
+    pub fn get_label(&'a self) -> Option<&'a str> {
+        if !self.label.is_empty() {
+            Some(&self.label)
+        } else {
+            None
+        }
+    }
+
     pub fn get_drive_letter(&'a self) -> Option<&'a str> {
         if !self.drive_letter.is_empty() {
             Some(&self.drive_letter)

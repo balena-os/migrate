@@ -1,17 +1,27 @@
+use regex::{Captures, Regex};
 use std::mem::transmute;
+use std::path::Path;
 use std::sync::{Arc, Mutex, MutexGuard, Once};
 
-use crate::common::{call, file_exists, path_append, MigErrCtx};
-use crate::mswin::util::mount_efi;
 use crate::mswin::win_api::is_efi_boot;
 use crate::{
-    common::{file_exists, path_append, MigError, MigErrorKind},
+    common::{
+        call, device_info::DeviceInfo, file_exists, path_append, path_info::PathInfo, MigError,
+        MigErrorKind,
+    },
     mswin::{
-        
-        win_api::{get_volume_disk_extents, is_efi_boot, DiskExtent},
+        util::mount_efi,
+        win_api::{get_volume_disk_extents, is_efi_boot, is_efi_boot, DiskExtent},
         wmi_utils::{LogicalDrive, Partition, PhysicalDrive, Volume},
     },
 };
+use nix::NixPath;
+use std::path::PathBuf;
+
+// \\?\Volume{345ad334-48a8-11e8-9eaf-806e6f6e6963}\
+
+const VOL_UUID_REGEX: &str =
+    r#"^\\\\\?\\Volume\{([a-f0-9]{8}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{12})\}\\$"#;
 
 struct VolumeInfo {
     pub volume: Volume,
@@ -24,7 +34,7 @@ struct SharedDriveInfo {
     volumes: Option<Vec<VolumeInfo>>,
 }
 
-struct DriveInfo {
+pub(crate) struct DriveInfo {
     inner: Arc<Mutex<SharedDriveInfo>>,
 }
 
@@ -50,6 +60,91 @@ impl DriveInfo {
 
         let _dummy = drive_info.init()?;
         drive_info
+    }
+
+    pub fn path_info_from_path<P: AsRef<Path>>(&self, path: P) -> Result<PathInfo, MigError> {
+        let drive_info = self.init()?;
+        if let Some(found) = drive_info
+            .volumes
+            .unwrap()
+            .iter()
+            .find(|di| PathBuf::from(di.logical_drive.get_name()).starts_with(path.as_ref()))
+        {
+            let dev_info = DeviceInfo {
+                // the drive device path
+                drive: String::from(found.physical_drive.get_device_id()),
+                // the drive size
+                drive_size: found.physical_drive.get_size(),
+                // the partition device path
+                device: String::from(found.volume.get_device_id()),
+                // TODO: the partition index - this value is not correct in windows as hidden partotions are not counted
+                index: found.partition.get_part_index() as u16,
+                // the partition fs type
+                fs_type: String::from(found.volume.get_file_system().to_linux_str()),
+                // the partition uuid
+                uuid: None,
+                // the partition partuuid
+                part_uuid: if let Some(captures) = Regex::new(VOL_UUID_REGEX)
+                    .unwrap()
+                    .captures(found.volume.get_device_id())
+                {
+                    Some(String::from(captures.get(1).unwrap().as_str()))
+                } else {
+                    None
+                },
+                // the partition label
+                part_label: if let Some(label) = found.volume.get_label() {
+                    Some(String::from(label))
+                } else {
+                    None
+                },
+                // the partition size
+                part_size: found.partition.get_size(),
+            };
+
+            Ok(PathInfo {
+                // the physical device info
+                device_info,
+                // the absolute path
+                path: path.as_ref().to_path_buf(),
+                // the devices mountpoint
+                mountpoint: PathBuf::from(found.logical_drive.get_name()),
+                // the partition read only flag
+                // pub mount_ro: bool,
+                // The file system size
+                fs_size: if let Some(capacity) = found.volume.get_capacity() {
+                    capacity
+                } else {
+                    return Err(MigError::from_remark(
+                        MigErrorKind::InvParam,
+                        &format!(
+                            "No fs capacity found for path '{}'",
+                            path.as_ref().display()
+                        ),
+                    ));
+                },
+                // the fs free space
+                fs_free: if let Some(free_space) = found.volume.get_free_space() {
+                    free_space
+                } else {
+                    return Err(MigError::from_remark(
+                        MigErrorKind::InvParam,
+                        &format!(
+                            "No fs free_space found for path '{}'",
+                            path.as_ref().display()
+                        ),
+                    ));
+                },
+            })
+        } else {
+            Err(MigError::from_remark(
+                MigErrorKind::NotFound,
+                &format!(
+                    "No logical drive found for path '{}'",
+                    path.as_ref().display()
+                ),
+            ))
+        }
     }
 
     fn init(&self) -> Result<MutexGuard<SharedDriveInfo>, MigError> {

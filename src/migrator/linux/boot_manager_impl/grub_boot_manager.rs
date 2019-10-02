@@ -239,6 +239,7 @@ impl<'a> BootManager for GrubBootManager {
             // TODO: try partuuid too ?local setRootA="set root='${GRUB_BOOT_DEV},msdos${ROOT_PART_NO}'"
             format!("search --no-floppy --fs-uuid --set=root {}", uuid)
         } else {
+            // TODO: use uuid instead - index does not work well with windows
             format!(
                 "search --no-floppy --fs-uuid --set=root {},{}{}",
                 boot_path.device_info.drive, part_type, boot_path.device_info.index
