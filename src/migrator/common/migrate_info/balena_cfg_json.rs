@@ -241,5 +241,4 @@ mod tests {
         assert_eq!(config.app_id, 13454711);
         assert_eq!(config.vpn_port, 443);
     }
-
 }

@@ -462,7 +462,7 @@ impl<'a> LsblkInfo {
 
 #[cfg(test)]
 mod tests {
-    use crate::linux::migrate_info::LsblkInfo;
+    use crate::linux::lsblk_info::LsblkInfo;
 
     const LSBLK_OUTPUT1: &str = r##"NAME="loop0" KNAME="loop0" MAJ:MIN="7:0" FSTYPE="squashfs" MOUNTPOINT="/snap/core/7270" LABEL="" UUID="" RO="1" SIZE="92778496" TYPE="loop"
 NAME="loop1" KNAME="loop1" MAJ:MIN="7:1" FSTYPE="squashfs" MOUNTPOINT="/snap/core18/1066" LABEL="" UUID="" RO="1" SIZE="57069568" TYPE="loop"

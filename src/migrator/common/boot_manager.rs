@@ -1,18 +1,13 @@
 use crate::{
     common::{
-        migrate_info::MigrateInfo,
-        path_info::PathInfo,
-        stage2_config::{Stage2ConfigBuilder},
-        Config, MigError,
+        migrate_info::MigrateInfo, path_info::PathInfo, stage2_config::Stage2ConfigBuilder, Config,
+        MigError,
     },
     defs::BootType,
 };
 
 #[cfg(target_os = "linux")]
-use crate::{
-    common::stage2_config::Stage2Config,
-    linux::stage2::mounts::Mounts,
-};
+use crate::{common::stage2_config::Stage2Config, linux::stage2::mounts::Mounts};
 
 pub(crate) trait BootManager {
     fn get_boot_type(&self) -> BootType;

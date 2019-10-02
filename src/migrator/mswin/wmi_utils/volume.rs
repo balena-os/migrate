@@ -174,12 +174,19 @@ impl<'a> Volume {
         &self.device_id
     }
 
+    pub fn get_drive_type(&'a self) -> &'a DriveType {
+        &self.drive_type
+    }
     /* pub fn get_device(&'a self) -> &'a str {
         &self.device
     }*/
 
-    pub fn get_drive_letter(&'a self) -> &'a str {
-        &self.drive_letter
+    pub fn get_drive_letter(&'a self) -> Option<&'a str> {
+        if !self.drive_letter.is_empty() {
+            Some(&self.drive_letter)
+        } else {
+            None
+        }
     }
 }
 

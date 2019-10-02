@@ -4,7 +4,7 @@ use crate::{
     common::{
         config::{
             balena_config::{FileRef, ImageType, PartDump},
-            migrate_config::{MigrateWifis},
+            migrate_config::MigrateWifis,
         },
         device_info::DeviceInfo,
         file_info::RelFileInfo,

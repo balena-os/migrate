@@ -129,7 +129,7 @@ impl<'a> Partition {
         }
     }
 
-    pub fn get_hd_index(&self) -> usize {
+    pub fn get_disk_index(&self) -> usize {
         self.disk_index
     }
 
