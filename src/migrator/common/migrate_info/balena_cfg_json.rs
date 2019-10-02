@@ -222,7 +222,6 @@ mod tests {
 }"###;
 
     use super::*;
-    use crate::{common::config::migrate_config::MigrateWifis, defs::FailMode};
 
     // TODO: update this to current config
 

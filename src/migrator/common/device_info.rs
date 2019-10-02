@@ -12,11 +12,11 @@ use crate::linux::lsblk_info::{LsblkDevice, LsblkPartition};
 #[derive(Debug, Clone)]
 pub(crate) struct DeviceInfo {
     // the drive device path
-    pub drive: PathBuf,
+    pub drive: String,
     // the drive size
     pub drive_size: u64,
     // the partition device path
-    pub device: PathBuf,
+    pub device: String,
     // the partition index
     pub index: u16,
     // the partition fs type
@@ -36,7 +36,7 @@ impl DeviceInfo {
     #[cfg(target_os = "linux")]
     pub fn new(drive: &LsblkDevice, partition: &LsblkPartition) -> Result<DeviceInfo, MigError> {
         Ok(DeviceInfo {
-            drive: drive.get_path(),
+            drive: String::from(drive.get_path().to_string_lossy()),
             drive_size: if let Some(size) = drive.size {
                 size
             } else {
@@ -46,7 +46,7 @@ impl DeviceInfo {
                 );
                 return Err(MigError::displayed());
             },
-            device: partition.get_path(),
+            device: String::from(partition.get_path().to_string_lossy()),
             index: if let Some(index) = partition.index {
                 index
             } else {
@@ -93,7 +93,7 @@ impl DeviceInfo {
             if let Some(ref uuid) = self.uuid {
                 format!("UUID={}", uuid)
             } else {
-                String::from(self.device.to_string_lossy())
+                self.device.clone()
             }
         }
     }

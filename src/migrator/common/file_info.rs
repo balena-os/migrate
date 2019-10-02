@@ -1,6 +1,4 @@
 use failure::ResultExt;
-#[cfg(target_os = "linux")]
-use lazy_static::lazy_static;
 #[allow(unused_imports)]
 use log::{debug, error, trace};
 #[allow(unused_imports)]

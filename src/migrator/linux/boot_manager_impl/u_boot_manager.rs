@@ -275,7 +275,7 @@ impl<'a> BootManager for UBootManager {
         let bootmgr_path = self.find_bootmgr_path(mig_info, &lsblk_info)?;
         info!(
             "Found boot manager '{}', mounpoint: '{}', fs type: {}, free space: {}",
-            bootmgr_path.device_info.device.display(),
+            bootmgr_path.device_info.device,
             bootmgr_path.mountpoint.display(),
             bootmgr_path.device_info.fs_type,
             format_size_with_unit(bootmgr_path.fs_free)
@@ -313,7 +313,7 @@ impl<'a> BootManager for UBootManager {
                 if boot_path.fs_free > boot_req_space {
                     info!(
                         "Found boot '{}', mounpoint: '{}', fs type: {}, free space: {}",
-                        boot_path.device_info.device.display(),
+                        boot_path.device_info.device,
                         boot_path.mountpoint.display(),
                         boot_path.device_info.fs_type,
                         format_size_with_unit(boot_path.fs_free)
@@ -327,7 +327,7 @@ impl<'a> BootManager for UBootManager {
                     if boot_path.fs_free > boot_req_space {
                         info!(
                             "Found boot '{}', mounpoint: '{}', fs type: {}, free space: {}",
-                            boot_path.device_info.device.display(),
+                            boot_path.device_info.device,
                             boot_path.mountpoint.display(),
                             boot_path.device_info.fs_type,
                             format_size_with_unit(boot_path.fs_free)
@@ -372,10 +372,7 @@ impl<'a> BootManager for UBootManager {
         let drive_num = {
             let dev_name = &boot_path.device_info.device;
 
-            if let Some(captures) = Regex::new(UBOOT_DRIVE_REGEX)
-                .unwrap()
-                .captures(&dev_name.to_string_lossy())
-            {
+            if let Some(captures) = Regex::new(UBOOT_DRIVE_REGEX).unwrap().captures(&dev_name) {
                 (
                     String::from(captures.get(1).unwrap().as_str()),
                     String::from(captures.get(2).unwrap().as_str()),
@@ -385,7 +382,7 @@ impl<'a> BootManager for UBootManager {
                     MigErrorKind::InvParam,
                     &format!(
                         "failed to parse drive & partition numbers from boot device name '{}'",
-                        dev_name.display()
+                        dev_name
                     ),
                 ));
             }

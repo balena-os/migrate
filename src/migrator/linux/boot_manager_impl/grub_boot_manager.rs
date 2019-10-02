@@ -222,7 +222,7 @@ impl<'a> BootManager for GrubBootManager {
                     MigErrorKind::InvParam,
                     &format!(
                         "Invalid partition type for '{}'",
-                        boot_path.device_info.drive.display()
+                        boot_path.device_info.drive
                     ),
                 ));
             }
@@ -232,8 +232,7 @@ impl<'a> BootManager for GrubBootManager {
 
         info!(
             "Boot partition type for '{}' is '{}'",
-            boot_path.device_info.drive.display(),
-            part_mod
+            boot_path.device_info.drive, part_mod
         );
 
         let root_cmd = if let Some(ref uuid) = boot_path.device_info.uuid {
@@ -242,9 +241,7 @@ impl<'a> BootManager for GrubBootManager {
         } else {
             format!(
                 "search --no-floppy --fs-uuid --set=root {},{}{}",
-                boot_path.device_info.drive.to_string_lossy(),
-                part_type,
-                boot_path.device_info.index
+                boot_path.device_info.drive, part_type, boot_path.device_info.index
             )
         };
 
