@@ -57,9 +57,9 @@ struct BigVolumeDiskExtents {
 }
 
 pub(crate) struct DiskExtent {
-    disk_index: u32,
-    start_offset: i64,
-    length: i64,
+    pub disk_index: u32,
+    pub start_offset: i64,
+    pub length: i64,
 }
 
 pub(crate) fn get_volume_disk_extents(path: &str) -> Result<Vec<DiskExtent>, MigError> {

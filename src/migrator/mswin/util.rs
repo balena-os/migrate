@@ -2,6 +2,7 @@ use lazy_static::lazy_static;
 use regex::Regex;
 use std::path::{Path, PathBuf};
 
+use crate::common::{file_exists, path_append};
 use crate::{
     common::{call, MigError, MigErrorKind},
     mswin::wmi_utils::{LogicalDrive, WmiUtils},
@@ -11,6 +12,8 @@ const DRIVE_LETTERS: &[&str] = &[
     "D:", "E:", "F:", "G:", "H:", "I:", "J:", "K:", "L:", "M:", "N:", "O:", "P:", "Q:", "R:", "S:",
     "t:", "U:", "V:", "W:", "X:", "Y:", "Z:",
 ];
+
+const CHECK_EFI_PATH: &str = r#"\EFI\Microsoft\boot\bootmgfw.efi"#;
 
 const MS2LINUX_PATH_RE: &str = r#"^\\\\\?\\[a-z,A-Z]:(.*)$"#;
 
@@ -29,33 +32,45 @@ pub(crate) fn to_linux_path(path: &Path) -> PathBuf {
     PathBuf::from(path.replace(r#"\"#, "/"))
 }
 
+// find or mount EFI LogicalDrive
 pub(crate) fn mount_efi() -> Result<LogicalDrive, MigError> {
+    // get drive letters in use
     let drive_letters = WmiUtils::query_drive_letters()?;
-    let mut mount_path: Option<&str> = None;
-    for letter in DRIVE_LETTERS {
-        if let None = drive_letters
-            .iter()
-            .position(|ltr| ltr.eq_ignore_ascii_case(letter))
-        {
-            mount_path = Some(*letter);
-            break;
-        }
-    }
 
-    if let Some(mount_path) = mount_path {
-        let cmd_res = call("mountvol", &[mount_path, "/S"], true)?;
-        if cmd_res.status.success() {
-            Ok(LogicalDrive::query_for_name(mount_path)?)
+    if let Some(drive_letter) = drive_letters
+        .iter()
+        .find(|dl| file_exists(path_append(dl, CHECK_EFI_PATH)))
+    {
+        // found EFI drive - return
+        Ok(LogicalDrive::query_for_name(drive_letter)?)
+    } else {
+        // find free drive letter
+        let mut mount_path: Option<&str> = None;
+        if let Some(drive_letter) = DRIVE_LETTERS.iter().find(|dl| {
+            if let None = drive_letters.iter().find(|used| used.as_str() == dl) {
+                true
+            } else {
+                false
+            }
+        }) {
+            // mount EFI drive
+            let cmd_res = call("mountvol", &[drive_letter, "/S"], true)?;
+            if cmd_res.status.success() && cmd_res.stderr.is_empty() {
+                Ok(LogicalDrive::query_for_name(drive_letter)?)
+            } else {
+                return Err(MigError::from_remark(
+                    MigErrorKind::ExecProcess,
+                    &format!(
+                        "Failed to mount EFI drive on '{}', msg: '{}'",
+                        mount_path, cmd_res.stderr
+                    ),
+                ));
+            }
         } else {
-            return Err(MigError::from_remark(
-                MigErrorKind::ExecProcess,
-                &format!("Failed to mount EFI drive on '{}'", mount_path),
+            Err(MigError::from_remark(
+                MigErrorKind::NotFound,
+                "Could not find a free drive letter for EFI device",
             ));
         }
-    } else {
-        return Err(MigError::from_remark(
-            MigErrorKind::InvState,
-            "Unable to find a free drive letter to mount the EFI drive on",
-        ));
     }
 }

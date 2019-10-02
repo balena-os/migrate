@@ -39,6 +39,8 @@ mod util;
 
 mod device_impl;
 
+mod drive_info;
+
 pub(crate) mod wmi_utils;
 
 mod boot_manager_impl;
@@ -79,7 +81,6 @@ impl<'a> MSWMigrator {
             return Err(MigError::displayed());
         }
 
-        let wmi_info = WmiUtils::get_os_info()?;
         let mswin_api = MSWinApi::new(&wmi_info)?;
 
         let mig_info = match MigrateInfo::new(&config, &mswin_api) {
