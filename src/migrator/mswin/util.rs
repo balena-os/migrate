@@ -47,7 +47,7 @@ pub(crate) fn mount_efi() -> Result<LogicalDrive, MigError> {
         // find free drive letter
         let mut mount_path: Option<&str> = None;
         if let Some(drive_letter) = DRIVE_LETTERS.iter().find(|dl| {
-            if let None = drive_letters.iter().find(|used| used.as_str() == dl) {
+            if let None = drive_letters.iter().find(|used| &used.as_str() == *dl) {
                 true
             } else {
                 false
@@ -58,19 +58,19 @@ pub(crate) fn mount_efi() -> Result<LogicalDrive, MigError> {
             if cmd_res.status.success() && cmd_res.stderr.is_empty() {
                 Ok(LogicalDrive::query_for_name(drive_letter)?)
             } else {
-                return Err(MigError::from_remark(
+                Err(MigError::from_remark(
                     MigErrorKind::ExecProcess,
                     &format!(
                         "Failed to mount EFI drive on '{}', msg: '{}'",
-                        mount_path, cmd_res.stderr
+                        drive_letter, cmd_res.stderr
                     ),
-                ));
+                ))
             }
         } else {
             Err(MigError::from_remark(
                 MigErrorKind::NotFound,
                 "Could not find a free drive letter for EFI device",
-            ));
+            ))
         }
     }
 }

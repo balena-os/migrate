@@ -236,14 +236,30 @@ impl<'a> BootManager for GrubBootManager {
         );
 
         let root_cmd = if let Some(ref uuid) = boot_path.device_info.uuid {
-            // TODO: try partuuid too ?local setRootA="set root='${GRUB_BOOT_DEV},msdos${ROOT_PART_NO}'"
+            // TODO: try partuuid too ? local setRootA="set root='${GRUB_BOOT_DEV},msdos${ROOT_PART_NO}'"
             format!("search --no-floppy --fs-uuid --set=root {}", uuid)
         } else {
-            // TODO: use uuid instead - index does not work well with windows
-            format!(
-                "search --no-floppy --fs-uuid --set=root {},{}{}",
-                boot_path.device_info.drive, part_type, boot_path.device_info.index
-            )
+            if let Some(ref partuuid) = boot_path.device_info.part_uuid {
+                return Err(MigError::from_remark(
+                    MigErrorKind::FeatureMissing,
+                    "Grub root string is not implemented for partuuid ",
+                ));
+            } else {
+                if let Some(index) = boot_path.device_info.index {
+                    format!(
+                        "search --no-floppy --fs-uuid --set=root {},{}{}",
+                        boot_path.device_info.drive, part_type, boot_path.device_info.index
+                    )
+                } else {
+                    return Err(MigError::from_remark(
+                        MigErrorKind::NotFound,
+                        &format!(
+                            "Could not find grub id for device '{}'",
+                            boot_path.device_info.device
+                        ),
+                    ));
+                }
+            }
         };
 
         debug!("root set to '{}", root_cmd);

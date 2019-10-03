@@ -55,7 +55,7 @@ use boot_manager_impl::efi_boot_manager::EfiBootManager;
 pub struct MSWMigrator {
     config: Config,
     mig_info: MigrateInfo,
-    device: Box<Device>,
+    device: Box<dyn Device>,
     stage2_config: Stage2ConfigBuilder,
 }
 
@@ -81,7 +81,7 @@ impl<'a> MSWMigrator {
             return Err(MigError::displayed());
         }
 
-        let mswin_api = MSWinApi::new(&wmi_info)?;
+        let mswin_api = MSWinApi::new()?;
 
         let mig_info = match MigrateInfo::new(&config, &mswin_api) {
             Ok(mig_info) => mig_info,
@@ -154,7 +154,7 @@ impl<'a> MSWMigrator {
 
         info!(
             "The install drive is {}, size: {}",
-            boot_info.device_info.drive.display(),
+            boot_info.device_info.drive,
             format_size_with_unit(flash_dev_size)
         );
 
@@ -177,7 +177,7 @@ impl<'a> MSWMigrator {
         if flash_dev_size < MIN_DISK_SIZE {
             error!(
                 "The size of the install drive '{}' = {} is too small to install balenaOS",
-                flash_device.display(),
+                flash_device,
                 format_size_with_unit(flash_dev_size)
             );
             return Err(MigError::from(MigErrorKind::Displayed));

@@ -130,7 +130,7 @@ impl MigrateInfo {
             }
 
             let cfg_path_info = os_api.path_info_from_path(&file_info.path)?;
-            if cfg_path_info.mountpoint != work_path.mountpoint {
+            if cfg_path_info.device_info.mountpoint != work_path.device_info.mountpoint {
                 error!("The balena OS config appears to reside on a different partition from the working directory. This setup is not supported");
                 return Err(MigError::displayed());
             }
@@ -317,7 +317,7 @@ impl MigrateInfo {
             };
 
             let file_path_info = os_api.path_info_from_path(&file_info.path)?;
-            if file_path_info.mountpoint != work_path.mountpoint {
+            if file_path_info.device_info.mountpoint != work_path.device_info.mountpoint {
                 error!("The file '{}' appears to reside on a different partition from the working directory. This setup is not supported", file_ref.path.display());
                 return Err(MigError::displayed());
             }

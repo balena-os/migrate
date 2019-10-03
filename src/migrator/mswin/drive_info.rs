@@ -1,9 +1,9 @@
 use regex::{Captures, Regex};
 use std::mem::transmute;
 use std::path::Path;
+use std::path::PathBuf;
 use std::sync::{Arc, Mutex, MutexGuard, Once};
 
-use crate::mswin::win_api::is_efi_boot;
 use crate::{
     common::{
         call, device_info::DeviceInfo, file_exists, path_append, path_info::PathInfo, MigError,
@@ -11,12 +11,10 @@ use crate::{
     },
     mswin::{
         util::mount_efi,
-        win_api::{get_volume_disk_extents, is_efi_boot, is_efi_boot, DiskExtent},
+        win_api::{get_volume_disk_extents, is_efi_boot, DiskExtent},
         wmi_utils::{LogicalDrive, Partition, PhysicalDrive, Volume},
     },
 };
-use nix::NixPath;
-use std::path::PathBuf;
 
 // \\?\Volume{345ad334-48a8-11e8-9eaf-806e6f6e6963}\
 
@@ -24,16 +22,78 @@ const VOL_UUID_REGEX: &str =
     r#"^\\\\\?\\Volume\{([a-f0-9]{8}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{12})\}\\$"#;
 
 struct VolumeInfo {
+    pub part_uuid: String,
     pub volume: Volume,
     pub logical_drive: LogicalDrive,
     pub physical_drive: PhysicalDrive,
     pub partition: Partition,
 }
 
+impl VolumeInfo {
+    fn to_device_info(&self) -> DeviceInfo {
+        DeviceInfo {
+            // the drive device path
+            drive: String::from(self.physical_drive.get_device_id()),
+            // the devices mountpoint
+            mountpoint: PathBuf::from(self.logical_drive.get_name()),
+            // the drive size
+            drive_size: self.physical_drive.get_size(),
+            // the partition device path
+            device: String::from(self.volume.get_device_id()),
+            // TODO: the partition index - this value is not correct in windows as hidden partotions are not counted
+            index: None,
+            // the partition fs type
+            fs_type: String::from(self.volume.get_file_system().to_linux_str()),
+            // the partition uuid
+            uuid: None,
+            // the partition partuuid
+            part_uuid: Some(self.part_uuid.clone()),
+            // the partition label
+            part_label: if let Some(label) = self.volume.get_label() {
+                Some(String::from(label))
+            } else {
+                None
+            },
+            // the partition size
+            part_size: self.partition.get_size(),
+        }
+    }
+
+    fn to_path_info(&self, path: &Path) -> Result<PathInfo, MigError> {
+        Ok(PathInfo {
+            // the physical device info
+            device_info: self.to_device_info(),
+            // the absolute path
+            path: path.to_path_buf(),
+            // the partition read only flag
+            // pub mount_ro: bool,
+            // The file system size
+            fs_size: if let Some(capacity) = self.volume.get_capacity() {
+                capacity
+            } else {
+                return Err(MigError::from_remark(
+                    MigErrorKind::InvParam,
+                    &format!("No fs capacity found for path '{}'", path.display()),
+                ));
+            },
+            // the fs free space
+            fs_free: if let Some(free_space) = self.volume.get_free_space() {
+                free_space
+            } else {
+                return Err(MigError::from_remark(
+                    MigErrorKind::InvParam,
+                    &format!("No fs free_space found for path '{}'", path.display()),
+                ));
+            },
+        })
+    }
+}
+
 struct SharedDriveInfo {
     volumes: Option<Vec<VolumeInfo>>,
 }
 
+#[derive(Clone)]
 pub(crate) struct DriveInfo {
     inner: Arc<Mutex<SharedDriveInfo>>,
 }
@@ -48,7 +108,7 @@ impl DriveInfo {
                 // Make it
                 //dbg!("call_once");
                 let singleton = DriveInfo {
-                    inner: Arc::new(Mutex::new(None)),
+                    inner: Arc::new(Mutex::new(SharedDriveInfo { volumes: None })),
                 };
 
                 // Put it in the heap so it can outlive this call
@@ -59,7 +119,24 @@ impl DriveInfo {
         };
 
         let _dummy = drive_info.init()?;
-        drive_info
+        Ok(drive_info)
+    }
+
+    pub fn device_info_for_efi_drive(&self) -> Result<DeviceInfo, MigError> {
+        let drive_info = self.init()?;
+        if let Some(found) = drive_info
+            .volumes
+            .unwrap()
+            .iter()
+            .find(|vi| vi.volume.is_system())
+        {
+            Ok(found.to_device_info())
+        } else {
+            Err(MigError::from_remark(
+                MigErrorKind::NotFound,
+                "Could not find EFI / System drive",
+            ))
+        }
     }
 
     pub fn path_info_from_path<P: AsRef<Path>>(&self, path: P) -> Result<PathInfo, MigError> {
@@ -70,72 +147,7 @@ impl DriveInfo {
             .iter()
             .find(|di| PathBuf::from(di.logical_drive.get_name()).starts_with(path.as_ref()))
         {
-            let dev_info = DeviceInfo {
-                // the drive device path
-                drive: String::from(found.physical_drive.get_device_id()),
-                // the drive size
-                drive_size: found.physical_drive.get_size(),
-                // the partition device path
-                device: String::from(found.volume.get_device_id()),
-                // TODO: the partition index - this value is not correct in windows as hidden partotions are not counted
-                index: found.partition.get_part_index() as u16,
-                // the partition fs type
-                fs_type: String::from(found.volume.get_file_system().to_linux_str()),
-                // the partition uuid
-                uuid: None,
-                // the partition partuuid
-                part_uuid: if let Some(captures) = Regex::new(VOL_UUID_REGEX)
-                    .unwrap()
-                    .captures(found.volume.get_device_id())
-                {
-                    Some(String::from(captures.get(1).unwrap().as_str()))
-                } else {
-                    None
-                },
-                // the partition label
-                part_label: if let Some(label) = found.volume.get_label() {
-                    Some(String::from(label))
-                } else {
-                    None
-                },
-                // the partition size
-                part_size: found.partition.get_size(),
-            };
-
-            Ok(PathInfo {
-                // the physical device info
-                device_info,
-                // the absolute path
-                path: path.as_ref().to_path_buf(),
-                // the devices mountpoint
-                mountpoint: PathBuf::from(found.logical_drive.get_name()),
-                // the partition read only flag
-                // pub mount_ro: bool,
-                // The file system size
-                fs_size: if let Some(capacity) = found.volume.get_capacity() {
-                    capacity
-                } else {
-                    return Err(MigError::from_remark(
-                        MigErrorKind::InvParam,
-                        &format!(
-                            "No fs capacity found for path '{}'",
-                            path.as_ref().display()
-                        ),
-                    ));
-                },
-                // the fs free space
-                fs_free: if let Some(free_space) = found.volume.get_free_space() {
-                    free_space
-                } else {
-                    return Err(MigError::from_remark(
-                        MigErrorKind::InvParam,
-                        &format!(
-                            "No fs free_space found for path '{}'",
-                            path.as_ref().display()
-                        ),
-                    ));
-                },
-            })
+            Ok(found.to_path_info(path.as_ref())?)
         } else {
             Err(MigError::from_remark(
                 MigErrorKind::NotFound,
@@ -153,13 +165,15 @@ impl DriveInfo {
             return Ok(shared_di);
         }
 
-        let efi_drive = if is_efi_boot() {
+        let efi_drive = if is_efi_boot()? {
             Some(mount_efi()?)
         } else {
             None
         };
 
         let mut vol_infos: Vec<VolumeInfo> = Vec::new();
+
+        let part_uuid_re = Regex::new(VOL_UUID_REGEX).unwrap();
 
         let volumes = Volume::query_all()?;
         // Detect  EFI, boot drive
@@ -189,6 +203,19 @@ impl DriveInfo {
                     if let Some(logical_drive) = logical_drive {
                         // Her we have all components: PhysicalDrive, Volume, Partition, LogicalDrive
                         vol_infos.push(VolumeInfo {
+                            part_uuid: if let Some(captures) =
+                                part_uuid_re.captures(volume.get_device_id())
+                            {
+                                String::from(captures.get(1).unwrap().as_str())
+                            } else {
+                                return Err(MigError::from_remark(
+                                    MigErrorKind::NoMatch,
+                                    &format!(
+                                        "Could not extract partuuid from volume id: '{}'",
+                                        volume.get_device_id()
+                                    ),
+                                ));
+                            },
                             volume,
                             physical_drive,
                             logical_drive,

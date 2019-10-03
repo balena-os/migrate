@@ -13,13 +13,15 @@ use crate::linux::lsblk_info::{LsblkDevice, LsblkPartition};
 pub(crate) struct DeviceInfo {
     // the drive device path
     pub drive: String,
+    // the devices mountpoint
+    pub mountpoint: PathBuf,
     // the drive size
     pub drive_size: u64,
     // the partition device path
     pub device: String,
     // the partition index
     // TODO: make optional
-    pub index: u16,
+    pub index: Option<u16>,
     // the partition fs type
     pub fs_type: String,
     // the partition uuid
@@ -49,13 +51,9 @@ impl DeviceInfo {
             },
             device: String::from(partition.get_path().to_string_lossy()),
             index: if let Some(index) = partition.index {
-                index
+                Some(index)
             } else {
-                error!(
-                    "The required parameter index could not be found for '{}'",
-                    partition.get_path().display()
-                );
-                return Err(MigError::displayed());
+                None
             },
             fs_type: if let Some(ref fstype) = partition.fstype {
                 fstype.clone()
@@ -79,12 +77,6 @@ impl DeviceInfo {
                 return Err(MigError::displayed());
             },
         })
-    }
-
-    #[cfg(target_os = "windows")]
-    pub fn new(// TODO: what to use
-    ) -> Result<DeviceInfo, MigError> {
-        unimplemented!()
     }
 
     pub fn get_kernel_cmd(&self) -> String {

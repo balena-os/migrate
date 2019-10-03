@@ -25,8 +25,6 @@ pub(crate) struct PathInfo {
     pub device_info: DeviceInfo,
     // the absolute path
     pub path: PathBuf,
-    // the devices mountpoint
-    pub mountpoint: PathBuf,
     // the partition read only flag
     // pub mount_ro: bool,
     // The file system size

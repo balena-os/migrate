@@ -53,22 +53,23 @@ impl BootManager for EfiBootManager {
     ) -> Result<bool, MigError> {
         let drive_info = DriveInfo::new()?;
 
-        if let None = drive_info.efi_path.get_partuuid() {
+        let efi_drive = match drive_info.device_info_for_efi_drive() {
+            Ok(efi_drive) => efi_drive,
+            Err(why) => {
+                error!("The EFI drive could not be found, error: {:?}", why);
+                return Ok(false);
+            }
+        };
+
+        if let None = efi_drive.part_uuid {
             // TODO: add option to override this
             error!("Cowardly refusing to migrate EFI partition without partuuid. Windows to linux drive name mapping is insecure");
-            Ok(false)
+            return Ok(false);
         }
 
-        if let None = mig_info.drive_info.boot_path.get_partuuid() {
-            // TODO: add option to override this
-            error!("Cowardly refusing to migrate boot partition without partuuid. Windows to linux drive name mapping is insecure");
-            Ok(false)
-        }
-
-        if let None = mig_info.drive_info.work_path.get_partuuid() {
-            // TODO: add option to override this
+        if let None = mig_info.work_path.device_info.part_uuid {
             error!("Cowardly refusing to migrate work partition without partuuid. Windows to linux drive name mapping is insecure");
-            Ok(false)
+            return Ok(false);
         }
 
         Ok(true)
