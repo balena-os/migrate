@@ -13,7 +13,9 @@ use crate::linux::lsblk_info::LsblkInfo;
 use crate::{
     common::{
         boot_manager::BootManager,
-        call, file_exists, format_size_with_unit, is_balena_file,
+        call,
+        device_info::DeviceInfo,
+        file_exists, format_size_with_unit, is_balena_file,
         migrate_info::MigrateInfo,
         path_append,
         path_info::PathInfo,
@@ -247,16 +249,8 @@ impl<'a> BootManager for UBootManager {
         BootType::UBoot
     }
 
-    fn get_bootmgr_path(&self) -> PathInfo {
-        self.bootmgr_path.as_ref().unwrap().clone()
-    }
-
-    fn get_boot_path(&self) -> PathInfo {
-        if let Some(ref boot_path) = self.boot_path {
-            boot_path.clone()
-        } else {
-            self.bootmgr_path.as_ref().unwrap().clone()
-        }
+    fn get_bootmgr_path(&self) -> DeviceInfo {
+        self.bootmgr_path.as_ref().unwrap().device_info.clone()
     }
 
     fn can_migrate(

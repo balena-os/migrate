@@ -4,8 +4,8 @@ use crate::{
     common::{
         boot_manager::BootManager,
         device::Device,
+        device_info::DeviceInfo,
         migrate_info::MigrateInfo,
-        path_info::PathInfo,
         stage2_config::{Stage2Config, Stage2ConfigBuilder},
         Config, MigError, MigErrorKind,
     },
@@ -136,7 +136,7 @@ impl<'a> Device for IntelNuc {
         self.boot_manager.restore(mounts, config)
     }
 
-    fn get_boot_device(&self) -> PathInfo {
+    fn get_boot_device(&self) -> DeviceInfo {
         self.boot_manager.get_bootmgr_path()
     }
 }

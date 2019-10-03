@@ -1,8 +1,8 @@
 use crate::{
     common::{
         boot_manager::BootManager,
+        device_info::DeviceInfo,
         migrate_info::MigrateInfo,
-        path_info::PathInfo,
         stage2_config::{Stage2Config, Stage2ConfigBuilder},
         Config, MigError, MigErrorKind,
     },
@@ -46,10 +46,7 @@ impl BootManager for EfiBootManager {
     fn get_boot_type(&self) -> BootType {
         BootType::Efi
     }
-    fn get_bootmgr_path(&self) -> PathInfo {
-        unimplemented!()
-    }
-    fn get_boot_path(&self) -> PathInfo {
+    fn get_bootmgr_path(&self) -> DeviceInfo {
         unimplemented!()
     }
 

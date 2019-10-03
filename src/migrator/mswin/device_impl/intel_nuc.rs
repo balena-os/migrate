@@ -2,8 +2,8 @@ use log::{error, info};
 
 use crate::{
     common::{
-        boot_manager::BootManager, config::Config, device::Device, migrate_info::MigrateInfo,
-        path_info::PathInfo, stage2_config::Stage2ConfigBuilder, MigError, MigErrorKind,
+        boot_manager::BootManager, config::Config, device::Device, device_info::DeviceInfo,
+        migrate_info::MigrateInfo, stage2_config::Stage2ConfigBuilder, MigError, MigErrorKind,
     },
     defs::{BootType, DeviceType},
     mswin::{
@@ -98,18 +98,18 @@ impl IntelNuc {
 
 impl Device for IntelNuc {
     fn get_device_slug(&self) -> &'static str {
-        unimplemented!()
+        "intel-nuc"
     }
     fn get_device_type(&self) -> DeviceType {
-        unimplemented!()
+        DeviceType::IntelNuc
     }
     fn get_boot_type(&self) -> BootType {
-        unimplemented!()
+        self.boot_manager.get_boot_type()
     }
     // TODO: make return reference
     // TODO: return device_info instead of path_info
-    fn get_boot_device(&self) -> PathInfo {
-        unimplemented!()
+    fn get_boot_device(&self) -> DeviceInfo {
+        self.boot_manager.get_bootmgr_path()
     }
 
     fn setup(
@@ -118,6 +118,12 @@ impl Device for IntelNuc {
         config: &Config,
         s2_cfg: &mut Stage2ConfigBuilder,
     ) -> Result<(), MigError> {
-        unimplemented!()
+        let kernel_opts = if let Some(ref kernel_opts) = config.migrate.get_kernel_opts() {
+            kernel_opts.clone()
+        } else {
+            String::from("")
+        };
+
+        self.boot_manager.setup(mig_info, s2_cfg, &kernel_opts)
     }
 }

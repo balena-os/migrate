@@ -11,7 +11,9 @@ use crate::linux::lsblk_info::LsblkInfo;
 use crate::{
     common::{
         boot_manager::BootManager,
-        call, dir_exists,
+        call,
+        device_info::DeviceInfo,
+        dir_exists,
         file_digest::check_digest,
         file_exists, is_balena_file,
         migrate_info::MigrateInfo,
@@ -77,14 +79,11 @@ impl BootManager for RaspiBootManager<'_> {
         self.boot_type.clone()
     }
 
-    fn get_bootmgr_path(&self) -> PathInfo {
-        self.bootmgr_path.as_ref().unwrap().clone()
+    fn get_bootmgr_path(&self) -> DeviceInfo {
+        self.bootmgr_path.as_ref().unwrap().device_info.clone()
     }
 
     // TODO: do we need to distiguish like in u-boot ?
-    fn get_boot_path(&self) -> PathInfo {
-        self.bootmgr_path.as_ref().unwrap().clone()
-    }
 
     fn can_migrate(
         &mut self,

@@ -8,7 +8,9 @@ use std::path::Path;
 use crate::{
     common::{
         boot_manager::BootManager,
-        call, dir_exists,
+        call,
+        device_info::DeviceInfo,
+        dir_exists,
         disk_util::LabelType,
         file_digest::check_digest,
         file_exists, format_size_with_unit,
@@ -111,13 +113,10 @@ impl<'a> BootManager for GrubBootManager {
         BootType::Grub
     }
 
-    fn get_bootmgr_path(&self) -> PathInfo {
-        self.bootmgr_path.as_ref().unwrap().clone()
+    fn get_bootmgr_path(&self) -> DeviceInfo {
+        self.bootmgr_path.as_ref().unwrap().device_info.clone()
     }
     // TODO: do we need to distiguish like in u-boot ?
-    fn get_boot_path(&self) -> PathInfo {
-        self.bootmgr_path.as_ref().unwrap().clone()
-    }
 
     fn can_migrate(
         &mut self,

@@ -4,8 +4,8 @@ use regex::Regex;
 use crate::{
     common::{
         boot_manager::BootManager,
+        device_info::DeviceInfo,
         migrate_info::MigrateInfo,
-        path_info::PathInfo,
         stage2_config::{Stage2Config, Stage2ConfigBuilder},
         Config, MigError, MigErrorKind,
     },
@@ -182,7 +182,7 @@ impl Device for BeagleboneGreen {
         self.boot_manager.restore(mounts, config)
     }
 
-    fn get_boot_device(&self) -> PathInfo {
+    fn get_boot_device(&self) -> DeviceInfo {
         self.boot_manager.get_bootmgr_path()
     }
 }
@@ -270,7 +270,7 @@ impl Device for BeagleboneBlack {
         self.boot_manager.restore(mounts, config)
     }
 
-    fn get_boot_device(&self) -> PathInfo {
+    fn get_boot_device(&self) -> DeviceInfo {
         self.boot_manager.get_bootmgr_path()
     }
 }
@@ -365,7 +365,7 @@ impl<'a> Device for BeagleboardXM {
         self.boot_manager.setup(mig_info, s2_cfg, &kernel_opts)
     }
 
-    fn get_boot_device(&self) -> PathInfo {
+    fn get_boot_device(&self) -> DeviceInfo {
         self.boot_manager.get_bootmgr_path()
     }
 }

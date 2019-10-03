@@ -4,8 +4,8 @@ use regex::Regex;
 use crate::{
     common::{
         boot_manager::BootManager,
+        device_info::DeviceInfo,
         migrate_info::MigrateInfo,
-        path_info::PathInfo,
         stage2_config::{Stage2Config, Stage2ConfigBuilder},
         Config, MigError, MigErrorKind,
     },
@@ -140,7 +140,7 @@ impl<'a> Device for RaspberryPi3 {
         restore_backups(mounts.get_boot_mountpoint(), config.get_boot_backups())
     }
 
-    fn get_boot_device(&self) -> PathInfo {
+    fn get_boot_device(&self) -> DeviceInfo {
         self.boot_manager.get_bootmgr_path()
     }
 }
@@ -221,7 +221,7 @@ impl<'a> Device for RaspberryPi4_64 {
         restore_backups(mounts.get_boot_mountpoint(), config.get_boot_backups())
     }
 
-    fn get_boot_device(&self) -> PathInfo {
+    fn get_boot_device(&self) -> DeviceInfo {
         self.boot_manager.get_bootmgr_path()
     }
 }
