@@ -149,12 +149,12 @@ impl<'a> MSWMigrator {
         // Pick the current root device as flash device
 
         let boot_info = device.get_boot_device();
-        let flash_device = &boot_info.device_info.drive;
-        let flash_dev_size = boot_info.device_info.drive_size;
+        let flash_device = &boot_info.drive;
+        let flash_dev_size = boot_info.drive_size;
 
         info!(
             "The install drive is {}, size: {}",
-            boot_info.device_info.drive,
+            boot_info.drive,
             format_size_with_unit(flash_dev_size)
         );
 

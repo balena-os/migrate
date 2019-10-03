@@ -32,7 +32,7 @@ impl OSApi for MSWinApi {
     }
 
     fn path_info_from_path<P: AsRef<Path>>(&self, path: P) -> Result<PathInfo, MigError> {
-        unimplemented!()
+        Ok(PathInfo::from_path(path)?)
     }
 
     fn device_info_from_partition<P: AsRef<Path>>(
@@ -43,6 +43,7 @@ impl OSApi for MSWinApi {
     }
 
     fn expect_type<P: AsRef<Path>>(&self, file: P, ftype: &FileType) -> Result<(), MigError> {
-        unimplemented!()
+        // TODO: do something smarter than nothing
+        return Ok(());
     }
 }

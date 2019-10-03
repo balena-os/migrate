@@ -124,7 +124,7 @@ impl DeviceInfo {
     #[cfg(target_os = "windows")]
     pub fn for_efi() -> Result<DeviceInfo, MigError> {
         Ok(DeviceInfo::from_volume_info(
-            DriveInfo::new()?.for_efi_drive()?,
+            &DriveInfo::new()?.for_efi_drive()?,
         ))
     }
 

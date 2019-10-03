@@ -32,18 +32,18 @@ impl<'a> MountPoint {
     pub fn query_path<P: AsRef<Path>>(path: P) -> Result<MountPoint, MigError> {
         let path = path.as_ref();
         let mountpoints = MountPoint::from_query(QUERY_ALL)?;
-        let mut found_mountpoint: Option<&MountPoint> = None;
+        let mut found_mountpoint: Option<MountPoint> = None;
 
         for ref mountpoint in mountpoints {
             if mountpoint.get_directory().starts_with(path) {
-                if let Some(found) = found_mountpoint {
+                if let Some(ref found) = found_mountpoint {
                     if mountpoint.directory.to_string_lossy().len()
                         > found.directory.to_string_lossy().len()
                     {
-                        found_mountpoint = Some(mountpoint);
+                        found_mountpoint = Some(mountpoint.clone());
                     }
                 } else {
-                    found_mountpoint = Some(mountpoint);
+                    found_mountpoint = Some(mountpoint.clone());
                 }
             }
         }
@@ -59,7 +59,7 @@ impl<'a> MountPoint {
                 found_path.get_volume().get_device_id()
             );
 
-            Ok(found_path.clone())
+            Ok(found_path)
         } else {
             Err(MigError::from_remark(
                 MigErrorKind::NotFound,

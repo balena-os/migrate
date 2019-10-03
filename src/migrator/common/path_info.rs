@@ -142,7 +142,7 @@ impl PathInfo {
 
         Ok(PathInfo::from_volume_info(
             &abs_path,
-            DriveInfo::new()?.from_path(abs_path)?,
+            &DriveInfo::new()?.from_path(&abs_path)?,
         )?)
     }
 }

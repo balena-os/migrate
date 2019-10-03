@@ -32,11 +32,15 @@ use crate::{
 
 pub(crate) struct EfiBootManager {
     msw_device: bool,
+    boot_device: Option<DeviceInfo>,
 }
 
 impl EfiBootManager {
     pub fn new() -> EfiBootManager {
-        EfiBootManager { msw_device: true }
+        EfiBootManager {
+            msw_device: true,
+            boot_device: None,
+        }
     }
 }
 
@@ -72,6 +76,8 @@ impl BootManager for EfiBootManager {
             return Ok(false);
         }
 
+        self.boot_device = Some(efi_drive);
+
         Ok(true)
     }
 
@@ -90,20 +96,21 @@ impl BootManager for EfiBootManager {
         // to a safe place and add a
         // create a startup.nsh file in \EFI\Boot\ that refers to our kernel & initramfs
 
-        let efi_path = DeviceInfo::for_efi()?;
+        let boot_dev = if let Some(ref boot_dev) = self.boot_device {
+            boot_dev
+        } else {
+            return Err(MigError::from_remark(
+                MigErrorKind::InvParam,
+                "boot_device not set for boot_manager",
+            ));
+        };
 
         debug!(
             "efi drive found, setting boot manager to '{}'",
-            efi_path.get_alt_path().display()
+            boot_dev.get_alt_path().display()
         );
 
-        s2_cfg.set_bootmgr_cfg(MountConfig::new(
-            &efi_path.get_alt_path(),
-            efi_path.fs_type.as_str(),
-            &efi_path.mountpoint,
-        ));
-
-        let balena_efi_dir = path_append(efi_path.get_path(), BALENA_EFI_DIR);
+        let balena_efi_dir = path_append(&boot_dev.mountpoint, BALENA_EFI_DIR);
         if !dir_exists(&balena_efi_dir)? {
             create_dir_all(&balena_efi_dir).context(MigErrCtx::from_remark(
                 MigErrorKind::Upstream,
@@ -141,13 +148,13 @@ impl BootManager for EfiBootManager {
             ),
         ))?;
 
-        let efi_boot_dir = path_append(efi_path.get_path(), EFI_BOOT_DIR);
+        let efi_boot_dir = path_append(&boot_dev.mountpoint, EFI_BOOT_DIR);
         if !dir_exists(&efi_boot_dir)? {
             create_dir_all(&balena_efi_dir).context(MigErrCtx::from_remark(
                 MigErrorKind::Upstream,
                 &format!(
                     "failed to create EFI directory '{}'",
-                    balena_efi_dir.display()
+                    efi_boot_dir.display()
                 ),
             ))?;
         }
@@ -171,14 +178,14 @@ impl BootManager for EfiBootManager {
 
         // TODO: prefer PARTUUID to guessed device name
 
-        let startup_content = if let Some(partuuid) = mig_info.drive_info.boot_path.get_partuuid() {
+        let startup_content = if let Some(ref partuuid) = boot_dev.part_uuid {
             format!(
                 "{}{} initrd={} root=PARTUUID={} rootfstype={}",
                 STARTUP_TEMPLATE,
                 kernel_path,
                 initrd_path,
                 partuuid,
-                mig_info.drive_info.work_path.get_linux_fstype()
+                mig_info.work_path.device_info.fs_type
             )
         } else {
             warn!("setting up /root device without partuuid, this is unsafe!");
@@ -188,11 +195,11 @@ impl BootManager for EfiBootManager {
                 kernel_path,
                 initrd_path,
                 mig_info
-                    .drive_info
                     .work_path
-                    .get_linux_part()
+                    .device_info
+                    .get_alt_path()
                     .to_string_lossy(),
-                mig_info.drive_info.work_path.get_linux_fstype()
+                mig_info.work_path.device_info.fs_type,
             )
         };
 
@@ -214,7 +221,7 @@ impl BootManager for EfiBootManager {
             ))?;
 
         // TODO: create fake EFI mountpoint and adapt backup paths to it
-        let efi_bckup_dir = path_append(efi_path.get_path(), EFI_BCKUP_DIR);
+        let efi_bckup_dir = path_append(&boot_dev.mountpoint, EFI_BCKUP_DIR);
         if !dir_exists(&efi_bckup_dir)? {
             create_dir_all(&efi_bckup_dir).context(MigErrCtx::from_remark(
                 MigErrorKind::Upstream,
@@ -225,7 +232,7 @@ impl BootManager for EfiBootManager {
             ))?;
         }
 
-        let msw_boot_mgr = path_append(efi_path.get_path(), EFI_MS_BOOTMGR);
+        let msw_boot_mgr = path_append(&boot_dev.mountpoint, EFI_MS_BOOTMGR);
         if file_exists(&msw_boot_mgr) {
             let backup_path = path_append(&efi_bckup_dir, &msw_boot_mgr.file_name().unwrap());
             info!(
@@ -248,7 +255,7 @@ impl BootManager for EfiBootManager {
         }
 
         // TODO: allow 32 bit
-        let def_boot_mgr = path_append(efi_path.get_path(), EFI_DEFAULT_BOOTMGR64);
+        let def_boot_mgr = path_append(&boot_dev.mountpoint, EFI_DEFAULT_BOOTMGR64);
         if file_exists(&def_boot_mgr) {
             let backup_path = path_append(&efi_bckup_dir, &def_boot_mgr.file_name().unwrap());
             info!(
@@ -273,10 +280,7 @@ impl BootManager for EfiBootManager {
         Ok(())
     }
 
-    fn get_bootmgr_path(&self) -> PathInfo {
-        unimplemented!()
-    }
-    fn get_boot_path(&self) -> PathInfo {
+    fn get_bootmgr_path(&self) -> DeviceInfo {
         unimplemented!()
     }
 }

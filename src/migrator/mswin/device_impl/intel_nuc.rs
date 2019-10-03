@@ -114,7 +114,7 @@ impl Device for IntelNuc {
 
     fn setup(
         &self,
-        dev_info: &mut MigrateInfo,
+        mig_info: &mut MigrateInfo,
         config: &Config,
         s2_cfg: &mut Stage2ConfigBuilder,
     ) -> Result<(), MigError> {

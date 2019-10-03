@@ -63,7 +63,14 @@ pub(crate) struct DiskExtent {
 }
 
 pub(crate) fn get_volume_disk_extents(path: &str) -> Result<Vec<DiskExtent>, MigError> {
-    let dev_path: Vec<u16> = OsStr::new(path).encode_wide().chain(once(0)).collect();
+    let mut path = String::from(path);
+
+    if path.ends_with("\\") {
+        let _dummy = path.pop();
+    }
+
+    let mut dev_path: Vec<u16> = OsStr::new(&path).encode_wide().chain(once(0)).collect();
+
     let file_handle = unsafe {
         CreateFileW(
             dev_path.as_ptr(),

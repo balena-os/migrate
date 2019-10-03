@@ -10,7 +10,7 @@ use crate::{
 
 mod intel_nuc;
 
-pub fn get_device(
+pub(crate) fn get_device(
     mig_info: &MigrateInfo,
     config: &Config,
     stage2_config: &mut Stage2ConfigBuilder,
