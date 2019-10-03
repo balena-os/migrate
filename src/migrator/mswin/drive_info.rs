@@ -21,7 +21,7 @@ use crate::{
 const VOL_UUID_REGEX: &str =
     r#"^\\\\\?\\Volume\{([a-f0-9]{8}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{12})\}\\$"#;
 
-struct VolumeInfo {
+pub(crate) struct VolumeInfo {
     pub part_uuid: String,
     pub volume: Volume,
     pub logical_drive: LogicalDrive,
@@ -29,65 +29,7 @@ struct VolumeInfo {
     pub partition: Partition,
 }
 
-impl VolumeInfo {
-    fn to_device_info(&self) -> DeviceInfo {
-        DeviceInfo {
-            // the drive device path
-            drive: String::from(self.physical_drive.get_device_id()),
-            // the devices mountpoint
-            mountpoint: PathBuf::from(self.logical_drive.get_name()),
-            // the drive size
-            drive_size: self.physical_drive.get_size(),
-            // the partition device path
-            device: String::from(self.volume.get_device_id()),
-            // TODO: the partition index - this value is not correct in windows as hidden partotions are not counted
-            index: None,
-            // the partition fs type
-            fs_type: String::from(self.volume.get_file_system().to_linux_str()),
-            // the partition uuid
-            uuid: None,
-            // the partition partuuid
-            part_uuid: Some(self.part_uuid.clone()),
-            // the partition label
-            part_label: if let Some(label) = self.volume.get_label() {
-                Some(String::from(label))
-            } else {
-                None
-            },
-            // the partition size
-            part_size: self.partition.get_size(),
-        }
-    }
-
-    fn to_path_info(&self, path: &Path) -> Result<PathInfo, MigError> {
-        Ok(PathInfo {
-            // the physical device info
-            device_info: self.to_device_info(),
-            // the absolute path
-            path: path.to_path_buf(),
-            // the partition read only flag
-            // pub mount_ro: bool,
-            // The file system size
-            fs_size: if let Some(capacity) = self.volume.get_capacity() {
-                capacity
-            } else {
-                return Err(MigError::from_remark(
-                    MigErrorKind::InvParam,
-                    &format!("No fs capacity found for path '{}'", path.display()),
-                ));
-            },
-            // the fs free space
-            fs_free: if let Some(free_space) = self.volume.get_free_space() {
-                free_space
-            } else {
-                return Err(MigError::from_remark(
-                    MigErrorKind::InvParam,
-                    &format!("No fs free_space found for path '{}'", path.display()),
-                ));
-            },
-        })
-    }
-}
+impl VolumeInfo {}
 
 struct SharedDriveInfo {
     volumes: Option<Vec<VolumeInfo>>,
@@ -122,7 +64,7 @@ impl DriveInfo {
         Ok(drive_info)
     }
 
-    pub fn device_info_for_efi_drive(&self) -> Result<DeviceInfo, MigError> {
+    pub fn for_efi_drive<'a>(&'a self) -> Result<&'a VolumeInfo, MigError> {
         let drive_info = self.init()?;
         if let Some(found) = drive_info
             .volumes
@@ -130,7 +72,7 @@ impl DriveInfo {
             .iter()
             .find(|vi| vi.volume.is_system())
         {
-            Ok(found.to_device_info())
+            Ok(found)
         } else {
             Err(MigError::from_remark(
                 MigErrorKind::NotFound,
@@ -139,7 +81,7 @@ impl DriveInfo {
         }
     }
 
-    pub fn path_info_from_path<P: AsRef<Path>>(&self, path: P) -> Result<PathInfo, MigError> {
+    pub fn from_path<'a, P: AsRef<Path>>(&'a self, path: P) -> Result<&'a VolumeInfo, MigError> {
         let drive_info = self.init()?;
         if let Some(found) = drive_info
             .volumes
@@ -147,7 +89,7 @@ impl DriveInfo {
             .iter()
             .find(|di| PathBuf::from(di.logical_drive.get_name()).starts_with(path.as_ref()))
         {
-            Ok(found.to_path_info(path.as_ref())?)
+            Ok(found)
         } else {
             Err(MigError::from_remark(
                 MigErrorKind::NotFound,

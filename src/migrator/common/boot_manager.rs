@@ -1,7 +1,7 @@
 use crate::{
     common::{
-        migrate_info::MigrateInfo, path_info::PathInfo, stage2_config::Stage2ConfigBuilder, Config,
-        MigError,
+        device_info::DeviceInfo, migrate_info::MigrateInfo, stage2_config::Stage2ConfigBuilder,
+        Config, MigError,
     },
     defs::BootType,
 };
@@ -29,6 +29,5 @@ pub(crate) trait BootManager {
     fn restore(&self, mounts: &Mounts, config: &Stage2Config) -> bool;
 
     // TODO: make return reference
-    fn get_bootmgr_path(&self) -> PathInfo;
-    fn get_boot_path(&self) -> PathInfo;
+    fn get_bootmgr_path(&self) -> DeviceInfo;
 }

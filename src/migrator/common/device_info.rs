@@ -9,6 +9,9 @@ use crate::{
 #[cfg(target_os = "linux")]
 use crate::linux::lsblk_info::{LsblkDevice, LsblkPartition};
 
+#[cfg(target_os = "windows")]
+use crate::mswin::drive_info::{DriveInfo, VolumeInfo};
+
 #[derive(Debug, Clone)]
 pub(crate) struct DeviceInfo {
     // the drive device path
@@ -86,6 +89,43 @@ impl DeviceInfo {
                 return Err(MigError::displayed());
             },
         })
+    }
+
+    #[cfg(target_os = "windows")]
+    pub fn from_volume_info(vol_info: &VolumeInfo) -> DeviceInfo {
+        DeviceInfo {
+            // the drive device path
+            drive: String::from(vol_info.physical_drive.get_device_id()),
+            // the devices mountpoint
+            mountpoint: PathBuf::from(vol_info.logical_drive.get_name()),
+            // the drive size
+            drive_size: vol_info.physical_drive.get_size(),
+            // the partition device path
+            device: String::from(vol_info.volume.get_device_id()),
+            // TODO: the partition index - this value is not correct in windows as hidden partotions are not counted
+            index: None,
+            // the partition fs type
+            fs_type: String::from(vol_info.volume.get_file_system().to_linux_str()),
+            // the partition uuid
+            uuid: None,
+            // the partition partuuid
+            part_uuid: Some(vol_info.part_uuid.clone()),
+            // the partition label
+            part_label: if let Some(label) = vol_info.volume.get_label() {
+                Some(String::from(label))
+            } else {
+                None
+            },
+            // the partition size
+            part_size: vol_info.partition.get_size(),
+        }
+    }
+
+    #[cfg(target_os = "windows")]
+    pub fn for_efi() -> Result<DeviceInfo, MigError> {
+        Ok(DeviceInfo::from_volume_info(
+            DriveInfo::new()?.for_efi_drive()?,
+        ))
     }
 
     pub fn get_kernel_cmd(&self) -> String {

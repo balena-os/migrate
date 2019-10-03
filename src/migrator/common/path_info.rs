@@ -10,7 +10,10 @@ use crate::linux::{
 };
 
 #[cfg(target_os = "windows")]
-use crate::mswin::{drive_info::DriveInfo, wmi_utils::MountPoint};
+use crate::mswin::{
+    drive_info::{DriveInfo, VolumeInfo},
+    wmi_utils::MountPoint,
+};
 
 /*
 Contains full Information on a path including
@@ -91,8 +94,33 @@ impl PathInfo {
     }
 
     #[cfg(target_os = "windows")]
-    pub fn for_efi<P: AsRef<Path>>(path: P) -> Result<DeviceInfo, MigError> {
-        Ok(DriveInfo::new()?.device_info_for_efi_drive()?)
+    fn from_volume_info(path: &Path, vol_info: &VolumeInfo) -> Result<PathInfo, MigError> {
+        Ok(PathInfo {
+            // the physical device info
+            device_info: DeviceInfo::from_volume_info(vol_info),
+            // the absolute path
+            path: path.to_path_buf(),
+            // the partition read only flag
+            // pub mount_ro: bool,
+            // The file system size
+            fs_size: if let Some(capacity) = vol_info.volume.get_capacity() {
+                capacity
+            } else {
+                return Err(MigError::from_remark(
+                    MigErrorKind::InvParam,
+                    &format!("No fs capacity found for path '{}'", path.display()),
+                ));
+            },
+            // the fs free space
+            fs_free: if let Some(free_space) = vol_info.volume.get_free_space() {
+                free_space
+            } else {
+                return Err(MigError::from_remark(
+                    MigErrorKind::InvParam,
+                    &format!("No fs free_space found for path '{}'", path.display()),
+                ));
+            },
+        })
     }
 
     #[cfg(target_os = "windows")]
@@ -112,8 +140,9 @@ impl PathInfo {
                 &format!("failed to canonicalize path: '{}'", path.as_ref().display()),
             ))?;
 
-        let mountpoints = MountPoint::query_path(abs_path)?;
-
-        unimplemented!()
+        Ok(PathInfo::from_volume_info(
+            &abs_path,
+            DriveInfo::new()?.from_path(abs_path)?,
+        )?)
     }
 }
