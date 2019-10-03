@@ -206,7 +206,7 @@ impl<'a> BootManager for GrubBootManager {
 
         // path to kernel & initramfs at boot time depends on how /boot is mounted
         // either / (for a /boot mount or /boot for a directory of /root file system)
-        let grub_boot: &Path = if boot_path.path == boot_path.mountpoint {
+        let grub_boot: &Path = if boot_path.path == boot_path.device_info.mountpoint {
             // /boot is a mounted filesystem
             &Path::new(ROOT_PATH)
         } else {
@@ -239,7 +239,7 @@ impl<'a> BootManager for GrubBootManager {
             // TODO: try partuuid too ? local setRootA="set root='${GRUB_BOOT_DEV},msdos${ROOT_PART_NO}'"
             format!("search --no-floppy --fs-uuid --set=root {}", uuid)
         } else {
-            if let Some(ref partuuid) = boot_path.device_info.part_uuid {
+            if let Some(ref _partuuid) = boot_path.device_info.part_uuid {
                 return Err(MigError::from_remark(
                     MigErrorKind::FeatureMissing,
                     "Grub root string is not implemented for partuuid ",
@@ -248,7 +248,7 @@ impl<'a> BootManager for GrubBootManager {
                 if let Some(index) = boot_path.device_info.index {
                     format!(
                         "search --no-floppy --fs-uuid --set=root {},{}{}",
-                        boot_path.device_info.drive, part_type, boot_path.device_info.index
+                        boot_path.device_info.drive, part_type, index
                     )
                 } else {
                     return Err(MigError::from_remark(

@@ -1,5 +1,4 @@
 use failure::ResultExt;
-use log::error;
 use std::path::{Path, PathBuf};
 
 use crate::common::{device_info::DeviceInfo, MigErrCtx, MigError, MigErrorKind};
@@ -11,7 +10,7 @@ use crate::linux::{
 };
 
 #[cfg(target_os = "windows")]
-use crate::mswin::wmi_utils::MountPoint;
+use crate::mswin::{drive_info::DriveInfo, wmi_utils::MountPoint};
 
 /*
 Contains full Information on a path including
@@ -54,26 +53,20 @@ impl PathInfo {
         let (drive, partition) = lsblk_info.get_path_devs(path.as_ref())?;
         let device_info = DeviceInfo::new(drive, partition)?;
 
-        if let Some(ref mountpoint) = partition.mountpoint {
-            let (fs_size, fs_free) = get_fs_space(&abs_path)?;
+        let (fs_size, fs_free) = get_fs_space(&abs_path)?;
 
-            Ok(Some(PathInfo {
-                device_info,
-                path: abs_path,
-                mountpoint: mountpoint.to_path_buf(),
-                fs_size,
-                fs_free,
-            }))
-        } else {
-            error!("Refusing to create PathInfo from unmounted partition");
-            return Err(MigError::displayed());
-        }
+        Ok(Some(PathInfo {
+            device_info,
+            path: abs_path,
+            fs_size,
+            fs_free,
+        }))
     }
 
     #[cfg(target_os = "linux")]
     pub fn from_mounted<P1: AsRef<Path>, P2: AsRef<Path>>(
         path: P1,
-        mountpoint: P2,
+        _mountpoint: P2,
         drive: &LsblkDevice,
         partition: &LsblkPartition,
     ) -> Result<PathInfo, MigError> {
@@ -92,15 +85,14 @@ impl PathInfo {
         Ok(PathInfo {
             device_info,
             path: abs_path,
-            mountpoint: mountpoint.as_ref().to_path_buf(),
             fs_size,
             fs_free,
         })
     }
 
     #[cfg(target_os = "windows")]
-    pub fn for_efi<P: AsRef<Path>>(path: P) -> Result<PathInfo, MigError> {
-        unimplemented!()
+    pub fn for_efi<P: AsRef<Path>>(path: P) -> Result<DeviceInfo, MigError> {
+        Ok(DriveInfo::new()?.device_info_for_efi_drive()?)
     }
 
     #[cfg(target_os = "windows")]

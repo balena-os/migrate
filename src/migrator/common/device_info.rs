@@ -40,6 +40,15 @@ impl DeviceInfo {
     pub fn new(drive: &LsblkDevice, partition: &LsblkPartition) -> Result<DeviceInfo, MigError> {
         Ok(DeviceInfo {
             drive: String::from(drive.get_path().to_string_lossy()),
+            mountpoint: if let Some(ref mountpoint) = partition.mountpoint {
+                mountpoint.clone()
+            } else {
+                error!(
+                    "The required parameter mountpoint could not be found for '{}'",
+                    partition.get_path().display()
+                );
+                return Err(MigError::displayed());
+            },
             drive_size: if let Some(size) = drive.size {
                 size
             } else {

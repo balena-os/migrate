@@ -276,7 +276,7 @@ impl<'a> BootManager for UBootManager {
         info!(
             "Found boot manager '{}', mounpoint: '{}', fs type: {}, free space: {}",
             bootmgr_path.device_info.device,
-            bootmgr_path.mountpoint.display(),
+            bootmgr_path.device_info.mountpoint.display(),
             bootmgr_path.device_info.fs_type,
             format_size_with_unit(bootmgr_path.fs_free)
         );
@@ -314,7 +314,7 @@ impl<'a> BootManager for UBootManager {
                     info!(
                         "Found boot '{}', mounpoint: '{}', fs type: {}, free space: {}",
                         boot_path.device_info.device,
-                        boot_path.mountpoint.display(),
+                        boot_path.device_info.mountpoint.display(),
                         boot_path.device_info.fs_type,
                         format_size_with_unit(boot_path.fs_free)
                     );
@@ -328,7 +328,7 @@ impl<'a> BootManager for UBootManager {
                         info!(
                             "Found boot '{}', mounpoint: '{}', fs type: {}, free space: {}",
                             boot_path.device_info.device,
-                            boot_path.mountpoint.display(),
+                            boot_path.device_info.mountpoint.display(),
                             boot_path.device_info.fs_type,
                             format_size_with_unit(boot_path.fs_free)
                         );
@@ -519,46 +519,46 @@ impl<'a> BootManager for UBootManager {
 
         // convert kernel / initrd / dtb paths to mountpoint relative paths for uEnv.txt
         let (kernel_path, initrd_path, dtb_path) =
-            if boot_path.mountpoint != PathBuf::from(ROOT_PATH) {
+            if boot_path.device_info.mountpoint != PathBuf::from(ROOT_PATH) {
                 (
                     path_append(
                         ROOT_PATH,
-                        kernel_path.strip_prefix(&boot_path.mountpoint).context(
-                            MigErrCtx::from_remark(
+                        kernel_path
+                            .strip_prefix(&boot_path.device_info.mountpoint)
+                            .context(MigErrCtx::from_remark(
                                 MigErrorKind::Upstream,
                                 &format!(
                                     "cannot remove prefix '{}' from '{}'",
                                     kernel_path.display(),
-                                    boot_path.mountpoint.display()
+                                    boot_path.device_info.mountpoint.display()
                                 ),
-                            ),
-                        )?,
+                            ))?,
                     ),
                     path_append(
                         ROOT_PATH,
-                        initrd_path.strip_prefix(&boot_path.mountpoint).context(
-                            MigErrCtx::from_remark(
+                        initrd_path
+                            .strip_prefix(&boot_path.device_info.mountpoint)
+                            .context(MigErrCtx::from_remark(
                                 MigErrorKind::Upstream,
                                 &format!(
                                     "cannot remove prefix '{}' from '{}'",
                                     initrd_path.display(),
-                                    boot_path.mountpoint.display()
+                                    boot_path.device_info.mountpoint.display()
                                 ),
-                            ),
-                        )?,
+                            ))?,
                     ),
                     path_append(
                         ROOT_PATH,
-                        dtb_path.strip_prefix(&boot_path.mountpoint).context(
-                            MigErrCtx::from_remark(
+                        dtb_path
+                            .strip_prefix(&boot_path.device_info.mountpoint)
+                            .context(MigErrCtx::from_remark(
                                 MigErrorKind::Upstream,
                                 &format!(
                                     "cannot remove prefix '{}' from '{}'",
                                     dtb_path.display(),
-                                    boot_path.mountpoint.display()
+                                    boot_path.device_info.mountpoint.display()
                                 ),
-                            ),
-                        )?,
+                            ))?,
                     ),
                 )
             } else {

@@ -39,7 +39,7 @@ mod util;
 
 mod device_impl;
 
-mod drive_info;
+pub(crate) mod drive_info;
 
 pub(crate) mod wmi_utils;
 

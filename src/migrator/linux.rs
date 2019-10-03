@@ -439,7 +439,7 @@ impl<'a> LinuxMigrator {
             .set_gzip_internal(self.config.migrate.is_gzip_internal());
 
         trace!("write stage 2 config");
-        let s2_path = path_append(&boot_device.mountpoint, STAGE2_CFG_FILE);
+        let s2_path = path_append(&boot_device.device_info.mountpoint, STAGE2_CFG_FILE);
         self.stage2_config.write_stage2_cfg_to(&s2_path)?;
 
         if let Some(delay) = self.config.migrate.get_reboot() {
