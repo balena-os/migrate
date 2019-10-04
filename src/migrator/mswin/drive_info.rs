@@ -90,22 +90,18 @@ impl DriveInfo {
     }
 
     pub fn from_path<P: AsRef<Path>>(&self, path: P) -> Result<VolumeInfo, MigError> {
+        debug!("from_path: entered with '{}'", path.as_ref().display());
+        let path = path.as_ref();
         let drive_info = self.init()?;
-        if let Some(found) = drive_info
-            .volumes
-            .as_ref()
-            .unwrap()
-            .iter()
-            .find(|di| PathBuf::from(di.logical_drive.get_name()).starts_with(path.as_ref()))
-        {
+        if let Some(found) = drive_info.volumes.as_ref().unwrap().iter().find(|di| {
+            debug!("comparing to: '{}'", di.logical_drive.get_name());
+            path.starts_with(di.logical_drive.get_name())
+        }) {
             Ok(found.clone())
         } else {
             Err(MigError::from_remark(
                 MigErrorKind::NotFound,
-                &format!(
-                    "No logical drive found for path '{}'",
-                    path.as_ref().display()
-                ),
+                &format!("No logical drive found for path '{}'", path.display()),
             ))
         }
     }

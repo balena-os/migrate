@@ -1,4 +1,5 @@
 use failure::ResultExt;
+
 use std::path::{Path, PathBuf};
 
 use crate::common::{device_info::DeviceInfo, MigErrCtx, MigError, MigErrorKind};
@@ -125,6 +126,15 @@ impl PathInfo {
 
     #[cfg(target_os = "windows")]
     pub fn from_path<P: AsRef<Path>>(path: P) -> Result<PathInfo, MigError> {
+        use lazy_static::lazy_static;
+        use log::{debug, warn};
+        use regex::Regex;
+
+        debug!("from_path entered with '{}'", path.as_ref().display());
+
+        const UNC_RE: &str = r#"^\\\\(\?|\.)\\([A-Z]:.*)$"#;
+        // ^\\\\([a-zA-Z]+|\?|\.)\\([A-Z]\:.*)$
+
         if !path.as_ref().exists() {
             return Err(MigError::from_remark(
                 MigErrorKind::NotFound,
@@ -140,9 +150,21 @@ impl PathInfo {
                 &format!("failed to canonicalize path: '{}'", path.as_ref().display()),
             ))?;
 
+        lazy_static! {
+            static ref UNC_REGEX: Regex = Regex::new(UNC_RE).unwrap();
+        }
+
+        let clean_path = if let Some(captures) = UNC_REGEX.captures(&*abs_path.to_string_lossy()) {
+            debug!("UNC regex matched: '{}'", abs_path.display());
+            PathBuf::from(captures.get(2).unwrap().as_str())
+        } else {
+            warn!("UNC regex did not match: '{}'", abs_path.display());
+            abs_path
+        };
+
         Ok(PathInfo::from_volume_info(
-            &abs_path,
-            &DriveInfo::new()?.from_path(&abs_path)?,
+            &clean_path,
+            &DriveInfo::new()?.from_path(&clean_path)?,
         )?)
     }
 }

@@ -75,10 +75,15 @@ impl FileInfo {
             }
         };
 
+        trace!("working with path: '{}'", checked_path.display());
+
         let abs_path = checked_path.canonicalize().context(MigErrCtx::from_remark(
             MigErrorKind::Upstream,
             &format!("Failed to canonicalize path '{}'", checked_path.display()),
         ))?;
+
+        trace!("working with abs_path: '{}'", abs_path.display());
+
         let metadata = abs_path.metadata().context(MigErrCtx::from_remark(
             MigErrorKind::Upstream,
             &format!("failed to retrieve metadata for path {:?}", abs_path),

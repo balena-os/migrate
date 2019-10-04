@@ -56,7 +56,12 @@ impl MigrateInfo {
         trace!("new: entered");
         let os_arch = os_api.get_os_arch()?;
 
-        let work_path = os_api.path_info_from_path(config.migrate.get_work_dir())?;
+        debug!(
+            "Calling PathInfo::from_path on '{}'",
+            config.migrate.get_work_dir().display()
+        );
+
+        let work_path = PathInfo::from_path(config.migrate.get_work_dir())?;
         let work_dir = &work_path.path;
         info!(
             "Working directory is '{}' on '{}'",
@@ -65,6 +70,7 @@ impl MigrateInfo {
         );
 
         let log_path = if let Some(log_dev) = config.migrate.get_log_device() {
+            debug!("Checking log device: '{}'", log_dev.display());
             if log_dev.exists() {
                 Some(os_api.device_info_from_partition(log_dev)?)
             } else {
@@ -77,6 +83,8 @@ impl MigrateInfo {
         } else {
             None
         };
+
+        debug!("Checking image files: {:?}", config.balena.get_image_path());
 
         let os_image = match config.balena.get_image_path() {
             ImageType::Flasher(ref flasher_img) => {
@@ -121,6 +129,10 @@ impl MigrateInfo {
             }
         };
 
+        debug!(
+            "Checking config.json: '{:?}'",
+            config.balena.get_config_path()
+        );
         let config_file = if let Some(file_info) =
             FileInfo::new(config.balena.get_config_path(), &work_dir)?
         {
