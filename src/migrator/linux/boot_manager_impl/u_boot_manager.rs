@@ -110,13 +110,13 @@ impl UBootManager {
         if file_exists(path_append(ROOT_PATH, MLO_FILE_NAME))
             || file_exists(path_append(ROOT_PATH, UBOOT_FILE_NAME))
         {
-            return Ok(PathInfo::from_path(ROOT_PATH, lsblk_info)?.unwrap());
+            return Ok(PathInfo::from_path(ROOT_PATH)?);
         }
 
         if file_exists(path_append(BOOT_PATH, MLO_FILE_NAME))
             || file_exists(path_append(BOOT_PATH, UBOOT_FILE_NAME))
         {
-            return Ok(PathInfo::from_path(BOOT_PATH, lsblk_info)?.unwrap());
+            return Ok(PathInfo::from_path(BOOT_PATH)?);
         }
 
         let mut tmp_mountpoint: Option<PathBuf> = None;
@@ -240,7 +240,7 @@ impl UBootManager {
 
         debug!("No u-boot boot files found, assuming '{}'", ROOT_PATH);
 
-        Ok(PathInfo::from_path(ROOT_PATH, lsblk_info)?.unwrap())
+        Ok(PathInfo::from_path(ROOT_PATH)?)
     }
 }
 
@@ -303,7 +303,7 @@ impl<'a> BootManager for UBootManager {
         if bootmgr_path.fs_free < boot_req_space {
             // find alt location for boot config
 
-            if let Some(boot_path) = PathInfo::from_path(BOOT_PATH, &lsblk_info)? {
+            if let Ok(boot_path) = PathInfo::from_path(BOOT_PATH) {
                 if boot_path.fs_free > boot_req_space {
                     info!(
                         "Found boot '{}', mounpoint: '{}', fs type: {}, free space: {}",
@@ -317,7 +317,7 @@ impl<'a> BootManager for UBootManager {
                     self.boot_path = Some(boot_path);
                 }
             } else {
-                if let Some(boot_path) = PathInfo::from_path(ROOT_PATH, &lsblk_info)? {
+                if let Ok(boot_path) = PathInfo::from_path(ROOT_PATH) {
                     if boot_path.fs_free > boot_req_space {
                         info!(
                             "Found boot '{}', mounpoint: '{}', fs type: {}, free space: {}",

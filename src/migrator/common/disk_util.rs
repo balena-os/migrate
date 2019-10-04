@@ -528,10 +528,7 @@ mod test {
     use mod_logger::{Level, Logger};
 
     use crate::common::disk_util::PartitionIterator;
-    use crate::common::{
-        disk_util::{Disk, LabelType},
-        MigError,
-    };
+    use crate::common::disk_util::{Disk, LabelType};
 
     #[test]
     fn read_gzipped_part() {

@@ -25,7 +25,7 @@ use crate::{
 pub(crate) mod msw_defs;
 // use defs::{STAGE2_CFG_FILE, STAGE2_CFG_DIR};
 
-mod mswin_api;
+pub(crate) mod mswin_api;
 
 mod powershell;
 use powershell::{is_admin, is_secure_boot};

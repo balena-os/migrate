@@ -8,7 +8,7 @@ use crate::{
         },
         device_info::DeviceInfo,
         file_info::RelFileInfo,
-        os_api::OSApi,
+        os_api::{OSApi, OSApiImpl},
         path_info::PathInfo,
         stage2_config::{CheckedFSDump, CheckedImageType, CheckedPartDump},
         wifi_config::WifiConfig,
@@ -52,8 +52,9 @@ pub(crate) struct MigrateInfo {
 // TODO: sort out error reporting with Displayed
 
 impl MigrateInfo {
-    pub(crate) fn new(config: &Config, os_api: &impl OSApi) -> Result<MigrateInfo, MigError> {
+    pub(crate) fn new(config: &Config) -> Result<MigrateInfo, MigError> {
         trace!("new: entered");
+        let os_api = OSApi::new()?;
         let os_arch = os_api.get_os_arch()?;
 
         debug!(
@@ -88,12 +89,8 @@ impl MigrateInfo {
 
         let os_image = match config.balena.get_image_path() {
             ImageType::Flasher(ref flasher_img) => {
-                let checked_ref = MigrateInfo::check_file(
-                    &flasher_img,
-                    &FileType::GZipOSImage,
-                    &work_path,
-                    os_api,
-                )?;
+                let checked_ref =
+                    MigrateInfo::check_file(&flasher_img, &FileType::GZipOSImage, &work_path)?;
 
                 CheckedImageType::Flasher(checked_ref)
             }
@@ -106,23 +103,23 @@ impl MigrateInfo {
                     mkfs_direct: fs_dump.mkfs_direct.clone(),
                     extended_blocks: fs_dump.extended_blocks,
                     boot: CheckedPartDump {
-                        archive: MigrateInfo::check_dump(&fs_dump.boot, &work_path, os_api)?,
+                        archive: MigrateInfo::check_dump(&fs_dump.boot, &work_path)?,
                         blocks: fs_dump.boot.blocks,
                     },
                     root_a: CheckedPartDump {
-                        archive: MigrateInfo::check_dump(&fs_dump.root_a, &work_path, os_api)?,
+                        archive: MigrateInfo::check_dump(&fs_dump.root_a, &work_path)?,
                         blocks: fs_dump.root_a.blocks,
                     },
                     root_b: CheckedPartDump {
-                        archive: MigrateInfo::check_dump(&fs_dump.root_b, &work_path, os_api)?,
+                        archive: MigrateInfo::check_dump(&fs_dump.root_b, &work_path)?,
                         blocks: fs_dump.root_b.blocks,
                     },
                     state: CheckedPartDump {
-                        archive: MigrateInfo::check_dump(&fs_dump.state, &work_path, os_api)?,
+                        archive: MigrateInfo::check_dump(&fs_dump.state, &work_path)?,
                         blocks: fs_dump.state.blocks,
                     },
                     data: CheckedPartDump {
-                        archive: MigrateInfo::check_dump(&fs_dump.data, &work_path, os_api)?,
+                        archive: MigrateInfo::check_dump(&fs_dump.data, &work_path)?,
                         blocks: fs_dump.data.blocks,
                     },
                 })
@@ -300,16 +297,11 @@ impl MigrateInfo {
         Ok(result)
     }
 
-    fn check_dump(
-        dump: &PartDump,
-        work_path: &PathInfo,
-        os_api: &impl OSApi,
-    ) -> Result<RelFileInfo, MigError> {
+    fn check_dump(dump: &PartDump, work_path: &PathInfo) -> Result<RelFileInfo, MigError> {
         Ok(MigrateInfo::check_file(
             &dump.archive,
             &FileType::GZipTar,
             work_path,
-            os_api,
         )?)
     }
 
@@ -317,7 +309,6 @@ impl MigrateInfo {
         file_ref: &FileRef,
         expected_type: &FileType,
         work_path: &PathInfo,
-        os_api: &impl OSApi,
     ) -> Result<RelFileInfo, MigError> {
         if let Some(file_info) = FileInfo::new(&file_ref, &work_path.path)? {
             // make sure files are present and in /workdir, generate total size and partitioning config in miginfo
@@ -328,6 +319,7 @@ impl MigrateInfo {
                 return Err(MigError::displayed());
             };
 
+            let os_api = OSApi::new()?;
             let file_path_info = os_api.path_info_from_path(&file_info.path)?;
             if file_path_info.device_info.mountpoint != work_path.device_info.mountpoint {
                 error!("The file '{}' appears to reside on a different partition from the working directory. This setup is not supported", file_ref.path.display());

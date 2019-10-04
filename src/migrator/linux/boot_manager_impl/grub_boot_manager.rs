@@ -26,8 +26,7 @@ use crate::{
             BOOT_PATH, GRUB_CONFIG_DIR, GRUB_CONFIG_FILE, GRUB_MIN_VERSION, KERNEL_CMDLINE_PATH,
             ROOT_PATH,
         },
-        linux_defs::{CHMOD_CMD, GRUB_REBOOT_CMD, GRUB_UPDT_CMD},
-        lsblk_info::LsblkInfo,
+        linux_defs::{CHMOD_CMD, GRUB_INSTALL_CMD, GRUB_REBOOT_CMD, GRUB_UPDT_CMD},
         stage2::mounts::Mounts,
     },
 };
@@ -71,14 +70,15 @@ impl<'a> GrubBootManager {
     fn get_grub_version() -> Result<(String, String), MigError> {
         trace!("get_grub_version: entered");
 
-        let cmd_res =
-            call(GRUB_UPDT_CMD, &GRUB_UPDT_VERSION_ARGS, true).context(MigErrCtx::from_remark(
+        let cmd_res = call(GRUB_INSTALL_CMD, &GRUB_UPDT_VERSION_ARGS, true).context(
+            MigErrCtx::from_remark(
                 MigErrorKind::Upstream,
                 &format!(
                     "get_grub_version: call '{} {:?}'",
-                    GRUB_UPDT_CMD, GRUB_UPDT_VERSION_ARGS
+                    GRUB_INSTALL_CMD, GRUB_UPDT_VERSION_ARGS
                 ),
-            ))?;
+            ),
+        )?;
 
         if cmd_res.status.success() {
             let re = Regex::new(GRUB_UPDT_VERSION_RE).unwrap();
@@ -134,14 +134,7 @@ impl<'a> BootManager for GrubBootManager {
             return Ok(false);
         }
 
-        let lsblk_info = LsblkInfo::all()?;
-
-        let boot_path = if let Some(boot_path) = PathInfo::from_path(BOOT_PATH, &lsblk_info)? {
-            boot_path
-        } else {
-            error!("Could not find boot path '{}'", BOOT_PATH);
-            return Err(MigError::displayed());
-        };
+        let boot_path = PathInfo::from_path(BOOT_PATH)?;
 
         let grub_version = GrubBootManager::get_grub_version()?;
         info!(

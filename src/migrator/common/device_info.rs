@@ -40,7 +40,10 @@ pub(crate) struct DeviceInfo {
 
 impl DeviceInfo {
     #[cfg(target_os = "linux")]
-    pub fn new(drive: &LsblkDevice, partition: &LsblkPartition) -> Result<DeviceInfo, MigError> {
+    pub fn from_lsblkinfo(
+        drive: &LsblkDevice,
+        partition: &LsblkPartition,
+    ) -> Result<DeviceInfo, MigError> {
         Ok(DeviceInfo {
             drive: String::from(drive.get_path().to_string_lossy()),
             mountpoint: if let Some(ref mountpoint) = partition.mountpoint {

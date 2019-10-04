@@ -7,7 +7,6 @@ use std::path::{Path, PathBuf};
 use crate::linux::linux_common::to_std_device_path;
 use crate::{
     common::{call, path_append, MigErrCtx, MigError, MigErrorKind},
-    defs::{DISK_BY_LABEL_PATH, DISK_BY_PARTUUID_PATH, DISK_BY_UUID_PATH},
     linux::linux_defs::LSBLK_CMD,
 };
 use std::collections::HashMap;
@@ -40,22 +39,6 @@ pub(crate) struct LsblkPartition {
 impl LsblkPartition {
     pub fn get_path(&self) -> PathBuf {
         path_append("/dev", &self.name)
-    }
-
-    pub fn get_alt_path(&self) -> PathBuf {
-        if let Some(ref partuuid) = self.partuuid {
-            path_append(DISK_BY_PARTUUID_PATH, partuuid)
-        } else {
-            if let Some(ref uuid) = self.uuid {
-                path_append(DISK_BY_UUID_PATH, uuid)
-            } else {
-                if let Some(ref label) = self.label {
-                    path_append(DISK_BY_LABEL_PATH, label)
-                } else {
-                    path_append("/dev", &self.name)
-                }
-            }
-        }
     }
 }
 
@@ -99,7 +82,7 @@ impl<'a> LsblkDevice {
     }
 }
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub(crate) struct LsblkInfo {
     blockdevices: Vec<LsblkDevice>,
 }

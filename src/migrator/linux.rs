@@ -35,7 +35,6 @@ pub(crate) mod boot_manager_impl;
 pub(crate) mod stage2;
 
 pub(crate) mod linux_api;
-use linux_api::LinuxAPI;
 
 pub(crate) mod lsblk_info;
 //pub(crate) use lsblk_info::LsblkInfo;
@@ -44,7 +43,6 @@ pub(crate) mod linux_common;
 use crate::common::file_size;
 use crate::common::stage2_config::MountConfig;
 use crate::linux::linux_common::{get_mem_info, whereis};
-use crate::linux::lsblk_info::LsblkInfo;
 pub(crate) use linux_common::is_admin;
 use mod_logger::{LogDestination, Logger};
 
@@ -58,7 +56,6 @@ pub(crate) struct LinuxMigrator {
     config: Config,
     stage2_config: Stage2ConfigBuilder,
     device: Box<dyn Device>,
-    lsblk_info: LsblkInfo,
 }
 
 impl<'a> LinuxMigrator {
@@ -114,9 +111,7 @@ impl<'a> LinuxMigrator {
         // Get os architecture & name & disk properties, check required paths
         // find wifis etc..
 
-        let lsblk_info = LsblkInfo::all()?;
-        let linux_api = LinuxAPI::new(&lsblk_info);
-        let mig_info = match MigrateInfo::new(&config, &linux_api) {
+        let mig_info = match MigrateInfo::new(&config) {
             Ok(mig_info) => {
                 info!(
                     "OS Architecture is {}, OS Name is '{}'",
@@ -232,7 +227,6 @@ impl<'a> LinuxMigrator {
             config,
             device,
             stage2_config,
-            lsblk_info,
         })
     }
 
@@ -259,17 +253,18 @@ impl<'a> LinuxMigrator {
             self.stage2_config
                 .set_work_path(&PathType::Path(self.mig_info.work_path.path.clone()));
         } else {
-            let (_lsblk_device, lsblk_part) = self.lsblk_info.get_path_devs(&work_dir)?;
+            //let (_lsblk_device, lsblk_part) = os_api.get_lsblk_info()?.get_path_devs(&work_dir)?;
+            let work_device = &self.mig_info.work_path.device_info;
             self.stage2_config
                 .set_work_path(&PathType::Mount(MountConfig::new(
-                    &lsblk_part.get_alt_path(),
-                    lsblk_part.fstype.as_ref().unwrap(),
-                    work_dir
-                        .strip_prefix(lsblk_part.mountpoint.as_ref().unwrap())
-                        .context(MigErrCtx::from_remark(
+                    &work_device.get_alt_path(),
+                    work_device.fs_type.as_str(),
+                    work_dir.strip_prefix(&work_device.mountpoint).context(
+                        MigErrCtx::from_remark(
                             MigErrorKind::Upstream,
                             "failed to create relative work path",
-                        ))?,
+                        ),
+                    )?,
                 )));
         }
 

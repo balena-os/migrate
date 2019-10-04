@@ -2,7 +2,9 @@ use log::debug;
 use std::path::{Path, PathBuf};
 
 use crate::{
-    common::{device_info::DeviceInfo, os_api::OSApi, path_info::PathInfo, MigError, MigErrorKind},
+    common::{
+        device_info::DeviceInfo, os_api::OSApiImpl, path_info::PathInfo, MigError, MigErrorKind,
+    },
     defs::{FileType, OSArch},
     mswin::{
         win_api::get_volume_disk_extents,
@@ -22,7 +24,7 @@ impl MSWinApi {
     }
 }
 
-impl OSApi for MSWinApi {
+impl OSApiImpl for MSWinApi {
     fn get_os_arch(&self) -> Result<OSArch, MigError> {
         Ok(self.os_info.os_arch.clone())
     }

@@ -34,6 +34,8 @@ pub const LSBLK_CMD: &str = "lsblk";
 //pub const BLKID_CMD: &str = "blkid";
 pub const GRUB_REBOOT_CMD: &str = "grub-reboot";
 pub const GRUB_UPDT_CMD: &str = "update-grub";
+pub const GRUB_INSTALL_CMD: &str = "grub-install";
+
 pub const GZIP_CMD: &str = "gzip";
 pub const MKTEMP_CMD: &str = "mktemp";
 pub const MOKUTIL_CMD: &str = "mokutil";

@@ -7,7 +7,6 @@ use std::path::PathBuf;
 
 use std::time::SystemTime;
 
-use crate::linux::lsblk_info::LsblkInfo;
 use crate::{
     common::{
         boot_manager::BootManager,
@@ -98,13 +97,7 @@ impl BootManager for RaspiBootManager<'_> {
             return Ok(false);
         }
 
-        let lsblk_info = LsblkInfo::all()?;
-        self.bootmgr_path = if let Some(boot_path) = PathInfo::from_path(BOOT_PATH, &lsblk_info)? {
-            Some(boot_path)
-        } else {
-            error!("Could not get path info from '{}'", BOOT_PATH);
-            return Err(MigError::displayed());
-        };
+        self.bootmgr_path = Some(PathInfo::from_path(BOOT_PATH)?);
 
         // TODO: provide a way to supply digests for DTB files
 
