@@ -14,6 +14,7 @@ use std::path::{Path, PathBuf};
 // TODO: make hash_info optional again
 // creating a digest in stage1 for check in stage2 does not mae a lot of sense.
 
+use crate::common::os_api::{OSApi, OSApiImpl};
 use crate::common::{
     config::balena_config::FileRef,
     file_digest::{check_digest, get_default_digest, HashInfo},
@@ -77,10 +78,13 @@ impl FileInfo {
 
         trace!("working with path: '{}'", checked_path.display());
 
-        let abs_path = checked_path.canonicalize().context(MigErrCtx::from_remark(
-            MigErrorKind::Upstream,
-            &format!("Failed to canonicalize path '{}'", checked_path.display()),
-        ))?;
+        let abs_path =
+            OSApi::new()?
+                .canonicalize(&checked_path)
+                .context(MigErrCtx::from_remark(
+                    MigErrorKind::Upstream,
+                    &format!("Failed to canonicalize path '{}'", checked_path.display()),
+                ))?;
 
         trace!("working with abs_path: '{}'", abs_path.display());
 
@@ -89,16 +93,24 @@ impl FileInfo {
             &format!("failed to retrieve metadata for path {:?}", abs_path),
         ))?;
 
+        trace!("got metadata for: '{}'", abs_path.display());
+
         let rel_path = match abs_path.strip_prefix(work_path) {
             Ok(rel_path) => Some(PathBuf::from(rel_path)),
             Err(_why) => None,
         };
 
+        trace!(
+            "got relative path for: '{}': '{}'",
+            abs_path.display(),
+            rel_path.as_ref().unwrap().display()
+        );
+
         let hash_info = if let Some(ref hash_info) = file_ref.hash {
-            if !check_digest(&file_ref.path, hash_info)? {
+            if !check_digest(&abs_path, hash_info)? {
                 error!(
                     "Failed to check file digest for file '{}': {:?}",
-                    file_ref.path.display(),
+                    abs_path.display(),
                     hash_info
                 );
                 return Err(MigError::displayed());
@@ -107,9 +119,10 @@ impl FileInfo {
             }
         } else {
             debug!("Created digest for file: '{}'", file_ref.path.display());
-            get_default_digest(&file_ref.path)?
+            get_default_digest(&abs_path)?
         };
 
+        debug!("done creating FileInfo for '{}'", file_ref.path.display());
         Ok(Some(FileInfo {
             path: abs_path,
             rel_path,

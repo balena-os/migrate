@@ -20,7 +20,7 @@ pub(crate) trait OSApiImpl {
 
     fn path_info_from_path<P: AsRef<Path>>(&self, path: P) -> Result<PathInfo, MigError>;
     fn expect_type<P: AsRef<Path>>(&self, file: P, ftype: &FileType) -> Result<(), MigError>;
-    fn cannonicalize<P: AsRef<Path>>(&self, path: P) -> Result<PathBuf, MigError>;
+    fn canonicalize<P: AsRef<Path>>(&self, path: P) -> Result<PathBuf, MigError>;
 }
 
 #[cfg(target_os = "windows")]
@@ -102,12 +102,12 @@ impl OSApi {
 }
 
 impl OSApiImpl for OSApi {
-    fn cannonicalize<P: AsRef<Path>>(&self, path: P) -> Result<PathBuf, MigError> {
+    fn canonicalize<P: AsRef<Path>>(&self, path: P) -> Result<PathBuf, MigError> {
         self.init()?
             .api_impl
             .as_ref()
             .unwrap()
-            .cannonicalize(path.as_ref())
+            .canonicalize(path.as_ref())
     }
 
     fn get_os_arch(&self) -> Result<OSArch, MigError> {

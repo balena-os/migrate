@@ -70,6 +70,9 @@ impl MigrateInfo {
             work_path.device_info.drive
         );
 
+        // TODO: what to do about log path - can not be partition name
+        let log_path = None;
+        /*
         let log_path = if let Some(log_dev) = config.migrate.get_log_device() {
             debug!("Checking log device: '{}'", log_dev.display());
             if log_dev.exists() {
@@ -83,7 +86,7 @@ impl MigrateInfo {
             }
         } else {
             None
-        };
+        }; */
 
         debug!("Checking image files: {:?}", config.balena.get_image_path());
 

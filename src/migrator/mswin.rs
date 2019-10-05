@@ -83,7 +83,7 @@ impl<'a> MSWMigrator {
 
         let mswin_api = MSWinApi::new()?;
 
-        let mig_info = match MigrateInfo::new(&config, &mswin_api) {
+        let mig_info = match MigrateInfo::new(&config) {
             Ok(mig_info) => mig_info,
             Err(why) => {
                 return match why.kind() {

@@ -27,7 +27,7 @@ impl LinuxAPI {
 }
 
 impl OSApiImpl for LinuxAPI {
-    fn cannonicalize<P: AsRef<Path>>(&self, path: P) -> Result<PathBuf, MigError> {
+    fn canonicalize<P: AsRef<Path>>(&self, path: P) -> Result<PathBuf, MigError> {
         Ok(path
             .as_ref()
             .canonicalize()

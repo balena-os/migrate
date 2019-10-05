@@ -43,7 +43,7 @@ pub(crate) struct PathInfo {
 impl PathInfo {
     pub fn from_path<P: AsRef<Path>>(path: P) -> Result<PathInfo, MigError> {
         let os_api = OSApi::new()?;
-        os_api.path_info_from_path(&os_api.cannonicalize(path)?)
+        os_api.path_info_from_path(&os_api.canonicalize(path)?)
     }
 
     #[cfg(target_os = "linux")]
@@ -152,7 +152,7 @@ impl PathInfo {
     }
 
     #[cfg(target_os = "windows")]
-    fn from_volume_info(path: &Path, vol_info: &VolumeInfo) -> Result<PathInfo, MigError> {
+    pub fn from_volume_info(path: &Path, vol_info: &VolumeInfo) -> Result<PathInfo, MigError> {
         Ok(PathInfo {
             // the physical device info
             device_info: DeviceInfo::from_volume_info(vol_info),
@@ -179,49 +179,5 @@ impl PathInfo {
                 ));
             },
         })
-    }
-
-    #[cfg(target_os = "windows")]
-    pub fn from_path<P: AsRef<Path>>(path: P) -> Result<PathInfo, MigError> {
-        use lazy_static::lazy_static;
-        use log::{debug, warn};
-        use regex::Regex;
-
-        debug!("from_path entered with '{}'", path.as_ref().display());
-
-        const UNC_RE: &str = r#"^\\\\(\?|\.)\\([A-Z]:.*)$"#;
-        // ^\\\\([a-zA-Z]+|\?|\.)\\([A-Z]\:.*)$
-
-        if !path.as_ref().exists() {
-            return Err(MigError::from_remark(
-                MigErrorKind::NotFound,
-                &format!("The path does not exist: '{}'", path.as_ref().display()),
-            ));
-        }
-
-        let abs_path = path
-            .as_ref()
-            .canonicalize()
-            .context(MigErrCtx::from_remark(
-                MigErrorKind::Upstream,
-                &format!("failed to canonicalize path: '{}'", path.as_ref().display()),
-            ))?;
-
-        lazy_static! {
-            static ref UNC_REGEX: Regex = Regex::new(UNC_RE).unwrap();
-        }
-
-        let clean_path = if let Some(captures) = UNC_REGEX.captures(&*abs_path.to_string_lossy()) {
-            debug!("UNC regex matched: '{}'", abs_path.display());
-            PathBuf::from(captures.get(2).unwrap().as_str())
-        } else {
-            warn!("UNC regex did not match: '{}'", abs_path.display());
-            abs_path
-        };
-
-        Ok(PathInfo::from_volume_info(
-            &clean_path,
-            &DriveInfo::new()?.from_path(&clean_path)?,
-        )?)
     }
 }
