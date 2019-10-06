@@ -1,5 +1,6 @@
 use failure::{Fail, ResultExt};
 use log::{debug, error, info, trace};
+use mod_logger::{LogDestination, Logger};
 use std::fs::create_dir_all;
 use std::path::PathBuf;
 use std::thread;
@@ -71,6 +72,15 @@ impl<'a> MSWMigrator {
 
     fn try_init(config: Config) -> Result<MSWMigrator, MigError> {
         trace!("MSWinMigrator::try_init: entered");
+
+        let log_file = path_append(config.migrate.get_work_dir(), "stage1.log");
+
+        Logger::set_log_file(&LogDestination::Stderr, &log_file, true).context(
+            MigErrCtx::from_remark(
+                MigErrorKind::Upstream,
+                &format!("Failed to set logging to '{}'", log_file.display()),
+            ),
+        )?;
 
         // **********************************************************************
         // We need to be root to do this

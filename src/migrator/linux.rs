@@ -93,6 +93,15 @@ impl<'a> LinuxMigrator {
 
         info!("migrate mode: {:?}", config.migrate.get_mig_mode());
 
+        let log_file = path_append(config.migrate.get_work_dir(), "stage1.log");
+
+        Logger::set_log_file(&LogDestination::Stderr, &log_file, true).context(
+            MigErrCtx::from_remark(
+                MigErrorKind::Upstream,
+                &format!("Failed to set logging to '{}'", log_file.display()),
+            ),
+        )?;
+
         // A simple replacement for ensured commands
         for command in REQUIRED_CMDS {
             match whereis(command) {
