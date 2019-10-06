@@ -2,7 +2,6 @@ use digest::Digest;
 use failure::ResultExt;
 use log::{debug, trace};
 use md5::Md5;
-use mod_logger::Logger;
 use serde::{Deserialize, Serialize};
 use sha1::Sha1;
 use std::fs::File;

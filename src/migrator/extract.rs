@@ -448,8 +448,8 @@ impl Extractor {
 
             // TODO: check free disk space
 
-            let mut heap_buffer: Vec<u8> = vec![0;DEF_BUFFER_SIZE];
-            let mut buffer: heap_buffer.as_mut_slice();
+            let mut heap_buffer: Vec<u8> = vec![0; DEF_BUFFER_SIZE];
+            let mut buffer = heap_buffer.as_mut_slice();
             loop {
                 let bytes_read = part_reader
                     .read(&mut buffer)
