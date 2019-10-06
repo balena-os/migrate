@@ -272,7 +272,7 @@ impl<'a> BootManager for UBootManager {
             bootmgr_path.device_info.device,
             bootmgr_path.device_info.mountpoint.display(),
             bootmgr_path.device_info.fs_type,
-            format_size_with_unit(bootmgr_path.fs_free)
+            format_size_with_unit(bootmgr_path.device_info.fs_free)
         );
 
         let mut boot_req_space: u64 = 8 * 1024; // one 8KiB extra space just in case and for uEnv.txt)
@@ -300,17 +300,17 @@ impl<'a> BootManager for UBootManager {
             return Ok(false);
         }
 
-        if bootmgr_path.fs_free < boot_req_space {
+        if bootmgr_path.device_info.fs_free < boot_req_space {
             // find alt location for boot config
 
             if let Ok(boot_path) = PathInfo::from_path(BOOT_PATH) {
-                if boot_path.fs_free > boot_req_space {
+                if boot_path.device_info.fs_free > boot_req_space {
                     info!(
                         "Found boot '{}', mounpoint: '{}', fs type: {}, free space: {}",
                         boot_path.device_info.device,
                         boot_path.device_info.mountpoint.display(),
                         boot_path.device_info.fs_type,
-                        format_size_with_unit(boot_path.fs_free)
+                        format_size_with_unit(boot_path.device_info.fs_free)
                     );
 
                     self.bootmgr_path = Some(bootmgr_path);
@@ -318,13 +318,13 @@ impl<'a> BootManager for UBootManager {
                 }
             } else {
                 if let Ok(boot_path) = PathInfo::from_path(ROOT_PATH) {
-                    if boot_path.fs_free > boot_req_space {
+                    if boot_path.device_info.fs_free > boot_req_space {
                         info!(
                             "Found boot '{}', mounpoint: '{}', fs type: {}, free space: {}",
                             boot_path.device_info.device,
                             boot_path.device_info.mountpoint.display(),
                             boot_path.device_info.fs_type,
-                            format_size_with_unit(boot_path.fs_free)
+                            format_size_with_unit(boot_path.device_info.fs_free)
                         );
 
                         self.bootmgr_path = Some(bootmgr_path);

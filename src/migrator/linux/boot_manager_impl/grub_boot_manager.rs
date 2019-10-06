@@ -170,7 +170,7 @@ impl<'a> BootManager for GrubBootManager {
             0
         };
 
-        if boot_path.fs_free < boot_req_space {
+        if boot_path.device_info.fs_free < boot_req_space {
             error!("The boot directory '{}' does not have enough space to store the migrate kernel and initramfs. Required space is {}",
                    boot_path.path.display(), format_size_with_unit(boot_req_space));
             return Ok(false);
