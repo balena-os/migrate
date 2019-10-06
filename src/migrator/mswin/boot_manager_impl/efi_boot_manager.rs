@@ -14,7 +14,7 @@ use crate::{
     common::{
         boot_manager::BootManager,
         device_info::DeviceInfo,
-        dir_exists, file_exists,
+        dir_exists, file_exists, format_size_with_unit,
         migrate_info::MigrateInfo,
         path_append,
         path_info::PathInfo,
@@ -68,6 +68,27 @@ impl BootManager for EfiBootManager {
         if let None = efi_drive.part_uuid {
             // TODO: add option to override this
             error!("Cowardly refusing to migrate EFI partition without partuuid. Windows to linux drive name mapping is insecure");
+            return Ok(false);
+        }
+
+        // TODO: get a better estimate for startup file size
+        let mut required_space: u64 = if file_exists(&mig_info.kernel_file.path) {
+            0
+        } else {
+            mig_info.kernel_file.size
+        };
+
+        if !file_exists(&mig_info.initrd_file.path) {
+            required_space += mig_info.initrd_file.size;
+        }
+
+        if !file_exists(path_append(&efi_drive.mountpoint, EFI_STARTUP_FILE)) {
+            // TODO: get a better estimate for startup file size
+            required_space += 50;
+        }
+
+        if efi_drive.fs_free < required_space {
+            error!("Not enough free space for boot setup found on EFI partition. {} of free space are required on EFI partition.", format_size_with_unit(required_space));
             return Ok(false);
         }
 
@@ -281,6 +302,6 @@ impl BootManager for EfiBootManager {
     }
 
     fn get_bootmgr_path(&self) -> DeviceInfo {
-        unimplemented!()
+        self.boot_device.as_ref().unwrap().clone()
     }
 }

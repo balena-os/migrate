@@ -2,12 +2,15 @@ use log::error;
 use std::path::PathBuf;
 
 use crate::{
-    common::{path_append, MigError},
+    common::{path_append, MigError, MigErrorKind},
     defs::{DISK_BY_LABEL_PATH, DISK_BY_PARTUUID_PATH, DISK_BY_UUID_PATH},
 };
 
 #[cfg(target_os = "linux")]
-use crate::linux::lsblk_info::{LsblkDevice, LsblkPartition};
+use crate::linux::{
+    linux_common::get_fs_space,
+    lsblk_info::{LsblkDevice, LsblkPartition},
+};
 
 #[cfg(target_os = "windows")]
 use crate::mswin::drive_info::{DriveInfo, VolumeInfo};
@@ -35,7 +38,10 @@ pub(crate) struct DeviceInfo {
     pub part_label: Option<String>,
     // the partition size
     pub part_size: u64,
-    // the fs size
+    // The file system size
+    pub fs_size: u64,
+    // the fs free space
+    pub fs_free: u64,
 }
 
 impl DeviceInfo {
@@ -44,17 +50,22 @@ impl DeviceInfo {
         drive: &LsblkDevice,
         partition: &LsblkPartition,
     ) -> Result<DeviceInfo, MigError> {
-        Ok(DeviceInfo {
-            drive: String::from(drive.get_path().to_string_lossy()),
-            mountpoint: if let Some(ref mountpoint) = partition.mountpoint {
-                mountpoint.clone()
-            } else {
-                error!(
+        let (mountpoint, fs_size, fs_free) = if let Some(ref mountpoint) = partition.mountpoint {
+            let (fs_size, fs_free) = get_fs_space(mountpoint)?;
+            (mountpoint.clone(), fs_size, fs_free)
+        } else {
+            return Err(MigError::from_remark(
+                MigErrorKind::NotFound,
+                &format!(
                     "The required parameter mountpoint could not be found for '{}'",
                     partition.get_path().display()
-                );
-                return Err(MigError::displayed());
-            },
+                ),
+            ));
+        };
+
+        Ok(DeviceInfo {
+            drive: String::from(drive.get_path().to_string_lossy()),
+            mountpoint,
             drive_size: if let Some(size) = drive.size {
                 size
             } else {
@@ -91,12 +102,14 @@ impl DeviceInfo {
                 );
                 return Err(MigError::displayed());
             },
+            fs_size,
+            fs_free,
         })
     }
 
     #[cfg(target_os = "windows")]
-    pub fn from_volume_info(vol_info: &VolumeInfo) -> DeviceInfo {
-        DeviceInfo {
+    pub fn from_volume_info(vol_info: &VolumeInfo) -> Result<DeviceInfo, MigError> {
+        Ok(DeviceInfo {
             // the drive device path
             drive: String::from(vol_info.physical_drive.get_device_id()),
             // the devices mountpoint
@@ -121,14 +134,36 @@ impl DeviceInfo {
             },
             // the partition size
             part_size: vol_info.partition.get_size(),
-        }
+            fs_size: if let Some(size) = vol_info.volume.get_capacity() {
+                size
+            } else {
+                return Err(MigError::from_remark(
+                    MigErrorKind::NotFound,
+                    &format!(
+                        "Required parameter size was not found for '{}'",
+                        vol_info.volume.get_device_id()
+                    ),
+                ));
+            },
+            fs_free: if let Some(free) = vol_info.volume.get_free_space() {
+                free
+            } else {
+                return Err(MigError::from_remark(
+                    MigErrorKind::NotFound,
+                    &format!(
+                        "Required parameter size was not found for '{}'",
+                        vol_info.volume.get_device_id()
+                    ),
+                ));
+            },
+        })
     }
 
     #[cfg(target_os = "windows")]
     pub fn for_efi() -> Result<DeviceInfo, MigError> {
         Ok(DeviceInfo::from_volume_info(
             &DriveInfo::new()?.for_efi_drive()?,
-        ))
+        )?)
     }
 
     pub fn get_kernel_cmd(&self) -> String {
