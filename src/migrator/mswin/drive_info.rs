@@ -3,6 +3,7 @@ use crate::{
         call, device_info::DeviceInfo, file_exists, path_append, path_info::PathInfo, MigError,
         MigErrorKind,
     },
+    defs::{DISK_BY_LABEL_PATH, DISK_BY_PARTUUID_PATH},
     mswin::{
         util::mount_efi,
         win_api::{get_volume_disk_extents, is_efi_boot, DiskExtent},
@@ -31,6 +32,12 @@ pub(crate) struct VolumeInfo {
     pub logical_drive: LogicalDrive,
     pub physical_drive: PhysicalDrive,
     pub partition: Partition,
+}
+
+impl VolumeInfo {
+    pub fn get_linux_path(&self) -> PathBuf {
+        path_append(DISK_BY_PARTUUID_PATH, &self.part_uuid)
+    }
 }
 
 #[derive(Clone)]
@@ -156,19 +163,45 @@ impl DriveInfo {
         }
     }
 
-    pub fn from_path<P: AsRef<Path>>(&self, path: P) -> Result<VolumeInfo, MigError> {
+    pub fn from_path<'a, P: AsRef<Path>>(&'a self, path: P) -> Result<&'a VolumeInfo, MigError> {
         debug!("from_path: entered with '{}'", path.as_ref().display());
         let path = path.as_ref();
         if let Some(found) = self.volumes.iter().find(|di| {
             debug!("comparing to: '{}'", di.logical_drive.get_name());
             path.starts_with(di.logical_drive.get_name())
         }) {
-            Ok(found.clone())
+            Ok(&found)
         } else {
             Err(MigError::from_remark(
                 MigErrorKind::NotFound,
                 &format!("No logical drive found for path '{}'", path.display()),
             ))
         }
+    }
+
+    pub fn from_partuuid<'a>(&'a self, partuuid: &str) -> Result<&'a VolumeInfo, MigError> {
+        for vol_info in &self.volumes {
+            if partuuid == vol_info.part_uuid {
+                return Ok(vol_info);
+            }
+        }
+
+        Err(MigError::from_remark(
+            MigErrorKind::NotFound,
+            &format!("No volume was found for partuuid: '{}' ", partuuid),
+        ))
+    }
+
+    pub fn from_label<'a>(&'a self, label: &str) -> Result<&'a VolumeInfo, MigError> {
+        for vol_info in &self.volumes {
+            if let Some(label) = vol_info.volume.get_label() {
+                return Ok(vol_info);
+            }
+        }
+
+        Err(MigError::from_remark(
+            MigErrorKind::NotFound,
+            &format!("No volume was found for label: '{}' ", label),
+        ))
     }
 }

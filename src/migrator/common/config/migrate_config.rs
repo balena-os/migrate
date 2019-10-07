@@ -85,6 +85,7 @@ pub(crate) enum DeviceSpec {
     PartUuid(String),
     DevicePath(PathBuf),
     Path(PathBuf),
+    Label(String),
 }
 
 #[derive(Debug, Deserialize)]

@@ -1,13 +1,14 @@
 use failure::ResultExt;
 use lazy_static::lazy_static;
-use log::debug;
+use log::{debug, error};
 use regex::Regex;
 use std::path::{Path, PathBuf};
 
 use crate::common::MigErrCtx;
 use crate::{
     common::{
-        device_info::DeviceInfo, os_api::OSApiImpl, path_info::PathInfo, MigError, MigErrorKind,
+        config::migrate_config::DeviceSpec, device_info::DeviceInfo, os_api::OSApiImpl,
+        path_info::PathInfo, MigError, MigErrorKind,
     },
     defs::{FileType, OSArch},
     mswin::{
@@ -67,8 +68,32 @@ impl OSApiImpl for MSWinApi {
     fn path_info_from_path<P: AsRef<Path>>(&self, path: P) -> Result<PathInfo, MigError> {
         Ok(PathInfo::from_volume_info(
             path.as_ref(),
-            &self.drive_info.from_path(path.as_ref())?,
+            self.drive_info.from_path(path.as_ref())?,
         )?)
+    }
+
+    fn device_path_from_partition(&self, device: &DeviceSpec) -> Result<PathBuf, MigError> {
+        let volume_info = match device {
+            DeviceSpec::DevicePath(dev_path) => {
+                error!(
+                    "Device path '{}' is not supported for windows partition specifyer",
+                    dev_path.display()
+                );
+                return Err(MigError::displayed());
+            }
+            DeviceSpec::Label(label) => self.drive_info.from_label(label)?,
+            DeviceSpec::PartUuid(partuuid) => self.drive_info.from_partuuid(partuuid)?,
+            DeviceSpec::Path(path) => &self.drive_info.from_path(path)?,
+            DeviceSpec::Uuid(uuid) => {
+                error!(
+                    "Device uuid '{}' is not supported for windows partition specifier",
+                    uuid
+                );
+                return Err(MigError::displayed());
+            }
+        };
+
+        Ok(volume_info.get_linux_path())
     }
 
     fn expect_type<P: AsRef<Path>>(&self, file: P, ftype: &FileType) -> Result<(), MigError> {
