@@ -79,9 +79,11 @@ pub(crate) enum MigrateWifis {
     List(Vec<String>),
 }
 
-#[derive(Debug, Deserialize)]
+#[derive(Debug, Deserialize, Clone)]
 pub(crate) enum DeviceSpec {
+    Uuid(String),
     PartUuid(String),
+    DevicePath(PathBuf),
     Path(PathBuf),
 }
 

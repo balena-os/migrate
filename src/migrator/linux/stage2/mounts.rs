@@ -350,8 +350,32 @@ impl<'a> Mounts {
 
         // TODO: ensure nothing is mounted twice, eg: work_mount == log_mount
 
-        if let Some((log_dev, log_fs)) = stage2_config.get_log_device() {
-            self.log_path = match Mounts::mount(LOGFS_DIR, log_dev, log_fs) {
+        if let Some(log_dev) = stage2_config.get_log_device() {
+            // TODO: establish fs_type ?
+
+            let fs_type = match LsblkInfo::lsblk_partition_from_dev_path(log_dev) {
+                Ok(partition) => {
+                    if let Some(fs_type) = partition.fstype {
+                        fs_type
+                    } else {
+                        warn!(
+                        "Could not determine fs type for log partition: '{}' not mounting log device",
+                        log_dev.display(),
+                    );
+                        return Ok(());
+                    }
+                }
+                Err(why) => {
+                    warn!(
+                    "Could not query device for log partition: '{}', error: {:?} not mounting log device",
+                    log_dev.display(),
+                    why
+                );
+                    return Ok(());
+                }
+            };
+
+            self.log_path = match Mounts::mount(LOGFS_DIR, log_dev, fs_type.as_str()) {
                 Ok(mountpoint) => Some(mountpoint),
                 Err(why) => {
                     warn!(

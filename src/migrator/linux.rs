@@ -15,7 +15,7 @@ use crate::{
         dir_exists, format_size_with_unit,
         migrate_info::MigrateInfo,
         path_append,
-        stage2_config::{PathType, Stage2ConfigBuilder, Stage2LogConfig},
+        stage2_config::{PathType, Stage2ConfigBuilder},
         Config, MigErrCtx, MigError, MigErrorKind, MigMode,
     },
     defs::{
@@ -247,15 +247,6 @@ impl<'a> LinuxMigrator {
         // TODO: prepare logging
 
         let work_dir = &self.mig_info.work_path.path;
-        let log_file = path_append(work_dir, "stage1.log");
-
-        Logger::set_log_file(&LogDestination::Stderr, &log_file, true).context(
-            MigErrCtx::from_remark(
-                MigErrorKind::Upstream,
-                &format!("Failed to set logging to '{}'", log_file.display()),
-            ),
-        )?;
-
         let boot_device = self.device.get_boot_device();
 
         if &self.mig_info.work_path.device_info.device == &boot_device.device {
@@ -423,19 +414,12 @@ impl<'a> LinuxMigrator {
             .set_log_level(String::from(self.config.migrate.get_log_level()));
 
         if let Some(ref log_path) = self.mig_info.log_path {
-            if log_path.device != boot_device.device {
-                info!(
-                    "Set up log device as '{}' with file system type '{}'",
-                    log_path.get_alt_path().display(),
-                    log_path.fs_type
-                );
+            if log_path != &boot_device.get_alt_path() {
+                info!("Set up log device as '{}'", log_path.display(),);
 
-                self.stage2_config.set_log_to(Stage2LogConfig {
-                    device: log_path.get_alt_path(),
-                    fstype: log_path.fs_type.clone(),
-                });
+                self.stage2_config.set_log_to(log_path.clone());
             } else {
-                warn!("Log partition '{}' is not on a distinct drive from flash drive: '{}' - ignoring", log_path.device, boot_device.drive);
+                warn!("Log partition '{}' is not on a distinct drive from flash drive: '{}' - ignoring", log_path.display(), boot_device.drive);
             }
         }
 

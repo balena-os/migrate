@@ -668,7 +668,7 @@ fn part_reread(
             "part_reread: calling LsblkInfo::for_device('{}')",
             device.display()
         );
-        let lsblk_dev = LsblkInfo::for_device(device)?;
+        let lsblk_dev = LsblkInfo::lsblk_device_from_dev_path(device)?;
         if let Some(children) = &lsblk_dev.children {
             if children.len() >= num_partitions {
                 debug!(

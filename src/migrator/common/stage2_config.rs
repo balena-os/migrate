@@ -63,12 +63,6 @@ impl CheckedImageType {
 }
 
 #[derive(Debug, Deserialize, Serialize, Clone)]
-pub(crate) struct Stage2LogConfig {
-    pub device: PathBuf,
-    pub fstype: String,
-}
-
-#[derive(Debug, Deserialize, Serialize, Clone)]
 pub(crate) struct MountConfig {
     // the device to mount
     device: PathBuf,
@@ -127,7 +121,7 @@ pub(crate) struct Stage2Config {
     // stage 2 log level
     log_level: String,
     // stage 2 log destination
-    log_to: Option<Stage2LogConfig>,
+    log_to: Option<PathBuf>,
     // log also to console
     log_console: bool,
     // device type
@@ -183,9 +177,9 @@ impl<'a> Stage2Config {
         }
     }
 
-    pub fn get_log_device(&'a self) -> Option<(&'a Path, &'a str)> {
+    pub fn get_log_device(&'a self) -> Option<&'a Path> {
         if let Some(ref log_to) = self.log_to {
-            Some((&log_to.device, &log_to.fstype))
+            Some(&log_to)
         } else {
             None
         }
@@ -335,7 +329,7 @@ pub(crate) struct Stage2ConfigBuilder {
     has_backup: Required<bool>,
     gzip_internal: Required<bool>,
     log_level: Required<String>,
-    log_to: Optional<Stage2LogConfig>,
+    log_to: Optional<PathBuf>,
     log_console: Required<bool>,
     device_type: Required<DeviceType>,
     boot_type: Required<BootType>,
@@ -464,7 +458,7 @@ impl<'a> Stage2ConfigBuilder {
         self.log_level.set(val);
     }
 
-    pub fn set_log_to(&mut self, val: Stage2LogConfig) {
+    pub fn set_log_to(&mut self, val: PathBuf) {
         self.log_to.set(val);
     }
 

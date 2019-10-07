@@ -3,8 +3,8 @@ use std::path::{Path, PathBuf};
 
 use crate::{
     common::{
-        config::migrate_config::DeviceSpec, device_info::DeviceInfo, os_api::OSApiImpl,
-        path_info::PathInfo, MigErrCtx, MigError, MigErrorKind,
+        config::migrate_config::DeviceSpec, os_api::OSApiImpl, path_info::PathInfo, MigErrCtx,
+        MigError, MigErrorKind,
     },
     defs::{FileType, OSArch},
     linux::{
@@ -52,14 +52,16 @@ impl OSApiImpl for LinuxAPI {
         expect_type(file.as_ref(), ftype)
     }
 
-    fn device_info_from_partition(&self, device: &DeviceSpec) -> Result<DeviceInfo, MigError> {
-        let (drive, partition) = match device {
-            DeviceSpec::Path(dev_path) => self
+    fn device_path_from_partition(&self, device: &DeviceSpec) -> Result<PathBuf, MigError> {
+        let (_drive, partition) = match device {
+            DeviceSpec::DevicePath(dev_path) => self
                 .lsblk_info
                 .get_devices_for_partition(dev_path.as_path())?,
             DeviceSpec::PartUuid(partuuid) => self.lsblk_info.get_devices_for_partuuid(partuuid)?,
+            DeviceSpec::Path(path) => self.lsblk_info.get_devices_for_path(path)?,
+            DeviceSpec::Uuid(uuid) => self.lsblk_info.get_devices_for_uuid(uuid)?,
         };
 
-        Ok(DeviceInfo::from_lsblkinfo(drive, partition)?)
+        Ok(partition.get_linux_path()?)
     }
 }

@@ -179,11 +179,11 @@ impl DeviceInfo {
     }
 
     pub fn get_alt_path(&self) -> PathBuf {
-        if let Some(ref partuuid) = self.part_uuid {
-            path_append(DISK_BY_PARTUUID_PATH, partuuid)
+        if let Some(ref uuid) = self.uuid {
+            path_append(DISK_BY_UUID_PATH, uuid)
         } else {
-            if let Some(ref uuid) = self.uuid {
-                path_append(DISK_BY_UUID_PATH, uuid)
+            if let Some(ref partuuid) = self.part_uuid {
+                path_append(DISK_BY_PARTUUID_PATH, partuuid)
             } else {
                 if let Some(ref label) = self.part_label {
                     path_append(DISK_BY_LABEL_PATH, label)

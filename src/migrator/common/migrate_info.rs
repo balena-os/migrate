@@ -6,7 +6,6 @@ use crate::{
             balena_config::{FileRef, ImageType, PartDump},
             migrate_config::MigrateWifis,
         },
-        device_info::DeviceInfo,
         file_info::RelFileInfo,
         os_api::{OSApi, OSApiImpl},
         path_info::PathInfo,
@@ -25,6 +24,7 @@ use crate::{
 
 pub(crate) mod balena_cfg_json;
 pub(crate) use balena_cfg_json::BalenaCfgJson;
+use std::path::PathBuf;
 
 //use crate::linux::migrate_info::lsblk_info::;
 
@@ -34,7 +34,7 @@ pub(crate) struct MigrateInfo {
     pub os_arch: OSArch,
 
     pub work_path: PathInfo,
-    pub log_path: Option<DeviceInfo>,
+    pub log_path: Option<PathBuf>,
 
     pub nwmgr_files: Vec<FileInfo>,
     pub wifis: Vec<WifiConfig>,
@@ -72,8 +72,11 @@ impl MigrateInfo {
 
         let log_path = if let Some(log_dev) = config.migrate.get_log_device() {
             debug!("Checking log device: '{:?}'", log_dev);
-            match os_api.device_info_from_partition(log_dev) {
-                Ok(dev_info) => Some(dev_info),
+            match os_api.device_path_from_partition(log_dev) {
+                Ok(dev_info) => {
+                    info!("Using log path: '{}'", dev_info.display());
+                    Some(dev_info)
+                }
                 Err(why) => {
                     warn!(
                         "Unable to determine log device: {:?}, error: {:?}",
