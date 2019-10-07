@@ -142,7 +142,30 @@ impl<'a> LsblkInfo {
         Ok(lsblk_info)
     }
 
-    pub fn get_path_devs<P: AsRef<Path>>(
+    pub fn get_devices_for_partuuid(
+        &'a self,
+        partuuid: &str,
+    ) -> Result<(&'a LsblkDevice, &'a LsblkPartition), MigError> {
+        for device in &self.blockdevices {
+            if let Some(ref children) = device.children {
+                if let Some(partition) = children.iter().find(|part| {
+                    if let Some(ref curr_uuid) = part.partuuid {
+                        curr_uuid.as_str() == partuuid
+                    } else {
+                        false
+                    }
+                }) {
+                    return Ok((device, partition));
+                }
+            }
+        }
+        Err(MigError::from_remark(
+            MigErrorKind::NotFound,
+            &format!("No partition found for partuuid: '{}'", partuuid),
+        ))
+    }
+
+    pub fn get_devices_for_path<P: AsRef<Path>>(
         &'a self,
         path: P,
     ) -> Result<(&'a LsblkDevice, &'a LsblkPartition), MigError> {
@@ -212,7 +235,7 @@ impl<'a> LsblkInfo {
     }
 
     // get the LsblkDevice & LsblkPartition from partition device path as in /dev/sda1
-    pub fn get_devinfo_from_partition<P: AsRef<Path>>(
+    pub fn get_devices_for_partition<P: AsRef<Path>>(
         &'a self,
         part_path: P,
     ) -> Result<(&'a LsblkDevice, &'a LsblkPartition), MigError> {
@@ -474,6 +497,6 @@ NAME="nvme0n1p7" KNAME="nvme0n1p7" MAJ:MIN="259:7" FSTYPE="ext4" MOUNTPOINT="/" 
 
     #[test]
     fn read_output_ok1() -> () {
-        let lsblk_info = LsblkInfo::from_list(LSBLK_OUTPUT1).unwrap();
+        let _lsblk_info = LsblkInfo::from_list(LSBLK_OUTPUT1).unwrap();
     }
 }

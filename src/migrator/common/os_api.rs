@@ -3,7 +3,9 @@ use std::path::{Path, PathBuf};
 use std::sync::{Arc, Mutex, MutexGuard, Once};
 
 use crate::{
-    common::{device_info::DeviceInfo, path_info::PathInfo, MigError},
+    common::{
+        config::migrate_config::DeviceSpec, device_info::DeviceInfo, path_info::PathInfo, MigError,
+    },
     defs::FileType,
     defs::OSArch,
 };
@@ -12,13 +14,13 @@ use crate::{
 use crate::mswin::mswin_api::MSWinApi;
 
 #[cfg(target_os = "linux")]
-use crate::linux::{linux_api::LinuxAPI, lsblk_info::LsblkInfo};
+use crate::linux::linux_api::LinuxAPI;
 
 pub(crate) trait OSApiImpl {
     fn get_os_arch(&self) -> Result<OSArch, MigError>;
     fn get_os_name(&self) -> Result<String, MigError>;
-
     fn path_info_from_path<P: AsRef<Path>>(&self, path: P) -> Result<PathInfo, MigError>;
+    fn device_info_from_partition(&self, device: &DeviceSpec) -> Result<DeviceInfo, MigError>;
     fn expect_type<P: AsRef<Path>>(&self, file: P, ftype: &FileType) -> Result<(), MigError>;
     fn canonicalize<P: AsRef<Path>>(&self, path: P) -> Result<PathBuf, MigError>;
 }
@@ -84,21 +86,12 @@ impl OSApi {
     fn get_api() -> Result<LinuxAPI, MigError> {
         LinuxAPI::new()
     }
-
-    #[cfg(target_os = "linux")]
-    pub fn get_lsblk_info(&self) -> Result<LsblkInfo, MigError> {
-        Ok(self.init()?.api_impl.as_ref().unwrap().get_lsblk_info())
-    }
-
-    #[cfg(target_os = "linux")]
-    pub fn device_info_from_partition<P: AsRef<Path>>(
-        &self,
-        part: P,
-    ) -> Result<DeviceInfo, MigError> {
-        let lsblk_info = self.get_lsblk_info()?;
-        let (drive, partition) = lsblk_info.get_devinfo_from_partition(part.as_ref())?;
-        Ok(DeviceInfo::from_lsblkinfo(drive, partition)?)
-    }
+    /*
+        #[cfg(target_os = "linux")]
+        pub fn get_lsblk_info(&self) -> Result<LsblkInfo, MigError> {
+            Ok(self.init()?.api_impl.as_ref().unwrap().get_lsblk_info())
+        }
+    */
 }
 
 impl OSApiImpl for OSApi {
@@ -124,6 +117,14 @@ impl OSApiImpl for OSApi {
             .as_ref()
             .unwrap()
             .path_info_from_path(path)
+    }
+
+    fn device_info_from_partition(&self, device: &DeviceSpec) -> Result<DeviceInfo, MigError> {
+        self.init()?
+            .api_impl
+            .as_ref()
+            .unwrap()
+            .device_info_from_partition(device)
     }
 
     fn expect_type<P: AsRef<Path>>(&self, file: P, ftype: &FileType) -> Result<(), MigError> {

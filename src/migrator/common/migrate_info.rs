@@ -70,23 +70,21 @@ impl MigrateInfo {
             work_path.device_info.drive
         );
 
-        // TODO: what to do about log path - can not be partition name
-        let log_path = None;
-        /*
         let log_path = if let Some(log_dev) = config.migrate.get_log_device() {
-            debug!("Checking log device: '{}'", log_dev.display());
-            if log_dev.exists() {
-                Some(os_api.device_info_from_partition(log_dev)?)
-            } else {
-                warn!(
-                    "Configured log drive '{}' could not be found",
-                    log_dev.display()
-                );
-                None
+            debug!("Checking log device: '{:?}'", log_dev);
+            match os_api.device_info_from_partition(log_dev) {
+                Ok(dev_info) => Some(dev_info),
+                Err(why) => {
+                    warn!(
+                        "Unable to determine log device: {:?}, error: {:?}",
+                        log_dev, why
+                    );
+                    None
+                }
             }
         } else {
             None
-        }; */
+        };
 
         debug!("Checking image files: {:?}", config.balena.get_image_path());
 

@@ -9,10 +9,7 @@ use crate::common::{
 };
 
 #[cfg(target_os = "linux")]
-use crate::linux::{
-    linux_common::get_fs_space,
-    lsblk_info::{LsblkDevice, LsblkInfo, LsblkPartition},
-};
+use crate::linux::lsblk_info::{LsblkDevice, LsblkInfo, LsblkPartition};
 
 #[cfg(target_os = "windows")]
 use crate::mswin::{
@@ -70,7 +67,7 @@ impl PathInfo {
         path: P,
         lsblk_info: &LsblkInfo,
     ) -> Result<PathInfo, MigError> {
-        let (drive, partition) = lsblk_info.get_path_devs(path.as_ref())?;
+        let (drive, partition) = lsblk_info.get_devices_for_path(path.as_ref())?;
 
         Ok(PathInfo {
             device_info: DeviceInfo::from_lsblkinfo(drive, partition)?,

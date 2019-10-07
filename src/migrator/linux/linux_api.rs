@@ -2,7 +2,10 @@ use failure::ResultExt;
 use std::path::{Path, PathBuf};
 
 use crate::{
-    common::{os_api::OSApiImpl, path_info::PathInfo, MigErrCtx, MigError, MigErrorKind},
+    common::{
+        config::migrate_config::DeviceSpec, device_info::DeviceInfo, os_api::OSApiImpl,
+        path_info::PathInfo, MigErrCtx, MigError, MigErrorKind,
+    },
     defs::{FileType, OSArch},
     linux::{
         linux_common::{expect_type, get_os_arch, get_os_name},
@@ -19,10 +22,6 @@ impl LinuxAPI {
         Ok(LinuxAPI {
             lsblk_info: LsblkInfo::all()?,
         })
-    }
-
-    pub fn get_lsblk_info(&self) -> LsblkInfo {
-        self.lsblk_info.clone()
     }
 }
 
@@ -51,5 +50,16 @@ impl OSApiImpl for LinuxAPI {
 
     fn expect_type<P: AsRef<Path>>(&self, file: P, ftype: &FileType) -> Result<(), MigError> {
         expect_type(file.as_ref(), ftype)
+    }
+
+    fn device_info_from_partition(&self, device: &DeviceSpec) -> Result<DeviceInfo, MigError> {
+        let (drive, partition) = match device {
+            DeviceSpec::Path(dev_path) => self
+                .lsblk_info
+                .get_devices_for_partition(dev_path.as_path())?,
+            DeviceSpec::PartUuid(partuuid) => self.lsblk_info.get_devices_for_partuuid(partuuid)?,
+        };
+
+        Ok(DeviceInfo::from_lsblkinfo(drive, partition)?)
     }
 }

@@ -80,10 +80,16 @@ pub(crate) enum MigrateWifis {
 }
 
 #[derive(Debug, Deserialize)]
-pub struct LogConfig {
+pub(crate) enum DeviceSpec {
+    PartUuid(String),
+    Path(PathBuf),
+}
+
+#[derive(Debug, Deserialize)]
+pub(crate) struct LogConfig {
     pub console: Option<bool>,
     pub level: Option<String>,
-    pub drive: Option<PathBuf>,
+    pub drive: Option<DeviceSpec>,
 }
 
 #[derive(Debug, Deserialize)]
@@ -317,7 +323,7 @@ impl<'a> MigrateConfig {
         }
     }
 
-    pub fn get_log_device(&'a self) -> Option<&'a Path> {
+    pub fn get_log_device(&'a self) -> Option<&'a DeviceSpec> {
         if let Some(ref log_info) = self.log {
             if let Some(ref val) = log_info.drive {
                 return Some(val);
