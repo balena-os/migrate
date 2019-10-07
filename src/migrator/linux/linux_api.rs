@@ -60,6 +60,7 @@ impl OSApiImpl for LinuxAPI {
             DeviceSpec::PartUuid(partuuid) => self.lsblk_info.get_devices_for_partuuid(partuuid)?,
             DeviceSpec::Path(path) => self.lsblk_info.get_devices_for_path(path)?,
             DeviceSpec::Uuid(uuid) => self.lsblk_info.get_devices_for_uuid(uuid)?,
+            DeviceSpec::Label(label) => self.lsblk_info.get_devices_for_label(label)?,
         };
 
         Ok(partition.get_linux_path()?)

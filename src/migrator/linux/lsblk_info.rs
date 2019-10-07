@@ -245,7 +245,6 @@ impl<'a> LsblkInfo {
         ))
     }
 
-    /*
     pub fn get_devices_for_label(
         &'a self,
         label: &str,
@@ -268,7 +267,6 @@ impl<'a> LsblkInfo {
             &format!("No partition found for label: '{}'", label),
         ))
     }
-    */
 
     pub fn get_devices_for_path<P: AsRef<Path>>(
         &'a self,
