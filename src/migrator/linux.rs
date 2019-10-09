@@ -336,7 +336,7 @@ impl<'a> LinuxMigrator {
             required_size += file_size(&backup_path)?;
         }
 
-        if dir_exists(&nwmgr_path) {
+        if dir_exists(&nwmgr_path)? {
             let read_dir = read_dir(&nwmgr_path).context(MigErrCtx::from_remark(
                 MigErrorKind::Upstream,
                 &format!("Failed to read directory '{}'", nwmgr_path.display()),

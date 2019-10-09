@@ -3,12 +3,12 @@ use std::path::{Path, PathBuf};
 
 use crate::{
     common::{
-        config::migrate_config::DeviceSpec, os_api::OSApiImpl, path_info::PathInfo, MigErrCtx,
-        MigError, MigErrorKind,
+        config::migrate_config::DeviceSpec, device_info::DeviceInfo, os_api::OSApiImpl,
+        path_info::PathInfo, MigErrCtx, MigError, MigErrorKind,
     },
     defs::{FileType, OSArch},
     linux::{
-        linux_common::{expect_type, get_os_arch, get_os_name},
+        linux_common::{expect_type, get_mem_info, get_os_arch, get_os_name},
         lsblk_info::LsblkInfo,
     },
 };
@@ -64,5 +64,11 @@ impl OSApiImpl for LinuxAPI {
         };
 
         Ok(partition.get_linux_path()?)
+    }
+    fn get_mem_info(&self) -> Result<(u64, u64), MigError> {
+        get_mem_info()
+    }
+    fn device_info_for_efi(&self) -> Result<DeviceInfo, MigError> {
+        unimplemented!()
     }
 }
