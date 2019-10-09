@@ -324,6 +324,7 @@ fn create_int<'a>(
                         MigErrorKind::Upstream,
                         &format!("Failed to process source '{}'", item.source),
                     ))?;
+
             debug!("processing item: source. '{}'", item_src.display());
 
             if let Ok(metadata) = item_src.metadata() {

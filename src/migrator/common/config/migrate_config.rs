@@ -81,10 +81,15 @@ pub(crate) enum MigrateWifis {
 
 #[derive(Debug, Deserialize, Clone)]
 pub(crate) enum DeviceSpec {
+    #[serde(rename = "uuid")]
     Uuid(String),
+    #[serde(rename = "partuuid")]
     PartUuid(String),
+    #[serde(rename = "devpath")]
     DevicePath(PathBuf),
+    #[serde(rename = "path")]
     Path(PathBuf),
+    #[serde(rename = "label")]
     Label(String),
 }
 

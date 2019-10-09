@@ -70,6 +70,7 @@ impl DriveInfo {
                     continue;
                 }
             }
+
             let logical_drive = if let Some(drive_letter) = volume.get_drive_letter() {
                 LogicalDrive::query_for_name(drive_letter)?
             } else {

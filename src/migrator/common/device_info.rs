@@ -12,6 +12,7 @@ use crate::linux::{
     lsblk_info::{LsblkDevice, LsblkPartition},
 };
 
+use crate::common::os_api::{OSApi, OSApiImpl};
 #[cfg(target_os = "windows")]
 use crate::mswin::drive_info::{DriveInfo, VolumeInfo};
 
@@ -161,9 +162,7 @@ impl DeviceInfo {
 
     #[cfg(target_os = "windows")]
     pub fn for_efi() -> Result<DeviceInfo, MigError> {
-        Ok(DeviceInfo::from_volume_info(
-            &DriveInfo::new()?.for_efi_drive()?,
-        )?)
+        OSApi::new()?.device_info_for_efi()
     }
 
     pub fn get_kernel_cmd(&self) -> String {
@@ -180,15 +179,15 @@ impl DeviceInfo {
 
     pub fn get_alt_path(&self) -> PathBuf {
         if let Some(ref uuid) = self.uuid {
-            path_append(DISK_BY_UUID_PATH, uuid)
+            PathBuf::from(&format!("{}/{}", DISK_BY_UUID_PATH, uuid))
         } else {
             if let Some(ref partuuid) = self.part_uuid {
-                path_append(DISK_BY_PARTUUID_PATH, partuuid)
+                PathBuf::from(&format!("{}/{}", DISK_BY_PARTUUID_PATH, partuuid))
             } else {
                 if let Some(ref label) = self.part_label {
-                    path_append(DISK_BY_LABEL_PATH, label)
+                    PathBuf::from(&format!("{}/{}", DISK_BY_LABEL_PATH, label))
                 } else {
-                    path_append("/dev", &self.device)
+                    PathBuf::from(&format!("{}/{}", "/dev", &self.device))
                 }
             }
         }

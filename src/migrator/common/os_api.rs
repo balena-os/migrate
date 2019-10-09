@@ -3,7 +3,9 @@ use std::path::{Path, PathBuf};
 use std::sync::{Arc, Mutex, MutexGuard, Once};
 
 use crate::{
-    common::{config::migrate_config::DeviceSpec, path_info::PathInfo, MigError},
+    common::{
+        config::migrate_config::DeviceSpec, device_info::DeviceInfo, path_info::PathInfo, MigError,
+    },
     defs::FileType,
     defs::OSArch,
 };
@@ -21,6 +23,8 @@ pub(crate) trait OSApiImpl {
     fn device_path_from_partition(&self, device: &DeviceSpec) -> Result<PathBuf, MigError>;
     fn expect_type<P: AsRef<Path>>(&self, file: P, ftype: &FileType) -> Result<(), MigError>;
     fn canonicalize<P: AsRef<Path>>(&self, path: P) -> Result<PathBuf, MigError>;
+    fn get_mem_info(&self) -> Result<(u64, u64), MigError>;
+    fn device_info_for_efi(&self) -> Result<DeviceInfo, MigError>;
 }
 
 #[cfg(target_os = "windows")]
@@ -131,5 +135,16 @@ impl OSApiImpl for OSApi {
             .as_ref()
             .unwrap()
             .expect_type(file, ftype)
+    }
+    fn get_mem_info(&self) -> Result<(u64, u64), MigError> {
+        self.init()?.api_impl.as_ref().unwrap().get_mem_info()
+    }
+
+    fn device_info_for_efi(&self) -> Result<DeviceInfo, MigError> {
+        self.init()?
+            .api_impl
+            .as_ref()
+            .unwrap()
+            .device_info_for_efi()
     }
 }

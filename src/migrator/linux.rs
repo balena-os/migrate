@@ -12,10 +12,10 @@ use crate::{
         backup, call,
         config::balena_config::ImageType,
         device::Device,
-        dir_exists, format_size_with_unit,
+        dir_exists, file_size, format_size_with_unit,
         migrate_info::MigrateInfo,
         path_append,
-        stage2_config::{PathType, Stage2ConfigBuilder},
+        stage2_config::{MountConfig, PathType, Stage2ConfigBuilder},
         Config, MigErrCtx, MigError, MigErrorKind, MigMode,
     },
     defs::{
@@ -40,8 +40,6 @@ pub(crate) mod lsblk_info;
 //pub(crate) use lsblk_info::LsblkInfo;
 
 pub(crate) mod linux_common;
-use crate::common::file_size;
-use crate::common::stage2_config::MountConfig;
 use crate::linux::linux_common::{get_mem_info, whereis};
 pub(crate) use linux_common::is_admin;
 use mod_logger::{LogDestination, Logger};
@@ -244,8 +242,7 @@ impl<'a> LinuxMigrator {
     // **********************************************************************
 
     fn do_migrate(&mut self) -> Result<(), MigError> {
-        // TODO: prepare logging
-
+        trace!("Entered do_migrate");
         let work_dir = &self.mig_info.work_path.path;
         let boot_device = self.device.get_boot_device();
 
@@ -294,22 +291,24 @@ impl<'a> LinuxMigrator {
             }
         }
 
-        for file in &self.mig_info.nwmgr_files {
-            if let Some(file_name) = file.path.file_name() {
-                let tgt = path_append(&nwmgr_path, file_name);
-                copy(&file.path, &tgt).context(MigErrCtx::from_remark(
-                    MigErrorKind::Upstream,
-                    &format!(
-                        "Failed to copy '{}' to '{}'",
-                        file.path.display(),
-                        tgt.display()
-                    ),
-                ))?;
-            } else {
-                return Err(MigError::from_remark(
-                    MigErrorKind::Upstream,
-                    &format!("unable to processs path: '{}'", file.path.display()),
-                ));
+        if dir_exists(&nwmgr_path)? {
+            for file in &self.mig_info.nwmgr_files {
+                if let Some(file_name) = file.path.file_name() {
+                    let tgt = path_append(&nwmgr_path, file_name);
+                    copy(&file.path, &tgt).context(MigErrCtx::from_remark(
+                        MigErrorKind::Upstream,
+                        &format!(
+                            "Failed to copy '{}' to '{}'",
+                            file.path.display(),
+                            tgt.display()
+                        ),
+                    ))?;
+                } else {
+                    return Err(MigError::from_remark(
+                        MigErrorKind::Upstream,
+                        &format!("unable to processs path: '{}'", file.path.display()),
+                    ));
+                }
             }
         }
 
@@ -337,20 +336,22 @@ impl<'a> LinuxMigrator {
             required_size += file_size(&backup_path)?;
         }
 
-        let read_dir = read_dir(&nwmgr_path).context(MigErrCtx::from_remark(
-            MigErrorKind::Upstream,
-            &format!("Failed to read directory '{}'", nwmgr_path.display()),
-        ))?;
+        if dir_exists(&nwmgr_path) {
+            let read_dir = read_dir(&nwmgr_path).context(MigErrCtx::from_remark(
+                MigErrorKind::Upstream,
+                &format!("Failed to read directory '{}'", nwmgr_path.display()),
+            ))?;
 
-        for entry in read_dir {
-            required_size += file_size(
-                &entry
-                    .context(MigErrCtx::from_remark(
-                        MigErrorKind::Upstream,
-                        "Failed to read directory entry",
-                    ))?
-                    .path(),
-            )?;
+            for entry in read_dir {
+                required_size += file_size(
+                    &entry
+                        .context(MigErrCtx::from_remark(
+                            MigErrorKind::Upstream,
+                            "Failed to read directory entry",
+                        ))?
+                        .path(),
+                )?;
+            }
         }
 
         info!(

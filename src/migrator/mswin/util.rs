@@ -1,4 +1,5 @@
 use lazy_static::lazy_static;
+use log::debug;
 use regex::Regex;
 use std::path::{Path, PathBuf};
 
@@ -37,10 +38,13 @@ pub(crate) fn mount_efi() -> Result<LogicalDrive, MigError> {
     // get drive letters in use
     let drive_letters = WmiUtils::query_drive_letters()?;
 
-    if let Some(drive_letter) = drive_letters
-        .iter()
-        .find(|dl| file_exists(path_append(dl, CHECK_EFI_PATH)))
-    {
+    if let Some(drive_letter) = drive_letters.iter().find(|dl| {
+        debug!(
+            "Checking path for EFI: '{}'",
+            path_append(dl, CHECK_EFI_PATH).display()
+        );
+        file_exists(path_append(dl, CHECK_EFI_PATH))
+    }) {
         // found EFI drive - return
         Ok(LogicalDrive::query_for_name(drive_letter)?)
     } else {

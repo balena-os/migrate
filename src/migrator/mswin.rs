@@ -1,7 +1,7 @@
 use failure::{Fail, ResultExt};
-use log::{debug, error, info, trace};
+use log::{debug, error, info, trace, warn};
 use mod_logger::{LogDestination, Logger};
-use std::fs::create_dir_all;
+use std::fs::{copy, create_dir, create_dir_all, read_dir};
 use std::path::PathBuf;
 use std::thread;
 use std::time::Duration;
@@ -10,16 +10,21 @@ use std::time::Duration;
 
 use crate::{
     common::{
+        backup,
         boot_manager::BootManager,
         config::balena_config::ImageType,
         device::Device,
-        dir_exists, format_size_with_unit,
+        dir_exists, file_size, format_size_with_unit,
         migrate_info::{balena_cfg_json::BalenaCfgJson, MigrateInfo},
+        os_api::OSApiImpl,
         path_append,
-        stage2_config::Stage2ConfigBuilder,
+        stage2_config::{MountConfig, PathType, Stage2ConfigBuilder},
         Config, MigErrCtx, MigError, MigErrorKind, MigMode,
     },
-    defs::{DeviceType, OSArch, MIN_DISK_SIZE, STAGE2_CFG_FILE},
+    defs::{
+        DeviceType, OSArch, BACKUP_FILE, MIN_DISK_SIZE, STAGE1_MEM_THRESHOLD, STAGE2_CFG_FILE,
+        SYSTEM_CONNECTIONS_DIR,
+    },
     mswin::{mswin_api::MSWinApi, util::to_linux_path, wmi_utils::WmiUtils},
 };
 
@@ -45,6 +50,8 @@ pub(crate) mod drive_info;
 pub(crate) mod wmi_utils;
 
 mod boot_manager_impl;
+use crate::common::os_api::OSApi;
+use crate::mswin::powershell::reboot;
 use boot_manager_impl::efi_boot_manager::EfiBootManager;
 
 //mod migrate_info;
@@ -62,6 +69,11 @@ pub struct MSWMigrator {
 
 impl<'a> MSWMigrator {
     pub fn migrate() -> Result<(), MigError> {
+        if !is_admin()? {
+            error!("Please run this program with adminstrator privileges");
+            return Err(MigError::displayed());
+        }
+
         let mut migrator = MSWMigrator::try_init(Config::new()?)?;
         match migrator.config.migrate.get_mig_mode() {
             MigMode::Immediate => migrator.do_migrate(),
@@ -86,15 +98,14 @@ impl<'a> MSWMigrator {
         // We need to be root to do this
         // note: fake admin is not honored in release mode
 
-        if !is_admin()? {
-            error!("Please run this program with adminstrator privileges");
-            return Err(MigError::displayed());
-        }
-
-        let mswin_api = MSWinApi::new()?;
-
         let mig_info = match MigrateInfo::new(&config) {
-            Ok(mig_info) => mig_info,
+            Ok(mig_info) => {
+                info!(
+                    "OS Architecture is {}, OS Name is '{}'",
+                    mig_info.os_arch, mig_info.os_name
+                );
+                mig_info
+            }
             Err(why) => {
                 return match why.kind() {
                     MigErrorKind::Displayed => Err(why),
@@ -205,6 +216,209 @@ impl<'a> MSWMigrator {
     }
 
     fn do_migrate(&mut self) -> Result<(), MigError> {
+        trace!("Entered do_migrate");
+
+        let work_dir = &self.mig_info.work_path.path;
+        let boot_device = self.device.get_boot_device();
+
+        if &self.mig_info.work_path.device_info.device == &boot_device.device {
+            self.stage2_config
+                .set_work_path(&PathType::Path(self.mig_info.work_path.path.clone()));
+        } else {
+            //let (_lsblk_device, lsblk_part) = os_api.get_lsblk_info()?.get_path_devs(&work_dir)?;
+            let work_device = &self.mig_info.work_path.device_info;
+            self.stage2_config
+                .set_work_path(&PathType::Mount(MountConfig::new(
+                    &work_device.get_alt_path(),
+                    work_device.fs_type.as_str(),
+                    work_dir.strip_prefix(&work_device.mountpoint).context(
+                        MigErrCtx::from_remark(
+                            MigErrorKind::Upstream,
+                            "failed to create relative work path",
+                        ),
+                    )?,
+                )));
+        }
+
+        let backup_path = path_append(work_dir, BACKUP_FILE);
+
+        let has_backup = self.stage2_config.set_has_backup(backup::create(
+            &backup_path,
+            self.config.migrate.get_backup_volumes(),
+        )?);
+
+        // TODO: this might not be a smart place to put things, everything in system-connections
+        // will end up in /mnt/boot/system-connections
+        trace!("nwmgr_files");
+        let nwmgr_path = path_append(work_dir, SYSTEM_CONNECTIONS_DIR);
+
+        if self.mig_info.nwmgr_files.len() > 0
+            || self.mig_info.wifis.len() > 0 && !dir_exists(&nwmgr_path)?
+        {
+            if !dir_exists(&nwmgr_path)? {
+                create_dir(&nwmgr_path).context(MigErrCtx::from_remark(
+                    MigErrorKind::Upstream,
+                    &format!("failed to create directory '{}'", nwmgr_path.display()),
+                ))?;
+            }
+        }
+
+        if dir_exists(&nwmgr_path)? {
+            for file in &self.mig_info.nwmgr_files {
+                if let Some(file_name) = file.path.file_name() {
+                    let tgt = path_append(&nwmgr_path, file_name);
+                    copy(&file.path, &tgt).context(MigErrCtx::from_remark(
+                        MigErrorKind::Upstream,
+                        &format!(
+                            "Failed to copy '{}' to '{}'",
+                            file.path.display(),
+                            tgt.display()
+                        ),
+                    ))?;
+                } else {
+                    return Err(MigError::from_remark(
+                        MigErrorKind::Upstream,
+                        &format!("unable to processs path: '{}'", file.path.display()),
+                    ));
+                }
+            }
+        }
+
+        trace!("do_migrate: found wifis: {}", self.mig_info.wifis.len());
+
+        if self.mig_info.wifis.len() > 0 {
+            let mut index = 0;
+            for wifi in &self.mig_info.wifis {
+                index = wifi.create_nwmgr_file(&nwmgr_path, index)?;
+            }
+        }
+
+        let (mem_tot, mem_avail) = OSApi::new()?.get_mem_info()?;
+        info!(
+            "Memory available is {} of {}",
+            format_size_with_unit(mem_avail),
+            format_size_with_unit(mem_tot),
+        );
+
+        let mut required_size: u64 = self.mig_info.image_file.get_required_space();
+
+        required_size += self.mig_info.config_file.get_size();
+
+        if has_backup {
+            required_size += file_size(&backup_path)?;
+        }
+
+        if dir_exists(&nwmgr_path)? {
+            let read_dir = read_dir(&nwmgr_path).context(MigErrCtx::from_remark(
+                MigErrorKind::Upstream,
+                &format!("Failed to read directory '{}'", nwmgr_path.display()),
+            ))?;
+
+            for entry in read_dir {
+                required_size += file_size(
+                    &entry
+                        .context(MigErrCtx::from_remark(
+                            MigErrorKind::Upstream,
+                            "Failed to read directory entry",
+                        ))?
+                        .path(),
+                )?;
+            }
+        }
+
+        info!(
+            "Memory required for copying files is {}",
+            format_size_with_unit(required_size)
+        );
+
+        if mem_tot - required_size < STAGE1_MEM_THRESHOLD {
+            warn!("The memory used to copy files to initramfs might not be available.");
+        }
+
+        trace!("device setup");
+
+        // We need this before s2 config as it might still modify migrate_info
+        // TODO: make setup take no s2_cfg or immutable s2_cfg and return boot_backup instead
+        // TODO: make setup undoable in case something bad happens later on
+
+        self.device
+            .setup(&mut self.mig_info, &self.config, &mut self.stage2_config)?;
+
+        trace!("stage2 config");
+
+        // dbg!("setting up stage2_cfg");
+        // *****************************************************************************************
+        // Finish Stage2ConfigBuilder & create stage2 config file
+
+        if let Some(device) = self.config.migrate.get_force_flash_device() {
+            warn!("Forcing flash device to '{}'", device.display());
+            self.stage2_config
+                .set_force_flash_device(device.to_path_buf());
+        }
+
+        self.stage2_config
+            .set_failmode(self.config.migrate.get_fail_mode());
+
+        self.stage2_config
+            .set_no_flash(self.config.debug.is_no_flash());
+
+        self.stage2_config
+            .set_migrate_delay(self.config.migrate.get_delay());
+
+        if let Some(watchdogs) = self.config.migrate.get_watchdogs() {
+            self.stage2_config.set_watchdogs(watchdogs);
+        }
+
+        self.stage2_config
+            .set_balena_image(self.mig_info.image_file.clone());
+
+        self.stage2_config
+            .set_balena_config(self.mig_info.config_file.get_rel_path().clone());
+
+        // TODO: setpath if on / mount else set mount
+
+        self.stage2_config
+            .set_gzip_internal(self.config.migrate.is_gzip_internal());
+
+        self.stage2_config
+            .set_log_console(self.config.migrate.get_log_console());
+
+        self.stage2_config
+            .set_log_level(String::from(self.config.migrate.get_log_level()));
+
+        if let Some(ref log_path) = self.mig_info.log_path {
+            if log_path != &boot_device.get_alt_path() {
+                info!("Set up log device as '{}'", log_path.display(),);
+
+                self.stage2_config.set_log_to(log_path.clone());
+            } else {
+                warn!("Log partition '{}' is not on a distinct drive from flash drive: '{}' - ignoring", log_path.display(), boot_device.drive);
+            }
+        }
+
+        self.stage2_config
+            .set_gzip_internal(self.config.migrate.is_gzip_internal());
+
+        trace!("write stage 2 config");
+        let s2_path = path_append(&boot_device.mountpoint, STAGE2_CFG_FILE);
+        self.stage2_config.write_stage2_cfg_to(&s2_path)?;
+
+        if let Some(delay) = self.config.migrate.get_reboot() {
+            println!(
+                "Migration stage 1 was successfull, rebooting system in {} seconds",
+                *delay
+            );
+            let delay = Duration::new(*delay, 0);
+            thread::sleep(delay);
+            println!("Rebooting now..");
+            if let Err(why) = reboot() {
+                error!("Failed to reboot device: error {:?}", why);
+            }
+        }
+
+        trace!("done");
+        Ok(())
+
         // TODO: take care of backup
         /*
                 self.stage2_config.set_has_backup(false);
@@ -316,7 +530,6 @@ impl<'a> MSWMigrator {
                     let _res = self.ps_info.reboot();
                 }
         */
-        Ok(())
     }
 }
 

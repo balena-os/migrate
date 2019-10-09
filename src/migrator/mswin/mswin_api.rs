@@ -1,4 +1,4 @@
-use failure::ResultExt;
+use failure::{Fail, ResultExt};
 use lazy_static::lazy_static;
 use log::{debug, error};
 use regex::Regex;
@@ -73,6 +73,8 @@ impl OSApiImpl for MSWinApi {
     }
 
     fn device_path_from_partition(&self, device: &DeviceSpec) -> Result<PathBuf, MigError> {
+        // TODO: this does not work very well
+        // partuuid
         let volume_info = match device {
             DeviceSpec::DevicePath(dev_path) => {
                 error!(
@@ -99,5 +101,15 @@ impl OSApiImpl for MSWinApi {
     fn expect_type<P: AsRef<Path>>(&self, file: P, ftype: &FileType) -> Result<(), MigError> {
         // TODO: do something smarter than nothing
         return Ok(());
+    }
+
+    fn get_mem_info(&self) -> Result<(u64, u64), MigError> {
+        Ok((self.os_info.mem_tot, self.os_info.mem_avail))
+    }
+
+    fn device_info_for_efi(&self) -> Result<DeviceInfo, MigError> {
+        Ok(DeviceInfo::from_volume_info(
+            &self.drive_info.for_efi_drive()?,
+        )?)
     }
 }
