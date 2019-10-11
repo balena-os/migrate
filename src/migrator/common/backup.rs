@@ -15,6 +15,7 @@ use crate::common::{
 };
 use crate::defs::BACKUP_FILE;
 
+use crate::common::os_api::{OSApi, OSApiImpl};
 #[cfg(target_os = "linux")]
 use crate::linux::linux_defs::{MKTEMP_CMD, TAR_CMD};
 
@@ -312,14 +313,14 @@ fn create_int<'a>(
     trace!("create_int entered with: {:?}", config);
 
     let mut written = false;
-
+    let os_api = OSApi::new()?;
     for ref volume in config {
         info!("backup to volume: '{}'", volume.volume);
 
         for item in &volume.items {
             let item_src =
-                PathBuf::from(&item.source)
-                    .canonicalize()
+                os_api
+                    .canonicalize(Path::new(&item.source))
                     .context(MigErrCtx::from_remark(
                         MigErrorKind::Upstream,
                         &format!("Failed to process source '{}'", item.source),

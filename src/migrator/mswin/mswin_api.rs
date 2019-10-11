@@ -1,7 +1,7 @@
 use failure::{Fail, ResultExt};
 use lazy_static::lazy_static;
 use log::{debug, error};
-use regex::Regex;
+use regex::{Regex, RegexBuilder};
 use std::path::{Path, PathBuf};
 
 use crate::common::MigErrCtx;
@@ -19,6 +19,7 @@ use crate::{
 };
 
 const UNC_RE: &str = r#"^\\\\(\?|\.)\\([A-Z]:.*)$"#;
+const DRIVE_LETTER_RE: &str = r#"^[A-Z]:(.*)$"#;
 
 pub(crate) struct MSWinApi {
     os_info: WMIOSInfo,
@@ -45,7 +46,10 @@ impl OSApiImpl for MSWinApi {
             ))?;
 
         lazy_static! {
-            static ref UNC_REGEX: Regex = Regex::new(UNC_RE).unwrap();
+            static ref UNC_REGEX: Regex = RegexBuilder::new(UNC_RE)
+                .case_insensitive(true)
+                .build()
+                .unwrap();
         }
 
         if let Some(captures) = UNC_REGEX.captures(&*abs_path.to_string_lossy()) {
@@ -111,5 +115,24 @@ impl OSApiImpl for MSWinApi {
         Ok(DeviceInfo::from_volume_info(
             &self.drive_info.for_efi_drive()?,
         )?)
+    }
+
+    fn to_linux_path<P: AsRef<Path>>(&self, path: P) -> Result<PathBuf, MigError> {
+        lazy_static! {
+            static ref DRIVE_LETTER_REGEX: Regex = RegexBuilder::new(DRIVE_LETTER_RE)
+                .case_insensitive(true)
+                .build()
+                .unwrap();
+        }
+
+        let path_str = if let Some(captures) =
+            DRIVE_LETTER_REGEX.captures(&*path.as_ref().to_string_lossy())
+        {
+            String::from(captures.get(1).unwrap().as_str())
+        } else {
+            String::from(&*path.as_ref().to_string_lossy())
+        };
+
+        Ok(PathBuf::from(path_str.replace("\\", "/")))
     }
 }

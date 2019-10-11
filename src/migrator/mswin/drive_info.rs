@@ -36,7 +36,7 @@ pub(crate) struct VolumeInfo {
 
 impl VolumeInfo {
     pub fn get_linux_path(&self) -> PathBuf {
-        path_append(DISK_BY_PARTUUID_PATH, &self.part_uuid)
+        PathBuf::from(&format!("{}/{}", DISK_BY_PARTUUID_PATH, &self.part_uuid))
     }
 }
 

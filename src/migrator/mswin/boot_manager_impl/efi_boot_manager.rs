@@ -16,6 +16,7 @@ use crate::{
         device_info::DeviceInfo,
         dir_exists, file_exists, format_size_with_unit,
         migrate_info::MigrateInfo,
+        os_api::{OSApi, OSApiImpl},
         path_append,
         path_info::PathInfo,
         stage2_config::{MountConfig, Stage2ConfigBuilder},
@@ -202,11 +203,7 @@ impl BootManager for EfiBootManager {
         let startup_content = if let Some(ref partuuid) = boot_dev.part_uuid {
             format!(
                 "{}{} initrd={} root=PARTUUID={} rootfstype={}",
-                STARTUP_TEMPLATE,
-                kernel_path,
-                initrd_path,
-                partuuid,
-                mig_info.work_path.device_info.fs_type
+                STARTUP_TEMPLATE, kernel_path, initrd_path, partuuid, boot_dev.fs_type
             )
         } else {
             warn!("setting up /root device without partuuid, this is unsafe!");
@@ -220,7 +217,7 @@ impl BootManager for EfiBootManager {
                     .device_info
                     .get_alt_path()
                     .to_string_lossy(),
-                mig_info.work_path.device_info.fs_type,
+                boot_dev.fs_type,
             )
         };
 
@@ -253,6 +250,8 @@ impl BootManager for EfiBootManager {
             ))?;
         }
 
+        let os_api = OSApi::new()?;
+        let mut boot_backup: Vec<(String, String)> = Vec::new();
         let msw_boot_mgr = path_append(&boot_dev.mountpoint, EFI_MS_BOOTMGR);
         if file_exists(&msw_boot_mgr) {
             let backup_path = path_append(&efi_bckup_dir, &msw_boot_mgr.file_name().unwrap());
@@ -268,12 +267,22 @@ impl BootManager for EfiBootManager {
                     msw_boot_mgr.display()
                 ),
             ))?;
+            if let Ok(bckup_path) = os_api.to_linux_path(backup_path) {
+                boot_backup.push((
+                    String::from(EFI_MS_BOOTMGR),
+                    String::from(&*bckup_path.to_string_lossy()),
+                ))
+            } else {
+                warn!("Failed to save backup for {}", EFI_DEFAULT_BOOTMGR64)
+            }
         } else {
             info!(
                 "not backing up  '{}' , file not found",
                 &msw_boot_mgr.display()
             );
         }
+
+        let os_api = OSApi::new()?;
 
         // TODO: allow 32 bit
         let def_boot_mgr = path_append(&boot_dev.mountpoint, EFI_DEFAULT_BOOTMGR64);
@@ -291,12 +300,21 @@ impl BootManager for EfiBootManager {
                     def_boot_mgr.display()
                 ),
             ))?;
+            if let Ok(bckup_path) = os_api.to_linux_path(backup_path) {
+                boot_backup.push((
+                    String::from(EFI_DEFAULT_BOOTMGR64),
+                    String::from(&*bckup_path.to_string_lossy()),
+                ))
+            } else {
+                warn!("Failed to save backup for {}", EFI_DEFAULT_BOOTMGR64)
+            }
         } else {
             info!(
                 "not backing up  '{}' , file not found",
                 &def_boot_mgr.display()
             );
         }
+        s2_cfg.set_boot_bckup(boot_backup);
 
         Ok(())
     }

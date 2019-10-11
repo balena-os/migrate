@@ -223,9 +223,10 @@ impl<'a> MSWMigrator {
 
         if &self.mig_info.work_path.device_info.device == &boot_device.device {
             self.stage2_config
-                .set_work_path(&PathType::Path(self.mig_info.work_path.path.clone()));
+                .set_work_path(&PathType::Path(OSApi::new()?.to_linux_path(work_dir)?));
         } else {
-            //let (_lsblk_device, lsblk_part) = os_api.get_lsblk_info()?.get_path_devs(&work_dir)?;
+            // in windows the mount path is usually something like [a-z]:/ which is stripped by to_linux_path
+            let work_dir = OSApi::new()?.to_linux_path(work_dir)?;
             let work_device = &self.mig_info.work_path.device_info;
             self.stage2_config
                 .set_work_path(&PathType::Mount(MountConfig::new(

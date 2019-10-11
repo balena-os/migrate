@@ -25,6 +25,7 @@ pub(crate) trait OSApiImpl {
     fn canonicalize<P: AsRef<Path>>(&self, path: P) -> Result<PathBuf, MigError>;
     fn get_mem_info(&self) -> Result<(u64, u64), MigError>;
     fn device_info_for_efi(&self) -> Result<DeviceInfo, MigError>;
+    fn to_linux_path<P: AsRef<Path>>(&self, path: P) -> Result<PathBuf, MigError>;
 }
 
 #[cfg(target_os = "windows")]
@@ -146,5 +147,14 @@ impl OSApiImpl for OSApi {
             .as_ref()
             .unwrap()
             .device_info_for_efi()
+    }
+
+    fn to_linux_path<P: AsRef<Path>>(&self, path: P) -> Result<PathBuf, MigError> {
+        Ok(self
+            .init()?
+            .api_impl
+            .as_ref()
+            .unwrap()
+            .to_linux_path(path)?)
     }
 }
