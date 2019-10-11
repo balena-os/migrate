@@ -5,6 +5,7 @@ use regex::{Regex, RegexBuilder};
 use std::path::{Path, PathBuf};
 
 use crate::common::MigErrCtx;
+use crate::mswin::drive_info::VolumeInfo;
 use crate::{
     common::{
         config::migrate_config::DeviceSpec, device_info::DeviceInfo, os_api::OSApiImpl,

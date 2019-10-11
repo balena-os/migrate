@@ -226,18 +226,22 @@ impl<'a> MSWMigrator {
                 .set_work_path(&PathType::Path(OSApi::new()?.to_linux_path(work_dir)?));
         } else {
             // in windows the mount path is usually something like [a-z]:/ which is stripped by to_linux_path
-            let work_dir = OSApi::new()?.to_linux_path(work_dir)?;
+            //let work_dir = OSApi::new()?.to_linux_path(work_dir)?;
             let work_device = &self.mig_info.work_path.device_info;
+            let stripped_path = OSApi::new()?.to_linux_path(
+                work_dir
+                    .strip_prefix(&work_device.mountpoint)
+                    .context(MigErrCtx::from_remark(
+                        MigErrorKind::Upstream,
+                        "failed to create relative work path",
+                    ))?,
+            )?;
+
             self.stage2_config
                 .set_work_path(&PathType::Mount(MountConfig::new(
                     &work_device.get_alt_path(),
                     work_device.fs_type.as_str(),
-                    work_dir.strip_prefix(&work_device.mountpoint).context(
-                        MigErrCtx::from_remark(
-                            MigErrorKind::Upstream,
-                            "failed to create relative work path",
-                        ),
-                    )?,
+                    &stripped_path,
                 )));
         }
 

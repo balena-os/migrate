@@ -269,8 +269,8 @@ impl BootManager for EfiBootManager {
             ))?;
             if let Ok(bckup_path) = os_api.to_linux_path(backup_path) {
                 boot_backup.push((
-                    String::from(EFI_MS_BOOTMGR),
-                    String::from(&*bckup_path.to_string_lossy()),
+                    String::from(&*os_api.to_linux_path(EFI_MS_BOOTMGR)?.to_string_lossy()),
+                    String::from(&*os_api.to_linux_path(bckup_path)?.to_string_lossy()),
                 ))
             } else {
                 warn!("Failed to save backup for {}", EFI_DEFAULT_BOOTMGR64)
@@ -302,8 +302,12 @@ impl BootManager for EfiBootManager {
             ))?;
             if let Ok(bckup_path) = os_api.to_linux_path(backup_path) {
                 boot_backup.push((
-                    String::from(EFI_DEFAULT_BOOTMGR64),
-                    String::from(&*bckup_path.to_string_lossy()),
+                    String::from(
+                        &*os_api
+                            .to_linux_path(EFI_DEFAULT_BOOTMGR64)?
+                            .to_string_lossy(),
+                    ),
+                    String::from(&*os_api.to_linux_path(bckup_path)?.to_string_lossy()),
                 ))
             } else {
                 warn!("Failed to save backup for {}", EFI_DEFAULT_BOOTMGR64)

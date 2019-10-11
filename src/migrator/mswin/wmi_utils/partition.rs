@@ -168,6 +168,11 @@ impl<'a> Partition {
     pub fn get_device_id(&'a self) -> &'a str {
         &self.device_id
     }
+
+    pub fn is_gpt_partition(&self) -> bool {
+        self.ptype.starts_with("GPT:")
+    }
+
     /*
         pub fn get_device(&'a self) -> &'a str {
             &self.device

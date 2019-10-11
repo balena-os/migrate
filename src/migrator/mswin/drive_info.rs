@@ -13,7 +13,7 @@ use crate::{
         },
     },
 };
-use log::debug;
+use log::{debug, warn};
 use regex::{Captures, Regex};
 use std::mem::{swap, transmute};
 use std::path::Path;
@@ -36,7 +36,15 @@ pub(crate) struct VolumeInfo {
 
 impl VolumeInfo {
     pub fn get_linux_path(&self) -> PathBuf {
-        PathBuf::from(&format!("{}/{}", DISK_BY_PARTUUID_PATH, &self.part_uuid))
+        if self.partition.is_gpt_partition() {
+            PathBuf::from(&format!("{}/{}", DISK_BY_PARTUUID_PATH, &self.part_uuid))
+        } else {
+            if let Some(label) = self.volume.get_label() {
+                PathBuf::from(&format!("{}/{}", DISK_BY_LABEL_PATH, label))
+            } else {
+                PathBuf::from(&format!("{}/{}", DISK_BY_PARTUUID_PATH, &self.part_uuid))
+            }
+        }
     }
 }
 
@@ -80,14 +88,14 @@ impl DriveInfo {
                     if let Some(efi_drive) = swapped_efi_drive {
                         efi_drive
                     } else {
-                        debug!(
+                        warn!(
                             "No logicalDrive found for volume '{}' - skipping volume",
                             volume.get_device_id()
                         );
                         continue;
                     }
                 } else {
-                    debug!(
+                    warn!(
                         "No logicalDrive found for volume '{}' - skipping volume",
                         volume.get_device_id()
                     );
