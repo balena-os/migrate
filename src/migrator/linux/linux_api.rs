@@ -71,4 +71,7 @@ impl OSApiImpl for LinuxAPI {
     fn device_info_for_efi(&self) -> Result<DeviceInfo, MigError> {
         unimplemented!()
     }
+    fn to_linux_path<P: AsRef<Path>>(&self, path: P) -> Result<PathBuf, MigError> {
+        Ok(PathBuf::from(path.as_ref()))
+    }
 }

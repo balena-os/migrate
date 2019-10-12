@@ -12,7 +12,7 @@ migrate:
   reboot: 5
   log:
     ## use this drive for stage2 persistent logging
-    # drive: '/dev/sda1'
+    #drive: '/dev/sda1'
     ## stage2 log level (trace, debug, info, warn, error)
     level: debug
   # path to stage2 kernel - must be a balena os kernel matching the device type

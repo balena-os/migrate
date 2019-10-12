@@ -2,7 +2,7 @@ use log::error;
 use std::path::PathBuf;
 
 use crate::{
-    common::{path_append, MigError, MigErrorKind},
+    common::{MigError, MigErrorKind},
     defs::{DISK_BY_LABEL_PATH, DISK_BY_PARTUUID_PATH, DISK_BY_UUID_PATH},
 };
 
@@ -12,9 +12,14 @@ use crate::linux::{
     lsblk_info::{LsblkDevice, LsblkPartition},
 };
 
-use crate::common::os_api::{OSApi, OSApiImpl};
 #[cfg(target_os = "windows")]
-use crate::mswin::drive_info::{DriveInfo, VolumeInfo};
+use crate::{
+    common::{
+        os_api::{OSApi, OSApiImpl},
+        path_append,
+    },
+    mswin::drive_info::{DriveInfo, VolumeInfo},
+};
 
 #[derive(Debug, Clone)]
 pub(crate) struct DeviceInfo {
