@@ -203,22 +203,20 @@ impl BootManager for EfiBootManager {
         let startup_content = if let Some(ref partuuid) = boot_dev.part_uuid {
             format!(
                 "{}{} initrd={} root=PARTUUID={} rootfstype={}",
-                STARTUP_TEMPLATE, kernel_path, initrd_path, partuuid, boot_dev.fs_type
-            )
-        } else {
-            warn!("setting up /root device without partuuid, this is unsafe!");
-            format!(
-                "{}{} initrd={} root={} rootfstype={}",
                 STARTUP_TEMPLATE,
                 kernel_path,
-                initrd_path,
-                mig_info
-                    .work_path
-                    .device_info
-                    .get_alt_path()
-                    .to_string_lossy(),
-                boot_dev.fs_type,
+                OSApi::new()?.to_linux_path(initrd_path)?.to_string_lossy(),
+                partuuid,
+                boot_dev.fs_type
             )
+        } else {
+            return Err(MigError::from_remark(
+                MigErrorKind::InvParam,
+                &format!(
+                    "No partuuid found for root device '{}'- cannot create root command",
+                    boot_dev.device
+                ),
+            ));
         };
 
         let mut startup_file = File::create(&startup_path).context(MigErrCtx::from_remark(
