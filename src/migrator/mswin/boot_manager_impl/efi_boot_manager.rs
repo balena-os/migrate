@@ -200,12 +200,13 @@ impl BootManager for EfiBootManager {
 
         // TODO: prefer PARTUUID to guessed device name
 
+        let os_api = OSApi::new()?;
         let startup_content = if let Some(ref partuuid) = boot_dev.part_uuid {
             format!(
-                "{}{} initrd={} root=PARTUUID={} rootfstype={}",
+                "{}{} initrd={} root=PARTUUID={} rootfstype={} rootwait\n",
                 STARTUP_TEMPLATE,
-                kernel_path,
-                OSApi::new()?.to_linux_path(initrd_path)?.to_string_lossy(),
+                os_api.to_linux_path(kernel_path)?.to_string_lossy(),
+                os_api.to_linux_path(initrd_path)?.to_string_lossy(),
                 partuuid,
                 boot_dev.fs_type
             )
