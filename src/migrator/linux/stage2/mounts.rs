@@ -143,8 +143,19 @@ impl<'a> Mounts {
             for fstype in &fstypes {
                 match Mounts::mount(BOOTFS_DIR, &kernel_root_device, fstype) {
                     Ok(boot_mountpoint) => {
+                        debug!(
+                            "device: '{}', boot fstype: '{}'",
+                            kernel_root_device.display(),
+                            fstype
+                        );
+
                         let stage2_config = path_append(&boot_mountpoint, STAGE2_CFG_FILE);
                         if file_exists(&stage2_config) {
+                            debug!(
+                                "device: '{}', boot fstype: '{}'",
+                                kernel_root_device.display(),
+                                fstype
+                            );
                             let init_device = match drive_from_partition(&kernel_root_device) {
                                 Ok(flash_device) => flash_device,
                                 Err(why) => {
@@ -153,9 +164,17 @@ impl<'a> Mounts {
                                         kernel_root_device.display(),
                                         why
                                     );
+                                    thread::sleep(Duration::new(5, 0));
+
                                     return Err(MigError::displayed());
                                 }
                             };
+                            debug!(
+                                "found '{}' on device: '{}',",
+                                stage2_config.display(),
+                                init_device.display()
+                            );
+                            thread::sleep(Duration::new(5, 0));
 
                             return Ok(Mounts {
                                 boot_device: init_device.clone(),
