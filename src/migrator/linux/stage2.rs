@@ -122,6 +122,7 @@ impl<'a> Stage2 {
             }
             Err(why) => {
                 error!("Failed to mount boot file system, giving up: {:?}", why);
+                thread::sleep(Duration::new(10, 0));
                 return Err(MigError::displayed());
             }
         };
@@ -143,6 +144,7 @@ impl<'a> Stage2 {
                     stage2_cfg_file.display(),
                     why
                 );
+                thread::sleep(Duration::new(10, 0));
                 // TODO: could try to restore former boot config anyway
                 return Err(MigError::displayed());
             }
@@ -167,6 +169,8 @@ impl<'a> Stage2 {
                 warn!("mount_all returned an error: {:?}", why);
             }
         }
+
+        thread::sleep(Duration::new(10, 0));
 
         // try switch logging to a persistent log
         let log_path = if let Some(log_path) = mounts.get_log_path() {
@@ -215,7 +219,7 @@ impl<'a> Stage2 {
     // Do the actual work once drives are mounted and config is read
 
     pub fn migrate(&mut self) -> Result<(), MigError> {
-        trace!("migrate: entered");
+        debug!("migrate: entered");
 
         let device_type = self.config.get_device_type();
         let boot_type = self.config.get_boot_type();
