@@ -23,7 +23,8 @@ impl IntelNuc {
         s2_cfg: &mut Stage2ConfigBuilder,
     ) -> Result<IntelNuc, MigError> {
         const SUPPORTED_OSSES: &'static [&'static str] =
-            &["Microsoft Windows 10 Enterprise Evaluation"];
+            &["Microsoft Windows 10 Enterprise Evaluation",
+              "Microsoft Windows 10 Pro"];
 
         let os_name = &mig_info.os_name;
         // TODO: find replacement for file command in windows
