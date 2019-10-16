@@ -592,13 +592,19 @@ pub(crate) fn get_kernel_root_info() -> Result<(PathBuf, Option<String>), MigErr
 
     debug!("Using root device: '{}'", root_device.display());
 
-    let root_fs_type =
-        if let Some(captures) = Regex::new(&ROOT_FSTYPE_REGEX).unwrap().captures(&cmd_line) {
-            Some(String::from(captures.get(1).unwrap().as_str()))
-        } else {
-            warn!("failed to parse {} for root fs type", cmd_line);
-            None
-        };
+    let root_fs_type = if let Some(captures) = RegexBuilder::new(&ROOT_FSTYPE_REGEX)
+        .case_insensitive(true)
+        .build()
+        .unwrap()
+        .captures(&cmd_line)
+    {
+        let fstype = captures.get(1).unwrap().as_str();
+        debug!("Got root fstype: '{}'", fstype);
+        Some(String::from(fstype))
+    } else {
+        warn!("failed to parse {} for root fs type", cmd_line);
+        None
+    };
 
     Ok((root_device, root_fs_type))
 }
