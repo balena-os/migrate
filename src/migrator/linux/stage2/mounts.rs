@@ -105,7 +105,7 @@ impl<'a> Mounts {
             }
         };
 
-        thread::sleep(Duration::new(10, 0));
+        //thread::sleep(Duration::new(10, 0));
 
         debug!(
             "Kernel cmd line points to root device '{:?}' with fs-type: '{:?}'",
@@ -113,7 +113,7 @@ impl<'a> Mounts {
         );
 
         // Not sure if this is needed but can't hurt to be patient
-        thread::sleep(Duration::from_secs(3));
+        //thread::sleep(Duration::from_secs(3));
 
         info!("calling {} {:?}", UDEVADM_CMD, UDEVADM_PARAMS);
         match call(UDEVADM_CMD, UDEVADM_PARAMS, true) {
