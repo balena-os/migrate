@@ -91,8 +91,8 @@ impl<'a> Mounts {
     // might get us in trouble with devices showing up slowly though
 
     pub fn new() -> Result<Mounts, MigError> {
-        trace!("new: entered");
-
+        debug!("new: entered");
+        thread::sleep(Duration::new(5, 0));
         // obtain boot device from kernel cmdline
         let (kernel_root_device, kernel_root_fs_type) = match get_kernel_root_info() {
             Ok((device, fstype)) => (Some(device), fstype),
@@ -104,6 +104,8 @@ impl<'a> Mounts {
                 (None, None)
             }
         };
+
+        thread::sleep(Duration::new(10, 0));
 
         debug!(
             "Kernel cmd line points to root device '{:?}' with fs-type: '{:?}'",
