@@ -7,7 +7,7 @@ use crate::{
         Config, MigError, MigErrorKind,
     },
     defs::BootType,
-    linux::stage2::mounts::Mounts,
+    linux::{linux_common::restore_backups, stage2::mounts::Mounts},
 };
 
 pub(crate) mod u_boot_manager;
@@ -66,7 +66,7 @@ impl BootManager for EfiBootManager {
     ) -> Result<(), MigError> {
         Err(MigError::from(MigErrorKind::NotImpl))
     }
-    fn restore(&self, _mounts: &Mounts, _config: &Stage2Config) -> bool {
-        unimplemented!()
+    fn restore(&self, mounts: &Mounts, config: &Stage2Config) -> bool {
+        restore_backups(mounts.get_boot_mountpoint(), config.get_boot_backups())
     }
 }

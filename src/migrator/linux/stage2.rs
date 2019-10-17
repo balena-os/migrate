@@ -170,7 +170,7 @@ impl<'a> Stage2 {
             }
         }
 
-        thread::sleep(Duration::new(10, 0));
+        //thread::sleep(Duration::new(10, 0));
 
         // try switch logging to a persistent log
         let log_path = if let Some(log_path) = mounts.get_log_path() {
