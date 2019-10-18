@@ -1,4 +1,4 @@
-use log::{error, info};
+use log::{error, debug, info};
 
 use crate::{
     common::{
@@ -113,6 +113,8 @@ impl Device for IntelNuc {
         config: &Config,
         s2_cfg: &mut Stage2ConfigBuilder,
     ) -> Result<(), MigError> {
+        debug!("setup entered");
+
         let kernel_opts = if let Some(ref kernel_opts) = config.migrate.get_kernel_opts() {
             kernel_opts.clone()
         } else {

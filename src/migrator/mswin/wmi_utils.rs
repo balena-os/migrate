@@ -368,6 +368,25 @@ impl<'a> QueryRes<'a> {
         }
     }
 
+    fn get_opt_int_property(&self, prop_name: &str) -> Result<Option<i32>, MigError> {
+        if let Some(ref variant) = self.q_result.get(prop_name) {
+            if let Variant::I32(val) = variant {
+                Ok(Some(*val))
+            } else {
+                if let Variant::NULL() = variant {
+                    Ok(None)
+                } else {
+                    Err(MigError::from_remark(MigErrorKind::InvParam, &format!("get_int_property: unexpected variant type, not I32 for key: '{}' value: {:?}", prop_name, variant)))
+                }
+            }
+        } else {
+            Err(MigError::from_remark(
+                MigErrorKind::NotFound,
+                &format!("get_int_property: value not found for key: '{}", prop_name),
+            ))
+        }
+    }
+
     fn get_int_property(&self, prop_name: &str) -> Result<i32, MigError> {
         if let Some(ref variant) = self.q_result.get(prop_name) {
             if let Variant::I32(val) = variant {
