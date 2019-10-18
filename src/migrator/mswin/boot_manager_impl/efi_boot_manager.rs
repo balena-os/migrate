@@ -117,7 +117,7 @@ impl BootManager for EfiBootManager {
         s2_cfg: &mut Stage2ConfigBuilder,
         kernel_opts: &str,
     ) -> Result<(), MigError> {
-        trace!("setup: entered");
+        debug!("setup: entered");
         // for now:
         // copy our kernel & initramfs to \EFI\balena-migrate
         // move all boot manager files in

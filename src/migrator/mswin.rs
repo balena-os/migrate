@@ -210,7 +210,7 @@ impl<'a> MSWMigrator {
     }
 
     fn do_migrate(&mut self) -> Result<(), MigError> {
-        trace!("Entered do_migrate");
+        debug!("Entered do_migrate");
 
         let work_dir = &self.mig_info.work_path.path;
         let boot_device = self.device.get_boot_device();
@@ -334,7 +334,7 @@ impl<'a> MSWMigrator {
             warn!("The memory used to copy files to initramfs might not be available.");
         }
 
-        trace!("device setup");
+        debug!("device setup");
 
         // We need this before s2 config as it might still modify migrate_info
         // TODO: make setup take no s2_cfg or immutable s2_cfg and return boot_backup instead
@@ -343,7 +343,7 @@ impl<'a> MSWMigrator {
         self.device
             .setup(&mut self.mig_info, &self.config, &mut self.stage2_config)?;
 
-        trace!("stage2 config");
+        debug!("stage2 config");
 
         // dbg!("setting up stage2_cfg");
         // *****************************************************************************************
@@ -415,7 +415,7 @@ impl<'a> MSWMigrator {
             }
         }
 
-        trace!("done");
+        debug!("done");
         Ok(())
 
         // TODO: take care of backup

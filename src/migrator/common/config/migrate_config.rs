@@ -84,9 +84,7 @@ pub(crate) enum DeviceSpec {
     #[serde(rename = "uuid")]
     Uuid(String),
     #[serde(rename = "partuuid")]
-
-    i
-
+    PartUuid(String),
     #[serde(rename = "devpath")]
     DevicePath(PathBuf),
     #[serde(rename = "path")]
