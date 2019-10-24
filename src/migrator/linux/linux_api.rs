@@ -69,7 +69,10 @@ impl OSApiImpl for LinuxAPI {
         get_mem_info()
     }
     fn device_info_for_efi(&self) -> Result<DeviceInfo, MigError> {
-        unimplemented!()
+        Err(MigError::from_remark(
+            MigErrorKind::InvState,
+            "device_info_for_efi is no implemented in linux_api",
+        ))
     }
     fn to_linux_path<P: AsRef<Path>>(&self, path: P) -> Result<PathBuf, MigError> {
         Ok(PathBuf::from(path.as_ref()))

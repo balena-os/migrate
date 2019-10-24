@@ -10,12 +10,13 @@ pub const SYSTEM_CONNECTIONS_DIR: &str = "system-connections";
 // Default migrate config name
 pub const DEFAULT_MIGRATE_CONFIG: &str = "balena-migrate.yml";
 
+pub const MIG_SYSLINUX_NAME: &str = "syslinux.efi";
 pub const MIG_KERNEL_NAME: &str = "balena-migrate.zImage";
 pub const MIG_INITRD_NAME: &str = "balena-migrate.initrd";
 pub const MIG_DTB_NAME: &str = "balena-migrate.dtb";
 
 #[allow(dead_code)]
-pub const EFI_STARTUP_FILE: &str = "startup.nsh";
+pub const EFI_SYSLINUX_CONFIG_FILE: &str = "syslinux.cfg";
 
 #[allow(dead_code)]
 pub const APPROX_MEM_THRESHOLD: u64 = 1024 * 1024;

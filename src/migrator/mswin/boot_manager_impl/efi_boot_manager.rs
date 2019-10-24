@@ -9,6 +9,7 @@ echo -off
 echo Starting balena Migrate Environment
 "#;
 
+use crate::defs::EFI_SYSLINUX_CONFIG_FILE;
 use crate::{
     common::{
         boot_manager::BootManager,
@@ -20,7 +21,7 @@ use crate::{
         stage2_config::Stage2ConfigBuilder,
         Config, MigErrCtx, MigError, MigErrorKind,
     },
-    defs::{BootType, EFI_STARTUP_FILE, MIG_INITRD_NAME, MIG_KERNEL_NAME},
+    defs::{BootType, EFI_STARTUP_FILE, MIG_INITRD_NAME, MIG_KERNEL_NAME, MIG_SYSLINUX_NAME},
     mswin::{
         drive_info::DriveInfo,
         msw_defs::{
@@ -52,7 +53,7 @@ impl BootManager for EfiBootManager {
         &mut self,
         mig_info: &MigrateInfo,
         _config: &Config,
-        _s2_cfg: &mut Stage2ConfigBuilder,
+        s2_cfg: &mut Stage2ConfigBuilder,
     ) -> Result<bool, MigError> {
         let drive_info = DriveInfo::new()?;
 
@@ -77,26 +78,36 @@ impl BootManager for EfiBootManager {
             return Ok(false);
         }
 
-        // TODO: get a better estimate for startup file size
-        let efi_path = path_append(&efi_drive.mountpoint, BALENA_EFI_DIR);
+        let balena_efi_path = path_append(&efi_drive.mountpoint, BALENA_EFI_DIR);
 
-        let mut required_space: u64 = if file_exists(path_append(
-            &efi_path,
-            mig_info.kernel_file.rel_path.as_ref().unwrap(),
-        )) {
+        // TODO: get a better estimate for startup file size
+
+        let mut required_space: u64 = if file_exists(path_append(&balena_efi_path, MIG_KERNEL_NAME))
+        {
             0
         } else {
             mig_info.kernel_file.size
         };
 
-        if !file_exists(path_append(
-            &efi_path,
-            mig_info.initrd_file.rel_path.as_ref().unwrap(),
-        )) {
+        if !file_exists(path_append(&balena_efi_path, MIG_INITRD_NAME)) {
             required_space += mig_info.initrd_file.size;
         }
 
-        if !file_exists(path_append(&efi_drive.mountpoint, EFI_STARTUP_FILE)) {
+        let syslinux = path_append(&mig_info.work_path, MIG_SYSLINUX_NAME_);
+        if !file_exists(syslinux) {
+            error!(
+                "The syslinux executable '{}' could not be found",
+                syslinux.display()
+            );
+            return Ok(false);
+        } else {
+            if !file_exists(path_append(&balena_efi_path, MIG_SYSLINUX_NAME)) {
+                // TODO: get a better estimate for startup file size
+                required_space += syslinux.metadata().unwrap().len();
+            }
+        }
+
+        if !file_exists(path_append(&balena_efi_path, EFI_SYSLINUX_CONFIG_FILE)) {
             // TODO: get a better estimate for startup file size
             required_space += 50;
         }
@@ -165,6 +176,20 @@ impl BootManager for EfiBootManager {
             ),
         ))?;
         let initrd_path = path_append(&balena_efi_dir, MIG_INITRD_NAME);
+        debug!(
+            "copy '{}' to '{}'",
+            &mig_info.initrd_file.path.display(),
+            &initrd_path.display()
+        );
+        copy(&mig_info.initrd_file.path, &initrd_path).context(MigErrCtx::from_remark(
+            MigErrorKind::Upstream,
+            &format!(
+                "failed to copy migrate initramfs to EFI directory '{}'",
+                initrd_path.display()
+            ),
+        ))?;
+
+        let syslinux_path = path_append(&balena_efi_dir, MIG_SYSLINUX_NAME);
         debug!(
             "copy '{}' to '{}'",
             &mig_info.initrd_file.path.display(),
