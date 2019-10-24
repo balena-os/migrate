@@ -373,40 +373,46 @@ impl<'a> Mounts {
 
         if let Some(log_dev) = stage2_config.get_log_device() {
             // TODO: establish fs_type ?
-
-            let fs_type = match LsblkInfo::lsblk_partition_from_dev_path(log_dev) {
-                Ok(partition) => {
-                    if let Some(fs_type) = partition.fstype {
-                        fs_type
-                    } else {
-                        warn!(
-                        "Could not determine fs type for log partition: '{}' not mounting log device",
-                        log_dev.display(),
-                    );
-                        return Ok(());
+            if file_exists(log_dev) {
+                let fs_type = match LsblkInfo::lsblk_partition_from_dev_path(log_dev) {
+                    Ok(partition) => {
+                        if let Some(fs_type) = partition.fstype {
+                            Some(fs_type)
+                        } else {
+                            warn!(
+                                "Could not determine fs type for log partition: '{}' not mounting log device",
+                                log_dev.display(),
+                            );
+                            None
+                        }
                     }
-                }
-                Err(why) => {
-                    warn!(
-                    "Could not query device for log partition: '{}', error: {:?} not mounting log device",
-                    log_dev.display(),
-                    why
-                );
-                    return Ok(());
-                }
-            };
+                    Err(why) => {
+                        warn!(
+                            "Could not query device for log partition: '{}', error: {:?} not mounting log device",
+                            log_dev.display(),
+                            why
+                        );
+                        None
+                    }
+                };
 
-            self.log_path = match Mounts::mount(LOGFS_DIR, log_dev, fs_type.as_str()) {
-                Ok(mountpoint) => Some(mountpoint),
-                Err(why) => {
-                    warn!(
-                        "Failed to mount log device: '{}': error: {:?}",
-                        log_dev.display(),
-                        why
-                    );
-                    None
+                if let Some(fstype) = fs_type {
+                    self.log_path = match Mounts::mount(LOGFS_DIR, log_dev, fstype.as_str()) {
+                        Ok(mountpoint) => Some(mountpoint),
+                        Err(why) => {
+                            warn!(
+                                "Failed to mount log device: '{}': error: {:?}",
+                                log_dev.display(),
+                                why
+                            );
+                            None
+                        }
+                    };
                 }
-            };
+            } else {
+                // TODO: wait loop ?
+                warn!("Could not find log device: '{}'", log_dev.display());
+            }
         }
 
         debug!("log mountpoint is {:?}", self.log_path);
