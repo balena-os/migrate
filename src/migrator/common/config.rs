@@ -602,5 +602,4 @@ debug:
   # don't flash device - terminate stage2 and reboot before flashing
   no_flash: false
 "###;
-
 }

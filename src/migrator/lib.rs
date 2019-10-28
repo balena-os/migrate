@@ -7,7 +7,6 @@ use nix::unistd::sync;
 
 use log::error;
 
-
 use std::panic;
 
 use mod_logger::Logger;
@@ -83,7 +82,6 @@ pub fn stage2() -> Result<(), MigError> {
         let _res = Stage2::default_exit();
         ()
     } else {
-
     }
 
     Ok(())
