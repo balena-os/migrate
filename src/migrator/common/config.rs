@@ -428,9 +428,11 @@ migrate:
     drive: "/dev/sda1"
     fs_type: ext4
   # the migrate kernel, might be downloaded automatically in future versions
-  kernel_path: "balena_x86_64.migrate.kernel"
+  kernel:
+    path: "balena_x86_64.migrate.kernel"
   # the migrate initramfs, might be downloaded automatically in future versions
-  initrd_path: "balena_x86_64.migrate.initramfs"
+  initrd:
+    path: "balena_x86_64.migrate.initramfs"
   # backup configuration
   backup:
    - volume: "test volume 1"
@@ -462,7 +464,8 @@ balena:
     dd:
       path: image.gz
   ## the balena config file to use (can be auto generated in future versions)
-  config: config.json
+  config:
+    path: "config.json"
   ## The balena app name - needed for download (not yet implemented) checked against present config.json
   app_name: 'test'
   ## Api to use for connectivity check, agent mode, downloads etc
@@ -501,9 +504,11 @@ migrate:
     # stage2 log level (trace, debug, info, warn, error)
     level: 'debug'
   # path to stage2 kernel - must be a balena os kernel matching the device type
-  kernel_path: 'balena.zImage'
+  kernel:
+    path: 'balena.zImage'
   # path to stage2 initramfs
-  initrd_path: 'balena.initramfs.cpio.gz'
+  initrd:
+    path: 'balena.initramfs.cpio.gz'
   # path to stage2 device tree blob - better be a balena dtb matching the device type
   dtb_path: 'balena.dtb'
   # backup configuration, configured files are copied to balena and mounted as volumes
@@ -578,7 +583,8 @@ balena:
         archive:
           path: resin-data.tgz
   # config.json file to inject
-  config: config.json
+  config:
+    path: "config.json"
   # application name
   app_name: 'bbtest'
   # api checks
