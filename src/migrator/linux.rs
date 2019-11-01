@@ -48,7 +48,7 @@ use crate::linux::lsblk_info::LsblkInfo;
 pub(crate) use linux_common::is_admin;
 use mod_logger::{LogDestination, Logger};
 
-const REQUIRED_CMDS: &'static [&'static str] = &[
+const REQUIRED_CMDS: &[&str] = &[
     // TODO: check this
     DF_CMD, LSBLK_CMD, FILE_CMD, UNAME_CMD, MOUNT_CMD, REBOOT_CMD, CHMOD_CMD, MKTEMP_CMD, TAR_CMD,
 ];
@@ -240,6 +240,7 @@ impl<'a> LinuxMigrator {
     // ** Start the actual migration
     // **********************************************************************
 
+    #[allow(clippy::cognitive_complexity)] //TODO refactor this function to fix the clippy warning
     fn do_migrate(&mut self) -> Result<(), MigError> {
         // TODO: prepare logging
 
@@ -255,7 +256,7 @@ impl<'a> LinuxMigrator {
 
         let boot_device = self.device.get_boot_device();
 
-        if &self.mig_info.work_path.device_info.device == &boot_device.device_info.device {
+        if self.mig_info.work_path.device_info.device == boot_device.device_info.device {
             self.stage2_config
                 .set_work_path(&PathType::Path(self.mig_info.work_path.path.clone()));
         } else {
@@ -288,15 +289,14 @@ impl<'a> LinuxMigrator {
         trace!("nwmgr_files");
         let nwmgr_path = path_append(work_dir, SYSTEM_CONNECTIONS_DIR);
 
-        if self.mig_info.nwmgr_files.len() > 0
-            || self.mig_info.wifis.len() > 0 && !dir_exists(&nwmgr_path)?
+        if (!self.mig_info.nwmgr_files.is_empty()
+            || !self.mig_info.wifis.is_empty() && !dir_exists(&nwmgr_path)?)
+            && !dir_exists(&nwmgr_path)?
         {
-            if !dir_exists(&nwmgr_path)? {
-                create_dir(&nwmgr_path).context(MigErrCtx::from_remark(
-                    MigErrorKind::Upstream,
-                    &format!("failed to create directory '{}'", nwmgr_path.display()),
-                ))?;
-            }
+            create_dir(&nwmgr_path).context(MigErrCtx::from_remark(
+                MigErrorKind::Upstream,
+                &format!("failed to create directory '{}'", nwmgr_path.display()),
+            ))?;
         }
 
         for file in &self.mig_info.nwmgr_files {
@@ -320,7 +320,7 @@ impl<'a> LinuxMigrator {
 
         trace!("do_migrate: found wifis: {}", self.mig_info.wifis.len());
 
-        if self.mig_info.wifis.len() > 0 {
+        if !self.mig_info.wifis.is_empty() {
             let mut index = 0;
             for wifi in &self.mig_info.wifis {
                 index = wifi.create_nwmgr_file(&nwmgr_path, index)?;

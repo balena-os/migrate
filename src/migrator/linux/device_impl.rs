@@ -77,24 +77,20 @@ pub(crate) fn get_device(
             error!("{}", message);
             Err(MigError::from_remark(MigErrorKind::InvState, &message))
         }
-        OSArch::AMD64 => {
-            return Ok(Box::new(intel_nuc::IntelNuc::from_config(
-                mig_info, config, s2_cfg,
-            )?))
-        }
+        OSArch::AMD64 => Ok(Box::new(intel_nuc::IntelNuc::from_config(
+            mig_info, config, s2_cfg,
+        )?)),
         /*            OSArch::I386 => {
                     migrator.init_i386()?;
                 },
         */
-        _ => {
-            return Err(MigError::from_remark(
-                MigErrorKind::InvParam,
-                &format!(
-                    "get_device: unexpected OsArch encountered: {}",
-                    mig_info.os_arch
-                ),
-            ));
-        }
+        _ => Err(MigError::from_remark(
+            MigErrorKind::InvParam,
+            &format!(
+                "get_device: unexpected OsArch encountered: {}",
+                mig_info.os_arch
+            ),
+        )),
     }
 }
 

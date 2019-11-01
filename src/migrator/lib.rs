@@ -80,7 +80,6 @@ pub fn stage2() -> Result<(), MigError> {
         Logger::flush();
         sync();
         let _res = Stage2::default_exit();
-        ()
     } else {
     }
 

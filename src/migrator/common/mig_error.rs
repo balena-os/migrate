@@ -152,6 +152,6 @@ impl From<MigErrCtx> for MigError {
 
 impl From<Context<MigErrCtx>> for MigError {
     fn from(inner: Context<MigErrCtx>) -> MigError {
-        MigError { inner: inner }
+        MigError { inner }
     }
 }

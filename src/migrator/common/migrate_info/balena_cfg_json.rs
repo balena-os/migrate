@@ -222,23 +222,22 @@ mod tests {
 }"###;
 
     use super::*;
-    use crate::{common::config::migrate_config::MigrateWifis, defs::FailMode};
 
     // TODO: update this to current config
 
     #[test]
-    fn read_conf_ok1() -> () {
+    fn read_conf_ok1() {
         let config: BalenaConfig = serde_json::from_str(CONFIG1).unwrap();
         assert_eq!(config.app_name, "TestDev");
-        assert_eq!(config.app_id, 1284711);
+        assert_eq!(config.app_id, 1_284_711);
         assert_eq!(config.vpn_port, 443);
     }
 
     #[test]
-    fn read_conf_ok2() -> () {
+    fn read_conf_ok2() {
         let config: BalenaConfig = serde_json::from_str(CONFIG2).unwrap();
         assert_eq!(config.app_name, "test");
-        assert_eq!(config.app_id, 13454711);
+        assert_eq!(config.app_id, 13_454_711);
         assert_eq!(config.vpn_port, 443);
     }
 }

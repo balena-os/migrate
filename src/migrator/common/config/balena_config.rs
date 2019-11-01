@@ -45,6 +45,7 @@ pub(crate) struct FileRef {
     pub hash: Option<HashInfo>,
 }
 
+#[allow(clippy::large_enum_variant)] //TODO refactor to remove clippy warning
 #[derive(Debug, Serialize, Deserialize, Clone)]
 pub(crate) enum ImageType {
     #[serde(rename = "dd")]
@@ -86,7 +87,7 @@ impl<'a> BalenaConfig {
     pub fn check(&self, mig_mode: &MigMode) -> Result<(), MigError> {
         debug!("check: {:?}", self);
         if let MigMode::Immediate = mig_mode {
-            if let None = self.image {
+            if self.image.is_none() {
                 return Err(MigError::from_remark(
                     MigErrorKind::InvParam,
                     &format!(
@@ -96,7 +97,7 @@ impl<'a> BalenaConfig {
                 ));
             }
 
-            if let None = self.config {
+            if self.config.is_none() {
                 return Err(MigError::from_remark(
                     MigErrorKind::InvParam,
                     &format!(

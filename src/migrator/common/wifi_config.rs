@@ -90,7 +90,7 @@ pub(crate) enum WifiConfig {
 }
 
 impl<'a> WifiConfig {
-    pub fn scan(ssid_filter: &Vec<String>) -> Result<Vec<WifiConfig>, MigError> {
+    pub fn scan(ssid_filter: &[String]) -> Result<Vec<WifiConfig>, MigError> {
         trace!("WifiConfig::scan: entered with {:?}", ssid_filter);
         let mut list: Vec<WifiConfig> = Vec::new();
         WifiConfig::from_wpa(&mut list, ssid_filter)?;
@@ -161,10 +161,7 @@ impl<'a> WifiConfig {
         }
     }
 
-    fn from_connman(
-        wifis: &mut Vec<WifiConfig>,
-        ssid_filter: &Vec<String>,
-    ) -> Result<(), MigError> {
+    fn from_connman(wifis: &mut Vec<WifiConfig>, ssid_filter: &[String]) -> Result<(), MigError> {
         if dir_exists(CONNMGR_CONFIG_DIR)? {
             let paths = read_dir(CONNMGR_CONFIG_DIR).context(MigErrCtx::from_remark(
                 MigErrorKind::Upstream,
@@ -184,7 +181,7 @@ impl<'a> WifiConfig {
                             if settings_path.exists() {
                                 debug!("examining connmgr path '{}'", settings_path.display());
                                 if let Some(wifi) = WifiConfig::parse_conmgr_file(&settings_path)? {
-                                    let mut valid = ssid_filter.len() == 0;
+                                    let mut valid = ssid_filter.is_empty();
                                     if !valid {
                                         if let Some(_pos) = ssid_filter
                                             .iter()
@@ -241,7 +238,8 @@ impl<'a> WifiConfig {
         Ok(())
     }
 
-    fn from_wpa(wifis: &mut Vec<WifiConfig>, ssid_filter: &Vec<String>) -> Result<(), MigError> {
+    #[allow(clippy::cognitive_complexity)] //TODO refactor this function to fix the clippy warning
+    fn from_wpa(wifis: &mut Vec<WifiConfig>, ssid_filter: &[String]) -> Result<(), MigError> {
         trace!("WifiConfig::from_wpa: entered with {:?}", ssid_filter);
 
         if file_exists(WPA_CONFIG_FILE) {
@@ -292,7 +290,7 @@ impl<'a> WifiConfig {
                                     if let Some(ssid) = ssid {
                                         // TODO: check if ssid is in filter list
 
-                                        let mut valid = ssid_filter.len() == 0;
+                                        let mut valid = ssid_filter.is_empty();
                                         if !valid {
                                             if let Some(_pos) =
                                                 ssid_filter.iter().position(|r| r.as_str() == ssid)
@@ -301,7 +299,7 @@ impl<'a> WifiConfig {
                                             }
                                         }
 
-                                        if valid == true {
+                                        if valid {
                                             if let Some(_pos) =
                                                 wifis.iter().position(|r| r.get_ssid() == ssid)
                                             {
@@ -391,7 +389,8 @@ impl<'a> WifiConfig {
         Ok(())
     }
 
-    fn from_nwmgr(wifis: &mut Vec<WifiConfig>, ssid_filter: &Vec<String>) -> Result<(), MigError> {
+    #[allow(clippy::cognitive_complexity)] //TODO refactor this function to fix the clippy warning
+    fn from_nwmgr(wifis: &mut Vec<WifiConfig>, ssid_filter: &[String]) -> Result<(), MigError> {
         trace!("WifiConfig::from_nwmgr: entered with {:?}", ssid_filter);
         if dir_exists(NWMGR_CONFIG_DIR)? {
             let paths = read_dir(NWMGR_CONFIG_DIR).context(MigErrCtx::from_remark(
@@ -429,34 +428,32 @@ impl<'a> WifiConfig {
                                 };
 
                                 debug!("got section: '{:?}'", section);
-                            } else {
-                                if let Some(captures) = NWMGR_PARAM_RE.captures(line) {
-                                    let param = captures.get(1).unwrap().as_str();
-                                    let value = captures.get(2).unwrap().as_str();
-                                    debug!("got param: '{}' : '{}'", param, value);
-                                    match section {
-                                        NwMgrSection::Connection => {
-                                            // TODO: lowercase this ?
-                                            if param == "type" && value == "wifi" {
-                                                debug!("Found wifi config");
-                                                is_wifi = true;
-                                                if let Some(ref _ssid) = ssid {
-                                                    break;
-                                                }
+                            } else if let Some(captures) = NWMGR_PARAM_RE.captures(line) {
+                                let param = captures.get(1).unwrap().as_str();
+                                let value = captures.get(2).unwrap().as_str();
+                                debug!("got param: '{}' : '{}'", param, value);
+                                match section {
+                                    NwMgrSection::Connection => {
+                                        // TODO: lowercase this ?
+                                        if param == "type" && value == "wifi" {
+                                            debug!("Found wifi config");
+                                            is_wifi = true;
+                                            if let Some(ref _ssid) = ssid {
+                                                break;
                                             }
                                         }
-                                        NwMgrSection::Wifi => {
-                                            // TODO: look for ssid=
-                                            if param == "ssid" {
-                                                debug!("Found ssid: '{}'", value);
-                                                ssid = Some(String::from(value));
-                                                if is_wifi {
-                                                    break;
-                                                }
-                                            }
-                                        }
-                                        NwMgrSection::Other => (),
                                     }
+                                    NwMgrSection::Wifi => {
+                                        // TODO: look for ssid=
+                                        if param == "ssid" {
+                                            debug!("Found ssid: '{}'", value);
+                                            ssid = Some(String::from(value));
+                                            if is_wifi {
+                                                break;
+                                            }
+                                        }
+                                    }
+                                    NwMgrSection::Other => (),
                                 }
                             }
                         }
@@ -468,17 +465,15 @@ impl<'a> WifiConfig {
                                         ssid,
                                         file: dir_path,
                                     }));
+                                } else if let Some(_pos) =
+                                    ssid_filter.iter().position(|r| r.as_str() == ssid)
+                                {
+                                    wifis.push(WifiConfig::NwMgrFile(NwmgrFile {
+                                        ssid,
+                                        file: dir_path,
+                                    }));
                                 } else {
-                                    if let Some(_pos) =
-                                        ssid_filter.iter().position(|r| r.as_str() == ssid)
-                                    {
-                                        wifis.push(WifiConfig::NwMgrFile(NwmgrFile {
-                                            ssid,
-                                            file: dir_path,
-                                        }));
-                                    } else {
-                                        info!("ignoring wifi config for ssid: '{}'", ssid);
-                                    }
+                                    info!("ignoring wifi config for ssid: '{}'", ssid);
                                 }
                             } else {
                                 warn!(
@@ -569,12 +564,10 @@ impl<'a> WifiConfig {
                         }
                     }
 
-                    if NWMGR_ID_RE.is_match(line) {
-                        if conn_section {
-                            // uncomment id= lines in connection section
-                            content += &format!("# {}\n", line);
-                            continue;
-                        }
+                    if NWMGR_ID_RE.is_match(line) && conn_section {
+                        // uncomment id= lines in connection section
+                        content += &format!("# {}\n", line);
+                        continue;
                     }
 
                     // all not handled are cloned

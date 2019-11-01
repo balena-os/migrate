@@ -58,19 +58,17 @@ impl FileInfo {
 
         let checked_path = if file_exists(file_path) {
             PathBuf::from(file_path)
-        } else {
-            if !file_path.is_absolute() {
-                let search_path = work_path.join(file_path);
-                if search_path.exists() {
-                    search_path
-                } else {
-                    // tried to build path using workdir, but nothing found
-                    return Ok(None);
-                }
+        } else if !file_path.is_absolute() {
+            let search_path = work_path.join(file_path);
+            if search_path.exists() {
+                search_path
             } else {
-                // Absolute path was not found, no hope
+                // tried to build path using workdir, but nothing found
                 return Ok(None);
             }
+        } else {
+            // Absolute path was not found, no hope
+            return Ok(None);
         };
 
         let abs_path = checked_path.canonicalize().context(MigErrCtx::from_remark(

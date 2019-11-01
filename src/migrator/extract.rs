@@ -187,11 +187,11 @@ impl Extractor {
             match Disk::from_gzip_img(&image_file) {
                 Ok(gzip_img) => {
                     debug!("new: is gzipped image '{}'", image_file.display());
-                    return Ok(Extractor {
+                    Ok(Extractor {
                         work_dir,
                         disk: gzip_img,
                         device_slug: extract_device,
-                    });
+                    })
                 }
                 Err(why) => {
                     error!(
@@ -199,36 +199,34 @@ impl Extractor {
                         image_file.display(),
                         why
                     );
-                    return Err(MigError::displayed());
+                    Err(MigError::displayed())
+                }
+            }
+        } else if is_file_type(&image_file, &FileType::OSImage)? {
+            match Disk::from_drive_file(&image_file, None) {
+                Ok(plain_img) => {
+                    debug!("new: is plain image '{}'", image_file.display());
+                    Ok(Extractor {
+                        work_dir,
+                        disk: plain_img,
+                        device_slug: extract_device,
+                    })
+                }
+                Err(why) => {
+                    error!(
+                        "Unable to open the image file '{}', error: {:?}",
+                        image_file.display(),
+                        why
+                    );
+                    Err(MigError::displayed())
                 }
             }
         } else {
-            if is_file_type(&image_file, &FileType::OSImage)? {
-                match Disk::from_drive_file(&image_file, None) {
-                    Ok(plain_img) => {
-                        debug!("new: is plain image '{}'", image_file.display());
-                        return Ok(Extractor {
-                            work_dir,
-                            disk: plain_img,
-                            device_slug: extract_device,
-                        });
-                    }
-                    Err(why) => {
-                        error!(
-                            "Unable to open the image file '{}', error: {:?}",
-                            image_file.display(),
-                            why
-                        );
-                        return Err(MigError::displayed());
-                    }
-                }
-            } else {
-                error!(
-                    "Unable to open the image file '{}', an unexpected file type was found",
-                    image_file.display(),
-                );
-                return Err(MigError::displayed());
-            }
+            error!(
+                "Unable to open the image file '{}', an unexpected file type was found",
+                image_file.display(),
+            );
+            Err(MigError::displayed())
         }
     }
 
@@ -268,13 +266,7 @@ impl Extractor {
 
         let mut extended_blocks: u64 = 0;
 
-        loop {
-            let raw_part = if let Some(raw_part) = part_iterator.next() {
-                raw_part
-            } else {
-                break;
-            };
-
+        while let Some(raw_part) = part_iterator.next() {
             let part_idx = partitions.len();
 
             match PartitionType::from_ptype(raw_part.ptype) {
@@ -329,7 +321,7 @@ impl Extractor {
                 }
             }
 
-            if let Some(_) = extract_err {
+            if extract_err.is_some() {
                 break;
             }
 
@@ -395,7 +387,7 @@ impl Extractor {
 
             let yaml_config = serde_yaml::to_string(&res).context(MigErrCtx::from_remark(
                 MigErrorKind::Upstream,
-                &format!("Failed to serialize config to yaml"),
+                &"Failed to serialize config to yaml".to_string(),
             ))?;
 
             let mut entabbed_cfg = String::new();
@@ -507,16 +499,16 @@ impl Extractor {
         if !cmd_res.status.success() {
             return Err(MigError::from_remark(
                 MigErrorKind::ExecProcess,
-                &format!("Failed to locate mounted loop device"),
+                &"Failed to locate mounted loop device".to_string(),
             ));
         }
 
-        let device = if let Some(output) = cmd_res.stdout.lines().into_iter().last() {
+        let device = if let Some(output) = cmd_res.stdout.lines().last() {
             String::from(output)
         } else {
             return Err(MigError::from_remark(
                 MigErrorKind::ExecProcess,
-                &format!("Failed to parse mounted loop device"),
+                &"Failed to parse mounted loop device".to_string(),
             ));
         };
 

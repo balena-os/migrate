@@ -41,6 +41,7 @@ pub(crate) struct CheckedFSDump {
     pub data: CheckedPartDump,
 }
 
+#[allow(clippy::large_enum_variant)] //TODO refactor to remove clippy warning
 #[derive(Debug, Deserialize, Serialize, Clone)]
 pub(crate) enum CheckedImageType {
     Flasher(RelFileInfo),
@@ -277,7 +278,7 @@ impl<T: Clone> Required<T> {
         }
     }
 
-    fn get<'a>(&self) -> Result<&T, MigError> {
+    fn get(&self) -> Result<&T, MigError> {
         if let Some(ref val) = self.data {
             Ok(val)
         } else {
@@ -311,7 +312,7 @@ impl<T: Clone> Optional<T> {
         }
     }
 
-    fn get<'a>(&'a self) -> &'a Option<T> {
+    fn get(&'_ self) -> &'_ Option<T> {
         &self.data
     }
 
@@ -368,7 +369,7 @@ impl<'a> Stage2ConfigBuilder {
     pub fn build(&self) -> Result<Stage2Config, MigError> {
         let result = Stage2Config {
             fail_mode: self.fail_mode.get()?.clone(),
-            no_flash: self.no_flash.get()?.clone(),
+            no_flash: *self.no_flash.get()?,
             force_flash_device: self.force_flash_device.get().clone(),
             balena_config: self.balena_config.get()?.clone(),
             balena_image: self.balena_image.get()?.clone(),
@@ -378,10 +379,10 @@ impl<'a> Stage2ConfigBuilder {
             gzip_internal: *self.gzip_internal.get()?,
             log_level: self.log_level.get()?.clone(),
             log_to: self.log_to.get().clone(),
-            log_console: self.log_console.get()?.clone(),
+            log_console: *self.log_console.get()?,
             device_type: self.device_type.get()?.clone(),
             boot_type: self.boot_type.get()?.clone(),
-            migrate_delay: self.migrate_delay.get().clone(),
+            migrate_delay: *self.migrate_delay.get(),
             watchdogs: self.watchdogs.get().clone(),
         };
 
@@ -480,6 +481,7 @@ impl<'a> Stage2ConfigBuilder {
         self.migrate_delay.set_ref(&val);
     }
 
+    #[allow(clippy::ptr_arg)] //TODO refactor this function to fix the clippy warning
     pub fn set_watchdogs(&mut self, val: &Vec<WatchdogCfg>) {
         self.watchdogs.set_ref(val);
     }
@@ -518,7 +520,7 @@ watchdogs: ~'
 "##;
 
     #[test]
-    fn assert_test_config1() -> () {
+    fn assert_test_config1() {
         let _config = Stage2Config::from_str(TEST_CONFIG);
     }
 }

@@ -79,7 +79,7 @@ impl MasterBootRecord {
         if self.zeros[0] == 0 && self.zeros[1] == 0 {
             let mut disk_sig_32: u32 = 0;
             for byte in self.disk_sig_32.iter().rev() {
-                disk_sig_32 = disk_sig_32 * 256 + *byte as u32;
+                disk_sig_32 = disk_sig_32 * 256 + u32::from(*byte);
             }
             if disk_sig_32 != 0 {
                 Some(disk_sig_32)
@@ -244,10 +244,12 @@ impl<'a> PartitionIterator<'a> {
 impl<'a> Iterator for PartitionIterator<'a> {
     type Item = PartInfo;
 
+    #[allow(clippy::cognitive_complexity)] //TODO refactor this function to fix the clippy warning
     fn next(&mut self) -> Option<Self::Item> {
         trace!("PartitionIterator::next: entered");
         // TODO: check for 0 size partition ?
 
+        #[allow(clippy::large_enum_variant)] //TODO refactor to remove clippy warning
         enum SetMbr {
             Leave,
             ToNone,
@@ -276,7 +278,7 @@ impl<'a> Iterator for PartitionIterator<'a> {
                         PartitionType::Container => {
                             // extended / container
                             // return extended partition
-                            self.offset = part.first_lba as u64;
+                            self.offset = u64::from(part.first_lba);
                             // self.mbr = None; // we are done with this mbr
                             self.part_idx += 1;
 
@@ -285,8 +287,8 @@ impl<'a> Iterator for PartitionIterator<'a> {
                                     index: self.part_idx,
                                     ptype: part.ptype,
                                     status: part.status,
-                                    start_lba: part.first_lba as u64,
-                                    num_sectors: part.num_sectors as u64,
+                                    start_lba: u64::from(part.first_lba),
+                                    num_sectors: u64::from(part.num_sectors),
                                 }),
                                 SetMbr::ToNone,
                             )
@@ -301,8 +303,8 @@ impl<'a> Iterator for PartitionIterator<'a> {
                                     index: self.part_idx,
                                     ptype: part.ptype,
                                     status: part.status,
-                                    start_lba: part.first_lba as u64,
-                                    num_sectors: part.num_sectors as u64,
+                                    start_lba: u64::from(part.first_lba),
+                                    num_sectors: u64::from(part.num_sectors),
                                 }),
                                 SetMbr::Leave,
                             )
@@ -332,7 +334,7 @@ impl<'a> Iterator for PartitionIterator<'a> {
                         } // weird though
                         PartitionType::Container => {
                             // we are expecting a container partition here
-                            self.offset += part.first_lba as u64;
+                            self.offset += u64::from(part.first_lba);
                             match self.disk.read_mbr(self.offset) {
                                 Ok(mbr) => {
                                     let part = &mbr.part_tbl[0];
@@ -346,8 +348,9 @@ impl<'a> Iterator for PartitionIterator<'a> {
                                                     index: self.part_idx,
                                                     ptype: part.ptype,
                                                     status: part.status,
-                                                    start_lba: self.offset + part.first_lba as u64,
-                                                    num_sectors: part.num_sectors as u64,
+                                                    start_lba: self.offset
+                                                        + u64::from(part.first_lba),
+                                                    num_sectors: u64::from(part.num_sectors),
                                                 }),
                                                 SetMbr::ToMbr(mbr),
                                             )
@@ -406,8 +409,8 @@ impl<'a> Iterator for PartitionIterator<'a> {
                                     index: self.part_idx,
                                     ptype: part.ptype,
                                     status: part.status,
-                                    start_lba: self.offset + part.first_lba as u64,
-                                    num_sectors: part.num_sectors as u64,
+                                    start_lba: self.offset + u64::from(part.first_lba),
+                                    num_sectors: u64::from(part.num_sectors),
                                 }),
                                 SetMbr::ToMbr(mbr),
                             )
@@ -430,7 +433,7 @@ impl<'a> Iterator for PartitionIterator<'a> {
 
         debug!(
             "PartitionIterator::next Res: {}",
-            if let Some(_) = res { "some" } else { "none" }
+            if res.is_some() { "some" } else { "none" }
         );
 
         match mbr {
@@ -497,7 +500,7 @@ impl<'a> PartitionReader<'a> {
 impl<'a> Read for PartitionReader<'a> {
     fn read(&mut self, buf: &mut [u8]) -> Result<usize, Error> {
         if self.bytes_left == 0 {
-            return Ok(0);
+            Ok(0)
         } else {
             let (res, size) = if self.bytes_left < buf.len() as u64 {
                 (
@@ -528,10 +531,7 @@ mod test {
     use mod_logger::{Level, Logger};
 
     use crate::common::disk_util::PartitionIterator;
-    use crate::common::{
-        disk_util::{Disk, LabelType},
-        MigError,
-    };
+    use crate::common::disk_util::{Disk, LabelType};
 
     #[test]
     fn read_gzipped_part() {

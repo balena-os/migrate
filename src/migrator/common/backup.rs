@@ -222,30 +222,8 @@ fn archive_dir<'a>(
                     )? {
                         written = true;
                     }
-                } else {
-                    if let Some(filter) = filter {
-                        if filter.is_match(&source_path.to_string_lossy()) {
-                            let target = path_append(target_path, &source_file);
-                            archiver
-                                .add_file(target.as_path(), source_path.as_path())
-                                .context(MigErrCtx::from_remark(
-                                    MigErrorKind::Upstream,
-                                    &format!(
-                                        "Failed to append file: '{}' to archive path: '{}'",
-                                        source_path.display(),
-                                        target.display()
-                                    ),
-                                ))?;
-                            written = true;
-                            debug!(
-                                "appended source: '{}'  to archive as '{}'",
-                                source_path.display(),
-                                target.display()
-                            );
-                        } else {
-                            debug!("No match on file: '{}'", &source_path.display());
-                        }
-                    } else {
+                } else if let Some(filter) = filter {
+                    if filter.is_match(&source_path.to_string_lossy()) {
                         let target = path_append(target_path, &source_file);
                         archiver
                             .add_file(target.as_path(), source_path.as_path())
@@ -263,13 +241,33 @@ fn archive_dir<'a>(
                             source_path.display(),
                             target.display()
                         );
+                    } else {
+                        debug!("No match on file: '{}'", &source_path.display());
                     }
+                } else {
+                    let target = path_append(target_path, &source_file);
+                    archiver
+                        .add_file(target.as_path(), source_path.as_path())
+                        .context(MigErrCtx::from_remark(
+                            MigErrorKind::Upstream,
+                            &format!(
+                                "Failed to append file: '{}' to archive path: '{}'",
+                                source_path.display(),
+                                target.display()
+                            ),
+                        ))?;
+                    written = true;
+                    debug!(
+                        "appended source: '{}'  to archive as '{}'",
+                        source_path.display(),
+                        target.display()
+                    );
                 }
             }
             Err(why) => {
                 return Err(MigError::from(why.context(MigErrCtx::from_remark(
                     MigErrorKind::Upstream,
-                    &format!("Failed to read entry from "),
+                    &"Failed to read entry from ".to_string(),
                 ))));
             }
         }
@@ -279,8 +277,8 @@ fn archive_dir<'a>(
 }
 
 #[cfg(target_os = "linux")]
-pub(crate) fn create_ext<'a>(file: &Path, config: &[VolumeConfig]) -> Result<bool, MigError> {
-    if config.len() > 0 {
+pub(crate) fn create_ext(file: &Path, config: &[VolumeConfig]) -> Result<bool, MigError> {
+    if !config.is_empty() {
         debug!("creating new backup in '{}", file.display());
         let mut archiver = ExtTarArchiver::new(file)?;
         create_int(&mut archiver, config)
@@ -291,7 +289,7 @@ pub(crate) fn create_ext<'a>(file: &Path, config: &[VolumeConfig]) -> Result<boo
 }
 
 pub(crate) fn create(file: &Path, config: &[VolumeConfig]) -> Result<bool, MigError> {
-    if config.len() > 0 {
+    if !config.is_empty() {
         debug!("creating new backup in '{}", file.display());
         let mut archiver = RustTarArchiver::new(file)?;
         create_int(&mut archiver, config)
@@ -311,7 +309,7 @@ fn create_int<'a>(
 
     let mut written = false;
 
-    for ref volume in config {
+    for volume in config {
         info!("backup to volume: '{}'", volume.volume);
 
         for item in &volume.items {

@@ -139,7 +139,7 @@ impl UBootManager {
                         Some(ref mountpoint) => (mountpoint, false),
                         None => {
                             // make mountpoint directory if none exists
-                            if let None = tmp_mountpoint {
+                            if tmp_mountpoint.is_none() {
                                 debug!("creating mountpoint");
                                 let cmd_res = call(
                                     MKTEMP_CMD,
@@ -219,18 +219,16 @@ impl UBootManager {
                         return Ok(PathInfo::from_mounted(
                             mountpoint, mountpoint, blk_device, &partition,
                         )?);
-                    } else {
-                        if mounted {
-                            debug!(
-                                "unmouting '{}', from {}",
-                                partition.get_path().display(),
-                                mountpoint.display()
-                            );
-                            umount(mountpoint).context(MigErrCtx::from_remark(
-                                MigErrorKind::Upstream,
-                                &format!("Failed to unmount '{}'", mountpoint.display()),
-                            ))?;
-                        }
+                    } else if mounted {
+                        debug!(
+                            "unmouting '{}', from {}",
+                            partition.get_path().display(),
+                            mountpoint.display()
+                        );
+                        umount(mountpoint).context(MigErrCtx::from_remark(
+                            MigErrorKind::Upstream,
+                            &format!("Failed to unmount '{}'", mountpoint.display()),
+                        ))?;
                     }
                 }
             }
@@ -322,29 +320,27 @@ impl<'a> BootManager for UBootManager {
                     self.bootmgr_path = Some(bootmgr_path);
                     self.boot_path = Some(boot_path);
                 }
-            } else {
-                if let Some(boot_path) = PathInfo::from_path(ROOT_PATH, &lsblk_info)? {
-                    if boot_path.fs_free > boot_req_space {
-                        info!(
-                            "Found boot '{}', mounpoint: '{}', fs type: {}, free space: {}",
-                            boot_path.device_info.device.display(),
-                            boot_path.mountpoint.display(),
-                            boot_path.device_info.fs_type,
-                            format_size_with_unit(boot_path.fs_free)
-                        );
+            } else if let Some(boot_path) = PathInfo::from_path(ROOT_PATH, &lsblk_info)? {
+                if boot_path.fs_free > boot_req_space {
+                    info!(
+                        "Found boot '{}', mounpoint: '{}', fs type: {}, free space: {}",
+                        boot_path.device_info.device.display(),
+                        boot_path.mountpoint.display(),
+                        boot_path.device_info.fs_type,
+                        format_size_with_unit(boot_path.fs_free)
+                    );
 
-                        self.bootmgr_path = Some(bootmgr_path);
-                        self.boot_path = Some(boot_path);
-                    } else {
-                        error!("Could not find a directory with sufficient space to store the migrate kernel, initramfs and dtb file. Required space is {}",
-                               format_size_with_unit(boot_req_space));
-                        return Ok(false);
-                    }
+                    self.bootmgr_path = Some(bootmgr_path);
+                    self.boot_path = Some(boot_path);
                 } else {
                     error!("Could not find a directory with sufficient space to store the migrate kernel, initramfs and dtb file. Required space is {}",
-                           format_size_with_unit(boot_req_space));
+                            format_size_with_unit(boot_req_space));
                     return Ok(false);
                 }
+            } else {
+                error!("Could not find a directory with sufficient space to store the migrate kernel, initramfs and dtb file. Required space is {}",
+                        format_size_with_unit(boot_req_space));
+                return Ok(false);
             }
         } else {
             self.bootmgr_path = Some(bootmgr_path);
@@ -481,7 +477,7 @@ impl<'a> BootManager for UBootManager {
         } else {
             return Err(MigError::from_remark(
                 MigErrorKind::NotFound,
-                &format!("The device tree blob (dtb_file) could not be found"),
+                &"The device tree blob (dtb_file) could not be found".to_string(),
             ));
         };
 

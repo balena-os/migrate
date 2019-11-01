@@ -53,6 +53,7 @@ pub(crate) struct MigrateInfo {
 // TODO: sort out error reporting with Displayed
 
 impl MigrateInfo {
+    #[allow(clippy::cognitive_complexity)] //TODO refactor this function to fix the clippy warning
     pub(crate) fn new(config: &Config, os_api: &impl OSApi) -> Result<MigrateInfo, MigError> {
         trace!("new: entered");
         let os_arch = os_api.get_os_arch()?;
@@ -95,8 +96,8 @@ impl MigrateInfo {
                 CheckedImageType::FileSystems(CheckedFSDump {
                     device_slug: fs_dump.device_slug.clone(),
                     check: fs_dump.check.clone(),
-                    max_data: fs_dump.max_data.clone(),
-                    mkfs_direct: fs_dump.mkfs_direct.clone(),
+                    max_data: fs_dump.max_data,
+                    mkfs_direct: fs_dump.mkfs_direct,
                     extended_blocks: fs_dump.extended_blocks,
                     boot: CheckedPartDump {
                         archive: MigrateInfo::check_dump(&fs_dump.boot, &work_path, os_api)?,
@@ -125,7 +126,7 @@ impl MigrateInfo {
         let config_file = if let Some(file_info) =
             FileInfo::new(config.balena.get_config_path(), &work_dir)?
         {
-            if let None = file_info.rel_path {
+            if file_info.rel_path.is_none() {
                 error!("The balena OS config was found outside of the working directory. This setup is not supported");
                 return Err(MigError::displayed());
             }
@@ -250,7 +251,7 @@ impl MigrateInfo {
 
             let wifi_list = WifiConfig::scan(list)?;
 
-            if wifi_list.len() > 0 {
+            if !wifi_list.is_empty() {
                 for wifi in &wifi_list {
                     info!("Found config for wifi: {}", wifi.get_ssid());
                 }
@@ -263,11 +264,11 @@ impl MigrateInfo {
             Vec::new()
         };
 
-        if nwmgr_files.is_empty() && wifis.is_empty() {
-            if config.migrate.require_nwmgr_configs() {
-                error!("No Network manager files were found, the device might not be able to come online");
-                return Err(MigError::from(MigErrorKind::Displayed));
-            }
+        if nwmgr_files.is_empty() && wifis.is_empty() && config.migrate.require_nwmgr_configs() {
+            error!(
+                "No Network manager files were found, the device might not be able to come online"
+            );
+            return Err(MigError::from(MigErrorKind::Displayed));
         }
 
         let result = MigrateInfo {

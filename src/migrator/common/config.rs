@@ -157,16 +157,12 @@ impl<'a> Config {
 
             if config_path.is_absolute() {
                 Some(config_path)
+            } else if let Ok(abs_path) = config_path.canonicalize() {
+                Some(abs_path)
+            } else if let Ok(abs_path) = path_append(tmp_work_dir, config_path).canonicalize() {
+                Some(abs_path)
             } else {
-                if let Ok(abs_path) = config_path.canonicalize() {
-                    Some(abs_path)
-                } else {
-                    if let Ok(abs_path) = path_append(tmp_work_dir, config_path).canonicalize() {
-                        Some(abs_path)
-                    } else {
-                        None
-                    }
-                }
+                None
             }
         };
 
@@ -174,12 +170,10 @@ impl<'a> Config {
             if file_exists(&config_path) {
                 let mut config = Config::from_file(&config_path)?;
                 // use config path as workdir if nothing other was defined
-                if !config.migrate.has_work_dir() {
-                    if let None = work_dir {
-                        config
-                            .migrate
-                            .set_work_dir(config_path.parent().unwrap().to_path_buf());
-                    }
+                if !config.migrate.has_work_dir() && work_dir.is_none() {
+                    config
+                        .migrate
+                        .set_work_dir(config_path.parent().unwrap().to_path_buf());
                 }
                 config
             } else {
@@ -298,7 +292,7 @@ mod tests {
     // TODO: update this to current config
 
     #[test]
-    fn read_conf_ok1() -> () {
+    fn read_conf_ok1() {
         let config = Config::from_string(TEST_DD_CONFIG_OK).unwrap();
 
         assert_eq!(config.migrate.get_mig_mode(), &MigMode::Immediate);
@@ -350,13 +344,11 @@ mod tests {
         */
         assert_eq!(config.balena.is_check_vpn(), false);
         assert_eq!(config.balena.get_check_timeout(), 42);
-
-        ()
     }
 
     #[test]
-    fn read_conf_ok2() -> () {
-        let config = Config::from_string(TEST_FS_CONFIG_OK).unwrap();
+    fn read_conf_ok2() {
+        let _config = Config::from_string(TEST_FS_CONFIG_OK).unwrap();
     }
 
     /*

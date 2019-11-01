@@ -118,18 +118,16 @@ impl GZipFile {
                 match self.decoder.read_exact(&mut buffer[0..to_read as usize]) {
                     Ok(_) => {
                         self.bytes_read = offset;
-                        return Ok(());
+                        Ok(())
                     }
-                    Err(why) => {
-                        return Err(MigError::from_remark(
-                            MigErrorKind::Upstream,
-                            &format!(
-                                "failed to reopen file for reading: '{}', error {:?}",
-                                self.path.display(),
-                                why
-                            ),
-                        ));
-                    }
+                    Err(why) => Err(MigError::from_remark(
+                        MigErrorKind::Upstream,
+                        &format!(
+                            "failed to reopen file for reading: '{}', error {:?}",
+                            self.path.display(),
+                            why
+                        ),
+                    )),
                 }
             } else {
                 self.bytes_read = offset;

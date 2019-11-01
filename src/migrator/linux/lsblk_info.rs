@@ -45,16 +45,12 @@ impl LsblkPartition {
     pub fn get_alt_path(&self) -> PathBuf {
         if let Some(ref partuuid) = self.partuuid {
             path_append(DISK_BY_PARTUUID_PATH, partuuid)
+        } else if let Some(ref uuid) = self.uuid {
+            path_append(DISK_BY_UUID_PATH, uuid)
+        } else if let Some(ref label) = self.label {
+            path_append(DISK_BY_LABEL_PATH, label)
         } else {
-            if let Some(ref uuid) = self.uuid {
-                path_append(DISK_BY_UUID_PATH, uuid)
-            } else {
-                if let Some(ref label) = self.label {
-                    path_append(DISK_BY_LABEL_PATH, label)
-                } else {
-                    path_append("/dev", &self.name)
-                }
-            }
+            path_append("/dev", &self.name)
         }
     }
 }
@@ -243,7 +239,7 @@ impl<'a> LsblkInfo {
             if let Some(lsblk_dev) = self
                 .blockdevices
                 .iter()
-                .find(|&dev| *&cmp_name.starts_with(&dev.name))
+                .find(|&dev| cmp_name.starts_with(&dev.name))
             {
                 Ok((lsblk_dev, lsblk_dev.get_devinfo_from_part_name(&cmp_name)?))
             } else {
@@ -288,10 +284,10 @@ impl<'a> LsblkInfo {
         if cmd_res.status.success() {
             Ok(LsblkInfo::from_list(&cmd_res.stdout)?)
         } else {
-            return Err(MigError::from_remark(
+            Err(MigError::from_remark(
                 MigErrorKind::ExecProcess,
                 "new: failed to determine block device attributes for",
-            ));
+            ))
         }
     }
 
@@ -462,7 +458,7 @@ impl<'a> LsblkInfo {
 
 #[cfg(test)]
 mod tests {
-    use crate::linux::migrate_info::LsblkInfo;
+    use crate::linux::lsblk_info::LsblkInfo;
 
     const LSBLK_OUTPUT1: &str = r##"NAME="loop0" KNAME="loop0" MAJ:MIN="7:0" FSTYPE="squashfs" MOUNTPOINT="/snap/core/7270" LABEL="" UUID="" RO="1" SIZE="92778496" TYPE="loop"
 NAME="loop1" KNAME="loop1" MAJ:MIN="7:1" FSTYPE="squashfs" MOUNTPOINT="/snap/core18/1066" LABEL="" UUID="" RO="1" SIZE="57069568" TYPE="loop"
@@ -490,7 +486,7 @@ NAME="nvme0n1p7" KNAME="nvme0n1p7" MAJ:MIN="259:7" FSTYPE="ext4" MOUNTPOINT="/" 
 "##;
 
     #[test]
-    fn read_output_ok1() -> () {
-        let lsblk_info = LsblkInfo::from_list(LSBLK_OUTPUT1).unwrap();
+    fn read_output_ok1() {
+        let _lsblk_info = LsblkInfo::from_list(LSBLK_OUTPUT1).unwrap();
     }
 }

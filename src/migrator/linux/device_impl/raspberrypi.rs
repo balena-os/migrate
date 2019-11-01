@@ -74,7 +74,7 @@ impl RaspberryPi3 {
         config: &Config,
         s2_cfg: &mut Stage2ConfigBuilder,
     ) -> Result<RaspberryPi3, MigError> {
-        const SUPPORTED_OSSES: &'static [&'static str] = &[
+        const SUPPORTED_OSSES: &[&str] = &[
             "Raspbian GNU/Linux 8 (jessie)",
             "Raspbian GNU/Linux 9 (stretch)",
             "Raspbian GNU/Linux 10 (buster)",
@@ -155,7 +155,7 @@ impl RaspberryPi4_64 {
         config: &Config,
         s2_cfg: &mut Stage2ConfigBuilder,
     ) -> Result<RaspberryPi4_64, MigError> {
-        const SUPPORTED_OSSES: &'static [&'static str] = &[
+        const SUPPORTED_OSSES: &[&str] = &[
             "Raspbian GNU/Linux 8 (jessie)",
             "Raspbian GNU/Linux 9 (stretch)",
             "Raspbian GNU/Linux 10 (buster)",
