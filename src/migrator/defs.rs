@@ -12,6 +12,7 @@ pub const DEFAULT_MIGRATE_CONFIG: &str = "balena-migrate.yml";
 
 #[allow(dead_code)]
 pub const MIG_SYSLINUX_NAME: &str = "syslinux.efi";
+pub const MIG_SYSLINUX_LOADER_NAME: &str = "ldlinux.e64";
 
 pub const MIG_KERNEL_NAME: &str = "balena-migrate.zImage";
 pub const MIG_INITRD_NAME: &str = "balena-migrate.initrd";

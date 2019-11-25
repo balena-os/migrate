@@ -5,12 +5,14 @@ use std::fs::{copy, create_dir_all, rename, File};
 use std::io::Write;
 use std::path::PathBuf;
 
-const STARTUP_TEMPLATE: &str = r#"
-echo -off
-echo Starting balena Migrate Environment
+const SYSLINUX_CFG_TEMPLATE: &str = r#"
+DEFAULT balena-migrate
+LABEL balena-migrate
+ SAY Now booting the balena kernel from SYSLINUX...
 "#;
 
-use crate::defs::EFI_SYSLINUX_CONFIG_FILE;
+use crate::common::call;
+use crate::defs::{EFI_SYSLINUX_CONFIG_FILE, MIG_SYSLINUX_LOADER_NAME};
 use crate::{
     common::{
         boot_manager::BootManager,
@@ -23,7 +25,7 @@ use crate::{
         stage2_config::{MountConfig, Stage2ConfigBuilder},
         Config, MigErrCtx, MigError, MigErrorKind,
     },
-    defs::{BootType, EFI_STARTUP_FILE, MIG_INITRD_NAME, MIG_KERNEL_NAME, MIG_SYSLINUX_NAME},
+    defs::{BootType, MIG_INITRD_NAME, MIG_KERNEL_NAME, MIG_SYSLINUX_NAME},
     mswin::{
         drive_info::DriveInfo,
         msw_defs::{
@@ -87,8 +89,8 @@ impl BootManager for EfiBootManager {
             required_space += mig_info.initrd_file.size;
         }
 
-        let syslinux = path_append(&mig_info.work_path, MIG_SYSLINUX_NAME_);
-        if !file_exists(syslinux) {
+        let syslinux = path_append(&mig_info.work_path.path, MIG_SYSLINUX_NAME);
+        if !file_exists(&syslinux) {
             error!(
                 "The syslinux executable '{}' could not be found",
                 syslinux.display()
@@ -96,8 +98,20 @@ impl BootManager for EfiBootManager {
             return Ok(false);
         } else {
             if !file_exists(path_append(&balena_efi_path, MIG_SYSLINUX_NAME)) {
-                // TODO: get a better estimate for startup file size
                 required_space += syslinux.metadata().unwrap().len();
+            }
+        }
+
+        let syslinux_ldr = path_append(&mig_info.work_path.path, MIG_SYSLINUX_LOADER_NAME);
+        if !file_exists(&syslinux_ldr) {
+            error!(
+                "The syslinux executable '{}' could not be found",
+                syslinux_ldr.display()
+            );
+            return Ok(false);
+        } else {
+            if !file_exists(path_append(&balena_efi_path, MIG_SYSLINUX_LOADER_NAME)) {
+                required_space += syslinux_ldr.metadata().unwrap().len();
             }
         }
 
@@ -188,17 +202,33 @@ impl BootManager for EfiBootManager {
             ),
         ))?;
 
+        let syslinux_src = path_append(&mig_info.work_path.path, MIG_SYSLINUX_NAME);
         let syslinux_path = path_append(&balena_efi_dir, MIG_SYSLINUX_NAME);
         debug!(
             "copy '{}' to '{}'",
-            &mig_info.initrd_file.path.display(),
-            &initrd_path.display()
+            &syslinux_src.display(),
+            &syslinux_path.display()
         );
-        copy(&mig_info.initrd_file.path, &initrd_path).context(MigErrCtx::from_remark(
+        copy(&syslinux_src, &syslinux_path).context(MigErrCtx::from_remark(
             MigErrorKind::Upstream,
             &format!(
-                "failed to copy migrate initramfs to EFI directory '{}'",
-                initrd_path.display()
+                "failed to copy syslinux executable to EFI directory '{}'",
+                syslinux_path.display()
+            ),
+        ))?;
+
+        let sysldr_src = path_append(&mig_info.work_path.path, MIG_SYSLINUX_LOADER_NAME);
+        let sysldr_path = path_append(&balena_efi_dir, MIG_SYSLINUX_LOADER_NAME);
+        debug!(
+            "copy '{}' to '{}'",
+            &sysldr_src.display(),
+            &sysldr_path.display()
+        );
+        copy(&sysldr_src, &sysldr_path).context(MigErrCtx::from_remark(
+            MigErrorKind::Upstream,
+            &format!(
+                "failed to copy syslinux loader executable to EFI directory '{}'",
+                sysldr_path.display()
             ),
         ))?;
 
@@ -213,33 +243,24 @@ impl BootManager for EfiBootManager {
             ))?;
         }
 
-        let startup_path = path_append(efi_boot_dir, EFI_STARTUP_FILE);
+        let syslinux_cfg_path = path_append(balena_efi_dir, EFI_SYSLINUX_CONFIG_FILE);
+        let os_api = OSApi::new()?;
 
-        debug!("writing '{}'", &startup_path.display());
-        let drive_letter_re = Regex::new(r#"^[a-z,A-Z]:(.*)$"#).unwrap();
-        let tmp_path = kernel_path.to_string_lossy();
-        let kernel_path = if let Some(captures) = drive_letter_re.captures(&tmp_path) {
-            captures.get(1).unwrap().as_str()
-        } else {
-            &tmp_path
-        };
-        let tmp_path = initrd_path.to_string_lossy();
-        let initrd_path = if let Some(captures) = drive_letter_re.captures(&tmp_path) {
-            captures.get(1).unwrap().as_str()
-        } else {
-            &tmp_path
-        };
+        debug!("writing '{}'", &syslinux_cfg_path.display());
+
+        let kernel_path = os_api.to_linux_path(kernel_path)?;
+        let initrd_path = os_api.to_linux_path(initrd_path)?;
 
         // TODO: prefer PARTUUID to guessed device name
 
-        let startup_content = if let Some(ref partuuid) = boot_dev.part_uuid {
+        let syslinux_cfg_content = if let Some(ref partuuid) = boot_dev.part_uuid {
             format!(
-                "{}{} initrd={} root=PARTUUID={} rootfstype={} rootwait\n",
-                STARTUP_TEMPLATE,
-                kernel_path,
-                OSApi::new()?.to_linux_path(initrd_path)?.to_string_lossy(),
+                "{} KERNEL {}\n APPEND ro root=PARTUUID={} rootfstype={} initrd={} rootwait\n",
+                SYSLINUX_CFG_TEMPLATE,
+                kernel_path.display(),
                 partuuid,
-                boot_dev.fs_type
+                boot_dev.fs_type,
+                initrd_path.display(),
             )
         } else {
             return Err(MigError::from_remark(
@@ -251,104 +272,55 @@ impl BootManager for EfiBootManager {
             ));
         };
 
-        let mut startup_file = File::create(&startup_path).context(MigErrCtx::from_remark(
-            MigErrorKind::Upstream,
-            &format!(
-                "failed to create EFI startup file '{}'",
-                startup_path.display()
-            ),
-        ))?;
-        startup_file
-            .write(startup_content.as_bytes())
+        debug!("syslinux cfg: \n{}", syslinux_cfg_content);
+
+        let mut syslinux_cfg_file =
+            File::create(&syslinux_cfg_path).context(MigErrCtx::from_remark(
+                MigErrorKind::Upstream,
+                &format!(
+                    "failed to create syslinux cong=fig file '{}'",
+                    syslinux_cfg_path.display()
+                ),
+            ))?;
+        syslinux_cfg_file
+            .write(syslinux_cfg_content.as_bytes())
             .context(MigErrCtx::from_remark(
                 MigErrorKind::Upstream,
                 &format!(
-                    "Failed to write EFI startup file'{}'",
-                    startup_path.display()
+                    "Failed to write syslinux config file'{}'",
+                    syslinux_cfg_path.display()
                 ),
             ))?;
 
-        // TODO: create fake EFI mountpoint and adapt backup paths to it
-        let efi_bckup_dir = path_append(&boot_dev.mountpoint, EFI_BCKUP_DIR);
-        if !dir_exists(&efi_bckup_dir)? {
-            create_dir_all(&efi_bckup_dir).context(MigErrCtx::from_remark(
-                MigErrorKind::Upstream,
-                &format!(
-                    "failed to create EFI backup directory '{}'",
-                    efi_bckup_dir.display()
-                ),
-            ))?;
-        }
-
-        let os_api = OSApi::new()?;
-        let mut boot_backup: Vec<(String, String)> = Vec::new();
-        let msw_boot_mgr = path_append(&boot_dev.mountpoint, EFI_MS_BOOTMGR);
-        if file_exists(&msw_boot_mgr) {
-            let backup_path = path_append(&efi_bckup_dir, &msw_boot_mgr.file_name().unwrap());
-            info!(
-                "backing up  '{}' to '{}'",
-                &msw_boot_mgr.display(),
-                backup_path.display()
-            );
-            rename(&msw_boot_mgr, &backup_path).context(MigErrCtx::from_remark(
-                MigErrorKind::Upstream,
-                &format!(
-                    "Failed to create EFI backup for '{}'",
-                    msw_boot_mgr.display()
-                ),
-            ))?;
-            if let Ok(bckup_path) = os_api.to_linux_path(backup_path) {
-                boot_backup.push((
-                    String::from(&*os_api.to_linux_path(EFI_MS_BOOTMGR)?.to_string_lossy()),
-                    String::from(&*os_api.to_linux_path(bckup_path)?.to_string_lossy()),
-                ))
-            } else {
-                warn!("Failed to save backup for {}", EFI_DEFAULT_BOOTMGR64)
-            }
+        let drive_letter_re = Regex::new(r#"^[a-z,A-Z]:(.*)$"#).unwrap();
+        let tmp_path = syslinux_path.to_string_lossy();
+        let syslinux_path = if let Some(captures) = drive_letter_re.captures(&tmp_path) {
+            captures.get(1).unwrap().as_str()
         } else {
-            info!(
-                "not backing up  '{}' , file not found",
-                &msw_boot_mgr.display()
-            );
-        }
+            &tmp_path
+        };
 
-        let os_api = OSApi::new()?;
+        let cmdres = call(
+            "BCDEdit",
+            &["/set", "{bootmgr}", "path", &syslinux_path],
+            true,
+        )
+        .context(MigErrCtx::from_remark(
+            MigErrorKind::Upstream,
+            "failed to setup UEFI bootmanager as syslinux",
+        ))?;
 
-        // TODO: allow 32 bit
-        let def_boot_mgr = path_append(&boot_dev.mountpoint, EFI_DEFAULT_BOOTMGR64);
-        if file_exists(&def_boot_mgr) {
-            let backup_path = path_append(&efi_bckup_dir, &def_boot_mgr.file_name().unwrap());
-            info!(
-                "backing up  '{}' to '{}'",
-                &def_boot_mgr.display(),
-                backup_path.display()
-            );
-            rename(&def_boot_mgr, &backup_path).context(MigErrCtx::from_remark(
-                MigErrorKind::Upstream,
+        debug!("BCDEDit result: '{}'", cmdres.stdout);
+
+        if !cmdres.status.success() {
+            return Err(MigError::from_remark(
+                MigErrorKind::ExecProcess,
                 &format!(
-                    "Failed to create EFI backup for '{}'",
-                    def_boot_mgr.display()
+                    "failed to setup UEFI bootmanager as syslinux, message: {}",
+                    cmdres.stderr
                 ),
-            ))?;
-            if let Ok(bckup_path) = os_api.to_linux_path(backup_path) {
-                boot_backup.push((
-                    String::from(
-                        &*os_api
-                            .to_linux_path(EFI_DEFAULT_BOOTMGR64)?
-                            .to_string_lossy(),
-                    ),
-                    String::from(&*os_api.to_linux_path(bckup_path)?.to_string_lossy()),
-                ))
-            } else {
-                warn!("Failed to save backup for {}", EFI_DEFAULT_BOOTMGR64)
-            }
-        } else {
-            info!(
-                "not backing up  '{}' , file not found",
-                &def_boot_mgr.display()
-            );
+            ));
         }
-        s2_cfg.set_boot_bckup(boot_backup);
 
         Ok(())
     }
