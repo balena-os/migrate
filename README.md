@@ -42,7 +42,7 @@ is usually trivial, adding a new device might require more effort.
 
 ### Stage 1 - balena-migrate
 
-Balena migrate is a binary executable file, that need to be executed with root privileges on the device 
+Balena migrate is a binary executable file, that needs to be executed with root privileges on the device 
 that will be migrated. There are several command line parameters that can be set and the program will be looking 
 for a YAML configuration file - by default in ```./balena-migrate.yml```.
 
