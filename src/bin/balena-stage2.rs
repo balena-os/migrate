@@ -1,3 +1,5 @@
+// executable wrapper for balena-stage2
+
 #[cfg(target_os = "linux")]
 fn main() {
     use balena_migrate::stage2;

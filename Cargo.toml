@@ -11,29 +11,8 @@ edition = "2018"
 [lib]
 path = "src/migrator/lib.rs"
 
-#[[bin]]
-#name = "balena-migrate"
-#path = "src/balena_migrate.rs"
-
-#[[bin]]
-# TODO: only on linux
-#name = "balena-stage2"#
-#path = "src/balena_stage2.rs"
-
-#[target.'cfg(target_os = "windows")']
-#[[bin]]
-# TODO: only on linux
-#name = "balena-extract"
-#path = "src/balena_extract.rs"
-
-# [profile.dev]
-# panic = "abort"
-# [profile.release]
-# panic = "abort"
-
-#[[bin]]
-#name = "test"
-#path = "src/test.rs"
+[features]
+extract_builtin_tar = []
 
 [dependencies]
 log = { version = "^0.4.5", features = ["std"] }
@@ -60,7 +39,6 @@ md-5 = "0.8"
 [target.'cfg(unix)'.dependencies]
 libc = { git = "https://github.com/rust-lang/libc" }
 nix = "*"
-
 
 [target.'cfg(windows)'.dependencies]
 winapi = {  git = "https://github.com/retep998/winapi-rs.git", branch = "0.3", features = [
