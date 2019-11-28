@@ -27,6 +27,7 @@ pub(crate) trait Device {
     ) -> Result<(), MigError>;
 
     // called in stage2 / linux only
+
     #[cfg(target_os = "linux")]
     fn restore_boot(&self, mounts: &Mounts, config: &Stage2Config) -> bool;
 }

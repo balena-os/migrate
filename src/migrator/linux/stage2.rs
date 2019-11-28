@@ -238,6 +238,7 @@ impl<'a> Stage2 {
             None
         };
 
+        // TODO: this will not work for grub, boot once
         let migrate_delay = self.config.get_migrate_delay();
         if migrate_delay > 0 {
             let start_time = Instant::now();
@@ -489,6 +490,7 @@ impl<'a> Stage2 {
         // Write our buffered log to workdir before unmounting if we are not flashing anyway
 
         if self.config.is_no_flash() {
+            // TODO: check recoverable flag, but what to ?
             info!("Not flashing due to config parameter no_flash");
             Logger::flush();
             sync();
@@ -502,6 +504,7 @@ impl<'a> Stage2 {
             let _res = Logger::set_log_dest(&log_dest, NO_STREAM);
         }
 
+        // TODO: check this
         self.mounts.borrow_mut().unmount_boot_devs()?;
 
         info!("Unmounted file systems");
@@ -671,6 +674,7 @@ impl<'a> Stage2 {
         }
 
         // we can hope to successfully reboot again after writing config.json and system-connections
+        sync();
         self.recoverable_state = true;
 
         if let Some(data_mountpoint) = self.mounts.borrow().get_balena_data_mountpoint() {

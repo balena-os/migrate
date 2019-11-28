@@ -294,6 +294,7 @@ impl BootManager for RaspiBootManager<'_> {
         }
 
         let balena_config = is_balena_file(&config_path)?;
+        // TODO: try to make sure valid configs, are saved independently from migrator tag
         if !balena_config {
             // backup config.txt
             let backup_file = format!("{}.{}", RPI_CONFIG_TXT, system_time.as_secs());
@@ -336,6 +337,9 @@ impl BootManager for RaspiBootManager<'_> {
                 MigErrorKind::Upstream,
                 &format!("Failed to open file '{}'", config_path.display()),
             ))?;
+
+            // TODO: remove potentially harmfull configs
+
             for line in BufReader::new(config_file).lines() {
                 match line {
                     Ok(line) => {

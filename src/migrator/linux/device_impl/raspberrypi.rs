@@ -137,6 +137,7 @@ impl<'a> Device for RaspberryPi3 {
 
     fn restore_boot(&self, mounts: &Mounts, config: &Stage2Config) -> bool {
         info!("restoring boot configuration for Raspberry Pi 3");
+        // TODO: move to boot_manager ?
         restore_backups(mounts.get_boot_mountpoint(), config.get_boot_backups())
     }
 

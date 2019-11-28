@@ -19,6 +19,9 @@ pub(crate) trait BootManager {
         config: &Config,
         s2_cfg: &mut Stage2ConfigBuilder,
     ) -> Result<bool, MigError>;
+
+    // TODO: make sure sufficient space is available for bootmanager backup
+
     fn setup(
         &self,
         mig_info: &MigrateInfo,
