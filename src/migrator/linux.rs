@@ -342,20 +342,22 @@ impl<'a> LinuxMigrator {
             required_size += file_size(&backup_path)?;
         }
 
-        let read_dir = read_dir(&nwmgr_path).context(MigErrCtx::from_remark(
-            MigErrorKind::Upstream,
-            &format!("Failed to read directory '{}'", nwmgr_path.display()),
-        ))?;
+        if dir_exists(&nwmgr_path)? {
+            let read_dir = read_dir(&nwmgr_path).context(MigErrCtx::from_remark(
+                MigErrorKind::Upstream,
+                &format!("Failed to read directory '{}'", nwmgr_path.display()),
+            ))?;
 
-        for entry in read_dir {
-            required_size += file_size(
-                &entry
-                    .context(MigErrCtx::from_remark(
-                        MigErrorKind::Upstream,
-                        "Failed to read directory entry",
-                    ))?
-                    .path(),
-            )?;
+            for entry in read_dir {
+                required_size += file_size(
+                    &entry
+                        .context(MigErrCtx::from_remark(
+                            MigErrorKind::Upstream,
+                            "Failed to read directory entry",
+                        ))?
+                        .path(),
+                )?;
+            }
         }
 
         info!(

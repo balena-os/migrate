@@ -180,7 +180,7 @@ cp "${RELEASE_DIR_STAGE2}/balena-migrate" "${TARGET_DIR}/"
 # TODO: create and use abs path for target
 
 UNPACK_DIR=$(mktemp -d)
-echo "using unpack directory ${PROJECT_ROOT}"
+verbose "using unpack directory ${UNPACK_DIR}"
 
 echo "unpacking \"${SOURCE_INITRD}\""
 gzip -c -d ${SOURCE_INITRD} | cpio -idmu -D ${UNPACK_DIR}

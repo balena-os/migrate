@@ -80,7 +80,6 @@ impl<'de> de::Visitor<'de> for DeserializeU16OrStringVisitor {
     where
         E: de::Error,
     {
-        println!("parse u16 from str: {:?}", v);
         match v.parse::<u16>() {
             Ok(val) => Ok(val),
             Err(_why) => Err(E::invalid_value(Unexpected::Str(v), &self)),
@@ -256,5 +255,4 @@ mod tests {
         assert_eq!(config.api_key, None);
         assert_eq!(config.device_api_key.unwrap(), "aaaaaaaaaaaa");
     }
-
 }
