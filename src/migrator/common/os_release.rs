@@ -11,7 +11,7 @@ const OS_RELEASE_RE: &str = r"^(\d+)\.(\d+)\.(\d+)(-.*)?$";
 pub struct OSRelease(u32, u32, u32);
 
 impl OSRelease {
-    pub fn get_mayor(&self) -> u32 {
+    pub fn get_major(&self) -> u32 {
         self.0
     }
 
