@@ -141,7 +141,6 @@ pub(crate) fn get_os_arch() -> Result<OSArch, MigError> {
 pub(crate) fn get_mem_info() -> Result<(u64, u64), MigError> {
     trace!("get_mem_info: entered");
     // TODO: could add loads, uptime if needed
-    // TODO: mem::uninitialzed is depreciated, replace with something like
     use std::mem::MaybeUninit;
     let mut s_info: libc::sysinfo = unsafe { MaybeUninit::<libc::sysinfo>::zeroed().assume_init() };
     let res = unsafe { libc::sysinfo(&mut s_info) };
