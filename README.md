@@ -84,10 +84,10 @@ For beaglebone / beagleboard build:
  
 ```cross build --target=armv7-unknown-linux-gnueabihf --release```
 
-For raspberrypi build 
+For raspberrypi3 build 
 
 ``` cross build --target=armv7-unknown-linux-musleabihf --release```
-
+    
 Once libgcc is integrated in the migration initramfs the musl builds will be obsolete.   
 
 ```mk_mig_config``` configures a migration initramfs by unpacking the standard migrate initramfs, deleting and injecting
