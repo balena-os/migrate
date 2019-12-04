@@ -5,6 +5,7 @@ use log::{debug, error, info, trace, warn};
 use regex::{Regex, RegexBuilder};
 use std::fs::{copy, read_link, read_to_string};
 use std::path::{Path, PathBuf};
+use std::mem::MaybeUninit;
 
 use libc::getuid;
 
@@ -141,8 +142,7 @@ pub(crate) fn get_os_arch() -> Result<OSArch, MigError> {
 pub(crate) fn get_mem_info() -> Result<(u64, u64), MigError> {
     trace!("get_mem_info: entered");
     // TODO: could add loads, uptime if needed
-    use std::mem;
-    let mut s_info: libc::sysinfo = unsafe { mem::uninitialized() };
+    let mut s_info: libc::sysinfo = unsafe { MaybeUninit::<libc::sysinfo>::zeroed().assume_init() };
     let res = unsafe { libc::sysinfo(&mut s_info) };
     if res == 0 {
         Ok((s_info.totalram as u64, s_info.freeram as u64))

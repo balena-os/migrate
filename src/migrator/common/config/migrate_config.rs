@@ -106,7 +106,6 @@ pub(crate) struct MigrateConfig {
     watchdogs: Option<Vec<WatchdogCfg>>,
     delay: Option<u64>,
     kernel_opts: Option<String>,
-    force_flash_device: Option<PathBuf>,
 }
 
 impl<'a> MigrateConfig {
@@ -131,7 +130,6 @@ impl<'a> MigrateConfig {
             watchdogs: None,
             delay: None,
             kernel_opts: None,
-            force_flash_device: None,
         }
     }
 
@@ -228,14 +226,6 @@ impl<'a> MigrateConfig {
     pub fn get_kernel_opts(&self) -> Option<String> {
         if let Some(ref val) = self.kernel_opts {
             Some(val.clone())
-        } else {
-            None
-        }
-    }
-
-    pub fn get_force_flash_device(&'a self) -> Option<&'a Path> {
-        if let Some(ref val) = self.force_flash_device {
-            Some(val)
         } else {
             None
         }
