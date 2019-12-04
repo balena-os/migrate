@@ -228,6 +228,7 @@ impl<'a> Config {
         ))?)
     }
 
+    // config is checed for validity at the end, when all has been set
     fn check(&self) -> Result<(), MigError> {
         self.migrate.check()?;
         let mode = self.migrate.get_mig_mode();

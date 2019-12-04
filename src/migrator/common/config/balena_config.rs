@@ -60,8 +60,6 @@ pub(crate) struct ApiInfo {
 
 #[derive(Debug, Deserialize)]
 pub(crate) struct BalenaConfig {
-    // TODO: why are these optional other than the ones specifyable
-    // on the cmd line
     image: Option<ImageType>,
     config: Option<FileRef>,
     app_name: Option<String>,
@@ -132,7 +130,7 @@ impl<'a> BalenaConfig {
         if let Some(ref path) = self.image {
             path
         } else {
-            panic!("image path is not set");
+            panic!("The image path is not set in config");
         }
     }
 
@@ -140,7 +138,7 @@ impl<'a> BalenaConfig {
         if let Some(ref path) = self.config {
             path
         } else {
-            panic!("config path is not set");
+            panic!("The balena config.json path is not set in config");
         }
     }
 }

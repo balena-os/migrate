@@ -109,7 +109,6 @@ pub(crate) struct MigrateConfig {
 }
 
 impl<'a> MigrateConfig {
-    // TODO: implement log & backup config getters
     pub fn default() -> MigrateConfig {
         MigrateConfig {
             work_dir: None,
@@ -156,6 +155,8 @@ impl<'a> MigrateConfig {
             }
         }
     }
+
+    // defaults are implemented in getter functions
 
     pub fn is_gzip_internal(&self) -> bool {
         if let Some(val) = self.gzip_internal {
@@ -269,32 +270,6 @@ impl<'a> MigrateConfig {
         }
     }
 
-    // The following functions can only be safely called after check has succeeded
-
-    pub fn get_work_dir(&'a self) -> &'a Path {
-        if let Some(ref dir) = self.work_dir {
-            dir
-        } else {
-            panic!("work_dir is not set");
-        }
-    }
-
-    pub fn get_kernel_path(&'a self) -> &'a FileRef {
-        if let Some(ref path) = self.kernel {
-            path
-        } else {
-            panic!("kernel path is not set");
-        }
-    }
-
-    pub fn get_initrd_path(&'a self) -> &'a FileRef {
-        if let Some(ref path) = self.initrd {
-            path
-        } else {
-            panic!("initramfs path is not set");
-        }
-    }
-
     pub fn get_dtb_refs(&'a self) -> Option<&'a Vec<FileRef>> {
         if let Some(ref path) = self.device_tree {
             Some(path)
@@ -328,5 +303,31 @@ impl<'a> MigrateConfig {
             }
         }
         false
+    }
+
+    // The following functions can only be safely called after check has succeeded
+
+    pub fn get_work_dir(&'a self) -> &'a Path {
+        if let Some(ref dir) = self.work_dir {
+            dir
+        } else {
+            panic!("work_dir is not set");
+        }
+    }
+
+    pub fn get_kernel_path(&'a self) -> &'a FileRef {
+        if let Some(ref path) = self.kernel {
+            path
+        } else {
+            panic!("kernel path is not set");
+        }
+    }
+
+    pub fn get_initrd_path(&'a self) -> &'a FileRef {
+        if let Some(ref path) = self.initrd {
+            path
+        } else {
+            panic!("initramfs path is not set");
+        }
     }
 }
