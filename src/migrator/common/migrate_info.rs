@@ -1,4 +1,4 @@
-use log::{debug, error, info, trace, warn};
+use log::{debug, error, info, warn};
 
 use crate::{
     common::{
@@ -20,14 +20,12 @@ use crate::{
 };
 
 // *************************************************************************************************
-// * Digested / Checked device-type independent properties from config and information retrieved
-// * from device required for stage1 of migration
+// * migrate_info holds digested and checked device-type independent properties from config and
+// information retrieved from device required for stage1 of migration
 // *************************************************************************************************
 
 pub(crate) mod balena_cfg_json;
 pub(crate) use balena_cfg_json::BalenaCfgJson;
-
-//use crate::linux::migrate_info::lsblk_info::;
 
 #[derive(Debug)]
 pub(crate) struct MigrateInfo {
@@ -55,11 +53,11 @@ pub(crate) struct MigrateInfo {
 impl MigrateInfo {
     #[allow(clippy::cognitive_complexity)] //TODO refactor this function to fix the clippy warning
     pub(crate) fn new(config: &Config, os_api: &impl OSApi) -> Result<MigrateInfo, MigError> {
-        trace!("new: entered");
+        debug!("new: entered");
         let os_arch = os_api.get_os_arch()?;
-
         let work_path = os_api.path_info_from_path(config.migrate.get_work_dir())?;
         let work_dir = &work_path.path;
+
         info!(
             "Working directory is '{}' on '{}'",
             work_dir.display(),
@@ -92,7 +90,7 @@ impl MigrateInfo {
                 CheckedImageType::Flasher(checked_ref)
             }
             ImageType::FileSystems(ref fs_dump) => {
-                // make sure all files are present and in /workdir, generate total size and partitioning config in miginfo
+                // make sure all files are present and in workdir
                 CheckedImageType::FileSystems(CheckedFSDump {
                     device_slug: fs_dump.device_slug.clone(),
                     check: fs_dump.check.clone(),
@@ -149,13 +147,13 @@ impl MigrateInfo {
                 }
             }
 
-            // check config
+            // check config, balena_cfg_json::check is done later when device info is present
             let balena_cfg = BalenaCfgJson::new(file_info)?;
             info!(
                 "The balena config file looks ok: '{}'",
                 balena_cfg.get_rel_path().display()
             );
-            //balena_cfg.check()
+
             balena_cfg
         } else {
             error!("The balena config has not been specified or cannot be accessed. Automatic download is not yet implemented, so you need to specify and supply all required files");

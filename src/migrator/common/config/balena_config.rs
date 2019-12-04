@@ -51,19 +51,11 @@ pub(crate) enum ImageType {
 }
 
 #[derive(Debug, Deserialize)]
-pub(crate) struct ApiInfo {
-    host: Option<String>,
-    port: Option<u16>,
-    check: Option<bool>,
-    key: Option<String>,
-}
-
-#[derive(Debug, Deserialize)]
 pub(crate) struct BalenaConfig {
     image: Option<ImageType>,
     config: Option<FileRef>,
     app_name: Option<String>,
-    api: Option<ApiInfo>,
+    check_api: Option<bool>,
     check_vpn: Option<bool>,
     check_timeout: Option<u64>,
 }
@@ -74,7 +66,7 @@ impl<'a> BalenaConfig {
             image: None,
             config: None,
             app_name: None,
-            api: None,
+            check_api: None,
             check_vpn: None,
             check_timeout: None,
         }
@@ -104,6 +96,14 @@ impl<'a> BalenaConfig {
     pub fn is_check_vpn(&self) -> bool {
         if let Some(ref check_vpn) = self.check_vpn {
             *check_vpn
+        } else {
+            true
+        }
+    }
+
+    pub fn is_check_api(&self) -> bool {
+        if let Some(ref check_api) = self.check_api {
+            *check_api
         } else {
             true
         }

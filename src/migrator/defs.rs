@@ -55,6 +55,8 @@ pub const BALENA_STATE_FSTYPE: &str = "ext4";
 pub const BALENA_DATA_PART: &str = "resin-data";
 pub const BALENA_DATA_FSTYPE: &str = "ext4";
 
+pub const BALENA_API_PORT: u16 = 80;
+
 pub const PART_NAME: &[&str] = &[
     BALENA_BOOT_PART,
     BALENA_ROOTA_PART,
