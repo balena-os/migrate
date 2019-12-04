@@ -1,14 +1,10 @@
 use super::MigMode;
 use crate::common::{file_digest::HashInfo, MigError, MigErrorKind};
+use crate::defs::DEFAULT_API_CHECK_TIMEOUT;
 use log::debug;
 use serde::{Deserialize, Serialize};
 use std::path::PathBuf;
 
-const MODULE: &str = "common::config::balena_config";
-
-use crate::defs::DEFAULT_API_CHECK_TIMEOUT;
-
-// TODO: also store optional bootable flag, partition type and start offset ?
 #[derive(Debug, Serialize, Deserialize, Clone)]
 pub(crate) struct PartDump {
     pub blocks: u64,
@@ -64,6 +60,8 @@ pub(crate) struct ApiInfo {
 
 #[derive(Debug, Deserialize)]
 pub(crate) struct BalenaConfig {
+    // TODO: why are these optional other than the ones specifyable
+    // on the cmd line
     image: Option<ImageType>,
     config: Option<FileRef>,
     app_name: Option<String>,
@@ -90,20 +88,14 @@ impl<'a> BalenaConfig {
             if self.image.is_none() {
                 return Err(MigError::from_remark(
                     MigErrorKind::InvParam,
-                    &format!(
-                        "{}::check: no balena OS image was specified in mode: IMMEDIATE",
-                        MODULE
-                    ),
+                    &format!("check: no balena OS image was specified in mode: IMMEDIATE",),
                 ));
             }
 
             if self.config.is_none() {
                 return Err(MigError::from_remark(
                     MigErrorKind::InvParam,
-                    &format!(
-                        "{}::check: no config.json was specified in mode: IMMEDIATE",
-                        MODULE
-                    ),
+                    &format!("check: no config.json was specified in mode: IMMEDIATE",),
                 ));
             }
         }

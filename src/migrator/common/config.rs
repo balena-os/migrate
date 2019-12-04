@@ -243,7 +243,9 @@ mod tests {
     use crate::{
         common::{
             config::{
-                balena_config::FileRef, balena_config::ImageType, migrate_config::MigrateWifis,
+                balena_config::ImageType,
+                balena_config::{FileRef, PartCheck},
+                migrate_config::MigrateWifis,
             },
             file_digest::HashInfo,
         },
@@ -303,6 +305,14 @@ mod tests {
         );
         assert_eq!(config.migrate.get_delay(), 60);
         assert_eq!(config.migrate.require_nwmgr_configs(), false);
+        if let Some(watchdogs) = config.migrate.get_watchdogs() {
+            assert_eq!(watchdogs.len(), 1_);
+            assert_eq!(watchdogs[0].path, PathBuf::from("/dev/watchdog1"));
+            assert_eq!(watchdogs[0].close, Some(false));
+            assert_eq!(watchdogs[0].interval, Some(10));
+        } else {
+            panic!("No Watchdogs found");
+        }
 
         if let ImageType::Flasher(comp) = config.balena.get_image_path() {
             assert_eq!(
@@ -329,20 +339,72 @@ mod tests {
                 )))
             }
         );
-        /*
-        assert_eq!(config.balena.get_app_name(), Some("test"));
-        assert_eq!(config.balena.get_api_host(), "api1.balena-cloud.com");
-        assert_eq!(config.balena.get_api_port(), 444);
-        assert_eq!(config.balena.is_api_check(), false);
-        assert_eq!(config.balena.get_api_key(), Some(String::from("secret")));
-        */
+
         assert_eq!(config.balena.is_check_vpn(), true);
         assert_eq!(config.balena.get_check_timeout(), 20);
     }
 
     #[test]
     fn read_conf_ok2() {
-        let _config = Config::from_string(TEST_FS_CONFIG_OK).unwrap();
+        // same as above except for fs tpe image so just test image
+        let config = Config::from_string(TEST_FS_CONFIG_OK).unwrap();
+        if let ImageType::FileSystems(dump) = config.balena.get_image_path() {
+            assert_eq!(dump.device_slug, String::from("beaglebone-black"));
+            assert_eq!(dump.extended_blocks, 2162688);
+            assert_eq!(dump.max_data, Some(true));
+            assert_eq!(dump.mkfs_direct, Some(true));
+            if let Some(part_check) = &dump.check {
+                if let PartCheck::ReadOnly = part_check {
+                } else {
+                    panic!("wrong PartCheck")
+                }
+            } else {
+                panic!("PartCheck missing")
+            }
+
+            assert_eq!(dump.boot.blocks, 81920);
+            assert_eq!(
+                dump.boot.archive,
+                FileRef {
+                    path: PathBuf::from("resin-boot.tgz"),
+                    hash: Some(HashInfo::Md5(String::from("1234567890")))
+                }
+            );
+            assert_eq!(dump.root_a.blocks, 638976);
+            assert_eq!(
+                dump.root_a.archive,
+                FileRef {
+                    path: PathBuf::from("resin-rootA.tgz"),
+                    hash: None
+                }
+            );
+            assert_eq!(dump.root_b.blocks, 638976);
+            assert_eq!(
+                dump.root_b.archive,
+                FileRef {
+                    path: PathBuf::from("resin-rootB.tgz"),
+                    hash: None
+                }
+            );
+            assert_eq!(dump.state.blocks, 40960);
+            assert_eq!(
+                dump.state.archive,
+                FileRef {
+                    path: PathBuf::from("resin-state.tgz"),
+                    hash: None
+                }
+            );
+            assert_eq!(dump.data.blocks, 2105344);
+            assert_eq!(
+                dump.data.archive,
+                FileRef {
+                    path: PathBuf::from("resin-data.tgz"),
+                    hash: None
+                }
+            );
+        } else {
+            panic!("Invalid image type");
+        };
     }
 
     const TEST_DD_CONFIG_OK: &str = r###"
@@ -420,117 +482,99 @@ debug:
 "###;
     const TEST_FS_CONFIG_OK: &str = r###"
 migrate:
-  # migrate mode
-  # immediate migrate
-  # pretend : just run stage 1 without modifying anything
-  # extract : do not migrate extract image instead
+  ## migrate mode
   mode: immediate
-  # where required files are expected
-  work_dir: '.'
-  # migrate all found wifi configurations
-  all_wifis: true
-  # automatically reboot into stage 2 after n seconds
-  reboot: 5
+  work_dir: ./work
+  all_wifis: false
+  wifis:
+    - 'Xcover'
+    - 'QIFI'
+    - 'bla'
+  reboot: 10
   log:
-    # use this drive for stage2 persistent logging
-    drive: '/dev/sda1'
-    # stage2 log level (trace, debug, info, warn, error)
-    level: 'debug'
-  # path to stage2 kernel - must be a balena os kernel matching the device type
-  kernel:
-    path: 'balena.zImage'
-  # path to stage2 initramfs
-  initrd:
-    path: 'balena.initramfs.cpio.gz'
-  # path to stage2 device tree blob - better be a balena dtb matching the device type
-  dtb_path: 'balena.dtb'
-  # backup configuration, configured files are copied to balena and mounted as volumes
+    console: true
+    drive: "/dev/sda1"
+    level: debug
+  kernel: 
+    path: balena.zImage
+    hash: 
+      md5: f1b3e346889e190279f43e984c7b693a
+  initrd: 
+    path: balena.initrd.cpio.gz
+    hash:
+      md5: f1b3e346889e190279f43e984c7b693a
   backup:
-  # network manager configuration files
+    - volume: "test volume 1"
+      items:
+      - source: /home/thomas/develop/balena.io/support
+        target: "target dir 1.1"
+      - source: "/home/thomas/develop/balena.io/customer/sonder/unitdata/UnitData files"
+        target: "target dir 1.2"
+    - volume: "test volume 2"
+      items:
+      - source: "/home/thomas/develop/balena.io/migrate/migratecfg/balena-migrate"
+        target: "target file 2.1"
+      - source: "/home/thomas/develop/balena.io/migrate/migratecfg/init-scripts"
+        target: "target dir 2.2"
+        filter: 'balena-.*'
+    - volume: "test_volume_3"
+      items:
+      - source: "/home/thomas/develop/balena.io/migrate/migratecfg/init-scripts"
+        filter: 'balena-.*'
+  fail_mode: Reboot
   nwmgr_files:
     - eth0_static
-    - sprint
-  # use internal gzip with dd
-  gzip_internal: ~
-  # Extra kernel commandline options
+  gzip_internal: true
   kernel_opts: "panic=20"
-  # Use the given device instead of the boot device to flash to
-  force_flash_device: ~
-  # delay migration by n seconds - workaround for stem watchdog
   delay: 60
-  # test kicking watchdogs - work in progress - not currently working
   watchdogs:
-    # path to watchdog device
-    #- path: /dev/watchdog1
-      # optional interval in seconds - overrides interval read from watchdog device
-      #  interval: ~
-      # optional close, false disables MAGICCLOSE flag read from device
-      # close: false
+    - path: /dev/watchdog1
+      interval: 10
+      close: false
+  require_nwmgr_config: false
 balena:
   image:
-    # use filesystem writes instead of Flasher (dd)
     fs:
-      # needed for filesystem writes, beagleboard-xm masquerades as beaglebone-black
       device_slug: beaglebone-black
-      # make mkfs.ext4 check for bad blocks, either
-      # empty / none, -> No test
-      # ro -> Read test
-      # rw -> ReadWrite test (slow)
       check: ro
-      # maximise resin-data partition, true / false
-      # empty / true -> maximise
-      # false -> do not maximise
-      # Currently required to be empty / true - migration does not succeed with max_data set to false
       max_data: true
-      # use direct io for mkfs.ext (-D see manpage)
-      # true -> use direct io (slow)
-      # empty / false -> do not use
-      mkfs_direct: ~
-      # extended partition blocks
+      mkfs_direct: true
       extended_blocks: 2162688
-      # boot partition blocks & tar file
       boot:
         blocks: 81920
         archive:
           path: resin-boot.tgz
           hash:
             md5: 1234567890
-      # rootA partition blocks & tar file
       root_a:
         blocks: 638976
         archive:
           path: resin-rootA.tgz
-      # rootB partition blocks & tar file
       root_b:
         blocks: 638976
         archive:
           path: resin-rootB.tgz
-      # state partition blocks & tar file
       state:
         blocks: 40960
         archive:
           path: resin-state.tgz
-      # data partition blocks & tar file
       data:
         blocks: 2105344
         archive:
           path: resin-data.tgz
-  # config.json file to inject
-  config:
-    path: "config.json"
-  # application name
-  app_name: 'bbtest'
-  # api checks
+  config: 
+    path: config.json
+    hash:
+      md5: 4834c4ffb3ee0cf0be850242a693c9b6    
+  app_name: support-multi
   api:
-    host: "api.balena-cloud.com"
+    host: api.balena-cloud.com
     port: 443
     check: true
-  # check for vpn connection
   check_vpn: true
-  # timeout for checks
   check_timeout: 20
 debug:
-  # don't flash device - terminate stage2 and reboot before flashing
-  no_flash: false
+  no_flash: true
+  force_flash_device: '/dev/sdb'
 "###;
 }
