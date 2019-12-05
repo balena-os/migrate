@@ -187,22 +187,6 @@ impl Disk {
 
         Ok(mbr)
     }
-
-    /*
-        pub fn get_partition_iterator(&mut self) -> Result<PartitionIterator, MigError> {
-            Ok(PartitionIterator::new(self)?)
-        }
-
-        // TODO: allow reading partitions while holding PartitionIterator
-        // PartitionIterator must supply partitionReader as it holds a mut ref to Disk
-
-        pub fn get_partition_reader(
-            &mut self,
-            partition: &PartInfo,
-        ) -> Result<PartitionReader, MigError> {
-            Ok(PartitionReader::from_disk(partition, self)?)
-        }
-    */
 }
 
 pub(crate) struct PartitionIterator<'a> {
@@ -461,23 +445,6 @@ pub(crate) struct PartitionReader<'a> {
 }
 
 impl<'a> PartitionReader<'a> {
-    /*
-    pub fn from_disk(part: &PartInfo, disk: &'a mut Disk) -> PartitionReader<'a> {
-        let block_size = disk.block_size;
-
-        debug!(
-            "from_disk: start_lba: {}, num_sectors: {}, sector_size: {}",
-            part.start_lba, part.num_sectors, block_size
-        );
-
-        PartitionReader {
-            disk,
-            offset: part.start_lba * block_size,
-            bytes_left: part.num_sectors * block_size,
-        }
-    }
-    */
-
     pub fn from_part_iterator(
         part: &PartInfo,
         iterator: &'a mut PartitionIterator,
@@ -527,28 +494,49 @@ impl<'a> Read for PartitionReader<'a> {
 
 #[cfg(test)]
 mod test {
-
-    use mod_logger::{Level, Logger};
-
+    // TODO: create a small partition data file and test partition enumeration, extraction on that
     use crate::common::disk_util::PartitionIterator;
     use crate::common::disk_util::{Disk, LabelType};
+    use crate::common::path_append;
+    use std::path::{Path, PathBuf};
+
+    fn get_test_file() -> PathBuf {
+        let path_buf = PathBuf::from(file!());
+        let mut test_path = path_buf.as_path();
+
+        // iterate up the path to find project root
+        let ancestors: Vec<&Path> = test_path.ancestors().collect();
+        test_path = test_path.parent().unwrap();
+
+        ancestors.iter().rev().find(|dir| {
+            test_path = test_path.parent().unwrap();
+            if &*dir.to_string_lossy() == "src" {
+                true
+            } else {
+                false
+            }
+        });
+
+        test_path = test_path.parent().unwrap();
+        let test_file = path_append(path_append(&test_path, "test_data"), "part.img.gz");
+        println!("using found test data path {}", test_file.display());
+        test_file
+    }
 
     #[test]
     fn read_gzipped_part() {
-        Logger::set_default_level(&Level::Debug);
-        let mut disk = Disk::from_gzip_img("./test_data/part.img.gz").unwrap();
+        let mut disk = Disk::from_gzip_img(get_test_file()).unwrap();
         if let LabelType::Dos = disk.get_label().unwrap() {
             let mut count = 0;
             let iterator = PartitionIterator::new(&mut disk).unwrap();
             for partition in iterator {
                 match partition.index {
-                    1 => assert_eq!(partition.ptype, 0x0e),
-                    4 => assert_eq!(partition.ptype, 0x05),
+                    3 => assert_eq!(partition.ptype, 0x05),
                     _ => assert_eq!(partition.ptype, 0x83),
                 }
                 count += 1;
             }
-            assert_eq!(count, 6);
+            assert_eq!(count, 4);
         } else {
             panic!("Invalid label type - not Dos");
         }
