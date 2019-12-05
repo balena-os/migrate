@@ -494,7 +494,6 @@ impl<'a> Read for PartitionReader<'a> {
 
 #[cfg(test)]
 mod test {
-    // TODO: create a small partition data file and test partition enumeration, extraction on that
     use crate::common::disk_util::PartitionIterator;
     use crate::common::disk_util::{Disk, LabelType};
     use crate::common::path_append;
