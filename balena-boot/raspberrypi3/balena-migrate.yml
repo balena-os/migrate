@@ -22,14 +22,17 @@ migrate:
       md5: 20dcc74754ace896e9f609650e5ee29d 
   ## path to stage2 initramfs
   initrd: 
-    path: balena.initramfs.cpio.gz
-    hash:
-      md5: f7fac19120fa11c88ea7e03ac466b294
+    path: balena.initrd.cpio.gz
+    # hash:
+    #  md5: 
   ## path to stage2 device tree blob - better be a balena dtb matching the device type
-  # device_tree: 
-  #   path: balena.dtb
-  #   hash: 
-  #     md5: <MD5 Hash>    
+  device_tree:
+    - path: bcm2710-rpi-3-b.dtb
+      hash:
+        md5: 20ce58eab8638692b6af0dba081c3763
+    - path: bcm2710-rpi-3-b-plus.dtb
+      hash:
+        md5: 61912bc1b3a7f1d80fd2f753b94037e5
   ## backup configuration, configured files are copied to balena and mounted as volumes
   backup:
   ## network manager configuration files
