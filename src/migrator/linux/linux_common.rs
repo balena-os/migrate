@@ -419,12 +419,11 @@ pub(crate) fn get_os_release() -> Result<OSRelease, MigError> {
 */
 
 pub(crate) fn get_fs_space<P: AsRef<Path>>(path: P) -> Result<(u64, u64), MigError> {
-    const SIZE_REGEX: &str = r#"^(\d+)K?$"#;
     let path = path.as_ref();
     trace!("get_fs_space: entered with '{}'", path.display());
 
     let path_str = path.to_string_lossy();
-    let args: Vec<&str> = vec!["--block-size=K", "--output=size,used", &path_str];
+    let args: Vec<&str> = vec!["--block-size=K", &path_str];
 
     let cmd_res = call(DF_CMD, &args, true)?;
 
@@ -451,65 +450,60 @@ pub(crate) fn get_fs_space<P: AsRef<Path>>(path: P) -> Result<(u64, u64), MigErr
 
     // debug!("PathInfo::new: '{}' df result: {:?}", path, &output[1]);
 
-    let words: Vec<&str> = output[1].split_whitespace().collect();
-    if words.len() != 2 {
-        debug!(
-            "get_fs_space: '{}' df result: words {}",
-            path.display(),
-            words.len()
-        );
-        return Err(MigError::from_remark(
-            MigErrorKind::InvParam,
-            &format!(
-                "get_fs_space: failed to parse df output for {}",
-                path.display()
-            ),
-        ));
+    let hdrs: Vec<&str> = output[0].split_whitespace().collect();
+    let values: Vec<&str> = output[1].split_whitespace().collect();
+    let mut fs_size: Option<u64> = None;
+    let mut fs_used: Option<u64> = None;
+
+    for (index, header) in hdrs.iter().enumerate() {
+        if *header == "1K-blocks" {
+            fs_size = Some(
+                String::from(values[index])
+                    .trim_end_matches("K")
+                    .parse::<u64>()
+                    .context(MigErrCtx::from_remark(
+                        MigErrorKind::Upstream,
+                        &format!("get_fs_space: failed to parse size from {} ", values[index]),
+                    ))?
+                    * 1024,
+            );
+            if let Some(_dummy) = fs_used {
+                break;
+            }
+        } else {
+            if *header == "Used" {
+                fs_used = Some(
+                    String::from(values[index])
+                        .trim_end_matches("K")
+                        .parse::<u64>()
+                        .context(MigErrCtx::from_remark(
+                            MigErrorKind::Upstream,
+                            &format!("get_fs_space: failed to parse size from {} ", values[index]),
+                        ))?
+                        * 1024,
+                );
+                if let Some(_dummy) = fs_size {
+                    break;
+                }
+            }
+        }
     }
 
-    debug!("get_fs_space: '{}' df result: {:?}", path.display(), &words);
-
-    lazy_static! {
-        static ref SIZE_RE: Regex = Regex::new(SIZE_REGEX).unwrap();
+    if let Some(fs_size) = fs_size {
+        if let Some(fs_used) = fs_used {
+            debug!(
+                "get_fs_space: fs_size: {}, fs_free: {}",
+                fs_size,
+                fs_size - fs_used
+            );
+            return Ok((fs_size, fs_size - fs_used));
+        }
     }
 
-    let fs_size = if let Some(captures) = SIZE_RE.captures(words[0]) {
-        captures
-            .get(1)
-            .unwrap()
-            .as_str()
-            .parse::<u64>()
-            .context(MigErrCtx::from_remark(
-                MigErrorKind::Upstream,
-                &format!("get_fs_space: failed to parse size from {} ", words[0]),
-            ))?
-            * 1024
-    } else {
-        return Err(MigError::from_remark(
-            MigErrorKind::InvParam,
-            &format!("get_fs_space: failed to parse size from {} ", words[0]),
-        ));
-    };
-
-    let fs_used = if let Some(captures) = SIZE_RE.captures(words[1]) {
-        captures
-            .get(1)
-            .unwrap()
-            .as_str()
-            .parse::<u64>()
-            .context(MigErrCtx::from_remark(
-                MigErrorKind::Upstream,
-                &format!("get_fs_space: failed to parse size from {} ", words[1]),
-            ))?
-            * 1024
-    } else {
-        return Err(MigError::from_remark(
-            MigErrorKind::InvParam,
-            &format!("get_fs_space: failed to parse size from {} ", words[1]),
-        ));
-    };
-
-    Ok((fs_size, fs_size - fs_used))
+    Err(MigError::from_remark(
+        MigErrorKind::InvParam,
+        "get_fs_space: failed to parse sizes ",
+    ))
 }
 
 /******************************************************************

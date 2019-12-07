@@ -53,14 +53,18 @@ pub(crate) fn get_device(
 ) -> Result<Box<dyn Device>, MigError> {
     match mig_info.os_arch {
         OSArch::ARMHF => {
-            let dev_tree_model =
-                read_to_string(DEVICE_TREE_MODEL).context(MigErrCtx::from_remark(
-                    MigErrorKind::Upstream,
-                    &format!(
-                        "get_device: unable to determine model due to inaccessible file '{}'",
-                        DEVICE_TREE_MODEL
-                    ),
-                ))?;
+            let dev_tree_model = String::from(
+                read_to_string(DEVICE_TREE_MODEL)
+                    .context(MigErrCtx::from_remark(
+                        MigErrorKind::Upstream,
+                        &format!(
+                            "get_device: unable to determine model due to inaccessible file '{}'",
+                            DEVICE_TREE_MODEL
+                        ),
+                    ))?
+                    .trim_end_matches("\0")
+                    .trim_end(),
+            );
 
             if let Some(device) = raspberrypi::is_rpi(mig_info, config, s2_cfg, &dev_tree_model)? {
                 return Ok(device);

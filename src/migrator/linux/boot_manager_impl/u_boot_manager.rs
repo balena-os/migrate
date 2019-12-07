@@ -93,6 +93,7 @@ impl UBootManager {
 
     */
 
+    // TODO: make sure bootmgr_path is set or fail
     fn find_bootmgr_path(
         &self,
         mig_info: &MigrateInfo,
@@ -279,6 +280,7 @@ impl<'a> BootManager for UBootManager {
             format_size_with_unit(bootmgr_path.fs_free)
         );
 
+        debug!("can_migrate: checking space");
         let mut boot_req_space: u64 = 8 * 1024; // one 8KiB extra space just in case and for uEnv.txt)
         boot_req_space += if !file_exists(path_append(&bootmgr_path.path, MIG_KERNEL_NAME)) {
             mig_info.kernel_file.size
@@ -304,46 +306,62 @@ impl<'a> BootManager for UBootManager {
             return Ok(false);
         }
 
+        debug!(
+            "bootmgr_path space: req: {}, found: {}",
+            boot_req_space, bootmgr_path.fs_free
+        );
+
         if bootmgr_path.fs_free < boot_req_space {
             // find alt location for boot config
+            info!(
+                "Can't_migrate with {} : checking space elsewhere",
+                bootmgr_path.path.display()
+            );
 
-            if let Some(boot_path) = PathInfo::from_path(BOOT_PATH, &lsblk_info)? {
-                if boot_path.fs_free > boot_req_space {
-                    info!(
-                        "Found boot '{}', mounpoint: '{}', fs type: {}, free space: {}",
-                        boot_path.device_info.device.display(),
-                        boot_path.mountpoint.display(),
-                        boot_path.device_info.fs_type,
-                        format_size_with_unit(boot_path.fs_free)
-                    );
+            loop {
+                if let Some(boot_path) = PathInfo::from_path(BOOT_PATH, &lsblk_info)? {
+                    if boot_path.fs_free > boot_req_space {
+                        info!(
+                            "Found boot '{}', mounpoint: '{}', fs type: {}, free space: {}",
+                            boot_path.device_info.device.display(),
+                            boot_path.mountpoint.display(),
+                            boot_path.device_info.fs_type,
+                            format_size_with_unit(boot_path.fs_free)
+                        );
 
-                    self.bootmgr_path = Some(bootmgr_path);
-                    self.boot_path = Some(boot_path);
+                        debug!(
+                            "setting bootmgr_path, boot_path to {}",
+                            bootmgr_path.path.display()
+                        );
+                        self.bootmgr_path = Some(bootmgr_path);
+                        self.boot_path = Some(boot_path);
+                        break;
+                    }
                 }
-            } else if let Some(boot_path) = PathInfo::from_path(ROOT_PATH, &lsblk_info)? {
-                if boot_path.fs_free > boot_req_space {
-                    info!(
-                        "Found boot '{}', mounpoint: '{}', fs type: {}, free space: {}",
-                        boot_path.device_info.device.display(),
-                        boot_path.mountpoint.display(),
-                        boot_path.device_info.fs_type,
-                        format_size_with_unit(boot_path.fs_free)
-                    );
 
-                    self.bootmgr_path = Some(bootmgr_path);
-                    self.boot_path = Some(boot_path);
-                } else {
-                    error!("Could not find a directory with sufficient space to store the migrate kernel, initramfs and dtb file. Required space is {}",
-                            format_size_with_unit(boot_req_space));
-                    return Ok(false);
+                if let Some(boot_path) = PathInfo::from_path(ROOT_PATH, &lsblk_info)? {
+                    if boot_path.fs_free > boot_req_space {
+                        info!(
+                            "Found boot '{}', mounpoint: '{}', fs type: {}, free space: {}",
+                            boot_path.device_info.device.display(),
+                            boot_path.mountpoint.display(),
+                            boot_path.device_info.fs_type,
+                            format_size_with_unit(boot_path.fs_free)
+                        );
+
+                        self.bootmgr_path = Some(bootmgr_path);
+                        self.boot_path = Some(boot_path);
+                        break;
+                    }
                 }
-            } else {
+
                 error!("Could not find a directory with sufficient space to store the migrate kernel, initramfs and dtb file. Required space is {}",
-                        format_size_with_unit(boot_req_space));
+                       format_size_with_unit(boot_req_space));
                 return Ok(false);
             }
         } else {
             self.bootmgr_path = Some(bootmgr_path);
+            // TODO: why is self.boot_path set above but not here ?
         }
 
         Ok(true)

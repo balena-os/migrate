@@ -18,10 +18,11 @@ use crate::{
     },
 };
 
-const SUPPORTED_OSSES: [&str; 3] = [
+const SUPPORTED_OSSES: [&str; 4] = [
     "Ubuntu 18.04.2 LTS",
     "Ubuntu 14.04.1 LTS",
     "Debian GNU/Linux 9 (stretch)",
+    "Debian GNU/Linux 7 (wheezy)",
 ];
 
 // add some of this to balena bb XM command line:
@@ -46,6 +47,16 @@ const BB_MODEL_REGEX: &str = r#"^((\S+\s+)*\S+)\s+Beagle(Bone|Board)\s+(\S+)$"#;
 
 // TODO: check location of uEnv.txt or other files files to improve reliability
 
+fn dump_str(str: &str) -> String {
+    let bytes = str.as_bytes();
+    let mut res = String::new();
+    bytes.iter().all(|byte| {
+        res.push_str(&format!("{:02x} ", byte));
+        true
+    });
+    res
+}
+
 pub(crate) fn is_bb(
     mig_info: &MigrateInfo,
     config: &Config,
@@ -57,41 +68,58 @@ pub(crate) fn is_bb(
         model_string
     );
 
-    if let Some(captures) = Regex::new(BB_MODEL_REGEX).unwrap().captures(model_string) {
-        let model = captures
-            .get(4)
-            .unwrap()
-            .as_str()
-            .trim_matches(char::from(0));
+    debug!(
+        "comparing <{}> to <TI AM335x BeagleBone> -> {}",
+        model_string,
+        model_string.eq("TI AM335x BeagleBone")
+    );
 
-        match model {
-            "xM" => {
-                debug!("match found for BeagleboardXM");
-                Ok(Some(Box::new(BeagleboardXM::from_config(
-                    mig_info, config, s2_cfg,
-                )?)))
-            }
-            "Green" => {
-                debug!("match found for BeagleboneGreen");
-                Ok(Some(Box::new(BeagleboneGreen::from_config(
-                    mig_info, config, s2_cfg,
-                )?)))
-            }
-            "Black" => {
-                debug!("match found for BeagleboneBlack");
-                Ok(Some(Box::new(BeagleboneBlack::from_config(
-                    mig_info, config, s2_cfg,
-                )?)))
-            }
-            _ => {
-                let message = format!("The beaglebone model reported by your device ('{}') is not supported by balena-migrate", model);
-                error!("{}", message);
-                Err(MigError::from_remark(MigErrorKind::InvParam, &message))
-            }
-        }
+    debug!("model_string: {}", dump_str(model_string));
+    debug!("comp:         {}", dump_str("TI AM335x BeagleBone"));
+
+    if model_string.eq("TI AM335x BeagleBone") {
+        // TODO: found this device model string on a beaglebone-green running debian wheezy
+        debug!("match found for BeagleboneGreen");
+        Ok(Some(Box::new(BeagleboneGreen::from_config(
+            mig_info, config, s2_cfg,
+        )?)))
     } else {
-        debug!("no match for beaglebone on: {}", model_string);
-        Ok(None)
+        if let Some(captures) = Regex::new(BB_MODEL_REGEX).unwrap().captures(model_string) {
+            let model = captures
+                .get(4)
+                .unwrap()
+                .as_str()
+                .trim_matches(char::from(0));
+
+            match model {
+                "xM" => {
+                    debug!("match found for BeagleboardXM");
+                    Ok(Some(Box::new(BeagleboardXM::from_config(
+                        mig_info, config, s2_cfg,
+                    )?)))
+                }
+                "Green" => {
+                    debug!("match found for BeagleboneGreen");
+                    Ok(Some(Box::new(BeagleboneGreen::from_config(
+                        mig_info, config, s2_cfg,
+                    )?)))
+                }
+                "Black" => {
+                    debug!("match found for BeagleboneBlack");
+                    Ok(Some(Box::new(BeagleboneBlack::from_config(
+                        mig_info, config, s2_cfg,
+                    )?)))
+                }
+                _ => {
+                    let message = format!("The beaglebone model reported by your device ('{}') is not supported by balena-migrate", model);
+                    error!("{}", message);
+                    Err(MigError::from_remark(MigErrorKind::InvParam, &message))
+                }
+            }
+        } else {
+            debug!("no match for beaglebone on: <{}>", model_string);
+            Ok(None)
+        }
     }
 }
 
