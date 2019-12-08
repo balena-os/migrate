@@ -13,7 +13,7 @@ use crate::linux::lsblk_info::LsblkInfo;
 use crate::{
     common::{
         boot_manager::BootManager,
-        call, file_exists, format_size_with_unit, is_balena_file,
+        call, file_exists, is_balena_file,
         migrate_info::MigrateInfo,
         path_append,
         path_info::PathInfo,
@@ -98,7 +98,7 @@ impl UBootManager {
         &self,
         mig_info: &MigrateInfo,
         lsblk_info: &LsblkInfo,
-    ) -> Result<PathInfo, MigError> {
+    ) -> Result<Option<PathInfo>, MigError> {
         lazy_static! {
             // same as ab
             static ref BOOT_DRIVE_RE: Regex = Regex::new(UBOOT_DRIVE_FILTER_REGEX).unwrap();
@@ -109,13 +109,13 @@ impl UBootManager {
         if file_exists(path_append(ROOT_PATH, MLO_FILE_NAME))
             || file_exists(path_append(ROOT_PATH, UBOOT_FILE_NAME))
         {
-            return Ok(PathInfo::from_path(ROOT_PATH, lsblk_info)?.unwrap());
+            return Ok(Some(PathInfo::from_path(ROOT_PATH, lsblk_info)?.unwrap()));
         }
 
         if file_exists(path_append(BOOT_PATH, MLO_FILE_NAME))
             || file_exists(path_append(BOOT_PATH, UBOOT_FILE_NAME))
         {
-            return Ok(PathInfo::from_path(BOOT_PATH, lsblk_info)?.unwrap());
+            return Ok(Some(PathInfo::from_path(BOOT_PATH, lsblk_info)?.unwrap()));
         }
 
         let mut tmp_mountpoint: Option<PathBuf> = None;
@@ -217,9 +217,9 @@ impl UBootManager {
                     if file_exists(path_append(mountpoint, MLO_FILE_NAME))
                         || file_exists(path_append(mountpoint, UBOOT_FILE_NAME))
                     {
-                        return Ok(PathInfo::from_mounted(
+                        return Ok(Some(PathInfo::from_mounted(
                             mountpoint, mountpoint, blk_device, &partition,
-                        )?);
+                        )?));
                     } else if mounted {
                         debug!(
                             "unmouting '{}', from {}",
@@ -235,9 +235,41 @@ impl UBootManager {
             }
         }
 
-        debug!("No u-boot boot files found, assuming '{}'", ROOT_PATH);
+        warn!("No u-boot boot files found",);
+        Ok(None)
+    }
 
-        Ok(PathInfo::from_path(ROOT_PATH, lsblk_info)?.unwrap())
+    fn check_bootmgr_path(
+        &self,
+        bootmgr_path: &PathInfo,
+        mig_info: &MigrateInfo,
+    ) -> Result<bool, MigError> {
+        let mut boot_req_space: u64 = 8 * 1024; // one 8KiB extra space just in case and for uEnv.txt)
+        boot_req_space += if !file_exists(path_append(&bootmgr_path.path, MIG_KERNEL_NAME)) {
+            mig_info.kernel_file.size
+        } else {
+            0
+        };
+
+        boot_req_space += if !file_exists(path_append(&bootmgr_path.path, MIG_INITRD_NAME)) {
+            mig_info.initrd_file.size
+        } else {
+            0
+        };
+
+        // TODO: support multiple dtb files ?
+        if let Some(dtb_file) = mig_info.dtb_file.get(0) {
+            boot_req_space += if !file_exists(path_append(&bootmgr_path.path, MIG_DTB_NAME)) {
+                dtb_file.size
+            } else {
+                0
+            };
+        } else {
+            error!("The device tree blob file required for u-boot is not defined.");
+            return Err(MigError::displayed());
+        }
+
+        Ok(boot_req_space > bootmgr_path.fs_free)
     }
 }
 
@@ -269,102 +301,69 @@ impl<'a> BootManager for UBootManager {
 
         // find the u-boot boot device
         // this is where uEnv.txt has to go
+
         let lsblk_info = LsblkInfo::all()?;
+        let mut bootmgr_path = self.find_bootmgr_path(mig_info, &lsblk_info)?;
 
-        let bootmgr_path = self.find_bootmgr_path(mig_info, &lsblk_info)?;
-        info!(
-            "Found boot manager '{}', mounpoint: '{}', fs type: {}, free space: {}",
-            bootmgr_path.device_info.device.display(),
-            bootmgr_path.mountpoint.display(),
-            bootmgr_path.device_info.fs_type,
-            format_size_with_unit(bootmgr_path.fs_free)
-        );
+        if let Some(path) = &bootmgr_path {
+            if self.check_bootmgr_path(path, mig_info)? {
+                info!(
+                    "Using boot manager '{}', mountpoint: '{}', fs type: {}",
+                    path.device_info.device.display(),
+                    path.mountpoint.display(),
+                    path.device_info.fs_type,
+                );
 
-        debug!("can_migrate: checking space");
-        let mut boot_req_space: u64 = 8 * 1024; // one 8KiB extra space just in case and for uEnv.txt)
-        boot_req_space += if !file_exists(path_append(&bootmgr_path.path, MIG_KERNEL_NAME)) {
-            mig_info.kernel_file.size
-        } else {
-            0
-        };
-
-        boot_req_space += if !file_exists(path_append(&bootmgr_path.path, MIG_INITRD_NAME)) {
-            mig_info.initrd_file.size
-        } else {
-            0
-        };
-
-        // TODO: support multiple dtb files ?
-        if let Some(dtb_file) = mig_info.dtb_file.get(0) {
-            boot_req_space += if !file_exists(path_append(&bootmgr_path.path, MIG_DTB_NAME)) {
-                dtb_file.size
-            } else {
-                0
-            };
-        } else {
-            error!("The device tree blob file required for u-boot is not defined.");
-            return Ok(false);
-        }
-
-        debug!(
-            "bootmgr_path space: req: {}, found: {}",
-            boot_req_space, bootmgr_path.fs_free
-        );
-
-        if bootmgr_path.fs_free < boot_req_space {
-            // find alt location for boot config
-            info!(
-                "Can't_migrate with {} : checking space elsewhere",
-                bootmgr_path.path.display()
-            );
-
-            loop {
-                if let Some(boot_path) = PathInfo::from_path(BOOT_PATH, &lsblk_info)? {
-                    if boot_path.fs_free > boot_req_space {
-                        info!(
-                            "Found boot '{}', mounpoint: '{}', fs type: {}, free space: {}",
-                            boot_path.device_info.device.display(),
-                            boot_path.mountpoint.display(),
-                            boot_path.device_info.fs_type,
-                            format_size_with_unit(boot_path.fs_free)
-                        );
-
-                        debug!(
-                            "setting bootmgr_path, boot_path to {}",
-                            bootmgr_path.path.display()
-                        );
-                        self.bootmgr_path = Some(bootmgr_path);
-                        self.boot_path = Some(boot_path);
-                        break;
-                    }
-                }
-
-                if let Some(boot_path) = PathInfo::from_path(ROOT_PATH, &lsblk_info)? {
-                    if boot_path.fs_free > boot_req_space {
-                        info!(
-                            "Found boot '{}', mounpoint: '{}', fs type: {}, free space: {}",
-                            boot_path.device_info.device.display(),
-                            boot_path.mountpoint.display(),
-                            boot_path.device_info.fs_type,
-                            format_size_with_unit(boot_path.fs_free)
-                        );
-
-                        self.bootmgr_path = Some(bootmgr_path);
-                        self.boot_path = Some(boot_path);
-                        break;
-                    }
-                }
-
-                error!("Could not find a directory with sufficient space to store the migrate kernel, initramfs and dtb file. Required space is {}",
-                       format_size_with_unit(boot_req_space));
-                return Ok(false);
+                self.bootmgr_path = bootmgr_path.clone();
+                self.boot_path = bootmgr_path;
+                return Ok(true);
             }
-        } else {
-            self.bootmgr_path = Some(bootmgr_path);
-            // TODO: why is self.boot_path set above but not here ?
+
+            warn!(
+                "Can't_migrate with {} : checking space elsewhere",
+                path.path.display()
+            );
         }
 
-        Ok(true)
+        bootmgr_path = PathInfo::from_path(BOOT_PATH, &lsblk_info)?;
+        if let Some(path) = &bootmgr_path {
+            if self.check_bootmgr_path(path, mig_info)? {
+                info!(
+                    "Using boot '{}', mountpoint: '{}', fs type: {}",
+                    path.device_info.device.display(),
+                    path.mountpoint.display(),
+                    path.device_info.fs_type,
+                );
+
+                self.bootmgr_path = bootmgr_path.clone();
+                self.boot_path = bootmgr_path;
+                return Ok(true);
+            }
+
+            warn!(
+                "Can't_migrate with {} : checking space elsewhere",
+                path.path.display()
+            );
+        }
+
+        bootmgr_path = PathInfo::from_path(ROOT_PATH, &lsblk_info)?;
+        if let Some(path) = &bootmgr_path {
+            if self.check_bootmgr_path(path, mig_info)? {
+                info!(
+                    "Using boot '{}', mountpoint: '{}', fs type: {}",
+                    path.device_info.device.display(),
+                    path.mountpoint.display(),
+                    path.device_info.fs_type,
+                );
+
+                self.bootmgr_path = bootmgr_path.clone();
+                self.boot_path = bootmgr_path;
+                return Ok(true);
+            }
+        }
+
+        error!("Could not find a directory with sufficient space to store the migrate kernel, initramfs and dtb file.");
+        Ok(false)
     }
 
     fn setup(
