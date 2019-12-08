@@ -123,7 +123,7 @@ pub(crate) fn is_bb(
     }
 }
 
-pub(crate) struct BeagleboneBlack {
+pub(crate) struct BeagleboneGreen {
     boot_manager: Box<dyn BootManager>,
 }
 
@@ -138,8 +138,14 @@ impl BeagleboneGreen {
 
         expect_type(&mig_info.kernel_file.path, &FileType::KernelARMHF)?;
 
+        let mmc_index = if let Some(mmc_index) = config.migrate.get_mmc_index() {
+            *mmc_index
+        } else {
+            1 // default to 1 internal emmc
+        };
+
         if let Some(_idx) = SUPPORTED_OSSES.iter().position(|&r| r == os_name) {
-            let mut boot_manager = UBootManager::new();
+            let mut boot_manager = UBootManager::new(mmc_index);
 
             // TODO: determine boot device
             // use config.migrate.flash_device
@@ -215,7 +221,7 @@ impl Device for BeagleboneGreen {
     }
 }
 
-pub(crate) struct BeagleboneGreen {
+pub(crate) struct BeagleboneBlack {
     boot_manager: Box<dyn BootManager>,
 }
 
@@ -230,8 +236,14 @@ impl BeagleboneBlack {
 
         expect_type(&mig_info.kernel_file.path, &FileType::KernelARMHF)?;
 
+        let mmc_index = if let Some(mmc_index) = config.migrate.get_mmc_index() {
+            *mmc_index
+        } else {
+            1 // default to 1 internal emmc
+        };
+
         if let Some(_idx) = SUPPORTED_OSSES.iter().position(|&r| r == os_name) {
-            let mut boot_manager = UBootManager::new();
+            let mut boot_manager = UBootManager::new(mmc_index);
 
             if boot_manager.can_migrate(mig_info, config, s2_cfg)? {
                 Ok(BeagleboneBlack {
@@ -316,10 +328,17 @@ impl BeagleboardXM {
         s2_cfg: &mut Stage2ConfigBuilder,
     ) -> Result<BeagleboardXM, MigError> {
         let os_name = &mig_info.os_name;
+
         expect_type(&mig_info.kernel_file.path, &FileType::KernelARMHF)?;
 
+        let mmc_index = if let Some(mmc_index) = config.migrate.get_mmc_index() {
+            *mmc_index
+        } else {
+            0 // default to 0 SD card - no emmc present on XM
+        };
+
         if let Some(_idx) = SUPPORTED_OSSES.iter().position(|&r| r == os_name) {
-            let mut boot_manager = UBootManager::new();
+            let mut boot_manager = UBootManager::new(mmc_index);
 
             /*
                         if let None = config.balena.get_uboot_env() {

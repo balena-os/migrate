@@ -107,6 +107,7 @@ pub(crate) struct MigrateConfig {
     delay: Option<u64>,
     kernel_opts: Option<String>,
     force_flash_device: Option<PathBuf>,
+    mmc_index: Option<u8>,
 }
 
 impl<'a> MigrateConfig {
@@ -132,10 +133,18 @@ impl<'a> MigrateConfig {
             delay: None,
             kernel_opts: None,
             force_flash_device: None,
+            mmc_index: None,
         }
     }
 
     pub fn check(&self) -> Result<(), MigError> {
+        if let Some(mmc_index) = self.mmc_index {
+            if mmc_index != 0 && mmc_index != 1 {
+                error!("mmc_index must be 0, 1, or undefined, found {}", mmc_index);
+                return Err(MigError::displayed());
+            }
+        }
+
         match self.get_mig_mode() {
             //MigMode::Agent => Err(MigError::from(MigErrorKind::NotImpl)),
             _ => {
@@ -215,6 +224,10 @@ impl<'a> MigrateConfig {
         } else {
             0
         }
+    }
+
+    pub fn get_mmc_index(&'a self) -> &'a Option<u8> {
+        &self.mmc_index
     }
 
     pub fn get_watchdogs(&'a self) -> Option<&'a Vec<WatchdogCfg>> {

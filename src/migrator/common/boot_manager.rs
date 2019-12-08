@@ -30,5 +30,4 @@ pub(crate) trait BootManager {
     fn restore(&self, mounts: &Mounts, config: &Stage2Config) -> bool;
     // TODO: make return reference
     fn get_bootmgr_path(&self) -> PathInfo;
-    fn get_boot_path(&self) -> PathInfo;
 }

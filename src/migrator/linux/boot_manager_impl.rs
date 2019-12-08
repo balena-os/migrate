@@ -19,7 +19,7 @@ pub(crate) use raspi_boot_manager::RaspiBootManager;
 
 pub(crate) fn from_boot_type(boot_type: &BootType) -> Box<dyn BootManager> {
     match boot_type {
-        BootType::UBoot => Box::new(UBootManager::new()),
+        BootType::UBoot => Box::new(UBootManager::new(1)),
         BootType::Grub => Box::new(GrubBootManager::new()),
         BootType::Efi => Box::new(EfiBootManager::new(false)),
         BootType::MSWEfi => Box::new(EfiBootManager::new(true)),
@@ -47,9 +47,6 @@ impl BootManager for EfiBootManager {
         BootType::Efi
     }
     fn get_bootmgr_path(&self) -> PathInfo {
-        unimplemented!()
-    }
-    fn get_boot_path(&self) -> PathInfo {
         unimplemented!()
     }
 

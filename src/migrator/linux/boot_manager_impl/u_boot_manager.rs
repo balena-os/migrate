@@ -6,7 +6,7 @@ use nix::mount::{mount, umount, MsFlags};
 use regex::Regex;
 use std::fs::{remove_file, File};
 use std::io::Write;
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 
 use crate::common::file_digest::check_digest;
 use crate::linux::lsblk_info::LsblkInfo;
@@ -33,7 +33,7 @@ use crate::{
 
 // TODO: this might be a bit of a tight fit, allow (s|h)d([a-z])(\d+) too ?
 const UBOOT_DRIVE_FILTER_REGEX: &str = r#"^mmcblk\d+$"#;
-const UBOOT_DRIVE_REGEX: &str = r#"^/dev/mmcblk(\d+)p(\d+)$"#;
+const UBOOT_DRIVE_REGEX: &str = r#"^/dev/mmcblk\d+p(\d+)$"#;
 
 const UENV_TXT: &str = r###"
 loadaddr=0x82000000
@@ -56,46 +56,68 @@ uenvcmd=run loadall; run mmcargs; echo debug: [${bootargs}] ... ; echo debug: [b
 "###;
 
 pub(crate) struct UBootManager {
-    // location of MLO / u-boot.img files, this is where we put our uEnv.txt and our kernel / initrd / dtb
-    // if sufficient space is available
+    // location of MLO / u-boot.img files, this is where we would like to put our uEnv.txt and
+    // our kernel / initrd / dtb if sufficient space is available
     bootmgr_path: Option<PathInfo>,
-    // this is an alt location for our kernel / initrd / dtb if bootmgr is too small
-    boot_path: Option<PathInfo>,
+    // this is where we are putting our uEnv.txt and our kernel / initrd / dtb if sufficient space
+    // is NOT available above or UBOOT files where not found
+    bootmgr_alt_path: Option<PathInfo>,
+    // mmc device selector , typically 0 for SD card, 1 for emmc, set by device
+    mmc_index: u8,
 }
 
 impl UBootManager {
-    pub fn new() -> UBootManager {
+    pub fn new(mmc_index: u8) -> UBootManager {
         UBootManager {
             bootmgr_path: None,
-            boot_path: None,
+            bootmgr_alt_path: None,
+            mmc_index,
         }
     }
 
-    // Try to find a drive containing MLO, uEnv.txt or u-boot.bin, mount it if necessarry and return PathInfo if found
+    // find the UBOOT files on the given path or in a boot subdirectory
+    fn find_uboot_files<P: AsRef<Path>>(base_path: P) -> Option<PathBuf> {
+        const UBOOT_FILES: [&str; 3] = [MLO_FILE_NAME, UBOOT_FILE_NAME, UENV_FILE_NAME];
+        let mut path_found: Option<PathBuf> = None;
+        if let Some(_) = UBOOT_FILES.iter().find(|file| {
+            let search_path = path_append(&base_path, BOOT_PATH);
+            if file_exists(path_append(&search_path, file)) {
+                path_found = Some(search_path);
+                true
+            } else {
+                // TODO: not sure about uEnv.txt in /
 
-    /*
-    Find boot manager partition - the partition where we will place our uEnv.txt
+                if file_exists(path_append(&base_path, file)) {
+                    path_found = Some(PathBuf::from(base_path.as_ref()));
+                    true
+                } else {
+                    false
+                }
+            }
+        }) {
+            path_found
+        } else {
+            None
+        }
+    }
 
-    In U-boot boot manager drive will contain  MLO & u-boot.img and possibly uEnv.txt in the root.
-    That said MLO & u-boot.img might reside in a special partition or in the MBR and uEnv.txt is
-    not mandatory. So neither of them ight be found.
-    So current strategy is:
-        a) Look for MLO & u-boot.img on all relevant drives. Return that drive if found
-           Look only on likely device types:
-            /dev/mmcblk[0-9]+p[0-9]+ (avoiding mmcblk[0-9]+boot0 mmcblk[0-9]+boot1 mmcblk[0-9]+rpmb)
-            /dev/sd[a-z,A-Z][0-9]+
+    // Try to find a drive containing MLO, uEnv.txt or u-boot.bin, mount it if necessary
+    // and return PathInfo if found
 
-            mmcblk[0-9]+boot0 mmcblk[0-9]+boot1 mmcblk[0-9]+rpmb indicates bootmanager devices on
-            beaglebones.
+    // Find boot manager partition - the partition where we will place our uEnv.txt
+    // In U-boot boot manager drive will contain  MLO & u-boot.img and possibly uEnv.txt in the root.
+    // That said MLO & u-boot.img might reside in a special partition or in the MBR and uEnv.txt is
+    // not mandatory. So neither of them ight be found.
+    // So current strategy is:
+    //    a) Look for MLO & u-boot.img on all relevant drives. Return that drive if found
+    //       Look only on likely device types:
+    //        /dev/mmcblk[0-9]+p[0-9]+ (avoiding mmcblk[0-9]+boot0 mmcblk[0-9]+boot1 mmcblk[0-9]+rpmb)
+    //        /dev/sd[a-z,A-Z][0-9]+
+    //        mmcblk[0-9]+boot0 mmcblk[0-9]+boot1 mmcblk[0-9]+rpmb indicates bootmanager devices on
+    //        beaglebones.
+    //    b) Use the drive with the /root partition
 
-        b) Use the drive with the /root partition
-
-
-    */
-
-    // TODO: make sure bootmgr_path is set or fail
     fn find_bootmgr_path(
-        &self,
         mig_info: &MigrateInfo,
         lsblk_info: &LsblkInfo,
     ) -> Result<Option<PathInfo>, MigError> {
@@ -104,18 +126,10 @@ impl UBootManager {
             static ref BOOT_DRIVE_RE: Regex = Regex::new(UBOOT_DRIVE_FILTER_REGEX).unwrap();
         }
 
-        // try our luck with /root, /boot
-
-        if file_exists(path_append(ROOT_PATH, MLO_FILE_NAME))
-            || file_exists(path_append(ROOT_PATH, UBOOT_FILE_NAME))
-        {
-            return Ok(Some(PathInfo::from_path(ROOT_PATH, lsblk_info)?.unwrap()));
-        }
-
-        if file_exists(path_append(BOOT_PATH, MLO_FILE_NAME))
-            || file_exists(path_append(BOOT_PATH, UBOOT_FILE_NAME))
-        {
-            return Ok(Some(PathInfo::from_path(BOOT_PATH, lsblk_info)?.unwrap()));
+        if let Some(bootmgr_path) = UBootManager::find_uboot_files(ROOT_PATH) {
+            return Ok(Some(
+                PathInfo::from_path(bootmgr_path, lsblk_info)?.unwrap(),
+            ));
         }
 
         let mut tmp_mountpoint: Option<PathBuf> = None;
@@ -214,11 +228,10 @@ impl UBootManager {
                         mountpoint.display()
                     );
 
-                    if file_exists(path_append(mountpoint, MLO_FILE_NAME))
-                        || file_exists(path_append(mountpoint, UBOOT_FILE_NAME))
-                    {
+                    if let Some(found_path) = UBootManager::find_uboot_files(mountpoint) {
+                        // leave mounted
                         return Ok(Some(PathInfo::from_mounted(
-                            mountpoint, mountpoint, blk_device, &partition,
+                            found_path, mountpoint, blk_device, &partition,
                         )?));
                     } else if mounted {
                         debug!(
@@ -239,11 +252,15 @@ impl UBootManager {
         Ok(None)
     }
 
+    // check the potential bootmgr path for space
     fn check_bootmgr_path(
-        &self,
         bootmgr_path: &PathInfo,
         mig_info: &MigrateInfo,
     ) -> Result<bool, MigError> {
+        debug!(
+            "check_bootmgr_path: called with path: {}",
+            bootmgr_path.path.display()
+        );
         let mut boot_req_space: u64 = 8 * 1024; // one 8KiB extra space just in case and for uEnv.txt)
         boot_req_space += if !file_exists(path_append(&bootmgr_path.path, MIG_KERNEL_NAME)) {
             mig_info.kernel_file.size
@@ -269,7 +286,11 @@ impl UBootManager {
             return Err(MigError::displayed());
         }
 
-        Ok(boot_req_space > bootmgr_path.fs_free)
+        debug!(
+            "check_bootmgr_path: required: {}, available: {}",
+            boot_req_space, bootmgr_path.fs_free
+        );
+        Ok(boot_req_space < bootmgr_path.fs_free)
     }
 }
 
@@ -280,14 +301,6 @@ impl<'a> BootManager for UBootManager {
 
     fn get_bootmgr_path(&self) -> PathInfo {
         self.bootmgr_path.as_ref().unwrap().clone()
-    }
-
-    fn get_boot_path(&self) -> PathInfo {
-        if let Some(ref boot_path) = self.boot_path {
-            boot_path.clone()
-        } else {
-            self.bootmgr_path.as_ref().unwrap().clone()
-        }
     }
 
     fn can_migrate(
@@ -303,61 +316,68 @@ impl<'a> BootManager for UBootManager {
         // this is where uEnv.txt has to go
 
         let lsblk_info = LsblkInfo::all()?;
-        let mut bootmgr_path = self.find_bootmgr_path(mig_info, &lsblk_info)?;
+        if let Some(path) = UBootManager::find_bootmgr_path(mig_info, &lsblk_info)? {
+            info!(
+                "Found uboot boot manager files in '{}', device: '{}', mountpoint: '{}', fs type: {}",
+                path.path.display(),
+                path.device_info.device.display(),
+                path.mountpoint.display(),
+                path.device_info.fs_type,
+            );
 
-        if let Some(path) = &bootmgr_path {
-            if self.check_bootmgr_path(path, mig_info)? {
+            if UBootManager::check_bootmgr_path(&path, mig_info)? {
                 info!(
-                    "Using boot manager '{}', mountpoint: '{}', fs type: {}",
+                    "Using boot manager path '{}', device: '{}', mountpoint: '{}', fs type: {}",
+                    path.path.display(),
                     path.device_info.device.display(),
                     path.mountpoint.display(),
                     path.device_info.fs_type,
                 );
 
-                self.bootmgr_path = bootmgr_path.clone();
-                self.boot_path = bootmgr_path;
+                self.bootmgr_path = Some(path);
+                return Ok(true);
+            } else {
+                warn!(
+                    "Can't_migrate with boot manager path {} : checking for space elsewhere",
+                    path.path.display()
+                );
+                // save this anyway, gotta figure out in setup
+                self.bootmgr_path = Some(path);
+            }
+        }
+
+        // no uboot files found or not enough space there, try (again) in / or /boot
+        if let Some(path) = PathInfo::from_path(BOOT_PATH, &lsblk_info)? {
+            if UBootManager::check_bootmgr_path(&path, mig_info)? {
+                info!(
+                    "Using boot manager path '{}', device: '{}', mountpoint: '{}', fs type: {}",
+                    path.path.display(),
+                    path.device_info.device.display(),
+                    path.mountpoint.display(),
+                    path.device_info.fs_type,
+                );
+
+                self.bootmgr_alt_path = Some(path);
                 return Ok(true);
             }
 
             warn!(
-                "Can't_migrate with {} : checking space elsewhere",
+                "Can't_migrate with boot manager path {} : checking space elsewhere",
                 path.path.display()
             );
         }
 
-        bootmgr_path = PathInfo::from_path(BOOT_PATH, &lsblk_info)?;
-        if let Some(path) = &bootmgr_path {
-            if self.check_bootmgr_path(path, mig_info)? {
+        if let Some(path) = PathInfo::from_path(ROOT_PATH, &lsblk_info)? {
+            if UBootManager::check_bootmgr_path(&path, mig_info)? {
                 info!(
-                    "Using boot '{}', mountpoint: '{}', fs type: {}",
+                    "Using boot manager path '{}', device: '{}, mountpoint: '{}', fs type: {}",
+                    path.path.display(),
                     path.device_info.device.display(),
                     path.mountpoint.display(),
                     path.device_info.fs_type,
                 );
 
-                self.bootmgr_path = bootmgr_path.clone();
-                self.boot_path = bootmgr_path;
-                return Ok(true);
-            }
-
-            warn!(
-                "Can't_migrate with {} : checking space elsewhere",
-                path.path.display()
-            );
-        }
-
-        bootmgr_path = PathInfo::from_path(ROOT_PATH, &lsblk_info)?;
-        if let Some(path) = &bootmgr_path {
-            if self.check_bootmgr_path(path, mig_info)? {
-                info!(
-                    "Using boot '{}', mountpoint: '{}', fs type: {}",
-                    path.device_info.device.display(),
-                    path.mountpoint.display(),
-                    path.device_info.fs_type,
-                );
-
-                self.bootmgr_path = bootmgr_path.clone();
-                self.boot_path = bootmgr_path;
+                self.bootmgr_alt_path = Some(path);
                 return Ok(true);
             }
         }
@@ -372,32 +392,54 @@ impl<'a> BootManager for UBootManager {
         s2_cfg: &mut Stage2ConfigBuilder,
         kernel_opts: &str,
     ) -> Result<(), MigError> {
-        // **********************************************************************
-        // ** read drive number & partition number from boot device
-        let bootmgr_path = self.bootmgr_path.as_ref().unwrap();
-        let boot_path = if let Some(ref boot_path) = self.boot_path {
+        if self.bootmgr_path.is_none() && self.bootmgr_alt_path.is_none() {
+            error!("setup: no boot manager path was set.");
+            return Err(MigError::displayed());
+        }
+
+        // this is where the UBOOT files have been found, the preferred location for uEnv.txt
+        let bootmgr_path = if let Some(ref bootmgr_path) = self.bootmgr_path {
+            bootmgr_path
+        } else {
+            self.bootmgr_alt_path.as_ref().unwrap()
+        };
+
+        // this is where we put the kernel and initramfs. Might differ from bootmgr_path if there
+        // was not enough disk space in that location. uEnv.txt will point to this location
+        // if no UBOOT files were found uEnv.txt goes here too
+        let boot_path = if let Some(ref boot_path) = self.bootmgr_alt_path {
             // TODO: save to s2_cfg - only really needed if we want to delete it
             boot_path
         } else {
             bootmgr_path
         };
 
-        let drive_num = {
+        // TODO: allow devices other than mmcblk
+        // **********************************************************************
+        // read drive number & partition number from kernel / initramfs location
+        // in uboot drive numbers do not appear to be consistent with what we see here
+        // sd-card appears to be always mmc 0 and internal emmc appears to always be mmc 1
+        // so depending on if we want to migrate an SD card or the emmc we need to select 0 or1
+        // TODO: distinguish what we are booting from SD-card or emmc
+        // current workaround:
+        // a) make it configurable, else
+        // b) let device decide -
+        //     - beagleboardXM - no emmc use mmc 0
+        //     - beaglebone-green - has emc - use mmc 1 by default
+
+        let part_num = {
             let dev_name = &boot_path.device_info.device;
 
             if let Some(captures) = Regex::new(UBOOT_DRIVE_REGEX)
                 .unwrap()
                 .captures(&dev_name.to_string_lossy())
             {
-                (
-                    String::from(captures.get(1).unwrap().as_str()),
-                    String::from(captures.get(2).unwrap().as_str()),
-                )
+                String::from(captures.get(1).unwrap().as_str())
             } else {
                 return Err(MigError::from_remark(
                     MigErrorKind::InvParam,
                     &format!(
-                        "failed to parse drive & partition numbers from boot device name '{}'",
+                        "failed to parse partition numbers from boot device name '{}'",
                         dev_name.display()
                     ),
                 ));
@@ -406,7 +448,6 @@ impl<'a> BootManager for UBootManager {
 
         // **********************************************************************
         // ** copy new kernel & iniramfs
-
         let kernel_path = path_append(&boot_path.path, MIG_KERNEL_NAME);
         std::fs::copy(&mig_info.kernel_file.path, &kernel_path).context(MigErrCtx::from_remark(
             MigErrorKind::Upstream,
@@ -534,60 +575,39 @@ impl<'a> BootManager for UBootManager {
         // ** create new /uEnv.txt
 
         // convert kernel / initrd / dtb paths to mountpoint relative paths for uEnv.txt
-        let (kernel_path, initrd_path, dtb_path) =
-            if boot_path.mountpoint != PathBuf::from(ROOT_PATH) {
-                (
-                    path_append(
-                        ROOT_PATH,
-                        kernel_path.strip_prefix(&boot_path.mountpoint).context(
-                            MigErrCtx::from_remark(
-                                MigErrorKind::Upstream,
-                                &format!(
-                                    "cannot remove prefix '{}' from '{}'",
-                                    kernel_path.display(),
-                                    boot_path.mountpoint.display()
-                                ),
-                            ),
-                        )?,
-                    ),
-                    path_append(
-                        ROOT_PATH,
-                        initrd_path.strip_prefix(&boot_path.mountpoint).context(
-                            MigErrCtx::from_remark(
-                                MigErrorKind::Upstream,
-                                &format!(
-                                    "cannot remove prefix '{}' from '{}'",
-                                    initrd_path.display(),
-                                    boot_path.mountpoint.display()
-                                ),
-                            ),
-                        )?,
-                    ),
-                    path_append(
-                        ROOT_PATH,
-                        dtb_path.strip_prefix(&boot_path.mountpoint).context(
-                            MigErrCtx::from_remark(
-                                MigErrorKind::Upstream,
-                                &format!(
-                                    "cannot remove prefix '{}' from '{}'",
-                                    dtb_path.display(),
-                                    boot_path.mountpoint.display()
-                                ),
-                            ),
-                        )?,
-                    ),
-                )
+        let mut paths: Vec<PathBuf> = Vec::new();
+        if ![kernel_path, initrd_path, dtb_path].iter().all(|path| {
+            if boot_path.mountpoint == PathBuf::from(ROOT_PATH) {
+                paths.push(path.clone());
+                true
             } else {
-                (kernel_path, initrd_path, dtb_path)
-            };
+                match path.strip_prefix(&boot_path.mountpoint) {
+                    Ok(path) => {
+                        paths.push(path_append(ROOT_PATH, path));
+                        true
+                    }
+                    Err(why) => {
+                        error!(
+                            "cannot remove prefix '{}' from '{}', error: {:?}",
+                            path.display(),
+                            boot_path.mountpoint.display(),
+                            why
+                        );
+                        false
+                    }
+                }
+            }
+        }) {
+            return Err(MigError::displayed());
+        }
 
         let mut uenv_text = String::from(BALENA_FILE_TAG);
         uenv_text.push_str(UENV_TXT);
-        uenv_text = uenv_text.replace("__KERNEL_PATH__", &kernel_path.to_string_lossy());
-        uenv_text = uenv_text.replace("__INITRD_PATH__", &initrd_path.to_string_lossy());
-        uenv_text = uenv_text.replace("__DTB_PATH__", &dtb_path.to_string_lossy());
-        uenv_text = uenv_text.replace("__DRIVE__", &drive_num.0);
-        uenv_text = uenv_text.replace("__PARTITION__", &drive_num.1);
+        uenv_text = uenv_text.replace("__DTB_PATH__", &paths.pop().unwrap().to_string_lossy());
+        uenv_text = uenv_text.replace("__INITRD_PATH__", &paths.pop().unwrap().to_string_lossy());
+        uenv_text = uenv_text.replace("__KERNEL_PATH__", &paths.pop().unwrap().to_string_lossy());
+        uenv_text = uenv_text.replace("__DRIVE__", &self.mmc_index.to_string());
+        uenv_text = uenv_text.replace("__PARTITION__", &part_num);
         uenv_text = uenv_text.replace("__ROOT_DEV__", &bootmgr_path.device_info.get_kernel_cmd());
         uenv_text = uenv_text.replace("__ROOT_FSTYPE__", &bootmgr_path.device_info.fs_type);
         uenv_text = uenv_text.replace("__MISC_OPTS__", kernel_opts);

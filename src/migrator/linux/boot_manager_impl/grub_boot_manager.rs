@@ -115,9 +115,6 @@ impl<'a> BootManager for GrubBootManager {
         self.bootmgr_path.as_ref().unwrap().clone()
     }
     // TODO: do we need to distiguish like in u-boot ?
-    fn get_boot_path(&self) -> PathInfo {
-        self.bootmgr_path.as_ref().unwrap().clone()
-    }
 
     fn can_migrate(
         &mut self,
