@@ -20,7 +20,7 @@ pub(crate) trait Device {
     fn get_boot_device(&self) -> PathInfo;
 
     fn setup(
-        &self,
+        &mut self,
         dev_info: &mut MigrateInfo,
         config: &Config,
         s2_cfg: &mut Stage2ConfigBuilder,

@@ -18,7 +18,7 @@ const DEVICE_TREE_MODEL: &str = "/proc/device-tree/model";
 
 pub(crate) fn from_config(
     device_type: &DeviceType,
-    boot_type: &BootType,
+    boot_type: BootType,
 ) -> Result<Box<dyn Device>, MigError> {
     match device_type {
         DeviceType::BeagleboneGreen => Ok(Box::new(beaglebone::BeagleboneGreen::from_boot_type(

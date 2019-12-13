@@ -80,6 +80,16 @@ impl DeviceInfo {
         })
     }
 
+    pub fn get_uboot_kernel_cmd(&self) -> String {
+        if let Some(ref uuid) = self.part_uuid {
+            format!("uuid={}", uuid)
+        } else if let Some(ref partuuid) = self.part_uuid {
+            format!("partuuid={}", partuuid)
+        } else {
+            String::from(self.device.to_string_lossy())
+        }
+    }
+
     pub fn get_kernel_cmd(&self) -> String {
         if let Some(ref partuuid) = self.part_uuid {
             format!("PARTUUID={}", partuuid)

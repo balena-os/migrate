@@ -1,9 +1,10 @@
-use log::{debug, error, trace};
+use log::{debug, error, info, trace};
 use regex::Regex;
 
 use crate::{
     common::{
         boot_manager::BootManager,
+        config::migrate_config::UEnvStrategy,
         migrate_info::MigrateInfo,
         path_info::PathInfo,
         stage2_config::{Stage2Config, Stage2ConfigBuilder},
@@ -11,9 +12,10 @@ use crate::{
     },
     defs::{BootType, DeviceType, FileType},
     linux::{
-        boot_manager_impl::{from_boot_type, UBootManager},
+        boot_manager_impl::{from_boot_type, u_boot_manager::UBootManager},
         device_impl::Device,
         linux_common::expect_type,
+        linux_defs::DEFAULT_UNAME_STR,
         stage2::mounts::Mounts,
     },
 };
@@ -43,7 +45,7 @@ const BBB_KOPTS: &str = "";
 
 // Supported models
 // TI OMAP3 BeagleBoard xM
-const BB_MODEL_REGEX: &str = r#"^((\S+\s+)*\S+)\s+Beagle(Bone|Board)\s+(\S+)$"#;
+const BB_MODEL_REGEX: &str = r#"^((\S+\s+)*(\S+))\s+Beagle(Bone|Board)\s+(\S+)$"#;
 
 // TODO: check location of uEnv.txt or other files files to improve reliability
 
@@ -81,33 +83,49 @@ pub(crate) fn is_bb(
         // TODO: found this device model string on a beaglebone-green running debian wheezy
         debug!("match found for BeagleboneGreen");
         Ok(Some(Box::new(BeagleboneGreen::from_config(
-            mig_info, config, s2_cfg,
+            mig_info,
+            config,
+            s2_cfg,
+            String::from("am335x"),
         )?)))
     } else {
         if let Some(captures) = Regex::new(BB_MODEL_REGEX).unwrap().captures(model_string) {
             let model = captures
-                .get(4)
+                .get(5)
                 .unwrap()
                 .as_str()
                 .trim_matches(char::from(0));
 
+            let chip_name = captures.get(3).unwrap().as_str().to_lowercase();
+
             match model {
                 "xM" => {
                     debug!("match found for BeagleboardXM");
+                    // TODO: dtb-name is a guess replace with real one
                     Ok(Some(Box::new(BeagleboardXM::from_config(
-                        mig_info, config, s2_cfg,
+                        mig_info,
+                        config,
+                        s2_cfg,
+                        format!("{}-boardxm.dtb", chip_name),
                     )?)))
                 }
                 "Green" => {
                     debug!("match found for BeagleboneGreen");
                     Ok(Some(Box::new(BeagleboneGreen::from_config(
-                        mig_info, config, s2_cfg,
+                        mig_info,
+                        config,
+                        s2_cfg,
+                        format!("{}-boardgreen.dtb", chip_name),
                     )?)))
                 }
                 "Black" => {
                     debug!("match found for BeagleboneBlack");
+                    // TODO: dtb-name is a guess replace with real one
                     Ok(Some(Box::new(BeagleboneBlack::from_config(
-                        mig_info, config, s2_cfg,
+                        mig_info,
+                        config,
+                        s2_cfg,
+                        format!("{}-boardblack.dtb", chip_name),
                     )?)))
                 }
                 _ => {
@@ -123,6 +141,29 @@ pub(crate) fn is_bb(
     }
 }
 
+fn get_uboot_cfg(config: &Config, dev_type: &DeviceType) -> (u8, UEnvStrategy) {
+    if let Some(uboot_cfg) = config.migrate.get_uboot_cfg() {
+        let mmc_index = if let Some(mmc_index) = uboot_cfg.mmc_index {
+            mmc_index
+        } else {
+            match dev_type {
+                DeviceType::BeagleboneGreen => 1,
+                DeviceType::BeagleboneBlack => 1,
+                DeviceType::BeagleboardXM => 0,
+                _ => 0,
+            }
+        };
+        let strategy = if let Some(ref strategy) = uboot_cfg.strategy {
+            strategy.clone()
+        } else {
+            UEnvStrategy::UName(String::from(DEFAULT_UNAME_STR))
+        };
+        (mmc_index, strategy)
+    } else {
+        (1, UEnvStrategy::UName(String::from(DEFAULT_UNAME_STR)))
+    }
+}
+
 pub(crate) struct BeagleboneGreen {
     boot_manager: Box<dyn BootManager>,
 }
@@ -133,19 +174,24 @@ impl BeagleboneGreen {
         mig_info: &MigrateInfo,
         config: &Config,
         s2_cfg: &mut Stage2ConfigBuilder,
+        chip_name: String,
     ) -> Result<BeagleboneGreen, MigError> {
         let os_name = &mig_info.os_name;
 
         expect_type(&mig_info.kernel_file.path, &FileType::KernelARMHF)?;
 
-        let mmc_index = if let Some(mmc_index) = config.migrate.get_mmc_index() {
-            *mmc_index
-        } else {
-            1 // default to 1 internal emmc
-        };
-
         if let Some(_idx) = SUPPORTED_OSSES.iter().position(|&r| r == os_name) {
-            let mut boot_manager = UBootManager::new(mmc_index);
+            // TODO: make this configurable
+
+            let (mmc_index, strategy) = get_uboot_cfg(config, &DeviceType::BeagleboneGreen);
+
+            info!(
+                "Using uboot device index: {}, strategy is {:?}",
+                mmc_index, strategy
+            );
+
+            let mut boot_manager =
+                UBootManager::new(mmc_index, strategy, format!("{}-bonegreen.dtb", chip_name));
 
             // TODO: determine boot device
             // use config.migrate.flash_device
@@ -174,7 +220,7 @@ impl BeagleboneGreen {
     }
 
     // this is used in stage2
-    pub fn from_boot_type(boot_type: &BootType) -> BeagleboneGreen {
+    pub fn from_boot_type(boot_type: BootType) -> BeagleboneGreen {
         BeagleboneGreen {
             boot_manager: from_boot_type(boot_type),
         }
@@ -195,7 +241,7 @@ impl Device for BeagleboneGreen {
     }
 
     fn setup(
-        &self,
+        &mut self,
         mig_info: &mut MigrateInfo,
         config: &Config,
         s2_cfg: &mut Stage2ConfigBuilder,
@@ -231,19 +277,15 @@ impl BeagleboneBlack {
         mig_info: &MigrateInfo,
         config: &Config,
         s2_cfg: &mut Stage2ConfigBuilder,
+        dtb_name: String,
     ) -> Result<BeagleboneBlack, MigError> {
         let os_name = &mig_info.os_name;
 
         expect_type(&mig_info.kernel_file.path, &FileType::KernelARMHF)?;
 
-        let mmc_index = if let Some(mmc_index) = config.migrate.get_mmc_index() {
-            *mmc_index
-        } else {
-            1 // default to 1 internal emmc
-        };
-
         if let Some(_idx) = SUPPORTED_OSSES.iter().position(|&r| r == os_name) {
-            let mut boot_manager = UBootManager::new(mmc_index);
+            let (mmc_index, strategy) = get_uboot_cfg(config, &DeviceType::BeagleboneBlack);
+            let mut boot_manager = UBootManager::new(mmc_index, strategy, dtb_name);
 
             if boot_manager.can_migrate(mig_info, config, s2_cfg)? {
                 Ok(BeagleboneBlack {
@@ -268,7 +310,7 @@ impl BeagleboneBlack {
     }
 
     // this is used in stage2
-    pub fn from_boot_type(boot_type: &BootType) -> BeagleboneBlack {
+    pub fn from_boot_type(boot_type: BootType) -> BeagleboneBlack {
         BeagleboneBlack {
             boot_manager: from_boot_type(boot_type),
         }
@@ -289,7 +331,7 @@ impl Device for BeagleboneBlack {
     }
 
     fn setup(
-        &self,
+        &mut self,
         mig_info: &mut MigrateInfo,
         config: &Config,
         s2_cfg: &mut Stage2ConfigBuilder,
@@ -326,27 +368,16 @@ impl BeagleboardXM {
         mig_info: &MigrateInfo,
         config: &Config,
         s2_cfg: &mut Stage2ConfigBuilder,
+        dtb_name: String,
     ) -> Result<BeagleboardXM, MigError> {
         let os_name = &mig_info.os_name;
 
         expect_type(&mig_info.kernel_file.path, &FileType::KernelARMHF)?;
 
-        let mmc_index = if let Some(mmc_index) = config.migrate.get_mmc_index() {
-            *mmc_index
-        } else {
-            0 // default to 0 SD card - no emmc present on XM
-        };
-
         if let Some(_idx) = SUPPORTED_OSSES.iter().position(|&r| r == os_name) {
-            let mut boot_manager = UBootManager::new(mmc_index);
+            let (mmc_index, strategy) = get_uboot_cfg(config, &DeviceType::BeagleboardXM);
+            let mut boot_manager = UBootManager::new(mmc_index, strategy, dtb_name);
 
-            /*
-                        if let None = config.balena.get_uboot_env() {
-                            let msg = String::from("Device type beagleboard xM requires the u-boot env to be set up to migrate successfully");
-                            error!("{}", &msg);
-                            return Err(MigError::from_remark(MigErrorKind::InvState, &msg));
-                        }
-            */
             if boot_manager.can_migrate(mig_info, config, s2_cfg)? {
                 Ok(BeagleboardXM {
                     boot_manager: Box::new(boot_manager),
@@ -370,7 +401,7 @@ impl BeagleboardXM {
     }
 
     // this is used in stage2
-    pub fn from_boot_type(boot_type: &BootType) -> BeagleboardXM {
+    pub fn from_boot_type(boot_type: BootType) -> BeagleboardXM {
         BeagleboardXM {
             boot_manager: from_boot_type(boot_type),
         }
@@ -395,7 +426,7 @@ impl<'a> Device for BeagleboardXM {
     }
 
     fn setup(
-        &self,
+        &mut self,
         mig_info: &mut MigrateInfo,
         config: &Config,
         s2_cfg: &mut Stage2ConfigBuilder,

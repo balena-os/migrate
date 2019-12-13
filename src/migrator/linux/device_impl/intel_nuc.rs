@@ -87,7 +87,7 @@ impl IntelNuc {
         }
     }
 
-    pub fn from_boot_type(boot_type: &BootType) -> IntelNuc {
+    pub fn from_boot_type(boot_type: BootType) -> IntelNuc {
         IntelNuc {
             boot_manager: from_boot_type(boot_type),
         }
@@ -113,7 +113,7 @@ impl<'a> Device for IntelNuc {
     }
 
     fn setup(
-        &self,
+        &mut self,
         mig_info: &mut MigrateInfo,
         config: &Config,
         s2_cfg: &mut Stage2ConfigBuilder,

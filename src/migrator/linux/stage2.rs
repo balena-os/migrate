@@ -218,7 +218,7 @@ impl<'a> Stage2 {
         trace!("migrate: entered");
 
         let device_type = self.config.get_device_type();
-        let boot_type = self.config.get_boot_type();
+        let boot_type = self.config.get_boot_type().clone();
 
         // Recover device type and restore original boot configuration
 
@@ -267,7 +267,7 @@ impl<'a> Stage2 {
         // TODO: debug, remove this
         thread::sleep(Duration::from_secs(3));
 
-        info!("migrating {:?} boot type: {:?}", device_type, boot_type);
+        info!("migrating {:?} boot type: {:?}", device_type, &boot_type);
 
         let work_path = if let Some(work_path) = self.mounts.borrow().get_work_path() {
             work_path.to_path_buf()

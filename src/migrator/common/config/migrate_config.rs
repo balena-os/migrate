@@ -43,6 +43,20 @@ impl MigMode {
 
 const DEFAULT_MIG_MODE: MigMode = MigMode::Pretend;
 
+#[derive(Debug, PartialEq, Serialize, Deserialize, Clone)]
+pub(crate) enum UEnvStrategy {
+    #[serde(rename = "uname")]
+    UName(String),
+    #[serde(rename = "manual")]
+    Manual,
+}
+
+#[derive(Debug, Deserialize, Serialize, Clone)]
+pub(crate) struct UBootCfg {
+    pub strategy: Option<UEnvStrategy>,
+    pub mmc_index: Option<u8>,
+}
+
 #[derive(Debug, Deserialize, Serialize, Clone)]
 pub(crate) struct WatchdogCfg {
     pub path: PathBuf,
@@ -50,11 +64,13 @@ pub(crate) struct WatchdogCfg {
     pub close: Option<bool>,
 }
 
+/*
 #[derive(Debug, Deserialize, Clone)]
 pub(crate) struct UBootEnv {
     pub mlo: PathBuf,
     pub image: PathBuf,
 }
+*/
 
 #[derive(Debug, Deserialize)]
 pub(crate) struct ItemConfig {
@@ -107,7 +123,7 @@ pub(crate) struct MigrateConfig {
     delay: Option<u64>,
     kernel_opts: Option<String>,
     force_flash_device: Option<PathBuf>,
-    mmc_index: Option<u8>,
+    uboot: Option<UBootCfg>,
 }
 
 impl<'a> MigrateConfig {
@@ -133,15 +149,17 @@ impl<'a> MigrateConfig {
             delay: None,
             kernel_opts: None,
             force_flash_device: None,
-            mmc_index: None,
+            uboot: None,
         }
     }
 
     pub fn check(&self) -> Result<(), MigError> {
-        if let Some(mmc_index) = self.mmc_index {
-            if mmc_index != 0 && mmc_index != 1 {
-                error!("mmc_index must be 0, 1, or undefined, found {}", mmc_index);
-                return Err(MigError::displayed());
+        if let Some(ref uboot_cfg) = self.uboot {
+            if let Some(mmc_index) = uboot_cfg.mmc_index {
+                if mmc_index != 0 && mmc_index != 1 {
+                    error!("mmc_index must be 0, 1, or undefined, found {}", mmc_index);
+                    return Err(MigError::displayed());
+                }
             }
         }
 
@@ -226,8 +244,12 @@ impl<'a> MigrateConfig {
         }
     }
 
-    pub fn get_mmc_index(&'a self) -> &'a Option<u8> {
-        &self.mmc_index
+    pub fn get_uboot_cfg(&'a self) -> Option<&'a UBootCfg> {
+        if let Some(ref val) = self.uboot {
+            Some(val)
+        } else {
+            None
+        }
     }
 
     pub fn get_watchdogs(&'a self) -> Option<&'a Vec<WatchdogCfg>> {

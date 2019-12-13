@@ -100,14 +100,14 @@ impl RaspberryPi3 {
         }
     }
 
-    pub fn from_boot_type(boot_type: &BootType) -> RaspberryPi3 {
+    pub fn from_boot_type(boot_type: BootType) -> RaspberryPi3 {
         RaspberryPi3 {
             boot_manager: from_boot_type(boot_type),
         }
     }
 }
 
-impl<'a> Device for RaspberryPi3 {
+impl Device for RaspberryPi3 {
     fn get_device_slug(&self) -> &'static str {
         "raspberrypi3"
     }
@@ -121,7 +121,7 @@ impl<'a> Device for RaspberryPi3 {
     }
 
     fn setup(
-        &self,
+        &mut self,
         mig_info: &mut MigrateInfo,
         config: &Config,
         s2_cfg: &mut Stage2ConfigBuilder,
@@ -181,14 +181,14 @@ impl RaspberryPi4_64 {
         }
     }
 
-    pub fn from_boot_type(boot_type: &BootType) -> RaspberryPi4_64 {
+    pub fn from_boot_type(boot_type: BootType) -> RaspberryPi4_64 {
         RaspberryPi4_64 {
             boot_manager: from_boot_type(boot_type),
         }
     }
 }
 
-impl<'a> Device for RaspberryPi4_64 {
+impl Device for RaspberryPi4_64 {
     fn get_device_slug(&self) -> &'static str {
         "raspberrypi4-64"
     }
@@ -202,7 +202,7 @@ impl<'a> Device for RaspberryPi4_64 {
     }
 
     fn setup(
-        &self,
+        &mut self,
         mig_info: &mut MigrateInfo,
         config: &Config,
         s2_cfg: &mut Stage2ConfigBuilder,

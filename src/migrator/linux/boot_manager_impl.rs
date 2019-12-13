@@ -1,6 +1,7 @@
 use crate::{
     common::{
         boot_manager::BootManager,
+        config::migrate_config::UEnvStrategy,
         migrate_info::MigrateInfo,
         path_info::PathInfo,
         stage2_config::{Stage2Config, Stage2ConfigBuilder},
@@ -15,16 +16,21 @@ pub(crate) use u_boot_manager::UBootManager;
 pub(crate) mod grub_boot_manager;
 pub(crate) use grub_boot_manager::GrubBootManager;
 pub(crate) mod raspi_boot_manager;
+use crate::linux::linux_defs::DEFAULT_UNAME_STR;
 pub(crate) use raspi_boot_manager::RaspiBootManager;
 
-pub(crate) fn from_boot_type(boot_type: &BootType) -> Box<dyn BootManager> {
+pub(crate) fn from_boot_type(boot_type: BootType) -> Box<dyn BootManager> {
     match boot_type {
-        BootType::UBoot => Box::new(UBootManager::new(1)),
+        BootType::UBoot => Box::new(UBootManager::new(
+            1,
+            UEnvStrategy::UName(String::from(DEFAULT_UNAME_STR)),
+            String::from(""),
+        )),
         BootType::Grub => Box::new(GrubBootManager::new()),
         BootType::Efi => Box::new(EfiBootManager::new(false)),
         BootType::MSWEfi => Box::new(EfiBootManager::new(true)),
-        BootType::Raspi => Box::new(RaspiBootManager::new(boot_type).unwrap()),
-        BootType::Raspi64 => Box::new(RaspiBootManager::new(boot_type).unwrap()),
+        BootType::Raspi => Box::new(RaspiBootManager::new(&boot_type).unwrap()),
+        BootType::Raspi64 => Box::new(RaspiBootManager::new(&boot_type).unwrap()),
         BootType::MSWBootMgr => panic!("BootType::MSWBootMgr is not implemented"),
     }
 }
@@ -59,7 +65,7 @@ impl BootManager for EfiBootManager {
         Err(MigError::from(MigErrorKind::NotImpl))
     }
     fn setup(
-        &self,
+        &mut self,
         _dev_info: &MigrateInfo,
         _s2_cfg: &mut Stage2ConfigBuilder,
         _kernel_opts: &str,

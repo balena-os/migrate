@@ -20,7 +20,7 @@ pub(crate) trait BootManager {
         s2_cfg: &mut Stage2ConfigBuilder,
     ) -> Result<bool, MigError>;
     fn setup(
-        &self,
+        &mut self,
         mig_info: &MigrateInfo,
         s2_cfg: &mut Stage2ConfigBuilder,
         kernel_opts: &str,

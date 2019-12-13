@@ -106,7 +106,7 @@ impl<'a> GrubBootManager {
     }
 }
 
-impl<'a> BootManager for GrubBootManager {
+impl BootManager for GrubBootManager {
     fn get_boot_type(&self) -> BootType {
         BootType::Grub
     }
@@ -187,7 +187,7 @@ impl<'a> BootManager for GrubBootManager {
     }
 
     fn setup(
-        &self,
+        &mut self,
         mig_info: &MigrateInfo,
         _s2_cfg: &mut Stage2ConfigBuilder,
         kernel_opts: &str,
