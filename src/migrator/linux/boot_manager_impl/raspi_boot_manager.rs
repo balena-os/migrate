@@ -55,12 +55,12 @@ impl RaspiBootManager<'_> {
             BootType::Raspi => Ok(RaspiBootManager {
                 bootmgr_path: None,
                 dtb_files: RPI3_DTB_FILES,
-                boot_type: boot_type,
+                boot_type,
             }),
             BootType::Raspi64 => Ok(RaspiBootManager {
                 bootmgr_path: None,
                 dtb_files: RPI4_64_DTB_FILES,
-                boot_type: boot_type,
+                boot_type,
             }),
             _ => {
                 error!(
