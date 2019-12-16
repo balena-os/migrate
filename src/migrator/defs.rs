@@ -52,10 +52,10 @@ pub const BALENA_ROOTB_FSTYPE: &str = "ext4";
 pub const BALENA_STATE_PART: &str = "resin-state";
 pub const BALENA_STATE_FSTYPE: &str = "ext4";
 
+pub const BALENA_API_PORT: u16 = 80;
+
 pub const BALENA_DATA_PART: &str = "resin-data";
 pub const BALENA_DATA_FSTYPE: &str = "ext4";
-
-pub const BALENA_API_PORT: u16 = 80;
 
 pub const PART_NAME: &[&str] = &[
     BALENA_BOOT_PART,
@@ -72,7 +72,7 @@ pub const PART_FSTYPE: &[&str] = &[
     BALENA_DATA_FSTYPE,
 ];
 
-#[derive(Debug, Deserialize, Serialize, Clone)]
+#[derive(Debug, Deserialize, Serialize, Clone, Copy)]
 pub(crate) enum BootType {
     UBoot,
     Raspi,
@@ -89,6 +89,7 @@ pub(crate) enum DeviceType {
     BeagleboneBlack,
     BeagleboardXM,
     IntelNuc,
+    RaspberryPi2,
     RaspberryPi3,
     RaspberryPi4_64,
 }

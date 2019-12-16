@@ -255,7 +255,7 @@ impl<'a> Stage2 {
             info!("Done waiting, continuing now");
         }
 
-        let device = device_impl::from_config(device_type, boot_type)?;
+        let device = device_impl::from_config(device_type, *boot_type)?;
         if device.restore_boot(&self.mounts.borrow(), &self.config) {
             info!("Boot configuration was restored sucessfully");
             // boot config restored can reboot
