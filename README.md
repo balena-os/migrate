@@ -70,8 +70,48 @@ of the configuration.
 The current version of the migrator provides pre build kernel and initramfs files as well as DTB files for all supported 
 devices. The script ```script/mk_mig_config``` can be used to create a basic migrator config. The script will copy the kernel 
 and other necessary files to the target directory. It expects to be run from within the migrator project directory with 
-a successful build present for the target plattform. For intel-nuc and raspberrypi devices on linux a static linked **musl** build 
-is required. The tools necessary for cross compiling and compiling for musl must be installed.
+a successful build present for the target plattform. For intel-nuc and raspberrypi devices on linux, a static linked 
+**musl** build is currently required as the initramfs does not provide libgcc. 
+
+#### Creating the migration Kernel, InitramFS and DTB's
+
+The balena migrate kernel, initramfs and the device tree blobs necessary to boot the device are taken from a 
+yocto build of balenaOS. The necessary modifications to the baleno OS build are contained in 
+[meta-balena][https://github.com/balena-os/meta-balena] but not yet merged.
+Instead they are checked into the **zlk/migrate** branch. The modifications add a new target 
+ (eg.: balena-image-migrator-initramfs-beagleboard-xm-20190711031218.rootfs.cpio.gz for the beageboard XM) for a 
+ modified initramfs that contains additional packets required for migration stage2. The patch also contains 
+ modifications to the kernel required by migration.
+ 
+ With the migrator patches living on a branch, creating the migrator initramfs and kernel is currently a 
+ tedious task. The branch can only be compiled together with a matching device implementation of balenaOS 
+ which can be hard to identify in terms of compatibility. 
+ 
+ Once compiled, the kernel (balena kernel without attached initramfs), migrator initramfs and dtb files 
+ have to be extracted from the build and integrated into the balena-boot folder of the migrator project. 
+ 
+ It is highly advisable to complete and merge the **zlk/migrate** branch into meta-balena master as soon as 
+ possible. To ease the creation of migrator configurations, one of the following strategies could be applied:
+  
+ ##### Create a fully functional version of the Migrator Initramfs within the Yocto Build
+ This strategy would comprise compiling and injecting the migrator stage2 executable as part of the yocto 
+ build. The OS build would supply a fully functional migrator initramfs with no need to use the 
+ ```mk_mig_config``` script (see below).
+Downside of the approach is that compiling the correct version of migrator stage2 is complex and hardware 
+dependant (needs to be set up in the hardware dependent part of balena OS ?)  and the initramfs would be 
+bundled with a fixed version of the migrator. In the current stage of the project the migrator is still 
+changing a lot so that commonly the injected stage2 would have to be replaced.    
+  
+ ##### Create a Migrator Initramfs Shell
+ This approach is what is happening currently. The initramfs shell could be more complete missing only 
+ the migrator stage2 executable which would be injected during configuration as it is done now. Advantage 
+ is that no hardware specific code needs to be compiled within the yocto build and that the configuration 
+ would remain flexible regarding migrator versions.
+     
+
+#### Compiling the Migrator Executables
+
+The tools necessary for cross compiling and compiling for musl must be installed.
 Due to the complex setup involved in creating cross compiled and statically linked binaries in rust the project 
 currently uses the [rust-embedded cross][https://github.com/rust-embedded/cross] cross compilation tools to compile. 
 The rust-embedded/cross project introduces the **cross** command that replaces the regular rust **cargo** command. 
@@ -89,6 +129,13 @@ For raspberrypi3 build
 ``` cross build --target=armv7-unknown-linux-musleabihf --release```
     
 Once libgcc is integrated in the migration initramfs the musl builds will be obsolete.   
+
+#### Configuring the migration Initramfs
+
+The migration initramfs provided by the balena yocto build is currently not fully set up for migration. 
+The starter scripts (init.d) inside initramfs need to be modified and the migrator stage2 executable and 
+an additional starter script need to be injected.
+
 
 ```mk_mig_config``` configures a migration initramfs by unpacking the standard migrate initramfs, deleting and injecting
  initramfs scripts in init.d and adding the ```balena-stage2``` executable to the bin folder. The initramfs is then repacked
