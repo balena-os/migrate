@@ -81,7 +81,7 @@ pub(crate) enum BootType {
     MSWBootMgr,
 }
 
-#[derive(Debug, Deserialize, Serialize, Clone)]
+#[derive(Debug, Deserialize, Serialize, Clone, Copy)]
 pub(crate) enum DeviceType {
     BeagleboneGreen,
     BeagleboneBlack,

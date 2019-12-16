@@ -218,7 +218,7 @@ impl<'a> Stage2 {
         trace!("migrate: entered");
 
         let device_type = self.config.get_device_type();
-        let boot_type = self.config.get_boot_type().clone();
+        let boot_type = self.config.get_boot_type();
 
         // Recover device type and restore original boot configuration
 
@@ -254,7 +254,7 @@ impl<'a> Stage2 {
             info!("Done waiting, continuing now");
         }
 
-        let device = device_impl::from_config(device_type, boot_type)?;
+        let device = device_impl::from_config(device_type, *boot_type)?;
         if device.restore_boot(&self.mounts.borrow(), &self.config) {
             info!("Boot configuration was restored sucessfully");
             // boot config restored can reboot

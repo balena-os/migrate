@@ -85,7 +85,7 @@ impl RaspberryPi3 {
         expect_type(&mig_info.kernel_file.path, &FileType::KernelARMHF)?;
 
         if let Some(_n) = SUPPORTED_OSSES.iter().position(|&r| r == os_name) {
-            let mut boot_manager = RaspiBootManager::new(&BootType::Raspi)?;
+            let mut boot_manager = RaspiBootManager::new(BootType::Raspi)?;
             if boot_manager.can_migrate(mig_info, config, s2_cfg)? {
                 Ok(RaspberryPi3 {
                     boot_manager: Box::new(boot_manager),
@@ -166,7 +166,7 @@ impl RaspberryPi4_64 {
         expect_type(&mig_info.kernel_file.path, &FileType::KernelAARCH64)?;
 
         if let Some(_n) = SUPPORTED_OSSES.iter().position(|&r| r == os_name) {
-            let mut boot_manager = RaspiBootManager::new(&BootType::Raspi64)?;
+            let mut boot_manager = RaspiBootManager::new(BootType::Raspi64)?;
             if boot_manager.can_migrate(mig_info, config, s2_cfg)? {
                 Ok(RaspberryPi4_64 {
                     boot_manager: Box::new(boot_manager),

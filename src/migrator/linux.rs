@@ -149,8 +149,8 @@ impl<'a> LinuxMigrator {
                 let boot_type = device.get_boot_type();
                 info!("Device Type is {:?}", device.get_device_type());
                 info!("Boot mode is {:?}", boot_type);
-                stage2_config.set_device_type(&dev_type);
-                stage2_config.set_boot_type(&boot_type);
+                stage2_config.set_device_type(dev_type);
+                stage2_config.set_boot_type(boot_type);
                 device
             }
             Err(why) => {

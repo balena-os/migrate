@@ -157,21 +157,25 @@ impl UBootManager {
     fn find_uboot_files<P: AsRef<Path>>(base_path: P) -> Option<PathBuf> {
         const UBOOT_FILES: [&str; 3] = [MLO_FILE_NAME, UBOOT_FILE_NAME, UENV_FILE_NAME];
         let mut path_found: Option<PathBuf> = None;
-        if let Some(_) = UBOOT_FILES.iter().find(|file| {
-            let search_path = path_append(&base_path, BOOT_PATH);
-            if file_exists(path_append(&search_path, file)) {
-                path_found = Some(search_path);
-                true
-            } else {
-                // TODO: not sure about uEnv.txt in root
-                if file_exists(path_append(&base_path, file)) {
-                    path_found = Some(PathBuf::from(base_path.as_ref()));
+        if UBOOT_FILES
+            .iter()
+            .find(|file| {
+                let search_path = path_append(&base_path, BOOT_PATH);
+                if file_exists(path_append(&search_path, file)) {
+                    path_found = Some(search_path);
                     true
                 } else {
-                    false
+                    // TODO: not sure about uEnv.txt in root
+                    if file_exists(path_append(&base_path, file)) {
+                        path_found = Some(PathBuf::from(base_path.as_ref()));
+                        true
+                    } else {
+                        false
+                    }
                 }
-            }
-        }) {
+            })
+            .is_some()
+        {
             path_found
         } else {
             None
@@ -748,11 +752,9 @@ impl UBootManager {
 
         // **********************************************************************
         // ** create new /uEnv.txt
-
         // convert kernel / initrd / dtb paths to mountpoint relative paths for uEnv.txt
         let mut paths: Vec<PathBuf> = Vec::new();
-
-        if ![kernel_dest, initrd_dest, dtb_dest].iter().all(|path| {
+        let result = [kernel_dest, initrd_dest, dtb_dest].iter().all(|path| {
             let mut done = false;
             if let Some(ref boot_path) = self.bootmgr_path {
                 if (boot_path.mountpoint != PathBuf::from(ROOT_PATH))
@@ -803,7 +805,10 @@ impl UBootManager {
                 )
             }
             done
-        }) {
+        });
+
+        if !result {
+            // make relative from abs paths failed for some file
             return Err(MigError::displayed());
         }
 
@@ -924,9 +929,10 @@ impl BootManager for UBootManager {
                 );
 
                 // if no uboot files were found - this is the path for all files
-                if let None = self.bootmgr_path {
+                if self.bootmgr_path.is_none() {
                     self.bootmgr_path = Some(path.clone())
                 }
+
                 self.bootmgr_alt_path = Some(path);
                 return Ok(true);
             }
@@ -960,7 +966,7 @@ impl BootManager for UBootManager {
                 );
 
                 // if no uboot files were found - this is the path for all files
-                if let None = self.bootmgr_path {
+                if self.bootmgr_path.is_none() {
                     self.bootmgr_path = Some(path.clone())
                 }
 

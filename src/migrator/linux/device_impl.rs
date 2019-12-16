@@ -62,7 +62,7 @@ pub(crate) fn get_device(
                             DEVICE_TREE_MODEL
                         ),
                     ))?
-                    .trim_end_matches("\0")
+                    .trim_end_matches('\0')
                     .trim_end(),
             );
 

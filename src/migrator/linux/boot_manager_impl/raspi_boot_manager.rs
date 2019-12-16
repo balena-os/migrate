@@ -50,17 +50,17 @@ pub(crate) struct RaspiBootManager<'a> {
 
 #[allow(clippy::new_ret_no_self)] //TODO refactor this to fix cluppy warning
 impl RaspiBootManager<'_> {
-    pub fn new(boot_type: &BootType) -> Result<impl BootManager + 'static, MigError> {
+    pub fn new(boot_type: BootType) -> Result<impl BootManager + 'static, MigError> {
         match boot_type {
             BootType::Raspi => Ok(RaspiBootManager {
                 bootmgr_path: None,
                 dtb_files: RPI3_DTB_FILES,
-                boot_type: boot_type.clone(),
+                boot_type: boot_type,
             }),
             BootType::Raspi64 => Ok(RaspiBootManager {
                 bootmgr_path: None,
                 dtb_files: RPI4_64_DTB_FILES,
-                boot_type: boot_type.clone(),
+                boot_type: boot_type,
             }),
             _ => {
                 error!(
@@ -75,7 +75,7 @@ impl RaspiBootManager<'_> {
 
 impl BootManager for RaspiBootManager<'_> {
     fn get_boot_type(&self) -> BootType {
-        self.boot_type.clone()
+        self.boot_type
     }
 
     fn get_bootmgr_path(&self) -> PathInfo {

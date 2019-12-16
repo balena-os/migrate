@@ -381,7 +381,7 @@ impl<'a> Stage2ConfigBuilder {
             log_to: self.log_to.get().clone(),
             log_console: *self.log_console.get()?,
             device_type: self.device_type.get()?.clone(),
-            boot_type: self.boot_type.get()?.clone(),
+            boot_type: *self.boot_type.get()?,
             migrate_delay: *self.migrate_delay.get(),
             watchdogs: self.watchdogs.get().clone(),
         };
@@ -457,8 +457,8 @@ impl<'a> Stage2ConfigBuilder {
         self.gzip_internal.set(val);
     }
 
-    pub fn set_device_type(&mut self, dev_type: &DeviceType) {
-        self.device_type.set_ref(dev_type);
+    pub fn set_device_type(&mut self, dev_type: DeviceType) {
+        self.device_type.set(dev_type);
     }
 
     pub fn set_log_level(&mut self, val: String) {
@@ -473,8 +473,8 @@ impl<'a> Stage2ConfigBuilder {
         self.log_console.set(val);
     }
 
-    pub fn set_boot_type(&mut self, val: &BootType) {
-        self.boot_type.set_ref(val);
+    pub fn set_boot_type(&mut self, val: BootType) {
+        self.boot_type.set(val);
     }
 
     pub fn set_migrate_delay(&mut self, val: u64) {

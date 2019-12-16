@@ -459,7 +459,7 @@ pub(crate) fn get_fs_space<P: AsRef<Path>>(path: P) -> Result<(u64, u64), MigErr
         if *header == "1K-blocks" {
             fs_size = Some(
                 String::from(values[index])
-                    .trim_end_matches("K")
+                    .trim_end_matches('K')
                     .parse::<u64>()
                     .context(MigErrCtx::from_remark(
                         MigErrorKind::Upstream,
@@ -473,7 +473,7 @@ pub(crate) fn get_fs_space<P: AsRef<Path>>(path: P) -> Result<(u64, u64), MigErr
         } else if *header == "Used" {
             fs_used = Some(
                 String::from(values[index])
-                    .trim_end_matches("K")
+                    .trim_end_matches('K')
                     .parse::<u64>()
                     .context(MigErrCtx::from_remark(
                         MigErrorKind::Upstream,
