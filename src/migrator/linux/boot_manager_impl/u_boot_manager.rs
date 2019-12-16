@@ -117,6 +117,8 @@ mmcargs=setenv bootargs console=tty0 console=${console} ${optargs} ${cape_disabl
 uenvcmd=run loadall; run mmcargs; echo debug: [${bootargs}] ... ; echo debug: [bootz ${loadaddr} ${rdaddr}:${rdsize} ${fdtaddr}] ... ; bootz ${loadaddr} ${rdaddr}:${rdsize} ${fdtaddr};
 "###;
 
+// TODO: support multiple DTB files for different versions, copy several or just matching
+
 pub(crate) struct UBootManager {
     // location of MLO / u-boot.img files, this is where we would like to put our uEnv.txt and
     // our kernel / initrd / dtb if sufficient space is available
@@ -515,7 +517,6 @@ impl UBootManager {
         mig_info: &MigrateInfo,
         s2_cfg: &mut Stage2ConfigBuilder,
         kernel_opts: &str,
-        //bootmgr_path: &PathInfo,
         uname: &str,
     ) -> Result<(), MigError> {
         // **********************************************************************

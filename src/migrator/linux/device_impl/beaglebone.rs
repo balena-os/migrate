@@ -106,7 +106,7 @@ pub(crate) fn is_bb(
                         mig_info,
                         config,
                         s2_cfg,
-                        format!("{}-boardxm.dtb", chip_name),
+                        String::from("omap3-beagle-xm.dtb"),
                     )?)))
                 }
                 "Green" => {
