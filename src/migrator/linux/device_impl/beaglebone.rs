@@ -88,56 +88,54 @@ pub(crate) fn is_bb(
             s2_cfg,
             String::from("am335x"),
         )?)))
-    } else {
-        if let Some(captures) = Regex::new(BB_MODEL_REGEX).unwrap().captures(model_string) {
-            let model = captures
-                .get(5)
-                .unwrap()
-                .as_str()
-                .trim_matches(char::from(0));
+    } else if let Some(captures) = Regex::new(BB_MODEL_REGEX).unwrap().captures(model_string) {
+        let model = captures
+            .get(5)
+            .unwrap()
+            .as_str()
+            .trim_matches(char::from(0));
 
-            let chip_name = captures.get(3).unwrap().as_str().to_lowercase();
+        let chip_name = captures.get(3).unwrap().as_str().to_lowercase();
 
-            match model {
-                "xM" => {
-                    debug!("match found for BeagleboardXM");
-                    // TODO: dtb-name is a guess replace with real one
-                    Ok(Some(Box::new(BeagleboardXM::from_config(
-                        mig_info,
-                        config,
-                        s2_cfg,
-                        String::from("omap3-beagle-xm.dtb"),
-                    )?)))
-                }
-                "Green" => {
-                    debug!("match found for BeagleboneGreen");
-                    Ok(Some(Box::new(BeagleboneGreen::from_config(
-                        mig_info,
-                        config,
-                        s2_cfg,
-                        format!("{}-boardgreen.dtb", chip_name),
-                    )?)))
-                }
-                "Black" => {
-                    debug!("match found for BeagleboneBlack");
-                    // TODO: dtb-name is a guess replace with real one
-                    Ok(Some(Box::new(BeagleboneBlack::from_config(
-                        mig_info,
-                        config,
-                        s2_cfg,
-                        format!("{}-boardblack.dtb", chip_name),
-                    )?)))
-                }
-                _ => {
-                    let message = format!("The beaglebone model reported by your device ('{}') is not supported by balena-migrate", model);
-                    error!("{}", message);
-                    Err(MigError::from_remark(MigErrorKind::InvParam, &message))
-                }
+        match model {
+            "xM" => {
+                debug!("match found for BeagleboardXM");
+                // TODO: dtb-name is a guess replace with real one
+                Ok(Some(Box::new(BeagleboardXM::from_config(
+                    mig_info,
+                    config,
+                    s2_cfg,
+                    String::from("omap3-beagle-xm.dtb"),
+                )?)))
             }
-        } else {
-            debug!("no match for beaglebone on: <{}>", model_string);
-            Ok(None)
+            "Green" => {
+                debug!("match found for BeagleboneGreen");
+                Ok(Some(Box::new(BeagleboneGreen::from_config(
+                    mig_info,
+                    config,
+                    s2_cfg,
+                    format!("{}-boardgreen.dtb", chip_name),
+                )?)))
+            }
+            "Black" => {
+                debug!("match found for BeagleboneBlack");
+                // TODO: dtb-name is a guess replace with real one
+                Ok(Some(Box::new(BeagleboneBlack::from_config(
+                    mig_info,
+                    config,
+                    s2_cfg,
+                    format!("{}-boardblack.dtb", chip_name),
+                )?)))
+            }
+            _ => {
+                let message = format!("The beaglebone model reported by your device ('{}') is not supported by balena-migrate", model);
+                error!("{}", message);
+                Err(MigError::from_remark(MigErrorKind::InvParam, &message))
+            }
         }
+    } else {
+        debug!("no match for beaglebone on: <{}>", model_string);
+        Ok(None)
     }
 }
 

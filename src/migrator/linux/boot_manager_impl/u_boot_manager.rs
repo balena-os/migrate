@@ -774,27 +774,25 @@ impl UBootManager {
                     paths.push(path.clone());
                     done = true;
                 }
-            } else {
-                if let Some(ref boot_path) = self.bootmgr_alt_path {
-                    if (boot_path.mountpoint != PathBuf::from(ROOT_PATH))
-                        && path.starts_with(&boot_path.mountpoint)
-                    {
-                        match path.strip_prefix(&boot_path.mountpoint) {
-                            Ok(path) => {
-                                paths.push(path_append(ROOT_PATH, path));
-                                done = true
-                            }
-                            Err(why) => error!(
-                                "cannot remove prefix '{}' from '{}', error: {:?}",
-                                path.display(),
-                                boot_path.mountpoint.display(),
-                                why
-                            ),
+            } else if let Some(ref boot_path) = self.bootmgr_alt_path {
+                if (boot_path.mountpoint != PathBuf::from(ROOT_PATH))
+                    && path.starts_with(&boot_path.mountpoint)
+                {
+                    match path.strip_prefix(&boot_path.mountpoint) {
+                        Ok(path) => {
+                            paths.push(path_append(ROOT_PATH, path));
+                            done = true
                         }
-                    } else {
-                        paths.push(path.clone());
-                        done = true;
+                        Err(why) => error!(
+                            "cannot remove prefix '{}' from '{}', error: {:?}",
+                            path.display(),
+                            boot_path.mountpoint.display(),
+                            why
+                        ),
                     }
+                } else {
+                    paths.push(path.clone());
+                    done = true;
                 }
             }
 
@@ -848,12 +846,10 @@ impl BootManager for UBootManager {
     fn get_bootmgr_path(&self) -> PathInfo {
         if let Some(ref boot_path) = self.bootmgr_path {
             boot_path.clone()
+        } else if let Some(ref boot_path) = self.bootmgr_alt_path {
+            boot_path.clone()
         } else {
-            if let Some(ref boot_path) = self.bootmgr_alt_path {
-                boot_path.clone()
-            } else {
-                panic!("Failed to retrieve a boot manager path");
-            }
+            panic!("Failed to retrieve a boot manager path");
         }
     }
 

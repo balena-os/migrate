@@ -470,21 +470,19 @@ pub(crate) fn get_fs_space<P: AsRef<Path>>(path: P) -> Result<(u64, u64), MigErr
             if let Some(_dummy) = fs_used {
                 break;
             }
-        } else {
-            if *header == "Used" {
-                fs_used = Some(
-                    String::from(values[index])
-                        .trim_end_matches("K")
-                        .parse::<u64>()
-                        .context(MigErrCtx::from_remark(
-                            MigErrorKind::Upstream,
-                            &format!("get_fs_space: failed to parse size from {} ", values[index]),
-                        ))?
-                        * 1024,
-                );
-                if let Some(_dummy) = fs_size {
-                    break;
-                }
+        } else if *header == "Used" {
+            fs_used = Some(
+                String::from(values[index])
+                    .trim_end_matches("K")
+                    .parse::<u64>()
+                    .context(MigErrCtx::from_remark(
+                        MigErrorKind::Upstream,
+                        &format!("get_fs_space: failed to parse size from {} ", values[index]),
+                    ))?
+                    * 1024,
+            );
+            if let Some(_dummy) = fs_size {
+                break;
             }
         }
     }
