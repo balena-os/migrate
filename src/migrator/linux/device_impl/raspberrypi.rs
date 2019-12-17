@@ -96,7 +96,7 @@ impl RaspberryPi3 {
         } else {
             let message = format!("The OS '{}' is not supported for RaspberryPi3", os_name,);
             error!("{}", message);
-            return Err(MigError::from_remark(MigErrorKind::InvParam, &message));
+            Err(MigError::from_remark(MigErrorKind::InvParam, &message))
         }
     }
 
@@ -177,7 +177,7 @@ impl RaspberryPi4_64 {
         } else {
             let message = format!("The OS '{}' is not supported for RaspberryPi4", os_name,);
             error!("{}", message);
-            return Err(MigError::from_remark(MigErrorKind::InvParam, &message));
+            Err(MigError::from_remark(MigErrorKind::InvParam, &message))
         }
     }
 

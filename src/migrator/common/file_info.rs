@@ -121,7 +121,7 @@ impl FileInfo {
                 "The file '{}' was not found in the working directory",
                 self.path.display()
             );
-            return Err(MigError::displayed());
+            Err(MigError::displayed())
         }
     }
 }

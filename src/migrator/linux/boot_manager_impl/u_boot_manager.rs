@@ -157,29 +157,23 @@ impl UBootManager {
     fn find_uboot_files<P: AsRef<Path>>(base_path: P) -> Option<PathBuf> {
         const UBOOT_FILES: [&str; 3] = [MLO_FILE_NAME, UBOOT_FILE_NAME, UENV_FILE_NAME];
         let mut path_found: Option<PathBuf> = None;
-        if UBOOT_FILES
-            .iter()
-            .find(|file| {
-                let search_path = path_append(&base_path, BOOT_PATH);
-                if file_exists(path_append(&search_path, file)) {
-                    path_found = Some(search_path);
+        let _res = UBOOT_FILES.iter().find(|file| {
+            let search_path = path_append(&base_path, BOOT_PATH);
+            if file_exists(path_append(&search_path, file)) {
+                path_found = Some(search_path);
+                true
+            } else {
+                // TODO: not sure about uEnv.txt in root
+                if file_exists(path_append(&base_path, file)) {
+                    path_found = Some(PathBuf::from(base_path.as_ref()));
                     true
                 } else {
-                    // TODO: not sure about uEnv.txt in root
-                    if file_exists(path_append(&base_path, file)) {
-                        path_found = Some(PathBuf::from(base_path.as_ref()));
-                        true
-                    } else {
-                        false
-                    }
+                    false
                 }
-            })
-            .is_some()
-        {
-            path_found
-        } else {
-            None
-        }
+            }
+        });
+
+        path_found
     }
 
     // Try to find a drive containing MLO, uEnv.txt or u-boot.bin, mount it if necessary

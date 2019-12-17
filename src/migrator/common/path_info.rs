@@ -59,7 +59,7 @@ impl PathInfo {
             }))
         } else {
             error!("Refusing to create PathInfo from unmounted partition");
-            return Err(MigError::displayed());
+            Err(MigError::displayed())
         }
     }
 

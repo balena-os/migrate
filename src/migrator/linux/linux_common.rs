@@ -334,13 +334,13 @@ pub(crate) fn to_std_device_path(device: &Path) -> Result<PathBuf, MigError> {
         Ok(link) => {
             if let Some(parent) = device.parent() {
                 let dev_path = path_append(parent, link);
-                return Ok(dev_path.canonicalize().context(MigErrCtx::from_remark(
+                Ok(dev_path.canonicalize().context(MigErrCtx::from_remark(
                     MigErrorKind::Upstream,
                     &format!("failed to canonicalize path from: '{}'", dev_path.display()),
-                ))?);
+                ))?)
             } else {
                 trace!("Failed to retrieve parent from  '{}'", device.display());
-                return Ok(PathBuf::from(device));
+                Ok(PathBuf::from(device))
             }
         }
         Err(why) => {

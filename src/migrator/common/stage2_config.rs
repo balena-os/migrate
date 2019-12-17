@@ -380,7 +380,7 @@ impl<'a> Stage2ConfigBuilder {
             log_level: self.log_level.get()?.clone(),
             log_to: self.log_to.get().clone(),
             log_console: *self.log_console.get()?,
-            device_type: self.device_type.get()?.clone(),
+            device_type: *self.device_type.get()?,
             boot_type: *self.boot_type.get()?,
             migrate_delay: *self.migrate_delay.get(),
             watchdogs: self.watchdogs.get().clone(),

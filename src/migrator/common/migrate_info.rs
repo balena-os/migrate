@@ -350,7 +350,7 @@ impl MigrateInfo {
                 "The balena file: '{}' can not be accessed.",
                 file_ref.path.display()
             );
-            return Err(MigError::displayed());
+            Err(MigError::displayed())
         }
     }
 }

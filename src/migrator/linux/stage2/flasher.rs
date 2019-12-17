@@ -226,22 +226,22 @@ fn flash_gzip_external(dd_cmd: &str, target_path: &Path, image_path: &Path) -> F
         {
             Ok(dd_cmd_res) => {
                 if dd_cmd_res.status.success() {
-                    return FlashResult::Ok;
+                    FlashResult::Ok
                 } else {
                     error!(
                         "dd terminated with exit code: {:?}",
                         dd_cmd_res.status.code()
                     );
-                    return FlashResult::FailNonRecoverable;
+                    FlashResult::FailNonRecoverable
                 }
             }
             Err(why) => {
                 error!("failed to execute command {}, error: {:?}", dd_cmd, why);
-                return FlashResult::FailRecoverable;
+                FlashResult::FailRecoverable
             }
         }
     } else {
         error!("failed to retrieved gzip stdout)");
-        return FlashResult::FailRecoverable;
+        FlashResult::FailRecoverable
     }
 }

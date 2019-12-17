@@ -248,7 +248,7 @@ fn balena_write(
         )
     } else {
         error!("Could not retrieve data mountpoint");
-        return false;
+        false
     }
 }
 

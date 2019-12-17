@@ -139,7 +139,7 @@ pub(crate) fn is_bb(
     }
 }
 
-fn get_uboot_cfg(config: &Config, dev_type: &DeviceType) -> (u8, UEnvStrategy) {
+fn get_uboot_cfg(config: &Config, dev_type: DeviceType) -> (u8, UEnvStrategy) {
     if let Some(uboot_cfg) = config.migrate.get_uboot_cfg() {
         let mmc_index = if let Some(mmc_index) = uboot_cfg.mmc_index {
             mmc_index
@@ -181,7 +181,7 @@ impl BeagleboneGreen {
         if let Some(_idx) = SUPPORTED_OSSES.iter().position(|&r| r == os_name) {
             // TODO: make this configurable
 
-            let (mmc_index, strategy) = get_uboot_cfg(config, &DeviceType::BeagleboneGreen);
+            let (mmc_index, strategy) = get_uboot_cfg(config, DeviceType::BeagleboneGreen);
 
             info!(
                 "Using uboot device index: {}, strategy is {:?}",
@@ -282,7 +282,7 @@ impl BeagleboneBlack {
         expect_type(&mig_info.kernel_file.path, &FileType::KernelARMHF)?;
 
         if let Some(_idx) = SUPPORTED_OSSES.iter().position(|&r| r == os_name) {
-            let (mmc_index, strategy) = get_uboot_cfg(config, &DeviceType::BeagleboneBlack);
+            let (mmc_index, strategy) = get_uboot_cfg(config, DeviceType::BeagleboneBlack);
             let mut boot_manager = UBootManager::new(mmc_index, strategy, dtb_name);
 
             if boot_manager.can_migrate(mig_info, config, s2_cfg)? {
@@ -373,7 +373,7 @@ impl BeagleboardXM {
         expect_type(&mig_info.kernel_file.path, &FileType::KernelARMHF)?;
 
         if let Some(_idx) = SUPPORTED_OSSES.iter().position(|&r| r == os_name) {
-            let (mmc_index, strategy) = get_uboot_cfg(config, &DeviceType::BeagleboardXM);
+            let (mmc_index, strategy) = get_uboot_cfg(config, DeviceType::BeagleboardXM);
             let mut boot_manager = UBootManager::new(mmc_index, strategy, dtb_name);
 
             if boot_manager.can_migrate(mig_info, config, s2_cfg)? {
