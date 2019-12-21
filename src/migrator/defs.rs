@@ -55,19 +55,12 @@ pub const BALENA_STATE_FSTYPE: &str = "ext4";
 pub const BALENA_DATA_PART: &str = "resin-data";
 pub const BALENA_DATA_FSTYPE: &str = "ext4";
 
-pub const PART_NAME: &[&str] = &[
-    BALENA_BOOT_PART,
-    BALENA_ROOTA_PART,
-    BALENA_ROOTB_PART,
-    BALENA_STATE_PART,
-    BALENA_DATA_PART,
-];
-pub const PART_FSTYPE: &[&str] = &[
-    BALENA_BOOT_FSTYPE,
-    BALENA_ROOTA_FSTYPE,
-    BALENA_ROOTB_FSTYPE,
-    BALENA_STATE_FSTYPE,
-    BALENA_DATA_FSTYPE,
+pub const PART_INFO: &[(&str, &str)] = &[
+    (BALENA_BOOT_PART, BALENA_BOOT_FSTYPE),
+    (BALENA_ROOTA_PART, BALENA_ROOTA_FSTYPE),
+    (BALENA_ROOTB_PART, BALENA_ROOTB_FSTYPE),
+    (BALENA_STATE_PART, BALENA_STATE_FSTYPE),
+    (BALENA_DATA_PART, BALENA_DATA_FSTYPE),
 ];
 
 #[derive(Debug, Deserialize, Serialize, Clone, Copy)]

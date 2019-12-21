@@ -27,7 +27,7 @@ use crate::{
         MigErrorKind,
     },
     defs::FileType,
-    defs::{PART_FSTYPE, PART_NAME},
+    defs::PART_INFO,
     linux::{
         linux_common::{is_admin, is_file_type, mktemp, whereis},
         linux_defs::NIX_NONE,
@@ -283,9 +283,10 @@ impl Extractor {
                 }
             }
 
+            let (part_label, part_fs_type) = PART_INFO[part_idx];
             let mut partition = Partition {
-                name: PART_NAME[part_idx],
-                fstype: PART_FSTYPE[part_idx],
+                name: part_label,
+                fstype: part_fs_type,
                 status: raw_part.status,
                 ptype: raw_part.ptype,
                 start_lba: raw_part.start_lba,

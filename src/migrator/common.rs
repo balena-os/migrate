@@ -4,7 +4,7 @@ use log::debug;
 use log::trace;
 use regex::Regex;
 use std::fs::{metadata, read_to_string, File};
-use std::io::{BufRead, BufReader};
+use std::io::{copy, BufRead, BufReader, Read};
 use std::path::{Path, PathBuf};
 use std::process::{Command, ExitStatus, Stdio};
 
@@ -46,7 +46,7 @@ pub(crate) use self::config::{Config, MigMode};
 pub(crate) use self::file_info::FileInfo;
 pub use self::mig_error::{MigErrCtx, MigError, MigErrorKind};
 
-const MODULE: &str = "migrator::common";
+//const MODULE: &str = "migrator::common";
 
 #[derive(Debug)]
 pub(crate) struct CmdRes {
@@ -144,8 +144,7 @@ pub fn dir_exists<P: AsRef<Path>>(name: P) -> Result<bool, MigError> {
             .context(MigErrCtx::from_remark(
                 MigErrorKind::Upstream,
                 &format!(
-                    "{}::dir_exists: failed to retrieve metadata for path: '{}'",
-                    MODULE,
+                    "dir_exists: failed to retrieve metadata for path: '{}'",
                     path.display()
                 ),
             ))?
@@ -160,8 +159,72 @@ pub fn file_exists<P: AsRef<Path>>(file: P) -> bool {
     file.as_ref().exists()
 }
 
-pub(crate) fn call(cmd: &str, args: &[&str], trim_stdout: bool) -> Result<CmdRes, MigError> {
+pub(crate) fn call_with_stdin<R>(
+    cmd: &str,
+    args: &[&str],
+    stdin: &mut R,
+    trim_stdout: bool,
+) -> Result<CmdRes, MigError>
+where
+    R: Read,
+{
     trace!("call(): '{}' called with {:?}, {}", cmd, args, trim_stdout);
+
+    let mut child = Command::new(cmd)
+        .args(args)
+        .stdin(Stdio::piped())
+        .stdout(Stdio::piped())
+        .stderr(Stdio::piped())
+        .spawn()
+        .context(MigErrCtx::from_remark(
+            MigErrorKind::Upstream,
+            &format!(
+                "call_with_stdin: failed to execute: command {} '{:?}'",
+                cmd, args
+            ),
+        ))?;
+
+    {
+        if let Some(child_stdin) = child.stdin.as_mut() {
+            let _res = copy(stdin, child_stdin).context(MigErrCtx::from_remark(
+                MigErrorKind::Upstream,
+                &format!(
+                    "call_with_stdin: failed to write stdin: command {} '{:?}'",
+                    cmd, args
+                ),
+            ))?;
+        } else {
+            return Err(MigError::from_remark(
+                MigErrorKind::Upstream,
+                &format!(
+                    "call_with_stdin: failed to open process stdin: command {} '{:?}'",
+                    cmd, args
+                ),
+            ));
+        }
+    }
+
+    let output = child.wait_with_output().context(MigErrCtx::from_remark(
+        MigErrorKind::Upstream,
+        &format!(
+            "call_with_stdin: failed to execute: command {} '{:?}'",
+            cmd, args
+        ),
+    ))?;
+
+    Ok(CmdRes {
+        stdout: if trim_stdout {
+            String::from(String::from_utf8_lossy(&output.stdout).trim())
+        } else {
+            String::from(String::from_utf8_lossy(&output.stdout))
+        },
+        stderr: String::from(String::from_utf8_lossy(&output.stderr)),
+        status: output.status,
+    })
+}
+
+pub(crate) fn call(cmd: &str, args: &[&str], trim_stdout: bool) -> Result<CmdRes, MigError> {
+    trace!("call: '{}' called with {:?}, {}", cmd, args, trim_stdout);
 
     let output = Command::new(cmd)
         .args(args)
@@ -170,10 +233,7 @@ pub(crate) fn call(cmd: &str, args: &[&str], trim_stdout: bool) -> Result<CmdRes
         .output()
         .context(MigErrCtx::from_remark(
             MigErrorKind::Upstream,
-            &format!(
-                "{}::call: failed to execute: command {} '{:?}'",
-                MODULE, cmd, args
-            ),
+            &format!("call: failed to execute: command {} '{:?}'", cmd, args),
         ))?;
 
     Ok(CmdRes {
@@ -194,8 +254,8 @@ pub fn check_tcp_connect(host: &str, port: u16, timeout: u64) -> Result<(), MigE
     let mut addrs_iter = url.to_socket_addrs().context(MigErrCtx::from_remark(
         MigErrorKind::Upstream,
         &format!(
-            "{}::check_tcp_connect: failed to resolve host address: '{}'",
-            MODULE, url
+            "check_tcp_connect: failed to resolve host address: '{}'",
+            url
         ),
     ))?;
 
@@ -204,8 +264,8 @@ pub fn check_tcp_connect(host: &str, port: u16, timeout: u64) -> Result<(), MigE
             MigErrCtx::from_remark(
                 MigErrorKind::Upstream,
                 &format!(
-                    "{}::check_tcp_connect: failed to connect to: '{}' with timeout: {}",
-                    MODULE, url, timeout
+                    "check_tcp_connect: failed to connect to: '{}' with timeout: {}",
+                    url, timeout
                 ),
             ),
         )?;
@@ -216,8 +276,8 @@ pub fn check_tcp_connect(host: &str, port: u16, timeout: u64) -> Result<(), MigE
         Err(MigError::from_remark(
             MigErrorKind::InvState,
             &format!(
-                "{}::check_tcp_connect: no results from name resolution for: '{}",
-                MODULE, url
+                "check_tcp_connect: no results from name resolution for: '{}",
+                url
             ),
         ))
     }

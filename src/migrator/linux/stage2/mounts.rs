@@ -25,6 +25,7 @@ use crate::{
     linux::{
         linux_common::{
             drive_from_partition, drive_to_partition, get_kernel_root_info, to_std_device_path,
+            whereis,
         },
         linux_defs::NIX_NONE,
         linux_defs::{FAT_CHK_CMD, UDEVADM_CMD},
@@ -713,22 +714,24 @@ impl<'a> Mounts {
 
                 if fstype == "vfat" {
                     debug!("checking fat file system on '{}'", device.display());
-                    match call(FAT_CHK_CMD, &["-a", &device.to_string_lossy()], true) {
-                        Ok(cmd_res) => {
-                            if !cmd_res.status.success() {
+                    if let Ok(path) = whereis(FAT_CHK_CMD) {
+                        match call(&path, &["-a", &device.to_string_lossy()], true) {
+                            Ok(cmd_res) => {
+                                if !cmd_res.status.success() {
+                                    warn!(
+                                        "Failed to check file system '{}': {} ",
+                                        device.display(),
+                                        cmd_res.stderr
+                                    );
+                                }
+                            }
+                            Err(why) => {
                                 warn!(
-                                    "Failed to check file system '{}': {} ",
+                                    "Failed to check file system '{}': {:?} ",
                                     device.display(),
-                                    cmd_res.stderr
+                                    why
                                 );
                             }
-                        }
-                        Err(why) => {
-                            warn!(
-                                "Failed to check file system '{}': {:?} ",
-                                device.display(),
-                                why
-                            );
                         }
                     }
                 }
