@@ -4,7 +4,6 @@ use std::io::Write;
 use lazy_static::lazy_static;
 use log::{debug, warn};
 use regex::Regex;
-use std::collections::HashMap;
 use std::fmt::{Debug, Display};
 use std::process::{Command, ExitStatus, Stdio};
 

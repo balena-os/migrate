@@ -3,7 +3,6 @@ use log::{debug, error, info, trace, warn};
 use regex::Regex;
 use std::fs::{copy, create_dir_all, rename, File};
 use std::io::Write;
-use std::path::PathBuf;
 
 const STARTUP_TEMPLATE: &str = r#"
 echo -off
@@ -18,8 +17,7 @@ use crate::{
         migrate_info::MigrateInfo,
         os_api::{OSApi, OSApiImpl},
         path_append,
-        path_info::PathInfo,
-        stage2_config::{MountConfig, Stage2ConfigBuilder},
+        stage2_config::Stage2ConfigBuilder,
         Config, MigErrCtx, MigError, MigErrorKind,
     },
     defs::{BootType, EFI_STARTUP_FILE, MIG_INITRD_NAME, MIG_KERNEL_NAME},
@@ -66,6 +64,13 @@ impl BootManager for EfiBootManager {
             }
         };
 
+        // make sure work path drive can be mapped to linux drive
+        if let None = mig_info.work_path.device_info.part_uuid {
+            error!("Cowardly refusing to migrate work partition without partuuid. Windows to linux drive name mapping is insecure");
+            return Ok(false);
+        }
+
+        // make sure efi drive can be mapped to linux drive
         if let None = efi_drive.part_uuid {
             // TODO: add option to override this
             error!("Cowardly refusing to migrate EFI partition without partuuid. Windows to linux drive name mapping is insecure");
@@ -73,13 +78,21 @@ impl BootManager for EfiBootManager {
         }
 
         // TODO: get a better estimate for startup file size
-        let mut required_space: u64 = if file_exists(&mig_info.kernel_file.path) {
+        let efi_path = path_append(&efi_drive.mountpoint, BALENA_EFI_DIR);
+
+        let mut required_space: u64 = if file_exists(path_append(
+            &efi_path,
+            mig_info.kernel_file.rel_path.as_ref().unwrap(),
+        )) {
             0
         } else {
             mig_info.kernel_file.size
         };
 
-        if !file_exists(&mig_info.initrd_file.path) {
+        if !file_exists(path_append(
+            &efi_path,
+            mig_info.initrd_file.rel_path.as_ref().unwrap(),
+        )) {
             required_space += mig_info.initrd_file.size;
         }
 
@@ -90,11 +103,6 @@ impl BootManager for EfiBootManager {
 
         if efi_drive.fs_free < required_space {
             error!("Not enough free space for boot setup found on EFI partition. {} of free space are required on EFI partition.", format_size_with_unit(required_space));
-            return Ok(false);
-        }
-
-        if let None = mig_info.work_path.device_info.part_uuid {
-            error!("Cowardly refusing to migrate work partition without partuuid. Windows to linux drive name mapping is insecure");
             return Ok(false);
         }
 

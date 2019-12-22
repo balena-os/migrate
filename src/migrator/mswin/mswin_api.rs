@@ -1,11 +1,10 @@
-use failure::{Fail, ResultExt};
+use failure::ResultExt;
 use lazy_static::lazy_static;
 use log::{debug, error};
 use regex::{Regex, RegexBuilder};
 use std::path::{Path, PathBuf};
 
 use crate::common::MigErrCtx;
-use crate::mswin::drive_info::VolumeInfo;
 use crate::{
     common::{
         config::migrate_config::DeviceSpec, device_info::DeviceInfo, os_api::OSApiImpl,
@@ -14,8 +13,7 @@ use crate::{
     defs::{FileType, OSArch},
     mswin::{
         drive_info::DriveInfo,
-        win_api::get_volume_disk_extents,
-        wmi_utils::{MountPoint, WMIOSInfo, WmiUtils},
+        wmi_utils::{WMIOSInfo, WmiUtils},
     },
 };
 

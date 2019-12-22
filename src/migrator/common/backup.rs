@@ -1,8 +1,8 @@
 use failure::{Fail, ResultExt};
 use flate2::{write::GzEncoder, Compression};
-use log::{debug, error, info, trace, warn};
+use log::{debug, info, trace};
 use regex::Regex;
-use std::fs::{create_dir_all, read_dir, remove_dir_all, File};
+use std::fs::{read_dir, File};
 use std::path::{Path, PathBuf};
 use tar::Builder;
 
@@ -10,10 +10,8 @@ use tar::Builder;
 use std::os::unix::fs::symlink;
 
 use crate::common::{
-    call, config::migrate_config::VolumeConfig, dir_exists, path_append, MigErrCtx, MigError,
-    MigErrorKind,
+    config::migrate_config::VolumeConfig, path_append, MigErrCtx, MigError, MigErrorKind,
 };
-use crate::defs::BACKUP_FILE;
 
 use crate::common::os_api::{OSApi, OSApiImpl};
 #[cfg(target_os = "linux")]

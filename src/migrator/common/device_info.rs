@@ -1,4 +1,3 @@
-use log::error;
 use std::path::PathBuf;
 
 use crate::{
@@ -14,11 +13,8 @@ use crate::linux::{
 
 #[cfg(target_os = "windows")]
 use crate::{
-    common::{
-        os_api::{OSApi, OSApiImpl},
-        path_append,
-    },
-    mswin::drive_info::{DriveInfo, VolumeInfo},
+    common::os_api::{OSApi, OSApiImpl},
+    mswin::drive_info::VolumeInfo,
 };
 
 #[derive(Debug, Clone)]

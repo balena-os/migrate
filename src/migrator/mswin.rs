@@ -1,8 +1,7 @@
 use failure::{Fail, ResultExt};
 use log::{debug, error, info, trace, warn};
 use mod_logger::{LogDestination, Logger};
-use std::fs::{copy, create_dir, create_dir_all, read_dir};
-use std::path::PathBuf;
+use std::fs::{copy, create_dir, read_dir};
 use std::thread;
 use std::time::Duration;
 
@@ -11,21 +10,18 @@ use std::time::Duration;
 use crate::{
     common::{
         backup,
-        boot_manager::BootManager,
         config::balena_config::ImageType,
         device::Device,
         dir_exists, file_size, format_size_with_unit,
-        migrate_info::{balena_cfg_json::BalenaCfgJson, MigrateInfo},
+        migrate_info::MigrateInfo,
         os_api::OSApiImpl,
         path_append,
         stage2_config::{MountConfig, PathType, Stage2ConfigBuilder},
         Config, MigErrCtx, MigError, MigErrorKind, MigMode,
     },
     defs::{
-        DeviceType, OSArch, BACKUP_FILE, MIN_DISK_SIZE, STAGE1_MEM_THRESHOLD, STAGE2_CFG_FILE,
-        SYSTEM_CONNECTIONS_DIR,
+        BACKUP_FILE, MIN_DISK_SIZE, STAGE1_MEM_THRESHOLD, STAGE2_CFG_FILE, SYSTEM_CONNECTIONS_DIR,
     },
-    mswin::{mswin_api::MSWinApi, util::to_linux_path, wmi_utils::WmiUtils},
 };
 
 pub(crate) mod msw_defs;
@@ -34,12 +30,11 @@ pub(crate) mod msw_defs;
 pub(crate) mod mswin_api;
 
 mod powershell;
-use powershell::{is_admin, is_secure_boot};
+use powershell::is_admin;
 
 //pub(crate) mod win_api;
 // pub mod drive_info;
 mod win_api;
-use win_api::is_efi_boot;
 
 mod util;
 
@@ -52,7 +47,6 @@ pub(crate) mod wmi_utils;
 mod boot_manager_impl;
 use crate::common::os_api::OSApi;
 use crate::mswin::powershell::reboot;
-use boot_manager_impl::efi_boot_manager::EfiBootManager;
 
 //mod migrate_info;
 //use migrate_info::MigrateInfo;
@@ -540,7 +534,6 @@ impl<'a> MSWMigrator {
 
 #[cfg(test)]
 mod tests {
-    use super::*;
 
     #[test]
     fn init_mswin() {

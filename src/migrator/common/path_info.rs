@@ -1,21 +1,16 @@
-use failure::ResultExt;
-
 use std::path::{Path, PathBuf};
 
 use crate::common::{
     device_info::DeviceInfo,
     os_api::{OSApi, OSApiImpl},
-    MigErrCtx, MigError, MigErrorKind,
+    MigError,
 };
 
 #[cfg(target_os = "linux")]
 use crate::linux::lsblk_info::{LsblkDevice, LsblkInfo, LsblkPartition};
 
 #[cfg(target_os = "windows")]
-use crate::mswin::{
-    drive_info::{DriveInfo, VolumeInfo},
-    wmi_utils::MountPoint,
-};
+use crate::mswin::drive_info::VolumeInfo;
 
 /*
 Contains full Information on a path including

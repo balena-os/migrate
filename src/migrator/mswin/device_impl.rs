@@ -5,7 +5,7 @@ use crate::{
         MigError,
     },
     defs::OSArch,
-    mswin::{device_impl::intel_nuc::IntelNuc, powershell::is_secure_boot, win_api::is_efi_boot},
+    mswin::device_impl::intel_nuc::IntelNuc,
 };
 
 mod intel_nuc;
@@ -14,7 +14,7 @@ pub(crate) fn get_device(
     mig_info: &MigrateInfo,
     config: &Config,
     stage2_config: &mut Stage2ConfigBuilder,
-) -> Result<Box<Device>, MigError> {
+) -> Result<Box<dyn Device>, MigError> {
     match mig_info.os_arch {
         OSArch::AMD64 => Ok(Box::new(IntelNuc::from_config(
             mig_info,

@@ -6,7 +6,6 @@ use std::io::Error;
 use std::iter::once;
 use std::mem;
 use std::os::windows::prelude::*;
-use std::path::Path;
 use std::ptr::null_mut;
 
 use winapi::{
@@ -29,7 +28,6 @@ use winapi::{
         },
         winnt::{
             FILE_ATTRIBUTE_NORMAL, FILE_SHARE_READ, FILE_SHARE_WRITE, GENERIC_READ, GENERIC_WRITE,
-            LARGE_INTEGER,
         },
     },
 };

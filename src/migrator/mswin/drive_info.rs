@@ -1,12 +1,9 @@
 use crate::{
-    common::{
-        call, device_info::DeviceInfo, file_exists, path_append, path_info::PathInfo, MigError,
-        MigErrorKind,
-    },
+    common::{MigError, MigErrorKind},
     defs::{DISK_BY_LABEL_PATH, DISK_BY_PARTUUID_PATH},
     mswin::{
         util::mount_efi,
-        win_api::{get_volume_disk_extents, is_efi_boot, DiskExtent},
+        win_api::{get_volume_disk_extents, is_efi_boot},
         wmi_utils::{
             volume::{DriveType, Volume},
             LogicalDrive, Partition, PhysicalDrive,
@@ -14,11 +11,10 @@ use crate::{
     },
 };
 use log::{debug, warn};
-use regex::{Captures, Regex};
-use std::mem::{swap, transmute};
+use regex::Regex;
+use std::mem::swap;
 use std::path::Path;
 use std::path::PathBuf;
-use std::sync::{Arc, Mutex, MutexGuard, Once};
 
 // \\?\Volume{345ad334-48a8-11e8-9eaf-806e6f6e6963}\
 
