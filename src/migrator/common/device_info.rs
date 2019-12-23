@@ -1,3 +1,4 @@
+use log::error;
 use std::path::PathBuf;
 
 use crate::{

@@ -1,9 +1,10 @@
+use failure::ResultExt;
 use std::path::{Path, PathBuf};
 
 use crate::common::{
     device_info::DeviceInfo,
     os_api::{OSApi, OSApiImpl},
-    MigError,
+    MigErrCtx, MigError, MigErrorKind,
 };
 
 #[cfg(target_os = "linux")]
