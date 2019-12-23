@@ -32,6 +32,8 @@ use crate::{
 
 // later ensure all other required commands
 
+mod stage2_defs;
+
 mod fs_writer;
 
 mod flasher;

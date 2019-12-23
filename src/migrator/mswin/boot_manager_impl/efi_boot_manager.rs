@@ -11,7 +11,9 @@ LABEL balena-migrate
 "#;
 
 use crate::common::call;
-use crate::defs::{EFI_SYSLINUX_CONFIG_FILE, MIG_SYSLINUX_LOADER_NAME};
+use crate::defs::{
+    EFI_SYSLINUX_CONFIG_FILE_X64, MIG_SYSLINUX_LOADER_NAME_IA32, MIG_SYSLINUX_LOADER_NAME_X64,
+};
 use crate::{
     common::{
         boot_manager::BootManager,
@@ -23,7 +25,7 @@ use crate::{
         stage2_config::Stage2ConfigBuilder,
         Config, MigErrCtx, MigError, MigErrorKind,
     },
-    defs::{BootType, MIG_INITRD_NAME, MIG_KERNEL_NAME, MIG_SYSLINUX_NAME},
+    defs::{BootType, MIG_INITRD_NAME, MIG_KERNEL_NAME, MIG_SYSLINUX_EFI_NAME},
     mswin::{
         drive_info::DriveInfo,
         msw_defs::{
@@ -95,7 +97,7 @@ impl BootManager for EfiBootManager {
             required_space += mig_info.initrd_file.size;
         }
 
-        let syslinux = path_append(&mig_info.work_path.path, MIG_SYSLINUX_NAME);
+        let syslinux = path_append(&mig_info.work_path.path, MIG_SYSLINUX_EFI_NAME);
         if !file_exists(&syslinux) {
             error!(
                 "The syslinux executable '{}' could not be found",
@@ -103,12 +105,12 @@ impl BootManager for EfiBootManager {
             );
             return Ok(false);
         } else {
-            if !file_exists(path_append(&balena_efi_path, MIG_SYSLINUX_NAME)) {
+            if !file_exists(path_append(&balena_efi_path, MIG_SYSLINUX_EFI_NAME)) {
                 required_space += syslinux.metadata().unwrap().len();
             }
         }
 
-        let syslinux_ldr = path_append(&mig_info.work_path.path, MIG_SYSLINUX_LOADER_NAME);
+        let syslinux_ldr = path_append(&mig_info.work_path.path, MIG_SYSLINUX_LOADER_NAME_X64);
         if !file_exists(&syslinux_ldr) {
             error!(
                 "The syslinux executable '{}' could not be found",
@@ -116,12 +118,12 @@ impl BootManager for EfiBootManager {
             );
             return Ok(false);
         } else {
-            if !file_exists(path_append(&balena_efi_path, MIG_SYSLINUX_LOADER_NAME)) {
+            if !file_exists(path_append(&balena_efi_path, MIG_SYSLINUX_LOADER_NAME_X64)) {
                 required_space += syslinux_ldr.metadata().unwrap().len();
             }
         }
 
-        if !file_exists(path_append(&balena_efi_path, EFI_SYSLINUX_CONFIG_FILE)) {
+        if !file_exists(path_append(&balena_efi_path, EFI_SYSLINUX_CONFIG_FILE_X64)) {
             // TODO: get a better estimate for startup file size
             required_space += 50;
         }
@@ -203,8 +205,8 @@ impl BootManager for EfiBootManager {
             ),
         ))?;
 
-        let syslinux_src = path_append(&mig_info.work_path.path, MIG_SYSLINUX_NAME);
-        let syslinux_path = path_append(&balena_efi_dir, MIG_SYSLINUX_NAME);
+        let syslinux_src = path_append(&mig_info.work_path.path, MIG_SYSLINUX_EFI_NAME);
+        let syslinux_path = path_append(&balena_efi_dir, MIG_SYSLINUX_EFI_NAME);
         debug!(
             "copy '{}' to '{}'",
             &syslinux_src.display(),
@@ -218,8 +220,8 @@ impl BootManager for EfiBootManager {
             ),
         ))?;
 
-        let sysldr_src = path_append(&mig_info.work_path.path, MIG_SYSLINUX_LOADER_NAME);
-        let sysldr_path = path_append(&balena_efi_dir, MIG_SYSLINUX_LOADER_NAME);
+        let sysldr_src = path_append(&mig_info.work_path.path, MIG_SYSLINUX_LOADER_NAME_X64);
+        let sysldr_path = path_append(&balena_efi_dir, MIG_SYSLINUX_LOADER_NAME_X64);
         debug!(
             "copy '{}' to '{}'",
             &sysldr_src.display(),
@@ -244,7 +246,7 @@ impl BootManager for EfiBootManager {
             ))?;
         }
 
-        let syslinux_cfg_path = path_append(balena_efi_dir, EFI_SYSLINUX_CONFIG_FILE);
+        let syslinux_cfg_path = path_append(balena_efi_dir, EFI_SYSLINUX_CONFIG_FILE_X64);
         let os_api = OSApi::new()?;
 
         debug!("writing '{}'", &syslinux_cfg_path.display());

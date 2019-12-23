@@ -11,16 +11,22 @@ pub const SYSTEM_CONNECTIONS_DIR: &str = "system-connections";
 pub const DEFAULT_MIGRATE_CONFIG: &str = "balena-migrate.yml";
 
 #[allow(dead_code)]
-pub const MIG_SYSLINUX_NAME: &str = "syslinux.efi";
+pub const MIG_SYSLINUX_EFI_NAME: &str = "syslinux.efi";
 #[allow(dead_code)]
-pub const MIG_SYSLINUX_LOADER_NAME: &str = "ldlinux.e64";
+pub const MIG_SYSLINUX_LOADER_NAME_X64: &str = "ldlinux.e64";
+#[allow(dead_code)]
+pub const MIG_SYSLINUX_LOADER_NAME_IA32: &str = "ldlinux.e32";
+
+#[allow(dead_code)]
+pub const EFI_SYSLINUX_CONFIG_FILE_X64: &str = "syslx64.cfg";
+#[allow(dead_code)]
+pub const EFI_SYSLINUX_CONFIG_FILE_IA32: &str = "syslia32.cfg";
+#[allow(dead_code)]
+pub const EFI_SYSLINUX_CONFIG_FILE_ANY: &str = "syslinux.cfg";
 
 pub const MIG_KERNEL_NAME: &str = "balena-migrate.zImage";
 pub const MIG_INITRD_NAME: &str = "balena-migrate.initrd";
 pub const MIG_DTB_NAME: &str = "balena-migrate.dtb";
-
-#[allow(dead_code)]
-pub const EFI_SYSLINUX_CONFIG_FILE: &str = "syslinux.cfg";
 
 #[allow(dead_code)]
 pub const APPROX_MEM_THRESHOLD: u64 = 1024 * 1024;
@@ -50,33 +56,6 @@ pub const DEF_BLOCK_SIZE: usize = 512;
 pub const STAGE1_MEM_THRESHOLD: u64 = 1024 * 1024 * 100; // 100 MB
 
 // Default balena partition labels and FS types
-pub const BALENA_BOOT_PART: &str = "resin-boot";
-pub const BALENA_BOOT_FSTYPE: &str = "vfat";
-
-pub const BALENA_ROOTA_PART: &str = "resin-rootA";
-pub const BALENA_ROOTA_FSTYPE: &str = "ext4";
-pub const BALENA_ROOTB_PART: &str = "resin-rootB";
-pub const BALENA_ROOTB_FSTYPE: &str = "ext4";
-pub const BALENA_STATE_PART: &str = "resin-state";
-pub const BALENA_STATE_FSTYPE: &str = "ext4";
-
-pub const BALENA_DATA_PART: &str = "resin-data";
-pub const BALENA_DATA_FSTYPE: &str = "ext4";
-
-pub const PART_NAME: &[&str] = &[
-    BALENA_BOOT_PART,
-    BALENA_ROOTA_PART,
-    BALENA_ROOTB_PART,
-    BALENA_STATE_PART,
-    BALENA_DATA_PART,
-];
-pub const PART_FSTYPE: &[&str] = &[
-    BALENA_BOOT_FSTYPE,
-    BALENA_ROOTA_FSTYPE,
-    BALENA_ROOTB_FSTYPE,
-    BALENA_STATE_FSTYPE,
-    BALENA_DATA_FSTYPE,
-];
 
 #[derive(Debug, Deserialize, Serialize, Clone)]
 pub(crate) enum BootType {
@@ -102,6 +81,7 @@ pub(crate) enum DeviceType {
 #[derive(Debug, Clone)]
 pub enum OSArch {
     AMD64,
+    #[cfg(target_os = "linux")]
     ARMHF,
     I386,
     /*
@@ -132,14 +112,17 @@ impl FailMode {
         &FailMode::Reboot
     }
 }
-
 #[derive(Debug, Clone)]
 pub(crate) enum FileType {
     GZipOSImage,
+    #[cfg(target_os = "linux")]
     OSImage,
+    #[cfg(target_os = "linux")]
     KernelAMD64,
+    #[cfg(target_os = "linux")]
     KernelARMHF,
     //    KernelI386,
+    #[cfg(target_os = "linux")]
     KernelAARCH64,
     InitRD,
     Json,
@@ -149,6 +132,7 @@ pub(crate) enum FileType {
 }
 
 impl FileType {
+    #[cfg(target_os = "linux")]
     pub fn get_descr(&self) -> &str {
         match self {
             FileType::GZipOSImage => "gzipped balena OS image",

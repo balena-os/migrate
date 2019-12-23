@@ -6,8 +6,7 @@ use crate::{
     common::{
         config::migrate_config::DeviceSpec, device_info::DeviceInfo, path_info::PathInfo, MigError,
     },
-    defs::FileType,
-    defs::OSArch,
+    defs::{FileType, OSArch},
 };
 
 #[cfg(target_os = "windows")]

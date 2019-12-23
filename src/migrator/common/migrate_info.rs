@@ -13,8 +13,7 @@ use crate::{
         wifi_config::WifiConfig,
         Config, FileInfo, MigError, MigErrorKind,
     },
-    defs::FileType,
-    defs::OSArch,
+    defs::{FileType, OSArch},
 };
 
 // *************************************************************************************************
