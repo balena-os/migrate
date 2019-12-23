@@ -1,4 +1,4 @@
-use log::{error, info};
+use log::{error, debug, info};
 
 use crate::{
     common::{
@@ -23,7 +23,8 @@ impl IntelNuc {
         s2_cfg: &mut Stage2ConfigBuilder,
     ) -> Result<IntelNuc, MigError> {
         const SUPPORTED_OSSES: &'static [&'static str] =
-            &["Microsoft Windows 10 Enterprise Evaluation"];
+            &["Microsoft Windows 10 Enterprise Evaluation",
+              "Microsoft Windows 10 Pro"];
 
         let os_name = &mig_info.os_name;
         // TODO: find replacement for file command in windows
@@ -112,6 +113,8 @@ impl Device for IntelNuc {
         config: &Config,
         s2_cfg: &mut Stage2ConfigBuilder,
     ) -> Result<(), MigError> {
+        debug!("setup entered");
+
         let kernel_opts = if let Some(ref kernel_opts) = config.migrate.get_kernel_opts() {
             kernel_opts.clone()
         } else {

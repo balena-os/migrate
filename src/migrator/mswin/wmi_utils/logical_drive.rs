@@ -110,7 +110,11 @@ impl<'a> LogicalDrive {
             name: String::from(res_map.get_string_property("Caption")?),
             device_id: String::from(res_map.get_string_property("DeviceID")?),
             status: String::from(res_map.get_string_property("Status")?),
-            media_type: MediaType::from_int(res_map.get_int_property("MediaType")?),
+            media_type: if let Some(mediatype) = res_map.get_opt_int_property("MediaType")? {
+             MediaType::from_int(mediatype)
+            } else {
+                MediaType::Unknown
+            },
             file_system: FileSystem::from_str(res_map.get_string_property("FileSystem")?),
             size: res_map.get_uint_property("Size")?,
             free_space: res_map.get_uint_property("FreeSpace")?,

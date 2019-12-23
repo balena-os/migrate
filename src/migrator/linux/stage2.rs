@@ -49,7 +49,7 @@ const S2_REV: u32 = 5;
 
 // TODO: set this to Info once mature
 const INIT_LOG_LEVEL: Level = Level::Trace;
-
+const DEBUG_CONSOLE_DELAY: u64 = 5;
 const MIGRATE_TEMP_DIR: &str = "/migrate_tmp";
 
 // TODO: replace removed command checks ?
@@ -122,6 +122,7 @@ impl<'a> Stage2 {
             }
             Err(why) => {
                 error!("Failed to mount boot file system, giving up: {:?}", why);
+                thread::sleep(Duration::new(2 * DEBUG_CONSOLE_DELAY, 0));
                 return Err(MigError::displayed());
             }
         };
@@ -143,6 +144,7 @@ impl<'a> Stage2 {
                     stage2_cfg_file.display(),
                     why
                 );
+                thread::sleep(Duration::new(2 * DEBUG_CONSOLE_DELAY, 0));
                 // TODO: could try to restore former boot config anyway
                 return Err(MigError::displayed());
             }
@@ -167,6 +169,8 @@ impl<'a> Stage2 {
                 warn!("mount_all returned an error: {:?}", why);
             }
         }
+
+        //thread::sleep(Duration::new(10, 0));
 
         // try switch logging to a persistent log
         let log_path = if let Some(log_path) = mounts.get_log_path() {
@@ -215,7 +219,7 @@ impl<'a> Stage2 {
     // Do the actual work once drives are mounted and config is read
 
     pub fn migrate(&mut self) -> Result<(), MigError> {
-        trace!("migrate: entered");
+        debug!("migrate: entered");
 
         let device_type = self.config.get_device_type();
         let boot_type = self.config.get_boot_type();
@@ -254,6 +258,8 @@ impl<'a> Stage2 {
             info!("Done waiting, continuing now");
         }
 
+        thread::sleep(Duration::from_secs(DEBUG_CONSOLE_DELAY));
+
         let device = device_impl::from_config(device_type, boot_type)?;
         if device.restore_boot(&self.mounts.borrow(), &self.config) {
             info!("Boot configuration was restored sucessfully");
@@ -265,7 +271,7 @@ impl<'a> Stage2 {
 
         sync();
         // TODO: debug, remove this
-        thread::sleep(Duration::from_secs(3));
+        thread::sleep(Duration::from_secs(DEBUG_CONSOLE_DELAY));
 
         info!("migrating {:?} boot type: {:?}", device_type, boot_type);
 
