@@ -22,7 +22,7 @@ use crate::{
         stage2_config::{Stage2Config, Stage2ConfigBuilder},
         Config, MigErrCtx, MigError, MigErrorKind,
     },
-    defs::{BootType, BALENA_FILE_TAG, MIG_DTB_NAME, MIG_INITRD_NAME, MIG_KERNEL_NAME},
+    defs::{BootType, BALENA_FILE_TAG, MIG_INITRD_NAME, MIG_KERNEL_NAME},
     linux::{
         linux_common::restore_backups,
         linux_defs::{
@@ -36,6 +36,9 @@ use crate::{
 // TODO: this might be a bit of a tight fit, allow (s|h)d([a-z])(\d+) too ?
 const UBOOT_DRIVE_FILTER_REGEX: &str = r#"^mmcblk\d+$"#;
 const UBOOT_DRIVE_REGEX: &str = r#"^/dev/mmcblk(\d+)p(\d+)$"#;
+
+// TODO: use individual, correctly named files rather than one dedicated one
+pub const MIG_DTB_NAME: &str = "balena-migrate.dtb";
 
 const UENV_TXT: &str = r###"
 loadaddr=0x82000000

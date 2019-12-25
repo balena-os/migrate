@@ -27,6 +27,7 @@ pub(crate) mod file_digest;
 
 pub(crate) mod disk_util;
 
+#[cfg(target_os = "linux")]
 pub(crate) mod backup;
 
 pub(crate) mod migrate_info;

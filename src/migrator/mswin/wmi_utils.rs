@@ -26,8 +26,6 @@ pub(crate) use partition::Partition;
 //const VERBOSE: bool = false;
 // const VERBOSE: bool = true;
 
-const MODULE: &str = "mswin::wmi_utils";
-
 const EMPTY_STR: &str = "";
 pub(crate) const NS_CVIM2: &str = "ROOT\\CIMV2";
 const NS_MSW_STORAGE: &str = r"ROOT\Microsoft\Windows\Storage";
@@ -55,12 +53,12 @@ pub(crate) struct WmiUtils {}
 
 impl WmiUtils {
     /*    pub fn new(namespace:  &str) -> Result<WmiUtils, MigError> {
-            debug!("{}::new: entered", MODULE);
+            debug!("new: entered");
             Ok(Self { wmi_api: Rc::new(WmiAPI::get_api(namespace)?), })
         }
 
         pub fn wmi_query(&self, query: &str) -> Result<Vec<HashMap<String, Variant>>, MigError> {
-            debug!("{}::wmi_query: entered with '{}'", MODULE, query);
+            debug!("wmi_query: entered with '{}'",  query);
             Ok(self.wmi_api.raw_query(query)?)
         }
     */
@@ -186,10 +184,10 @@ impl WmiUtils {
     /*  make this query_partitions (if required), individual partitions can be queried fron drive
         pub fn get_partition_info(&self, disk_index: u64, partition_index: u64) -> Result<WmiPartitionInfo, MigError> {
             let query = format!("SELECT Caption,Bootable,Size,NumberOfBlocks,Type,BootPartition,StartingOffset FROM Win32_DiskPartition where DiskIndex={} and Index={}", disk_index, partition_index);
-            debug!("{}::get_partition_info: performing WMI Query: '{}'", MODULE, query);
+            debug!("get_partition_info: performing WMI Query: '{}'", query);
             let mut q_res = self.wmi_api.raw_query(&query)?;
             match q_res.len() {
-                0 => Err(MigError::from_remark(MigErrorKind::NotFound,&format!("{}::get_partition_info: the query returned an empty result set: '{}'", MODULE, query))),
+                0 => Err(MigError::from_remark(MigErrorKind::NotFound,&format!("get_partition_info: the query returned an empty result set: '{}'", query))),
                 1 => {
                     let res_map = QueryRes::new(q_res.pop().unwrap());
                     Ok(WmiPartitionInfo{
@@ -205,7 +203,7 @@ impl WmiUtils {
                         partition_index,
                     })
                 },
-                _ => Err(MigError::from_remark(MigErrorKind::InvParam, &format!("{}::get_partition_info: invalid result cout for query, expected 1, got  {}",MODULE, q_res.len()))),
+                _ => Err(MigError::from_remark(MigErrorKind::InvParam, &format!("get_partition_info: invalid result cout for query, expected 1, got  {}", q_res.len()))),
             }
         }
     */
@@ -216,7 +214,7 @@ impl WmiUtils {
         let mut result: Vec<String> = Vec::new();
         for res in q_res {
             /*for key in res.keys() {
-                debug!("{}::query_drive_letters: key: {}, value: {:?}", MODULE, key, res.get(key).unwrap());
+                debug!("query_drive_letters: key: {}, value: {:?}", key, res.get(key).unwrap());
             }*/
             result.push(String::from(
                 QueryRes::new(&res).get_string_property("DeviceID")?,
@@ -226,6 +224,7 @@ impl WmiUtils {
         Ok(result)
     }
 
+    #[allow(dead_code)]
     pub fn test_get_drive(disk_index: u64) -> Result<(), MigError> {
         let query = format!("SELECT * FROM MSFT_Disk WHERE Number={}", disk_index);
         let mut q_res = WmiAPI::get_api(NS_MSW_STORAGE)?.raw_query(&query)?;
@@ -258,29 +257,29 @@ impl WmiUtils {
     /*
         let wmi_res = wmi_utils.wmi_query(wmi_utils::WMIQ_BootConfig)?;
 
-        info!("{}::init_sys_info: ****** QUERY: {}", MODULE, wmi_utils::WMIQ_BootConfig);
+        info!("init_sys_info: ****** QUERY: {}", wmi_utils::WMIQ_BootConfig);
         for wmi_row in wmi_res.iter() {
-            info!("{}::init_sys_info: *** ROW START", MODULE);
+            info!("init_sys_info: *** ROW START");
             for (key,value) in wmi_row.iter() {
-                info!("{}::init_sys_info:   {} -> {:?}", MODULE, key, value);
+                info!("init_sys_info:   {} -> {:?}", key, value);
             }
         }
 
         let wmi_res = wmi_utils.wmi_query(wmi_utils::WMIQ_Disk)?;
-        info!("{}::init_sys_info: ****** QUERY: {}", MODULE, wmi_utils::WMIQ_Disk);
+        info!("init_sys_info: ****** QUERY: {}", wmi_utils::WMIQ_Disk);
         for wmi_row in wmi_res.iter() {
-            info!("{}::init_sys_info:   *** ROW START", MODULE);
+            info!("init_sys_info:   *** ROW START");
             for (key,value) in wmi_row.iter() {
-                info!("{}::init_sys_info:   {} -> {:?}", MODULE, key, value);
+                info!("init_sys_info:   {} -> {:?}",  key, value);
             }
         }
 
         let wmi_res = wmi_utils.wmi_query(wmi_utils::WMIQ_Partition)?;
-        info!("{}::init_sys_info: ****** QUERY: {}", MODULE, wmi_utils::WMIQ_Partition);
+        info!("init_sys_info: ****** QUERY: {}",  wmi_utils::WMIQ_Partition);
         for wmi_row in wmi_res.iter() {
-            info!("{}::init_sys_info:   *** ROW START", MODULE);
+            info!("init_sys_info:   *** ROW START",);
             for (key,value) in wmi_row.iter() {
-                info!("{}::init_sys_info:   {} -> {:?}", MODULE, key, value);
+                info!("init_sys_info:   {} -> {:?}", key, value);
             }
         }
 
@@ -332,7 +331,7 @@ impl<'a> QueryRes<'a> {
                     Ok(default)
                 }
                 _=> {
-                    Err(MigError::from_remark(MigErrorKind::InvParam,&format!("{}::get_bool_property: unexpected variant type, not BOOL for key: '{}' value: {:?}", MODULE, prop_name, variant)))
+                    Err(MigError::from_remark(MigErrorKind::InvParam,&format!("get_bool_property: unexpected variant type, not BOOL for key: '{}' value: {:?}", prop_name, variant)))
                 }
             }
         } else {
@@ -353,7 +352,7 @@ impl<'a> QueryRes<'a> {
                     Ok(val.eq_ignore_ascii_case("true"))
                 },
                 _ => {                
-                    Err(MigError::from_remark(MigErrorKind::InvParam,&format!("{}::get_bool_property: unexpected variant type, not BOOL for key: '{}' value: {:?}", MODULE, prop_name, variant)))
+                    Err(MigError::from_remark(MigErrorKind::InvParam,&format!("get_bool_property: unexpected variant type, not BOOL for key: '{}' value: {:?}", prop_name, variant)))
                 }
             }
         } else {

@@ -20,11 +20,11 @@ use crate::{
         stage2_config::{CheckedImageType, Stage2Config},
         MigErrCtx, MigError, MigErrorKind,
     },
-    defs::{DEF_BLOCK_SIZE, PART_NAME},
+    defs::DEF_BLOCK_SIZE,
     linux::{
         linux_defs::{EXT_FMT_CMD, FAT_FMT_CMD, LSBLK_CMD, PARTED_CMD, PARTPROBE_CMD, TAR_CMD},
         lsblk_info::{LsblkDevice, LsblkInfo},
-        stage2::{mounts::Mounts, FlashResult},
+        stage2::{mounts::Mounts, FlashResult, PART_NAME},
     },
 };
 

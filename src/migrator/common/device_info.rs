@@ -1,4 +1,6 @@
+#[cfg(target_os = "linux")]
 use log::error;
+
 use std::path::PathBuf;
 
 use crate::{

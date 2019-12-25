@@ -2,3 +2,5 @@
 rustflags = ["-C", "target-feature=+crt-static", "-C" , "link-args=-Wl,-zstack-size=10485760"]
 [target.i686-pc-windows-msvc]
 rustflags = ["-C", "target-feature=+crt-static"]
+#[target.i686-pc-windows-gnu]
+#rustflags = "-C panic=abort"

@@ -9,15 +9,21 @@ use std::time::Duration;
 
 use crate::{
     common::{
-        backup,
+        // backup,
         config::balena_config::ImageType,
         device::Device,
-        dir_exists, file_size, format_size_with_unit,
+        dir_exists,
+        file_size,
+        format_size_with_unit,
         migrate_info::MigrateInfo,
         os_api::OSApiImpl,
         path_append,
         stage2_config::{MountConfig, PathType, Stage2ConfigBuilder},
-        Config, MigErrCtx, MigError, MigErrorKind, MigMode,
+        Config,
+        MigErrCtx,
+        MigError,
+        MigErrorKind,
+        MigMode,
     },
     defs::{
         BACKUP_FILE, MIN_DISK_SIZE, STAGE1_MEM_THRESHOLD, STAGE2_CFG_FILE, SYSTEM_CONNECTIONS_DIR,
@@ -240,11 +246,10 @@ impl<'a> MSWMigrator {
         }
 
         let backup_path = path_append(work_dir, BACKUP_FILE);
-
-        let has_backup = self.stage2_config.set_has_backup(backup::create(
-            &backup_path,
-            self.config.migrate.get_backup_volumes(),
-        )?);
+        if !self.config.migrate.get_backup_volumes().is_empty() {
+            // TODO: enable backup in windows - howto create backup.tgz ?
+            warn!("The backup feature is not currently supported in windows - the defined backup will not be saved/restored");
+        }
 
         // TODO: this might not be a smart place to put things, everything in system-connections
         // will end up in /mnt/boot/system-connections
@@ -303,7 +308,7 @@ impl<'a> MSWMigrator {
 
         required_size += self.mig_info.config_file.get_size();
 
-        if has_backup {
+        if self.stage2_config.get_has_backup() {
             required_size += file_size(&backup_path)?;
         }
 

@@ -26,7 +26,6 @@ pub const EFI_SYSLINUX_CONFIG_FILE_ANY: &str = "syslinux.cfg";
 
 pub const MIG_KERNEL_NAME: &str = "balena-migrate.zImage";
 pub const MIG_INITRD_NAME: &str = "balena-migrate.initrd";
-pub const MIG_DTB_NAME: &str = "balena-migrate.dtb";
 
 #[allow(dead_code)]
 pub const APPROX_MEM_THRESHOLD: u64 = 1024 * 1024;

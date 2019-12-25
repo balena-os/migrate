@@ -17,11 +17,7 @@ use crate::{
         stage2_config::{PathType, Stage2Config},
         MigErrCtx, MigError, MigErrorKind,
     },
-    defs::{
-        BALENA_BOOT_FSTYPE, BALENA_BOOT_PART, BALENA_DATA_FSTYPE, BALENA_DATA_PART,
-        BALENA_ROOTA_FSTYPE, BALENA_ROOTA_PART, BALENA_ROOTB_FSTYPE, BALENA_ROOTB_PART,
-        BALENA_STATE_FSTYPE, BALENA_STATE_PART, DISK_BY_LABEL_PATH, STAGE2_CFG_FILE,
-    },
+    defs::{DISK_BY_LABEL_PATH, STAGE2_CFG_FILE},
     linux::{
         linux_common::{
             drive_from_partition, drive_to_partition, get_kernel_root_info, to_std_device_path,
@@ -29,6 +25,11 @@ use crate::{
         linux_defs::NIX_NONE,
         linux_defs::{FAT_CHK_CMD, UDEVADM_CMD},
         lsblk_info::LsblkInfo,
+        stage2::{
+            BALENA_BOOT_FSTYPE, BALENA_BOOT_PART, BALENA_DATA_FSTYPE, BALENA_DATA_PART,
+            BALENA_ROOTA_FSTYPE, BALENA_ROOTA_PART, BALENA_ROOTB_FSTYPE, BALENA_ROOTB_PART,
+            BALENA_STATE_FSTYPE, BALENA_STATE_PART,
+        },
     },
 };
 

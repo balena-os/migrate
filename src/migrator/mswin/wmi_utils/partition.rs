@@ -6,8 +6,6 @@ use crate::{
 
 use log::debug;
 
-const MODULE: &str = "mswin::wmi_utils::partition";
-
 #[derive(Debug, Clone)]
 pub(crate) struct Partition {
     name: String,
@@ -85,8 +83,8 @@ impl<'a> Partition {
             Err(MigError::from_remark(
                 MigErrorKind::NotFound,
                 &format!(
-                    "{}::from_query: unable to find disk from partition {}",
-                    MODULE, device_id
+                    "from_query: unable to find disk from partition {}",
+                    device_id
                 ),
             ))
         }
@@ -105,10 +103,7 @@ impl<'a> Partition {
 
     pub fn query_logical_drive(&self) -> Result<Option<LogicalDrive>, MigError> {
         let query = &format!("ASSOCIATORS OF {{Win32_DiskPartition.DeviceID='{}'}} WHERE AssocClass = Win32_LogicalDiskToPartition",self.device_id);
-        debug!(
-            "{}::query_logical_drive: performing WMI Query: '{}'",
-            MODULE, query
-        );
+        debug!("query_logical_drive: performing WMI Query: '{}'", query);
 
         let mut q_res = WmiAPI::get_api(NS_CVIM2)?.raw_query(query)?;
         match q_res.len() {
@@ -121,8 +116,7 @@ impl<'a> Partition {
             _ => Err(MigError::from_remark(
                 MigErrorKind::InvParam,
                 &format!(
-                    "{}::query_logical_drive: invalid result cout for query, expected 1, got  {}",
-                    MODULE,
+                    "query_logical_drive: invalid result cout for query, expected 1, got  {}",
                     q_res.len()
                 ),
             )),
@@ -165,6 +159,7 @@ impl<'a> Partition {
         &self.ptype
     }
 
+    #[allow(dead_code)]
     pub fn get_device_id(&'a self) -> &'a str {
         &self.device_id
     }

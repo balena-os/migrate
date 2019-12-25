@@ -10,7 +10,6 @@ use regex::Regex;
 
 use crate::mswin::wmi_utils::NS_CVIM2;
 
-const MODULE: &str = "mswin::wmi_utils::logical_drive";
 // const QUERY_ALL: &str = "SELECT Caption, Index, DeviceID, Size, MediaType, Status, BytesPerSector, Partitions, CompressionMethod FROM Win32_DiskDrive";
 const QUERY_BASE: &str = "SELECT Caption, DeviceID, Compressed, FileSystem, MediaType, Size, FreeSpace, VolumeDirty, Status FROM Win32_LogicalDisk";
 
@@ -95,12 +94,11 @@ impl<'a> LogicalDrive {
     }
 
     pub(crate) fn new(res_map: QueryRes) -> Result<LogicalDrive, MigError> {
-        debug!("{}::new: creating logical drive", MODULE);
+        debug!("new: creating logical drive");
 
         for key in res_map.q_result.keys() {
             debug!(
-                "{}::new: res_map key: {}: {:?}",
-                MODULE,
+                "new: res_map key: {}: {:?}",
                 key,
                 res_map.q_result.get(key).unwrap()
             );
@@ -111,7 +109,7 @@ impl<'a> LogicalDrive {
             device_id: String::from(res_map.get_string_property("DeviceID")?),
             status: String::from(res_map.get_string_property("Status")?),
             media_type: if let Some(mediatype) = res_map.get_opt_int_property("MediaType")? {
-             MediaType::from_int(mediatype)
+                MediaType::from_int(mediatype)
             } else {
                 MediaType::Unknown
             },
@@ -167,8 +165,8 @@ impl<'a> LogicalDrive {
             Err(MigError::from_remark(
                 MigErrorKind::InvParam,
                 &format!(
-                    "{}::get_supported_sizes: invalid drive letter: '{}",
-                    MODULE, self.device_id
+                    "get_supported_sizes: invalid drive letter: '{}",
+                    self.device_id
                 ),
             ))
         }

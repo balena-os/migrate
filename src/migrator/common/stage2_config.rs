@@ -446,6 +446,15 @@ impl<'a> Stage2ConfigBuilder {
         val
     }
 
+    #[cfg(target_os = "windows")]
+    pub fn get_has_backup(&self) -> bool {
+        if let Ok(has_backup) = self.has_backup.get() {
+            *has_backup
+        } else {
+            false
+        }
+    }
+
     pub fn set_gzip_internal(&mut self, val: bool) {
         self.gzip_internal.set(val);
     }

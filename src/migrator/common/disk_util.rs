@@ -11,7 +11,9 @@ use crate::{
 mod image_file;
 pub(crate) use image_file::ImageFile;
 
+#[cfg(target_os = "linux")]
 mod gzip_file;
+#[cfg(target_os = "linux")]
 pub(crate) use gzip_file::GZipFile;
 
 mod plain_file;
@@ -123,6 +125,7 @@ pub(crate) struct Disk {
 }
 
 impl Disk {
+    #[cfg(target_os = "linux")]
     pub fn from_gzip_img<P: AsRef<Path>>(image: P) -> Result<Disk, MigError> {
         Ok(Disk {
             disk: Box::new(GZipFile::new(image.as_ref())?),

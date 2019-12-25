@@ -27,11 +27,11 @@ use crate::{
         MigErrorKind,
     },
     defs::FileType,
-    defs::{PART_FSTYPE, PART_NAME},
     linux::{
         linux_common::{is_admin, is_file_type, mktemp, whereis},
         linux_defs::NIX_NONE,
         linux_defs::{FILE_CMD, LOSETUP_CMD, MKTEMP_CMD, TAR_CMD},
+        stage2::{PART_FSTYPE, PART_NAME},
     },
 };
 

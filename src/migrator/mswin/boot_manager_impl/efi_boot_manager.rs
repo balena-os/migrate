@@ -35,6 +35,7 @@ use crate::{
 };
 
 pub(crate) struct EfiBootManager {
+    #[allow(dead_code)]
     msw_device: bool,
     boot_device: Option<DeviceInfo>,
 }
