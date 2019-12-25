@@ -525,6 +525,7 @@ impl<'a> Read for PartitionReader<'a> {
     }
 }
 
+/*
 #[cfg(test)]
 mod test {
 
@@ -554,3 +555,4 @@ mod test {
         }
     }
 }
+*/

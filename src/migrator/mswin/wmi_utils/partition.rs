@@ -52,7 +52,7 @@ impl<'a> Partition {
         let device_id = res_map.get_string_property("DeviceID")?;
         // Get DiskIndex from Win32_DiskDriveToDiskPartition
         let query = &format!("ASSOCIATORS OF {{Win32_DiskPartition.DeviceID='{}'}} WHERE AssocClass = Win32_DiskDriveToDiskPartition", device_id);
-        let mut q_res = WmiAPI::get_api(NS_CVIM2)?.raw_query(query)?;
+        let q_res = WmiAPI::get_api(NS_CVIM2)?.raw_query(query)?;
         if q_res.len() == 1 {
             let disk_index = QueryRes::new(&q_res[0]).get_int_property("Index")? as usize;
             let partition_index = res_map.get_int_property("Index")? as u64;
@@ -92,7 +92,7 @@ impl<'a> Partition {
 
     pub fn get_boot_partition() -> Result<Vec<Partition>, MigError> {
         const QUERY: &str = "SELECT Caption, Index, DeviceID, Bootable, Size, NumberOfBlocks, Type, BootPartition, StartingOffset FROM Win32_DiskPartition WHERE BootPartition=true";
-        let mut q_res = WmiAPI::get_api(NS_CVIM2)?.raw_query(QUERY)?;
+        let q_res = WmiAPI::get_api(NS_CVIM2)?.raw_query(QUERY)?;
         let mut result: Vec<Partition> = Vec::new();
         for res in q_res {
             result.push(Partition::from_query(&QueryRes::new(&res))?);
@@ -151,10 +151,12 @@ impl<'a> Partition {
         self.start_offset
     }
 
+    #[allow(dead_code)]
     pub fn get_name(&'a self) -> &'a str {
         &self.name
     }
 
+    #[allow(dead_code)]
     pub fn get_ptype(&'a self) -> &'a str {
         &self.ptype
     }

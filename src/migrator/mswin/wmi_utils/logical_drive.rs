@@ -66,7 +66,7 @@ impl<'a> LogicalDrive {
         let query = format!("{} where Name='{}'", QUERY_BASE, name);
         debug!("query_drive_for_name: performing WMI Query: '{}'", query);
 
-        let mut q_res = WmiAPI::get_api(NS_CVIM2)?.raw_query(&query)?;
+        let q_res = WmiAPI::get_api(NS_CVIM2)?.raw_query(&query)?;
         if q_res.len() > 0 {
             Ok(LogicalDrive::new(QueryRes::new(&q_res[0]))?)
         } else {
@@ -84,7 +84,7 @@ impl<'a> LogicalDrive {
         let query = QUERY_BASE;
         debug!("query_all: performing WMI Query: '{}'", query);
 
-        let mut q_res = WmiAPI::get_api(NS_CVIM2)?.raw_query(query)?;
+        let q_res = WmiAPI::get_api(NS_CVIM2)?.raw_query(query)?;
         let mut result: Vec<LogicalDrive> = Vec::new();
         for res in q_res {
             let res_map = QueryRes::new(&res);

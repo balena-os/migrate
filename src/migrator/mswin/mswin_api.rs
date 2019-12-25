@@ -101,7 +101,7 @@ impl OSApiImpl for MSWinApi {
         Ok(volume_info.get_linux_path())
     }
 
-    fn expect_type<P: AsRef<Path>>(&self, file: P, ftype: &FileType) -> Result<(), MigError> {
+    fn expect_type<P: AsRef<Path>>(&self, _file: P, _ftype: &FileType) -> Result<(), MigError> {
         // TODO: do something smarter than nothing
         return Ok(());
     }

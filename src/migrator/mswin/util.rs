@@ -49,7 +49,6 @@ pub(crate) fn mount_efi() -> Result<LogicalDrive, MigError> {
         Ok(LogicalDrive::query_for_name(drive_letter)?)
     } else {
         // find free drive letter
-        let mut mount_path: Option<&str> = None;
         if let Some(drive_letter) = DRIVE_LETTERS.iter().find(|dl| {
             if let None = drive_letters.iter().find(|used| &used.as_str() == *dl) {
                 true

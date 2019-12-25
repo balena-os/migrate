@@ -25,8 +25,6 @@ pub(crate) mod path_info;
 
 pub(crate) mod file_digest;
 
-pub(crate) mod disk_util;
-
 #[cfg(target_os = "linux")]
 pub(crate) mod backup;
 

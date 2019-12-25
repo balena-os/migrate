@@ -35,6 +35,8 @@ use crate::{
     },
 };
 
+mod disk_util;
+
 // mod image_file;
 // use image_file::ImageFile;
 

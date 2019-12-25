@@ -199,7 +199,7 @@ impl DriveInfo {
 
     pub fn from_label<'a>(&'a self, label: &str) -> Result<&'a VolumeInfo, MigError> {
         for vol_info in &self.volumes {
-            if let Some(label) = vol_info.volume.get_label() {
+            if vol_info.volume.get_label().is_some() {
                 return Ok(vol_info);
             }
         }

@@ -1,7 +1,11 @@
 use failure::ResultExt;
-use log::{debug, error, info, trace, warn};
+use log::{debug, error};
+#[cfg(target_os = "linux")]
+use log::{info, trace, warn};
 use regex::Regex;
-use std::fs::{copy, create_dir_all, rename, File};
+#[cfg(target_os = "linux")]
+use std::fs::rename;
+use std::fs::{copy, create_dir_all, File};
 use std::io::Write;
 
 const SYSLINUX_CFG_TEMPLATE: &str = r#"
@@ -11,9 +15,7 @@ LABEL balena-migrate
 "#;
 
 use crate::common::call;
-use crate::defs::{
-    EFI_SYSLINUX_CONFIG_FILE_X64, MIG_SYSLINUX_LOADER_NAME_IA32, MIG_SYSLINUX_LOADER_NAME_X64,
-};
+use crate::defs::{EFI_SYSLINUX_CONFIG_FILE_X64, MIG_SYSLINUX_LOADER_NAME_X64};
 use crate::{
     common::{
         boot_manager::BootManager,
@@ -26,11 +28,10 @@ use crate::{
         Config, MigErrCtx, MigError, MigErrorKind,
     },
     defs::{BootType, MIG_INITRD_NAME, MIG_KERNEL_NAME, MIG_SYSLINUX_EFI_NAME},
-    mswin::{
-        drive_info::DriveInfo,
-        msw_defs::{
-            BALENA_EFI_DIR, EFI_BCKUP_DIR, EFI_BOOT_DIR, EFI_DEFAULT_BOOTMGR64, EFI_MS_BOOTMGR,
-        },
+    mswin::msw_defs::{
+        BALENA_EFI_DIR,
+        EFI_BOOT_DIR,
+        //EFI_BCKUP_DIR, EFI_DEFAULT_BOOTMGR64, EFI_MS_BOOTMGR,
     },
 };
 
@@ -58,10 +59,9 @@ impl BootManager for EfiBootManager {
         &mut self,
         mig_info: &MigrateInfo,
         _config: &Config,
-        s2_cfg: &mut Stage2ConfigBuilder,
+        _s2_cfg: &mut Stage2ConfigBuilder,
     ) -> Result<bool, MigError> {
-        let drive_info = DriveInfo::new()?;
-
+        // find / mount the efi drive
         let efi_drive = match DeviceInfo::for_efi() {
             Ok(efi_drive) => efi_drive,
             Err(why) => {
@@ -70,12 +70,6 @@ impl BootManager for EfiBootManager {
             }
         };
 
-        // make sure work path drive can be mapped to linux drive
-        if let None = mig_info.work_path.device_info.part_uuid {
-            error!("Cowardly refusing to migrate work partition without partuuid. Windows to linux drive name mapping is insecure");
-            return Ok(false);
-        }
-
         // make sure efi drive can be mapped to linux drive
         if let None = efi_drive.part_uuid {
             // TODO: add option to override this
@@ -83,9 +77,13 @@ impl BootManager for EfiBootManager {
             return Ok(false);
         }
 
-        let balena_efi_path = path_append(&efi_drive.mountpoint, BALENA_EFI_DIR);
+        // make sure work path drive can be mapped to linux drive
+        if let None = mig_info.work_path.device_info.part_uuid {
+            error!("Cowardly refusing to migrate work partition without partuuid. Windows to linux drive name mapping is insecure");
+            return Ok(false);
+        }
 
-        // TODO: get a better estimate for startup file size
+        let balena_efi_path = path_append(&efi_drive.mountpoint, BALENA_EFI_DIR);
 
         let mut required_space: u64 = if file_exists(path_append(&balena_efi_path, MIG_KERNEL_NAME))
         {
@@ -114,7 +112,7 @@ impl BootManager for EfiBootManager {
         let syslinux_ldr = path_append(&mig_info.work_path.path, MIG_SYSLINUX_LOADER_NAME_X64);
         if !file_exists(&syslinux_ldr) {
             error!(
-                "The syslinux executable '{}' could not be found",
+                "The syslinux loader '{}' could not be found",
                 syslinux_ldr.display()
             );
             return Ok(false);
@@ -126,6 +124,7 @@ impl BootManager for EfiBootManager {
 
         if !file_exists(path_append(&balena_efi_path, EFI_SYSLINUX_CONFIG_FILE_X64)) {
             // TODO: get a better estimate for startup file size
+            // TODO: do we need a backup for this ?
             required_space += 50;
         }
 
@@ -142,19 +141,22 @@ impl BootManager for EfiBootManager {
     fn setup(
         &self,
         mig_info: &MigrateInfo,
-        s2_cfg: &mut Stage2ConfigBuilder,
+        _s2_cfg: &mut Stage2ConfigBuilder,
         kernel_opts: &str,
     ) -> Result<(), MigError> {
         debug!("setup: entered");
+        // TODO: update this
         // for now:
         // copy our kernel & initramfs to \EFI\balena-migrate
+        // copy our syslinux.efi & loader  to \EFI\balena-migrate
+        // create syslinux config file in \EFI\balena-migrate
         // move all boot manager files in
         //    \EFI\Boot\bootx86.efi
         //    \EFI\Microsoft\Boot\bootmgrfw.efi
         // to a safe place and add a
         // create a startup.nsh file in \EFI\Boot\ that refers to our kernel & initramfs
 
-        let boot_dev = if let Some(ref boot_dev) = self.boot_device {
+        let efi_device = if let Some(ref boot_dev) = self.boot_device {
             boot_dev
         } else {
             return Err(MigError::from_remark(
@@ -165,10 +167,10 @@ impl BootManager for EfiBootManager {
 
         debug!(
             "efi drive found, setting boot manager to '{}'",
-            boot_dev.get_alt_path().display()
+            efi_device.get_alt_path().display()
         );
 
-        let balena_efi_dir = path_append(&boot_dev.mountpoint, BALENA_EFI_DIR);
+        let balena_efi_dir = path_append(&efi_device.mountpoint, BALENA_EFI_DIR);
         if !dir_exists(&balena_efi_dir)? {
             create_dir_all(&balena_efi_dir).context(MigErrCtx::from_remark(
                 MigErrorKind::Upstream,
@@ -179,12 +181,15 @@ impl BootManager for EfiBootManager {
             ))?;
         }
 
+        // TODO: check digest after file copies
+
         let kernel_path = path_append(&balena_efi_dir, MIG_KERNEL_NAME);
         debug!(
             "copy '{}' to '{}'",
             &mig_info.kernel_file.path.display(),
             &kernel_path.display()
         );
+        // TODO: check digest after copy ?
         copy(&mig_info.kernel_file.path, &kernel_path).context(MigErrCtx::from_remark(
             MigErrorKind::Upstream,
             &format!(
@@ -192,6 +197,7 @@ impl BootManager for EfiBootManager {
                 kernel_path.display()
             ),
         ))?;
+
         let initrd_path = path_append(&balena_efi_dir, MIG_INITRD_NAME);
         debug!(
             "copy '{}' to '{}'",
@@ -236,7 +242,7 @@ impl BootManager for EfiBootManager {
             ),
         ))?;
 
-        let efi_boot_dir = path_append(&boot_dev.mountpoint, EFI_BOOT_DIR);
+        let efi_boot_dir = path_append(&efi_device.mountpoint, EFI_BOOT_DIR);
         if !dir_exists(&efi_boot_dir)? {
             create_dir_all(&balena_efi_dir).context(MigErrCtx::from_remark(
                 MigErrorKind::Upstream,
@@ -247,6 +253,7 @@ impl BootManager for EfiBootManager {
             ))?;
         }
 
+        // create syslinux config file
         let syslinux_cfg_path = path_append(balena_efi_dir, EFI_SYSLINUX_CONFIG_FILE_X64);
         let os_api = OSApi::new()?;
 
@@ -257,21 +264,22 @@ impl BootManager for EfiBootManager {
 
         // TODO: prefer PARTUUID to guessed device name
 
-        let syslinux_cfg_content = if let Some(ref partuuid) = boot_dev.part_uuid {
+        let syslinux_cfg_content = if let Some(ref partuuid) = efi_device.part_uuid {
             format!(
-                "{} KERNEL {}\n APPEND ro root=PARTUUID={} rootfstype={} initrd={} rootwait\n",
+                "{} KERNEL {}\n APPEND ro root=PARTUUID={} rootfstype={} initrd={} rootwait {}\n",
                 SYSLINUX_CFG_TEMPLATE,
                 kernel_path.display(),
                 partuuid,
-                boot_dev.fs_type,
+                efi_device.fs_type,
                 initrd_path.display(),
+                kernel_opts
             )
         } else {
             return Err(MigError::from_remark(
                 MigErrorKind::InvParam,
                 &format!(
                     "No partuuid found for root device '{}'- cannot create root command",
-                    boot_dev.device
+                    efi_device.device
                 ),
             ));
         };
@@ -296,6 +304,7 @@ impl BootManager for EfiBootManager {
                 ),
             ))?;
 
+        // get relative (no driveletter) path to syslinux.efi
         let drive_letter_re = Regex::new(r#"^[a-z,A-Z]:(.*)$"#).unwrap();
         let tmp_path = syslinux_path.to_string_lossy();
         let syslinux_path = if let Some(captures) = drive_letter_re.captures(&tmp_path) {
@@ -304,6 +313,7 @@ impl BootManager for EfiBootManager {
             &tmp_path
         };
 
+        // set bootmanager to syslinux using BCDEDIT
         let cmdres = call(
             "BCDEdit",
             &["/set", "{bootmgr}", "path", &syslinux_path],

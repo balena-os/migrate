@@ -67,7 +67,7 @@ pub(crate) fn get_volume_disk_extents(path: &str) -> Result<Vec<DiskExtent>, Mig
         let _dummy = path.pop();
     }
 
-    let mut dev_path: Vec<u16> = OsStr::new(&path).encode_wide().chain(once(0)).collect();
+    let dev_path: Vec<u16> = OsStr::new(&path).encode_wide().chain(once(0)).collect();
 
     let file_handle = unsafe {
         CreateFileW(

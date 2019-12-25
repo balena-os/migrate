@@ -169,6 +169,7 @@ impl DeviceInfo {
         OSApi::new()?.device_info_for_efi()
     }
 
+    #[allow(dead_code)]
     pub fn get_kernel_cmd(&self) -> String {
         if let Some(ref partuuid) = self.part_uuid {
             format!("PARTUUID={}", partuuid)
