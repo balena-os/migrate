@@ -145,6 +145,7 @@ pub(crate) fn get_volume_disk_extents(path: &str) -> Result<Vec<DiskExtent>, Mig
     Ok(result)
 }
 
+#[allow(dead_code)]
 fn get_volumes() -> Result<Vec<String>, MigError> {
     debug!("get_volumes: entered",);
     const BUFFER_SIZE: usize = 2048;
@@ -256,6 +257,7 @@ pub(crate) fn is_efi_boot() -> Result<bool, MigError> {
     }
 }
 
+#[allow(dead_code)]
 pub fn enumerate_volumes() -> Result<i32, MigError> {
     match query_dos_device(None) {
         Ok(sl) => {

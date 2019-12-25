@@ -11,6 +11,11 @@ pub const SYSTEM_CONNECTIONS_DIR: &str = "system-connections";
 pub const DEFAULT_MIGRATE_CONFIG: &str = "balena-migrate.yml";
 
 #[allow(dead_code)]
+pub const BALENA_EFI_DIR: &str = r#"\EFI\balena-migrate"#;
+#[allow(dead_code)]
+pub const EFI_BOOT_DIR: &str = r#"\EFI\Boot"#;
+
+#[allow(dead_code)]
 pub const MIG_SYSLINUX_EFI_NAME: &str = "syslinux.efi";
 #[allow(dead_code)]
 pub const MIG_SYSLINUX_LOADER_NAME_X64: &str = "ldlinux.e64";
@@ -50,6 +55,7 @@ pub const BACKUP_FILE: &str = "backup.tgz";
 
 pub const MIN_DISK_SIZE: u64 = 2 * 1024 * 1024 * 1024; // 2 GiB
 
+#[allow(dead_code)]
 pub const DEF_BLOCK_SIZE: usize = 512;
 
 pub const STAGE1_MEM_THRESHOLD: u64 = 1024 * 1024 * 100; // 100 MB

@@ -41,6 +41,7 @@ pub(crate) struct PhysicalDrive {
     drive_type: DriveType,
 }
 
+#[allow(dead_code)]
 impl<'a> PhysicalDrive {
     pub fn query_all() -> Result<Vec<PhysicalDrive>, MigError> {
         let query = QUERY_ALL;

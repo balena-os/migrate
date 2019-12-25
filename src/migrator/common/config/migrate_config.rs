@@ -183,6 +183,7 @@ impl<'a> MigrateConfig {
         }
     }
 
+    #[cfg(target_os = "linux")]
     pub fn is_tar_internal(&self) -> bool {
         if let Some(val) = self.tar_internal {
             val

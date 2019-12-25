@@ -27,11 +27,9 @@ use crate::{
         stage2_config::Stage2ConfigBuilder,
         Config, MigErrCtx, MigError, MigErrorKind,
     },
-    defs::{BootType, MIG_INITRD_NAME, MIG_KERNEL_NAME, MIG_SYSLINUX_EFI_NAME},
-    mswin::msw_defs::{
-        BALENA_EFI_DIR,
-        EFI_BOOT_DIR,
-        //EFI_BCKUP_DIR, EFI_DEFAULT_BOOTMGR64, EFI_MS_BOOTMGR,
+    defs::{
+        BootType, BALENA_EFI_DIR, EFI_BOOT_DIR, MIG_INITRD_NAME, MIG_KERNEL_NAME,
+        MIG_SYSLINUX_EFI_NAME,
     },
 };
 

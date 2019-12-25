@@ -105,6 +105,7 @@ pub(crate) fn is_balena_file<P: AsRef<Path>>(file_name: P) -> Result<bool, MigEr
     }
 }
 
+#[allow(dead_code)]
 pub(crate) fn parse_file<P: AsRef<Path>>(
     fname: P,
     regex: &Regex,

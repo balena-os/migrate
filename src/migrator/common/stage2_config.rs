@@ -8,9 +8,8 @@ use std::str::FromStr;
 use serde::{Deserialize, Serialize};
 use serde_yaml;
 
+#[allow(dead_code)]
 pub const EMPTY_BACKUPS: &[(String, String)] = &[];
-
-const MODULE: &str = "stage2::stage2:config";
 
 use crate::{
     common::{
@@ -81,12 +80,17 @@ impl<'a> MountConfig {
         }
     }
 
+    #[allow(dead_code)]
     pub fn get_device(&'a self) -> &'a Path {
         &self.device.as_path()
     }
+
+    #[allow(dead_code)]
     pub fn get_fstype(&'a self) -> &'a str {
         &self.fstype
     }
+
+    #[allow(dead_code)]
     pub fn get_path(&'a self) -> &'a Path {
         &self.path.as_path()
     }
@@ -151,13 +155,13 @@ impl<'a> Stage2Config {
         ))?)
     }
 
+    #[allow(dead_code)]
     pub fn from_config<P: AsRef<Path>>(path: &P) -> Result<Stage2Config, MigError> {
         // TODO: Dummy, parse from yaml
         let config_str = read_to_string(path).context(MigErrCtx::from_remark(
             MigErrorKind::Upstream,
             &format!(
-                "{}::from_config: failed to read stage2_config from file: '{}'",
-                MODULE,
+                "from_config: failed to read stage2_config from file: '{}'",
                 path.as_ref().display()
             ),
         ))?;
@@ -165,10 +169,12 @@ impl<'a> Stage2Config {
         Stage2Config::from_str(&config_str)
     }
 
+    #[allow(dead_code)]
     pub fn is_log_console(&self) -> bool {
         self.log_console
     }
 
+    #[allow(dead_code)]
     pub fn get_log_level(&self) -> Level {
         if let Ok(level) = Level::from_str(&self.log_level) {
             level
@@ -177,6 +183,7 @@ impl<'a> Stage2Config {
         }
     }
 
+    #[allow(dead_code)]
     pub fn get_log_device(&'a self) -> Option<&'a Path> {
         if let Some(ref log_to) = self.log_to {
             Some(&log_to)
@@ -185,18 +192,22 @@ impl<'a> Stage2Config {
         }
     }
 
+    #[allow(dead_code)]
     pub fn has_backup(&self) -> bool {
         self.has_backup
     }
 
+    #[allow(dead_code)]
     pub fn is_no_flash(&self) -> bool {
         self.no_flash
     }
 
+    #[allow(dead_code)]
     pub fn is_gzip_internal(&self) -> bool {
         self.gzip_internal
     }
 
+    #[allow(dead_code)]
     pub fn get_force_flash_device(&'a self) -> Option<&'a PathBuf> {
         if let Some(ref flash_device) = self.force_flash_device {
             Some(flash_device)
@@ -205,6 +216,7 @@ impl<'a> Stage2Config {
         }
     }
 
+    #[allow(dead_code)]
     pub fn get_migrate_delay(&self) -> u64 {
         if let Some(val) = self.migrate_delay {
             val
@@ -213,6 +225,7 @@ impl<'a> Stage2Config {
         }
     }
 
+    #[allow(dead_code)]
     pub fn get_watchdogs(&self) -> Option<&Vec<WatchdogCfg>> {
         if let Some(ref val) = self.watchdogs {
             Some(val)
@@ -221,22 +234,27 @@ impl<'a> Stage2Config {
         }
     }
 
+    #[allow(dead_code)]
     pub fn get_boot_type(&'a self) -> &'a BootType {
         &self.boot_type
     }
 
+    #[allow(dead_code)]
     pub fn get_device_type(&'a self) -> &'a DeviceType {
         &self.device_type
     }
 
+    #[allow(dead_code)]
     pub fn get_balena_image(&'a self) -> &'a CheckedImageType {
         &self.balena_image
     }
 
+    #[allow(dead_code)]
     pub fn get_balena_config(&'a self) -> &'a Path {
         self.balena_config.as_path()
     }
 
+    #[allow(dead_code)]
     pub fn get_boot_backups(&'a self) -> &'a [(String, String)] {
         if let Some(ref boot_bckup) = self.boot_bckup {
             boot_bckup.as_slice()
@@ -245,10 +263,12 @@ impl<'a> Stage2Config {
         }
     }
 
+    #[allow(dead_code)]
     pub fn get_work_path(&'a self) -> &'a PathType {
         &self.work_path
     }
 
+    #[allow(dead_code)]
     pub fn get_fail_mode(&'a self) -> &'a FailMode {
         &self.fail_mode
     }
@@ -437,10 +457,12 @@ impl<'a> Stage2ConfigBuilder {
         self.work_path.set_ref(val);
     }
 
+    #[allow(dead_code)]
     pub fn set_boot_bckup(&mut self, boot_backup: Vec<(String, String)>) {
         self.boot_bckup.set(boot_backup);
     }
 
+    #[allow(dead_code)]
     pub fn set_has_backup(&mut self, val: bool) -> bool {
         self.has_backup.set(val);
         val

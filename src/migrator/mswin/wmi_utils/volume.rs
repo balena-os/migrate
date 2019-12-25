@@ -55,6 +55,7 @@ pub(crate) struct Volume {
     drive_type: DriveType,
 }
 
+#[allow(dead_code)]
 impl<'a> Volume {
     /*    pub fn get_query_all() -> &'static str {
             QUERY_ALL

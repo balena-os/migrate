@@ -20,6 +20,7 @@ pub(crate) struct Partition {
     start_offset: u64,
 }
 
+#[allow(dead_code)]
 impl<'a> Partition {
     pub(crate) fn new(disk_index: usize, res_map: QueryRes) -> Result<Partition, MigError> {
         let partition_index = res_map.get_int_property("Index")? as u64;
@@ -151,17 +152,14 @@ impl<'a> Partition {
         self.start_offset
     }
 
-    #[allow(dead_code)]
     pub fn get_name(&'a self) -> &'a str {
         &self.name
     }
 
-    #[allow(dead_code)]
     pub fn get_ptype(&'a self) -> &'a str {
         &self.ptype
     }
 
-    #[allow(dead_code)]
     pub fn get_device_id(&'a self) -> &'a str {
         &self.device_id
     }

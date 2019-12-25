@@ -31,15 +31,6 @@ use crate::{
     },
 };
 
-// mod image_file;
-// use image_file::ImageFile;
-
-// mod gzip_file;
-// use gzip_file::GZipFile;
-
-// mod plain_file;
-// use plain_file::PlainFile;
-
 const REQUIRED_CMDS: &[&str] = &[FILE_CMD, MKTEMP_CMD, TAR_CMD, LOSETUP_CMD];
 const DEF_BUFFER_SIZE: usize = 1024 * 1024;
 

@@ -18,6 +18,7 @@ const CHECK_EFI_PATH: &str = r#"\EFI\Microsoft\boot\bootmgfw.efi"#;
 
 const MS2LINUX_PATH_RE: &str = r#"^\\\\\?\\[a-z,A-Z]:(.*)$"#;
 
+#[allow(dead_code)]
 pub(crate) fn to_linux_path(path: &Path) -> PathBuf {
     lazy_static! {
         static ref MS2LINUX_PATH_REGEX: Regex = Regex::new(MS2LINUX_PATH_RE).unwrap();

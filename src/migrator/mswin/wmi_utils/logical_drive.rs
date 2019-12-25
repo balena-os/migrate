@@ -51,6 +51,7 @@ pub(crate) struct LogicalDrive {
     dirty: bool,
 }
 
+#[allow(dead_code)]
 impl<'a> LogicalDrive {
     /*
         pub(crate) fn query_drive_letters() -> Result<Vec<String>, MigError> {

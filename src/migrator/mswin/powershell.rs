@@ -24,8 +24,10 @@ const PS_CMD_IS_SECURE_BOOT: &str = "Confirm-SecureBootUEFI";
 
 const PS_CMD_REBOOT: &str = "Restart-Computer";
 
+#[allow(dead_code)]
 const PS_ARGS_VERSION_PARAMS: [&'static str; 1] = ["$PSVersionTable.PSVersion"];
 
+#[allow(dead_code)]
 pub type PSVER = (u32, u32);
 
 // Try params:
@@ -47,6 +49,7 @@ trait PsFailed<T> {
     fn ps_failed(ps_res: &PSRes, command: &T, function: &str) -> MigError;
 }
 
+#[allow(dead_code)]
 pub(crate) fn has_command(cmd: &str) -> Result<bool, MigError> {
     let cmd_res = call_from_stdin(&format!("Get-Command {};", cmd), true)?;
     if cmd_res.ps_ok {
@@ -97,6 +100,7 @@ pub(crate) fn is_secure_boot() -> Result<bool, MigError> {
     }
 }
 
+#[allow(dead_code)]
 pub(crate) fn get_ps_ver() -> Result<(u32, u32), MigError> {
     debug!("{}::get_ps_ver(): called", MODULE);
 
