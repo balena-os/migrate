@@ -11,7 +11,6 @@ use crate::{
         call,
         device_info::DeviceInfo,
         dir_exists,
-        disk_util::LabelType,
         file_digest::check_digest,
         file_exists, format_size_with_unit,
         migrate_info::MigrateInfo,
@@ -22,6 +21,7 @@ use crate::{
     },
     defs::{BootType, MIG_INITRD_NAME, MIG_KERNEL_NAME},
     linux::{
+        disk_util::LabelType,
         linux_defs::{
             BOOT_PATH, GRUB_CONFIG_DIR, GRUB_CONFIG_FILE, GRUB_MIN_VERSION, KERNEL_CMDLINE_PATH,
             ROOT_PATH,

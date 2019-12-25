@@ -6,7 +6,10 @@ use std::path::{Path, PathBuf};
 
 const DEF_READ_BUFFER: usize = 1024 * 1024;
 
-use crate::common::{disk_util::image_file::ImageFile, MigError, MigErrorKind};
+use crate::{
+    common::{MigError, MigErrorKind},
+    linux::disk_util::image_file::ImageFile,
+};
 
 pub(crate) struct GZipFile {
     path: PathBuf,

@@ -15,27 +15,21 @@ use std::time::Duration;
 use serde_yaml;
 
 use crate::{
-    common::disk_util::PartitionType,
     common::{
         call,
         config::balena_config::{FSDump, FileRef, ImageType, PartDump},
-        disk_util::{Disk, PartitionIterator, PartitionReader}, //  , ImageFile, GZipFile, PlainFile },
         file_digest::get_default_digest,
-        path_append,
-        MigErrCtx,
-        MigError,
-        MigErrorKind,
+        path_append, MigErrCtx, MigError, MigErrorKind,
     },
     defs::FileType,
     linux::{
+        disk_util::{Disk, PartitionIterator, PartitionReader, PartitionType},
         linux_common::{is_admin, is_file_type, mktemp, whereis},
         linux_defs::NIX_NONE,
         linux_defs::{FILE_CMD, LOSETUP_CMD, MKTEMP_CMD, TAR_CMD},
         stage2::{PART_FSTYPE, PART_NAME},
     },
 };
-
-mod disk_util;
 
 // mod image_file;
 // use image_file::ImageFile;

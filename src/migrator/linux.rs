@@ -39,6 +39,8 @@ pub(crate) mod linux_api;
 pub(crate) mod lsblk_info;
 //pub(crate) use lsblk_info::LsblkInfo;
 
+pub(crate) mod disk_util;
+
 pub(crate) mod linux_common;
 use crate::linux::linux_common::{get_mem_info, whereis};
 pub(crate) use linux_common::is_admin;

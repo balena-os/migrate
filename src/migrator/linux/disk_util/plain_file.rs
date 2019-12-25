@@ -3,7 +3,10 @@ use std::fs::{File, OpenOptions};
 use std::io::{Read, Seek, SeekFrom};
 use std::path::{Path, PathBuf};
 
-use crate::common::{disk_util::image_file::ImageFile, MigErrCtx, MigError, MigErrorKind};
+use crate::{
+    common::{MigErrCtx, MigError, MigErrorKind},
+    linux::disk_util::image_file::ImageFile,
+};
 
 pub(crate) struct PlainFile {
     path: PathBuf,

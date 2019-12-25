@@ -22,6 +22,21 @@ pub(crate) use plain_file::PlainFile;
 // TODO: implement GPT partition
 
 #[derive(Debug)]
+pub(crate) enum LabelType {
+    GPT,
+    Dos,
+    Other,
+}
+
+impl LabelType {
+    pub fn from_device<P: AsRef<Path>>(device_path: P) -> Result<LabelType, MigError> {
+        let device_path = device_path.as_ref();
+        // TODO: provide propper device block size
+        Ok(Disk::from_drive_file(device_path, None)?.get_label()?)
+    }
+}
+
+#[derive(Debug)]
 pub(crate) enum PartitionType {
     Container,
     Fat,
@@ -101,21 +116,6 @@ pub(crate) struct PartInfo {
     pub status: u8,
     pub start_lba: u64,
     pub num_sectors: u64,
-}
-
-#[derive(Debug)]
-pub(crate) enum LabelType {
-    GPT,
-    Dos,
-    Other,
-}
-
-impl LabelType {
-    pub fn from_device<P: AsRef<Path>>(device_path: P) -> Result<LabelType, MigError> {
-        let device_path = device_path.as_ref();
-        // TODO: provide propper device block size
-        Ok(Disk::from_drive_file(device_path, None)?.get_label()?)
-    }
 }
 
 pub(crate) struct Disk {
