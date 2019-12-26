@@ -311,6 +311,7 @@ impl BootManager for EfiBootManager {
             &tmp_path
         };
 
+/* TODO: try enabling syslinux bootmanager manually instead of this radical solution
         // set bootmanager to syslinux using BCDEDIT
         let cmdres = call(
             "BCDEdit",
@@ -333,7 +334,7 @@ impl BootManager for EfiBootManager {
                 ),
             ));
         }
-
+*/
         Ok(())
     }
 
