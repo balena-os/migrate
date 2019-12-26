@@ -11,7 +11,7 @@ pub const SYSTEM_CONNECTIONS_DIR: &str = "system-connections";
 pub const DEFAULT_MIGRATE_CONFIG: &str = "balena-migrate.yml";
 
 #[allow(dead_code)]
-pub const BALENA_EFI_DIR: &str = r#"\EFI\balena-migrate"#;
+pub const BALENA_EFI_DIR: &str = r#"\EFI\balena"#;
 #[allow(dead_code)]
 pub const EFI_BOOT_DIR: &str = r#"\EFI\Boot"#;
 
