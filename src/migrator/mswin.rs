@@ -251,6 +251,8 @@ impl<'a> MSWMigrator {
             warn!("The backup feature is not currently supported in windows - the defined backup will not be saved/restored");
         }
 
+        self.stage2_config.set_has_backup(false);
+
         // TODO: this might not be a smart place to put things, everything in system-connections
         // will end up in /mnt/boot/system-connections
         trace!("nwmgr_files");
