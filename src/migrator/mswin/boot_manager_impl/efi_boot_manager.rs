@@ -369,7 +369,7 @@ impl BootManager for EfiBootManager {
         debug!("Created new BCD entry with ID: {}", bcd_id);
 
         EfiBootManager::bcd_edit(
-            &["/set", &bcd_id,"device",efi_drive_letter],
+            &["/set", &bcd_id,"device",&format!("partition={}", efi_drive_letter)],
             false)
             .context(MigErrCtx::from_remark(MigErrorKind::Upstream, "Failed to set BCD entry device"))?;
 
