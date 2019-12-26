@@ -4,8 +4,6 @@ use log::debug;
 use serde::{Deserialize, Serialize};
 use std::path::PathBuf;
 
-const MODULE: &str = "common::config::balena_config";
-
 use crate::defs::DEFAULT_API_CHECK_TIMEOUT;
 
 // TODO: also store optional bootable flag, partition type and start offset ?
@@ -89,20 +87,14 @@ impl<'a> BalenaConfig {
             if let None = self.image {
                 return Err(MigError::from_remark(
                     MigErrorKind::InvParam,
-                    &format!(
-                        "{}::check: no balena OS image was specified in mode: IMMEDIATE",
-                        MODULE
-                    ),
+                        "check: no balena OS image was specified in mode: IMMEDIATE",
                 ));
             }
 
             if let None = self.config {
                 return Err(MigError::from_remark(
                     MigErrorKind::InvParam,
-                    &format!(
-                        "{}::check: no config.json was specified in mode: IMMEDIATE",
-                        MODULE
-                    ),
+                    "check: no config.json was specified in mode: IMMEDIATE",
                 ));
             }
         }

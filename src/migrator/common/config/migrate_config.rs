@@ -9,7 +9,6 @@ use crate::{
 use crate::common::config::balena_config::FileRef;
 use serde::{Deserialize, Serialize};
 
-const MODULE: &str = "common::config::migrate_config";
 const NO_NMGR_FILES: &[PathBuf] = &[];
 
 const NO_BACKUP_VOLUMES: &[VolumeConfig] = &[];
@@ -34,8 +33,8 @@ impl MigMode {
                 return Err(MigError::from_remark(
                     MigErrorKind::InvParam,
                     &format!(
-                        "{}::new: invalid value for parameter mode: '{}'",
-                        MODULE, mode
+                        "new: invalid value for parameter mode: '{}'",
+                        mode
                     ),
                 ));
             }
