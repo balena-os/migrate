@@ -1,6 +1,6 @@
 use failure::ResultExt;
-use log::{debug, error};
 use lazy_static::lazy_static;
+use log::{debug, error};
 #[cfg(target_os = "linux")]
 use log::{info, trace, warn};
 use regex::Regex;
@@ -50,19 +50,14 @@ impl EfiBootManager {
 }
 
 impl EfiBootManager {
-    fn bcd_edit(params: &[&str], parse_id: bool) ->  Result<Option<String>,MigError> {
+    fn bcd_edit(params: &[&str], parse_id: bool) -> Result<Option<String>, MigError> {
         lazy_static! {
             static ref BCD_ID_RE: Regex = Regex::new(r#"^The entry (\{[a-z,0-9]{8}-[a-z,0-9]{4}-[a-z,0-9]{4}-[a-z,0-9]{4}-[a-z,0-9]{12}\}) was successfully created.$"#).unwrap();
             static ref BCD_OK_RE: Regex = Regex::new(r#"The operation completed successfully."#).unwrap();
         }
 
         debug!("calling bcdedit with {:?}", params);
-        let cmdres
-            = call(
-            "BCDEdit",
-            params,
-            true,
-        ).context(MigErrCtx::from_remark(
+        let cmdres = call("BCDEdit", params, true).context(MigErrCtx::from_remark(
             MigErrorKind::Upstream,
             "Failed to execute bcdedit",
         ))?;
@@ -70,12 +65,14 @@ impl EfiBootManager {
         if cmdres.status.success() {
             debug!("BCDEDit result: '{}'", cmdres.stdout);
             if parse_id {
-                let bcd_id = if let Some(captures) = BCD_ID_RE
-                    .captures(&cmdres.stdout) {
+                let bcd_id = if let Some(captures) = BCD_ID_RE.captures(&cmdres.stdout) {
                     captures.get(1).unwrap().as_str()
                 } else {
-                    error!("Failed to parse bcd id from bcdedit output '{}'", cmdres.stdout);
-                    return Err(MigError::displayed())
+                    error!(
+                        "Failed to parse bcd id from bcdedit output '{}'",
+                        cmdres.stdout
+                    );
+                    return Err(MigError::displayed());
                 };
 
                 Ok(Some(String::from(bcd_id)))
@@ -83,13 +80,16 @@ impl EfiBootManager {
                 if BCD_OK_RE.is_match(&cmdres.stdout) {
                     Ok(None)
                 } else {
-                    error!("Failed to parse bcdedit success message from '{}'", cmdres.stdout);
-                    return Err(MigError::displayed())
+                    error!(
+                        "Failed to parse bcdedit success message from '{}'",
+                        cmdres.stdout
+                    );
+                    return Err(MigError::displayed());
                 }
             }
         } else {
             error!("bcdedit failed with message: '{}'", cmdres.stderr);
-            return Err(MigError::displayed())
+            return Err(MigError::displayed());
         }
     }
 }
@@ -361,58 +361,50 @@ impl BootManager for EfiBootManager {
         // create a new BCD entry and retrieve BCD ID
         // bcdedit /create /d "balena-migrate" /application startup
         let bcd_id = EfiBootManager::bcd_edit(
-            &["/create", "/d","balena-migrate","/application","startup"],
-            true)
-            .context(MigErrCtx::from_remark(MigErrorKind::Upstream, "Failed to create new BCD entry"))?
-            .unwrap();
+            &["/create", "/d", "balena-migrate", "/application", "startup"],
+            true,
+        )
+        .context(MigErrCtx::from_remark(
+            MigErrorKind::Upstream,
+            "Failed to create new BCD entry",
+        ))?
+        .unwrap();
 
         debug!("Created new BCD entry with ID: {}", bcd_id);
 
         EfiBootManager::bcd_edit(
-            &["/set", &bcd_id,"device",&format!("partition={}", efi_drive_letter)],
-            false)
-            .context(MigErrCtx::from_remark(MigErrorKind::Upstream, "Failed to set BCD entry device"))?;
+            &[
+                "/set",
+                &bcd_id,
+                "device",
+                &format!("partition={}", efi_drive_letter),
+            ],
+            false,
+        )
+        .context(MigErrCtx::from_remark(
+            MigErrorKind::Upstream,
+            "Failed to set BCD entry device",
+        ))?;
 
         debug!("BCD device set to {}", efi_drive_letter);
 
-        EfiBootManager::bcd_edit(
-            &["/set", &bcd_id,"path",syslinux_path],
-            false)
-            .context(MigErrCtx::from_remark(MigErrorKind::Upstream, "Failed to set BCD entry path"))?;
+        EfiBootManager::bcd_edit(&["/set", &bcd_id, "path", syslinux_path], false).context(
+            MigErrCtx::from_remark(MigErrorKind::Upstream, "Failed to set BCD entry path"),
+        )?;
 
         debug!("BCD path set to {}", syslinux_path);
 
-        EfiBootManager::bcd_edit(
-            &["/bootsequence", &bcd_id, "{current}"],
-            false)
-            .context(MigErrCtx::from_remark(MigErrorKind::Upstream, "Failed to activate BCD entry"))?;
+        EfiBootManager::bcd_edit(&["/bootsequence", &bcd_id, "{current}"], false).context(
+            MigErrCtx::from_remark(MigErrorKind::Upstream, "Failed to activate BCD entry"),
+        )?;
 
         debug!("Activated new BCD entry {}", bcd_id);
 
         /* TODO: try enabling syslinux bootmanager manually instead of this radical solution
-
-                // set bootmanager to syslinux using BCDEDIT
-                let cmdres = call(
-                    "BCDEdit",
-                    &["/set", "{bootmgr}", "path", &syslinux_path],
-                    true,
-                )
-                .context(MigErrCtx::from_remark(
-                    MigErrorKind::Upstream,
-                    "failed to setup UEFI bootmanager as syslinux",
-                ))?;
-
-                debug!("BCDEDit result: '{}'", cmdres.stdout);
-
-                if !cmdres.status.success() {
-                    return Err(MigError::from_remark(
-                        MigErrorKind::ExecProcess,
-                        &format!(
-                            "failed to setup UEFI bootmanager as syslinux, message: {}",
-                            cmdres.stderr
-                        ),
-                    ));
-                }
+        EfiBootManager::bcd_edit(
+            &["/set", "{bootmgr}", "path", &syslinux_path],
+            false)
+            .context(MigErrCtx::from_remark(MigErrorKind::Upstream, "Failed to activate BCD entry"))?;
         */
         Ok(())
     }
