@@ -33,6 +33,7 @@ use crate::{
         MIG_SYSLINUX_EFI_NAME,
     },
 };
+use syntax::util::map_in_place::MapInPlace;
 
 pub(crate) struct EfiBootManager {
     #[allow(dead_code)]
@@ -185,6 +186,7 @@ impl BootManager for EfiBootManager {
     fn setup(
         &self,
         mig_info: &MigrateInfo,
+        config: &Config,
         _s2_cfg: &mut Stage2ConfigBuilder,
         kernel_opts: &str,
     ) -> Result<(), MigError> {
@@ -356,56 +358,84 @@ impl BootManager for EfiBootManager {
         } else {
             &tmp_path
         };
-        let efi_drive_letter = &*efi_device.mountpoint.to_string_lossy();
 
-        // create a new BCD entry and retrieve BCD ID
-        // bcdedit /create /d "balena-migrate" /application startup
-        let bcd_id = EfiBootManager::bcd_edit(
-            &["/create", "/d", "balena-migrate", "/application", "startup"],
-            true,
-        )
-        .context(MigErrCtx::from_remark(
-            MigErrorKind::Upstream,
-            "Failed to create new BCD entry",
-        ))?
-        .unwrap();
+        let bcd_strategy_default = if let Some(hack) = config.debug.get_hack(bcd_strategy) {
+            if Regex::new(r#"^bcd_strategy:\s*\s*$"#)
+                .unwrap()
+                .is_match(hack)
+            {
+                false
+            } else {
+                warn!(
+                    "Invalid hacks string encountered: '{}', using default",
+                    hack
+                );
+                true
+            }
+        } else {
+            true
+        };
 
-        debug!("Created new BCD entry with ID: {}", bcd_id);
+        if bcd_strategy_default {
+            // TODO: try enabling syslinux bootmanager manually instead of this radical solution
+            EfiBootManager::bcd_edit(&["/set", "{bootmgr}", "path", &syslinux_path], false)
+                .context(MigErrCtx::from_remark(
+                    MigErrorKind::Upstream,
+                    "Failed to activate BCD entry",
+                ))?;
+        } else {
+            // TODO: wip - preferable but not working yet
+            let efi_drive_letter = &*efi_device.mountpoint.to_string_lossy();
 
-        EfiBootManager::bcd_edit(
-            &[
-                "/set",
-                &bcd_id,
-                "device",
-                &format!("partition={}", efi_drive_letter),
-            ],
-            false,
-        )
-        .context(MigErrCtx::from_remark(
-            MigErrorKind::Upstream,
-            "Failed to set BCD entry device",
-        ))?;
+            // create a new BCD entry and retrieve BCD ID
+            // bcdedit /create /d "balena-migrate" /application startup
+            let bcd_id = EfiBootManager::bcd_edit(
+                &["/create", "/d", "balena-migrate", "/application", "startup"],
+                true,
+            )
+            .context(MigErrCtx::from_remark(
+                MigErrorKind::Upstream,
+                "Failed to create new BCD entry",
+            ))?
+            .unwrap();
 
-        debug!("BCD device set to {}", efi_drive_letter);
+            debug!("Created new BCD entry with ID: {}", bcd_id);
 
-        EfiBootManager::bcd_edit(&["/set", &bcd_id, "path", syslinux_path], false).context(
-            MigErrCtx::from_remark(MigErrorKind::Upstream, "Failed to set BCD entry path"),
-        )?;
+            EfiBootManager::bcd_edit(
+                &[
+                    "/set",
+                    &bcd_id,
+                    "device",
+                    &format!("partition={}", efi_drive_letter),
+                ],
+                false,
+            )
+            .context(MigErrCtx::from_remark(
+                MigErrorKind::Upstream,
+                "Failed to set BCD entry device",
+            ))?;
 
-        debug!("BCD path set to {}", syslinux_path);
+            debug!("BCD device set to partition={}", efi_drive_letter);
 
-        EfiBootManager::bcd_edit(&["/bootsequence", &bcd_id, "{current}"], false).context(
-            MigErrCtx::from_remark(MigErrorKind::Upstream, "Failed to activate BCD entry"),
-        )?;
+            EfiBootManager::bcd_edit(&["/set", &bcd_id, "path", syslinux_path], false).context(
+                MigErrCtx::from_remark(MigErrorKind::Upstream, "Failed to set BCD entry path"),
+            )?;
 
-        debug!("Activated new BCD entry {}", bcd_id);
+            debug!("BCD path set to {}", syslinux_path);
 
-        /* TODO: try enabling syslinux bootmanager manually instead of this radical solution
-        EfiBootManager::bcd_edit(
-            &["/set", "{bootmgr}", "path", &syslinux_path],
-            false)
-            .context(MigErrCtx::from_remark(MigErrorKind::Upstream, "Failed to activate BCD entry"))?;
-        */
+            // TODO: disable this in production
+            EfiBootManager::bcd_edit(&["/displayorder", "{current}", &bcd_id], false).context(
+                MigErrCtx::from_remark(MigErrorKind::Upstream, "Failed to activate BCD entry"),
+            )?;
+            debug!("BCD displayorder set - made new entry persistent",);
+
+            EfiBootManager::bcd_edit(&["/bootsequence", &bcd_id, "{current}"], false).context(
+                MigErrCtx::from_remark(MigErrorKind::Upstream, "Failed to activate BCD entry"),
+            )?;
+
+            debug!("One-Time-Activated new BCD entry {}", bcd_id);
+        }
+
         Ok(())
     }
 
