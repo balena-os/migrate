@@ -175,7 +175,8 @@ impl Device for BeagleboneGreen {
             String::from(BBG_KOPTS)
         };
 
-        self.boot_manager.setup(mig_info, s2_cfg, &kernel_opts)
+        self.boot_manager
+            .setup(mig_info, config, s2_cfg, &kernel_opts)
     }
 
     fn restore_boot(&self, mounts: &Mounts, config: &Stage2Config) -> bool {
@@ -263,7 +264,8 @@ impl Device for BeagleboneBlack {
             String::from(BBB_KOPTS)
         };
 
-        self.boot_manager.setup(mig_info, s2_cfg, &kernel_opts)
+        self.boot_manager
+            .setup(mig_info, config, s2_cfg, &kernel_opts)
     }
 
     fn restore_boot(&self, mounts: &Mounts, config: &Stage2Config) -> bool {
@@ -362,7 +364,8 @@ impl<'a> Device for BeagleboardXM {
             String::from(BBXM_KOPTS)
         };
 
-        self.boot_manager.setup(mig_info, s2_cfg, &kernel_opts)
+        self.boot_manager
+            .setup(mig_info, config, s2_cfg, &kernel_opts)
     }
 
     fn get_boot_device(&self) -> DeviceInfo {

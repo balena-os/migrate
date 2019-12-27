@@ -184,6 +184,7 @@ impl<'a> BootManager for GrubBootManager {
     fn setup(
         &self,
         mig_info: &MigrateInfo,
+        _config: &Config,
         _s2_cfg: &mut Stage2ConfigBuilder,
         kernel_opts: &str,
     ) -> Result<(), MigError> {

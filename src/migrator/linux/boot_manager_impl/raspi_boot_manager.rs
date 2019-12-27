@@ -137,6 +137,7 @@ impl BootManager for RaspiBootManager<'_> {
     fn setup(
         &self,
         mig_info: &MigrateInfo,
+        _config: &Config,
         s2_cfg: &mut Stage2ConfigBuilder,
         kernel_opts: &str,
     ) -> Result<(), MigError> {

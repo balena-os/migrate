@@ -375,6 +375,10 @@ impl<'a> MSWMigrator {
             self.stage2_config.set_watchdogs(watchdogs);
         }
 
+        if let Some(hacks) = self.config.debug.get_hacks() {
+            self.stage2_config.set_hacks(hacks)
+        }
+
         self.stage2_config
             .set_balena_image(self.mig_info.image_file.clone());
 

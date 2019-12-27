@@ -269,7 +269,6 @@ impl<'a> LinuxMigrator {
 
         let backup_path = path_append(work_dir, BACKUP_FILE);
 
-
         let has_backup =
             self.stage2_config
                 .set_has_backup(if self.config.migrate.is_tar_internal() {
@@ -398,6 +397,10 @@ impl<'a> LinuxMigrator {
 
         if let Some(watchdogs) = self.config.migrate.get_watchdogs() {
             self.stage2_config.set_watchdogs(watchdogs);
+        }
+
+        if let Some(hacks) = self.config.debug.get_hacks() {
+            self.stage2_config.set_hacks(hacks)
         }
 
         self.stage2_config

@@ -110,6 +110,8 @@ pub(crate) struct Stage2Config {
     no_flash: bool,
     // which device to flash - derive from /root partition if not set (windows)
     force_flash_device: Option<PathBuf>,
+    // free form debug parameters
+    hacks: Option<Vec<String>>,
     // balena config file
     balena_config: PathBuf,
     // balena OS image file in work_path
@@ -180,6 +182,15 @@ impl<'a> Stage2Config {
             level
         } else {
             Level::Debug
+        }
+    }
+
+    #[allow(dead_code)]
+    pub fn get_hacks(&'a self) -> Option<&'a Vec<String>> {
+        if let Some(ref hacks) = self.hacks {
+            Some(hacks)
+        } else {
+            None
         }
     }
 
@@ -355,6 +366,7 @@ pub(crate) struct Stage2ConfigBuilder {
     boot_type: Required<BootType>,
     migrate_delay: Optional<u64>,
     watchdogs: Optional<Vec<WatchdogCfg>>,
+    hacks: Optional<Vec<String>>,
 }
 
 impl<'a> Stage2ConfigBuilder {
@@ -376,6 +388,7 @@ impl<'a> Stage2ConfigBuilder {
             boot_type: Required::new("boot_type", None),
             migrate_delay: Optional::new(None),
             watchdogs: Optional::new(None),
+            hacks: Optional::new(None),
         }
     }
 
@@ -397,6 +410,7 @@ impl<'a> Stage2ConfigBuilder {
             boot_type: self.boot_type.get()?.clone(),
             migrate_delay: self.migrate_delay.get().clone(),
             watchdogs: self.watchdogs.get().clone(),
+            hacks: self.hacks.get().clone(),
         };
 
         Ok(result)
@@ -455,6 +469,10 @@ impl<'a> Stage2ConfigBuilder {
 
     pub fn set_work_path(&mut self, val: &PathType) {
         self.work_path.set_ref(val);
+    }
+
+    pub fn set_hacks(&mut self, val: &Vec<String>) {
+        self.hacks.set_ref(val);
     }
 
     #[allow(dead_code)]
