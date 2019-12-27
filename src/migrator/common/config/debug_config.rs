@@ -4,7 +4,6 @@ use super::MigMode;
 use crate::common::MigError;
 
 use serde::Deserialize;
-use std::alloc::handle_alloc_error;
 
 #[derive(Debug, Deserialize)]
 pub(crate) struct DebugConfig {
@@ -47,7 +46,7 @@ impl<'a> DebugConfig {
         if let Some(ref hacks) = self.hacks {
             if let Some(hack) = hacks
                 .iter()
-                .find(|hack| (hack == param) || hack.starts_with(&format!("{}:", param)))
+                .find(|hack| (hack.as_str() == param) || hack.starts_with(&format!("{}:", param)))
             {
                 Some(hack)
             } else {

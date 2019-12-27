@@ -359,31 +359,7 @@ impl BootManager for EfiBootManager {
             &tmp_path
         };
 
-        let bcd_strategy_default = if let Some(hack) = config.debug.get_hack(bcd_strategy) {
-            if Regex::new(r#"^bcd_strategy:\s*\s*$"#)
-                .unwrap()
-                .is_match(hack)
-            {
-                false
-            } else {
-                warn!(
-                    "Invalid hacks string encountered: '{}', using default",
-                    hack
-                );
-                true
-            }
-        } else {
-            true
-        };
-
-        if bcd_strategy_default {
-            // TODO: try enabling syslinux bootmanager manually instead of this radical solution
-            EfiBootManager::bcd_edit(&["/set", "{bootmgr}", "path", &syslinux_path], false)
-                .context(MigErrCtx::from_remark(
-                    MigErrorKind::Upstream,
-                    "Failed to activate BCD entry",
-                ))?;
-        } else {
+        if config.debug.get_hack("bcd_add_menu").is_some() {
             // TODO: wip - preferable but not working yet
             let efi_drive_letter = &*efi_device.mountpoint.to_string_lossy();
 
@@ -434,6 +410,13 @@ impl BootManager for EfiBootManager {
             )?;
 
             debug!("One-Time-Activated new BCD entry {}", bcd_id);
+        } else {
+            // TODO: try enabling syslinux bootmanager manually instead of this radical solution
+            EfiBootManager::bcd_edit(&["/set", "{bootmgr}", "path", &syslinux_path], false)
+                .context(MigErrCtx::from_remark(
+                    MigErrorKind::Upstream,
+                    "Failed to activate BCD entry",
+                ))?;
         }
 
         Ok(())
