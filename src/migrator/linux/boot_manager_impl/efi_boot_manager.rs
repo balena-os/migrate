@@ -42,6 +42,7 @@ impl BootManager for EfiBootManager {
     fn setup(
         &self,
         _dev_info: &MigrateInfo,
+        _config: &Config,
         _s2_cfg: &mut Stage2ConfigBuilder,
         _kernel_opts: &str,
     ) -> Result<(), MigError> {
