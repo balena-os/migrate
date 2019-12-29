@@ -201,8 +201,12 @@ impl<'a> MSWMigrator {
             return Err(MigError::from(MigErrorKind::Displayed));
         }
 
+
+
         // TODO: Don't migrate if we do not have PARTUUIDS
         // TODO: maybe allow hints otherwise  ->
+
+        debug!("try_init: success");
 
         Ok(MSWMigrator {
             config,
