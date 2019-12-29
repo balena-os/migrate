@@ -62,24 +62,19 @@ impl<'a> LinuxMigrator {
     pub fn migrate() -> Result<(), MigError> {
         // **********************************************************************
         // We need to be root to do this
-
-        let config = Config::new()?;
-
         if !is_admin()? {
             error!("please run this program as root");
             return Err(MigError::from(MigErrorKind::Displayed));
         }
 
-        match config.migrate.get_mig_mode() {
-            _ => {
-                let mut migrator = LinuxMigrator::try_init(config)?;
-                let res = match migrator.config.migrate.get_mig_mode() {
-                    MigMode::Immediate => migrator.do_migrate(),
-                    MigMode::Pretend => Ok(()),
-                    //MigMode::Agent => Err(MigError::from(MigErrorKind::NotImpl)),
-                };
+        let mut migrator = LinuxMigrator::try_init(Config::new()?)?;
+
+        match migrator.config.migrate.get_mig_mode() {
+            MigMode::Immediate => migrator.do_migrate(),
+            MigMode::Pretend => {
                 Logger::flush();
-                res
+                sync();
+                Ok(())
             }
         }
     }
@@ -442,11 +437,16 @@ impl<'a> LinuxMigrator {
                 "Migration stage 1 was successfull, rebooting system in {} seconds",
                 *delay
             );
+            Logger::flush();
             sync();
             let delay = Duration::new(*delay, 0);
             thread::sleep(delay);
             println!("Rebooting now..");
             call(REBOOT_CMD, &["-f"], false)?;
+        } else {
+            println!(
+                "Migration stage 1 was successful, please reboot system to finalize migration"
+            );
         }
 
         trace!("done");

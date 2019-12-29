@@ -33,10 +33,9 @@ use crate::{
         MIG_SYSLINUX_EFI_NAME,
     },
 };
-use syntax::util::map_in_place::MapInPlace;
 
+#[allow(dead_code)]
 pub(crate) struct EfiBootManager {
-    #[allow(dead_code)]
     msw_device: bool,
     boot_device: Option<DeviceInfo>,
 }
