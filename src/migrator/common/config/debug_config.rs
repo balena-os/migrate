@@ -42,6 +42,7 @@ impl<'a> DebugConfig {
         }
     }
 
+    #[allow(dead_code)]
     pub fn get_hack(&'a self, param: &str) -> Option<&'a String> {
         if let Some(ref hacks) = self.hacks {
             if let Some(hack) = hacks

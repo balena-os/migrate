@@ -36,7 +36,7 @@ pub(crate) mod msw_defs;
 pub(crate) mod mswin_api;
 
 mod powershell;
-use powershell::is_admin;
+use powershell::{is_admin, reboot};
 
 //pub(crate) mod win_api;
 // pub mod drive_info;
@@ -52,13 +52,6 @@ pub(crate) mod wmi_utils;
 
 mod boot_manager_impl;
 use crate::common::os_api::OSApi;
-use crate::mswin::powershell::reboot;
-
-//mod migrate_info;
-//use migrate_info::MigrateInfo;
-
-// mod boot_manager;
-//use boot_manager::{BootManager, EfiBootManager};
 
 pub struct MSWMigrator {
     config: Config,
@@ -69,6 +62,8 @@ pub struct MSWMigrator {
 
 impl<'a> MSWMigrator {
     pub fn migrate() -> Result<(), MigError> {
+        // **********************************************************************
+        // We need to be root to do this
         if !is_admin()? {
             error!("Please run this program with adminstrator privileges");
             return Err(MigError::displayed());
@@ -77,8 +72,10 @@ impl<'a> MSWMigrator {
         let mut migrator = MSWMigrator::try_init(Config::new()?)?;
         match migrator.config.migrate.get_mig_mode() {
             MigMode::Immediate => migrator.do_migrate(),
-            MigMode::Pretend => Ok(()),
-            //MigMode::Agent => Err(MigError::from(MigErrorKind::NotImpl)),
+            MigMode::Pretend => {
+                Logger::flush();
+                Ok(())
+            }
         }
     }
 
@@ -415,131 +412,24 @@ impl<'a> MSWMigrator {
 
         if let Some(delay) = self.config.migrate.get_reboot() {
             println!(
-                "Migration stage 1 was successfull, rebooting system in {} seconds",
+                "Migration stage 1 was successfull, rebooting the system in {} seconds",
                 *delay
             );
             let delay = Duration::new(*delay, 0);
             thread::sleep(delay);
             println!("Rebooting now..");
+            Logger::flush();
+
             if let Err(why) = reboot() {
                 error!("Failed to reboot device: error {:?}", why);
             }
+        } else {
+            println!(
+                "Migration stage 1 was successful, please reboot the system to finalize migration"
+            );
         }
 
-        debug!("done");
         Ok(())
-
-        // TODO: take care of backup
-        /*
-                self.stage2_config.set_has_backup(false);
-
-                // *****************************************************************************************
-                // Finish Stage2ConfigBuilder & create stage2 config file
-
-                self.stage2_config
-                    .set_failmode(self.config.migrate.get_fail_mode());
-
-                self.stage2_config
-                    .set_no_flash(self.config.debug.is_no_flash());
-
-                let device =
-                    match device_impl::get_device(&self.mig_info, &self.config, &mut self.stage2_config) {
-                        Ok(device) => {
-                            self.stage2_config.set_boot_type(&device.get_boot_type());
-                            self.stage2_config
-                                .set_device_type(&device.get_device_type());
-                            device
-                        }
-                        Err(why) => {
-                            return match why.kind() {
-                                MigErrorKind::Displayed => Err(why),
-                                _ => {
-                                    error!("Failed to create Device: {:?}", why);
-                                    Err(MigError::from(
-                                        why.context(MigErrCtx::from(MigErrorKind::Displayed)),
-                                    ))
-                                }
-                            };
-                        }
-                    };
-
-                        self.stage2_config.set_boot_device(&PathBuf::from(
-                            self.mig_info.drive_info.boot_path.get_linux_part(),
-                        ));
-                self.stage2_config.set_boot_fstype(&String::from(
-                    self.mig_info.drive_info.boot_path.get_linux_fstype(),
-                ));
-
-
-                // later
-                self.stage2_config
-                    .set_balena_image(self.mig_info.image_file.clone());
-
-                self.stage2_config
-                    .set_balena_config(PathBuf::from(&to_linux_path(
-                        &self.mig_info.config_file.get_path(),
-                    )));
-
-                self.stage2_config.set_work_dir(&PathBuf::from(
-                    self.mig_info.drive_info.work_path.get_linux_path(),
-                ));
-
-                self.stage2_config
-                    .set_gzip_internal(self.config.migrate.is_gzip_internal());
-
-                self.stage2_config
-                    .set_log_level(String::from(self.config.migrate.get_log_level()));
-
-
-                self.stage2_config
-                    .set_gzip_internal(self.config.migrate.is_gzip_internal());
-
-                trace!("device setup");
-
-                match self
-                    .boot_manager
-                    .setup(&self.mig_info, &self.config, &mut self.stage2_config)
-                {
-                    Ok(_s) => info!("The system is set up to boot into the migration environment"),
-                    Err(why) => {
-                        error!(
-                            "Failed to set up the boot configuration for the migration environment: {:?}",
-                            why
-                        );
-                        return Err(MigError::displayed());
-                    }
-                }
-
-                trace!("write stage 2 config");
-
-                let stage2_cfg_path = path_append(
-                    self.mig_info.drive_info.boot_path.get_path(),
-                    STAGE2_CFG_FILE,
-                );
-                let stage2_cfg_dir = stage2_cfg_path.parent().unwrap();
-                if !dir_exists(&stage2_cfg_dir)? {
-                    create_dir_all(&stage2_cfg_dir).context(MigErrCtx::from_remark(
-                        MigErrorKind::Upstream,
-                        &format!("Fauíled to create directory '{}'", stage2_cfg_dir.display()),
-                    ))?;
-                }
-
-                self.stage2_config.write_stage2_cfg_to(&stage2_cfg_path)?;
-
-                if let Some(delay) = self.config.migrate.get_reboot() {
-                    let message = format!(
-                        "Migration stage 1 was successfull, rebooting system in {} seconds",
-                        *delay
-                    );
-                    println!("{}", &message);
-
-                    let delay = Duration::new(*delay, 0);
-                    thread::sleep(delay);
-                    println!("Rebooting now..");
-
-                    let _res = self.ps_info.reboot();
-                }
-        */
     }
 }
 

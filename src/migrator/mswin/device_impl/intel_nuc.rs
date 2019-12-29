@@ -1,4 +1,4 @@
-use log::{error, debug, info};
+use log::{debug, error, info};
 
 use crate::{
     common::{
@@ -22,9 +22,10 @@ impl IntelNuc {
         config: &Config,
         s2_cfg: &mut Stage2ConfigBuilder,
     ) -> Result<IntelNuc, MigError> {
-        const SUPPORTED_OSSES: &'static [&'static str] =
-            &["Microsoft Windows 10 Enterprise Evaluation",
-              "Microsoft Windows 10 Pro"];
+        const SUPPORTED_OSSES: &'static [&'static str] = &[
+            "Microsoft Windows 10 Enterprise Evaluation",
+            "Microsoft Windows 10 Pro",
+        ];
 
         let os_name = &mig_info.os_name;
         // TODO: find replacement for file command in windows
@@ -50,7 +51,7 @@ impl IntelNuc {
 
         let secure_boot = is_secure_boot()?;
         info!(
-            "Secure boot is {}enabled",
+            "Secure boot is {} enabled",
             match secure_boot {
                 true => "",
                 false => "not ",
@@ -101,8 +102,6 @@ impl Device for IntelNuc {
     fn get_boot_type(&self) -> BootType {
         self.boot_manager.get_boot_type()
     }
-    // TODO: make return reference
-    // TODO: return device_info instead of path_info
     fn get_boot_device(&self) -> DeviceInfo {
         self.boot_manager.get_bootmgr_path()
     }
@@ -121,6 +120,14 @@ impl Device for IntelNuc {
             String::from("")
         };
 
-        self.boot_manager.setup(mig_info, config, s2_cfg, &kernel_opts)
+        self.boot_manager
+            .setup(mig_info, config, s2_cfg, &kernel_opts)
     }
+
+    /* restore boot is not needed in mswin as this is done only in linux code in stage2
+       Also Mounts is implemented in Linux only
+    fn restore_boot(&self, _mounts: &Mounts, _config: &Stage2Config) -> bool {
+        unimplemented!();
+    }
+    */
 }
