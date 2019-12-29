@@ -51,7 +51,9 @@ pub(crate) struct DriveInfo {
 
 impl DriveInfo {
     pub fn new() -> Result<DriveInfo, MigError> {
+        debug!("new: entered");
         let mut efi_drive = if is_efi_boot()? {
+            debug!("attempting to mount/locate efi drive");
             Some(mount_efi()?)
         } else {
             None
@@ -63,6 +65,7 @@ impl DriveInfo {
 
         let volumes = Volume::query_all()?;
         for volume in volumes {
+            debug!("new: looking at volume {}, type: {:?}, driveletter: {:?}", volume.get_device_id(), volume.get_drive_type(), volume.get_drive_letter());
             match volume.get_drive_type() {
                 DriveType::LocalDisk | DriveType::RemovableDisk => (),
                 _ => {
@@ -85,7 +88,7 @@ impl DriveInfo {
                         efi_drive
                     } else {
                         warn!(
-                            "No logicalDrive found for volume '{}' - skipping volume",
+                            "No logicalDrive found for system volume '{}' - skipping volume",
                             volume.get_device_id()
                         );
                         continue;

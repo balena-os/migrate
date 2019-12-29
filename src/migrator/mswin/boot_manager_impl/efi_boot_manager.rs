@@ -33,7 +33,6 @@ use crate::{
         MIG_SYSLINUX_EFI_NAME,
     },
 };
-use syntax::util::map_in_place::MapInPlace;
 
 pub(crate) struct EfiBootManager {
     #[allow(dead_code)]
@@ -365,6 +364,7 @@ impl BootManager for EfiBootManager {
 
             // create a new BCD entry and retrieve BCD ID
             // bcdedit /create /d "balena-migrate" /application startup
+            //TODO: try to check if entry exists first
             let bcd_id = EfiBootManager::bcd_edit(
                 &["/create", "/d", "balena-migrate", "/application", "startup"],
                 true,

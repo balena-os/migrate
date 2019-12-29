@@ -41,15 +41,17 @@ pub(crate) fn mount_efi() -> Result<LogicalDrive, MigError> {
 
     if let Some(drive_letter) = drive_letters.iter().find(|dl| {
         debug!(
-            "Checking path for EFI: '{}'",
+            "mount_efi: Checking path for EFI: '{}'",
             path_append(dl, CHECK_EFI_PATH).display()
         );
         file_exists(path_append(dl, CHECK_EFI_PATH))
     }) {
         // found EFI drive - return
+        debug!("mount_efi: found efi bootmgrfw on '{}'", drive_letter );
         Ok(LogicalDrive::query_for_name(drive_letter)?)
     } else {
         // find free drive letter
+
         if let Some(drive_letter) = DRIVE_LETTERS.iter().find(|dl| {
             if let None = drive_letters.iter().find(|used| &used.as_str() == *dl) {
                 true
@@ -58,6 +60,7 @@ pub(crate) fn mount_efi() -> Result<LogicalDrive, MigError> {
             }
         }) {
             // mount EFI drive
+            debug!("mount_efi: attempting to mount efi drive on '{}'", drive_letter );
             let cmd_res = call("mountvol", &[drive_letter, "/S"], true)?;
             if cmd_res.status.success() && cmd_res.stderr.is_empty() {
                 Ok(LogicalDrive::query_for_name(drive_letter)?)

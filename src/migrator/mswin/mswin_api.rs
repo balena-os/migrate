@@ -81,7 +81,7 @@ impl OSApiImpl for MSWinApi {
         let volume_info = match device {
             DeviceSpec::DevicePath(dev_path) => {
                 error!(
-                    "Device path '{}' is not supported for windows partition specifyer",
+                    "Device path '{}' is not supported for windows partition specifier",
                     dev_path.display()
                 );
                 return Err(MigError::displayed());

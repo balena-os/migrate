@@ -121,6 +121,6 @@ impl Device for IntelNuc {
             String::from("")
         };
 
-        self.boot_manager.setup(mig_info, s2_cfg, &kernel_opts)
+        self.boot_manager.setup(mig_info, config, s2_cfg, &kernel_opts)
     }
 }
