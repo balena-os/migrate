@@ -52,7 +52,7 @@ pub(crate) struct DriveInfo {
 impl DriveInfo {
     pub fn new() -> Result<DriveInfo, MigError> {
         debug!("new: entered");
-        let mut efi_drive = if is_efi_boot()? {
+        let mut found_efi_drive = if is_efi_boot()? {
             debug!("attempting to mount/locate efi drive");
             Some(mount_efi()?)
         } else {
@@ -65,17 +65,12 @@ impl DriveInfo {
 
         let volumes = Volume::query_all()?;
         for volume in volumes {
-            debug!(
-                "new: looking at volume {}, type: {:?}, driveletter: {:?}",
-                volume.get_device_id(),
-                volume.get_drive_type(),
-                volume.get_drive_letter()
-            );
+            debug!("new: looking at volume {}", volume);
             match volume.get_drive_type() {
                 DriveType::LocalDisk | DriveType::RemovableDisk => (),
                 _ => {
                     debug!(
-                        "Unsupported drive type: {:?} for volume '{}', skipping volume",
+                        "new: Unsupported drive type: {:?} for volume '{}', skipping volume",
                         volume.get_drive_type(),
                         volume.get_device_id()
                     );
@@ -84,11 +79,14 @@ impl DriveInfo {
             }
 
             let logical_drive = if let Some(drive_letter) = volume.get_drive_letter() {
+                // find a LogicalDisk for this volume
                 LogicalDisk::query_for_name(drive_letter)?
             } else {
                 if volume.is_system() {
+                    // volume is the EFI volume - use found_efi_drive as this volumes
+                    // logical drive
                     let mut swapped_efi_drive: Option<LogicalDisk> = None;
-                    swap(&mut swapped_efi_drive, &mut efi_drive);
+                    swap(&mut swapped_efi_drive, &mut found_efi_drive);
                     if let Some(efi_drive) = swapped_efi_drive {
                         efi_drive
                     } else {
@@ -111,8 +109,7 @@ impl DriveInfo {
             let disk_extents =
                 get_volume_disk_extents(&format!("\\\\.\\{}", logical_drive.get_name()))?;
 
-            if disk_extents.len() == 1 {
-                let disk_extent = &disk_extents[0];
+            if let Some(disk_extent) = disk_extents.get(0) {
                 let physical_drive = PhysicalDrive::by_index(disk_extent.disk_index as usize)?;
                 if let Some(partition) = physical_drive
                     .query_partitions()?
@@ -154,8 +151,7 @@ impl DriveInfo {
                 return Err(MigError::from_remark(
                     MigErrorKind::InvParam,
                     &format!(
-                        "Encountered invalid number of disk extents ({} != 1) for volume '{}'",
-                        disk_extents.len(),
+                        "No disk extents found for for volume '{}'",
                         volume.get_device_id()
                     ),
                 ));

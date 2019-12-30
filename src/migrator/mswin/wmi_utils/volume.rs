@@ -3,6 +3,7 @@ use crate::{
     mswin::{msw_defs::FileSystem, win_api::wmi_api::WmiAPI},
 };
 use log::debug;
+use std::fmt;
 
 use super::{QueryRes, NS_CVIM2};
 
@@ -57,12 +58,8 @@ pub(crate) struct Volume {
 
 #[allow(dead_code)]
 impl<'a> Volume {
-    /*    pub fn get_query_all() -> &'static str {
-            QUERY_ALL
-        }
-    */
-
     pub fn query_all() -> Result<Vec<Volume>, MigError> {
+        debug!("query_all:");
         let query = QUERY_ALL;
         debug!("query_volumes: performing WMI Query: '{}'", query);
         let q_res = WmiAPI::get_api(NS_CVIM2)?.raw_query(query)?;
@@ -75,8 +72,8 @@ impl<'a> Volume {
     }
 
     pub fn query_by_drive_letter(dl: &str) -> Result<Volume, MigError> {
+        debug!("query_by_drive_letter: {}", dl);
         let query = format!("{} WHERE DriveLetter={}", QUERY_ALL, dl);
-        debug!("query_volumes: performing WMI Query: '{}'", query);
         let q_res = WmiAPI::get_api(NS_CVIM2)?.raw_query(&query)?;
         if q_res.len() == 1 {
             Ok(Volume::new(QueryRes::new(&q_res[0]))?)
@@ -89,8 +86,8 @@ impl<'a> Volume {
     }
 
     pub fn query_by_device_id(device_id: &str) -> Result<Volume, MigError> {
+        debug!("query_by_device_id: {}", device_id);
         let query = format!("{} WHERE DeviceID={}", QUERY_ALL, device_id);
-        debug!("query_volumes: performing WMI Query: '{}'", query);
         let q_res = WmiAPI::get_api(NS_CVIM2)?.raw_query(&query)?;
         if q_res.len() == 1 {
             Ok(Volume::new(QueryRes::new(&q_res[0]))?)
@@ -103,8 +100,8 @@ impl<'a> Volume {
     }
 
     pub fn query_system_volumes() -> Result<Vec<Volume>, MigError> {
+        debug!("query_system_volumes:");
         let query = format!("{} WHERE SystemVolume=True", QUERY_ALL);
-        debug!("query_volumes: performing WMI Query: '{}'", query);
         let q_res = WmiAPI::get_api(NS_CVIM2)?.raw_query(&query)?;
         let mut result: Vec<Volume> = Vec::new();
         for res in q_res {
@@ -115,8 +112,8 @@ impl<'a> Volume {
     }
 
     pub fn query_boot_volumes() -> Result<Vec<Volume>, MigError> {
+        debug!("query_boot_volumes:");
         let query = format!("{} WHERE BootVolume=True", QUERY_ALL);
-        debug!("query_volumes: performing WMI Query: '{}'", query);
         let q_res = WmiAPI::get_api(NS_CVIM2)?.raw_query(&query)?;
         let mut result: Vec<Volume> = Vec::new();
         for res in q_res {
@@ -128,14 +125,6 @@ impl<'a> Volume {
 
     pub(crate) fn new(res_map: QueryRes) -> Result<Volume, MigError> {
         let device_id = String::from(res_map.get_string_property("DeviceID")?);
-
-        /*
-        let handle = device_id
-            .trim_start_matches(r#"\\?\"#)
-            .trim_end_matches(r#"\"#);
-        debug!("'{}' -> handle: '{}'", device_id, handle);
-        // let device = query_dos_device(Some(handle))?.get(0).unwrap().clone();
-        */
 
         Ok(Volume {
             name: String::from(res_map.get_string_property("Name")?),
@@ -204,6 +193,26 @@ impl<'a> Volume {
         } else {
             None
         }
+    }
+}
+
+impl fmt::Display for Volume {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        // The `f` value implements the `Write` trait, which is what the
+        // write! macro is expecting. Note that this formatting ignores the
+        // various flags provided to format strings.
+        write!(
+            f,
+            "Vol[{},id:{},dl:{},type:{:?},fs:{:?},boot:{},sys:{},label:{}]",
+            self.name,
+            self.device_id,
+            self.drive_letter,
+            self.drive_type,
+            self.file_system,
+            self.boot_volume,
+            self.system_volume,
+            self.label
+        )
     }
 }
 
