@@ -5,6 +5,7 @@ use crate::{
 };
 
 use log::debug;
+use std::fmt;
 
 #[derive(Debug, Clone)]
 pub(crate) struct Partition {
@@ -18,6 +19,25 @@ pub(crate) struct Partition {
     disk_index: usize,
     partition_index: u64,
     start_offset: u64,
+}
+
+impl fmt::Display for Partition {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        write!(
+            f,
+            "PARTITION[{},id:{},diskIdx:{},partidx:{},offset:{},blocks:{},boot:{},bootpart:{},size:{},type:{}]",
+            self.name,
+            self.device_id,
+            self.disk_index,
+            self.partition_index,
+            self.start_offset,
+            self.number_of_blocks,
+            self.bootable,
+            self.boot_partition,
+            self.size,
+            self.ptype
+        )
+    }
 }
 
 #[allow(dead_code)]

@@ -6,7 +6,7 @@ use crate::{
         win_api::{get_volume_disk_extents, is_efi_boot},
         wmi_utils::{
             volume::{DriveType, Volume},
-            LogicalDisk, Partition, PhysicalDrive,
+            LogicalDisk, Partition, PhysicalDisk,
         },
     },
 };
@@ -26,7 +26,7 @@ pub(crate) struct VolumeInfo {
     pub part_uuid: String,
     pub volume: Volume,
     pub logical_drive: LogicalDisk,
-    pub physical_drive: PhysicalDrive,
+    pub physical_drive: PhysicalDisk,
     pub partition: Partition,
 }
 
@@ -62,10 +62,10 @@ impl DriveInfo {
         let mut vol_infos: Vec<VolumeInfo> = Vec::new();
 
         let part_uuid_re = Regex::new(VOL_UUID_REGEX).unwrap();
-
+        debug!("new: ******************************** scanning volumes");
         let volumes = Volume::query_all()?;
         for volume in volumes {
-            debug!("new: looking at volume {}", volume);
+            debug!("new: ***** looking at volume {}", volume);
             match volume.get_drive_type() {
                 DriveType::LocalDisk | DriveType::RemovableDisk => (),
                 _ => {
@@ -78,11 +78,12 @@ impl DriveInfo {
                 }
             }
 
-            let logical_drive = if let Some(drive_letter) = volume.get_drive_letter() {
+            let logical_disk = if let Some(drive_letter) = volume.get_drive_letter() {
                 // find a LogicalDisk for this volume
                 LogicalDisk::query_for_name(drive_letter)?
             } else {
                 if volume.is_system() {
+                    debug!("new: failed to match logical disk by drive letter, trying EFI drive");
                     // volume is the EFI volume - use found_efi_drive as this volumes
                     // logical drive
                     let mut swapped_efi_drive: Option<LogicalDisk> = None;
@@ -105,37 +106,45 @@ impl DriveInfo {
                 }
             };
 
+            debug!("new: got logical_disk_for volume: {}", logical_disk);
+
             // get DiskPartition for volume
             let disk_extents =
-                get_volume_disk_extents(&format!("\\\\.\\{}", logical_drive.get_name()))?;
+                get_volume_disk_extents(&format!("\\\\.\\{}", logical_disk.get_name()))?;
 
             if let Some(disk_extent) = disk_extents.get(0) {
-                let physical_drive = PhysicalDrive::by_index(disk_extent.disk_index as usize)?;
-                if let Some(partition) = physical_drive
+                let physical_disk = PhysicalDisk::by_index(disk_extent.disk_index as usize)?;
+                if let Some(partition) = physical_disk
                     .query_partitions()?
                     .iter()
                     .find(|part| part.get_start_offset() == disk_extent.start_offset as u64)
                 {
-                    // got volume & partition here
-
-                    // Her we have all components: PhysicalDrive, Volume, Partition, LogicalDrive
-                    vol_infos.push(VolumeInfo {
-                        part_uuid: if let Some(captures) =
-                            part_uuid_re.captures(volume.get_device_id())
-                        {
-                            String::from(captures.get(1).unwrap().as_str())
-                        } else {
-                            return Err(MigError::from_remark(
+                    // got volume, logical_disk, physical_disk & partition here
+                    debug!("new: got physical disk_for volume: {}", physical_disk);
+                    debug!("new: got partition disk_for volume: {}", partition);
+                    // try to extract a partuuid from volume_id
+                    let part_uuid = if let Some(captures) =
+                        part_uuid_re.captures(volume.get_device_id())
+                            {
+                                String::from(captures.get(1).unwrap().as_str())
+                            } else {
+                                return Err(MigError::from_remark(
                                 MigErrorKind::NoMatch,
                                 &format!(
                                     "Could not extract partuuid from volume id: '{}'",
                                     volume.get_device_id()
                                 ),
                             ));
-                        },
+                    };
+
+                    debug!("new: found partuuid: {} for volume {}", part_uuid, volume);
+
+                    // Her we have all components: PhysicalDrive, Volume, Partition, LogicalDrive
+                    vol_infos.push(VolumeInfo {
+                        part_uuid,
                         volume,
-                        physical_drive,
-                        logical_drive: logical_drive.clone(),
+                        physical_drive: physical_disk,
+                        logical_drive: logical_disk.clone(),
                         partition: partition.clone(),
                     });
                 } else {

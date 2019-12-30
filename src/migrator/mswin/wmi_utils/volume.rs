@@ -198,12 +198,9 @@ impl<'a> Volume {
 
 impl fmt::Display for Volume {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        // The `f` value implements the `Write` trait, which is what the
-        // write! macro is expecting. Note that this formatting ignores the
-        // various flags provided to format strings.
         write!(
             f,
-            "Vol[{},id:{},dl:{},type:{:?},fs:{:?},boot:{},sys:{},label:{}]",
+            "VOLUME[{},id:{},dl:{},type:{:?},fs:{:?},boot:{},sys:{},label:{}]",
             self.name,
             self.device_id,
             self.drive_letter,

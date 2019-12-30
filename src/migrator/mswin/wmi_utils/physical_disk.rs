@@ -3,6 +3,7 @@ use crate::{
     mswin::win_api::{query_dos_device, wmi_api::WmiAPI},
 };
 use log::debug;
+use std::fmt;
 
 use super::{Partition, QueryRes, NS_CVIM2};
 
@@ -27,7 +28,7 @@ impl DriveType {
 }
 
 #[derive(Debug, Clone)]
-pub(crate) struct PhysicalDrive {
+pub(crate) struct PhysicalDisk {
     name: String,
     device_id: String,
     size: u64,
@@ -41,21 +42,38 @@ pub(crate) struct PhysicalDrive {
     drive_type: DriveType,
 }
 
+impl fmt::Display for PhysicalDisk {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        write!(
+            f,
+            "PHYSDISK[{},id:{},idx:{},stat:{},media:{:?},type:{:?},size:{},partitions:{}]",
+            self.name,
+            self.device_id,
+            self.disk_index,
+            self.status,
+            self.media_type,
+            self.drive_type,
+            self.size,
+            self.partitions
+        )
+    }
+}
+
 #[allow(dead_code)]
-impl<'a> PhysicalDrive {
-    pub fn query_all() -> Result<Vec<PhysicalDrive>, MigError> {
+impl<'a> PhysicalDisk {
+    pub fn query_all() -> Result<Vec<PhysicalDisk>, MigError> {
         let query = QUERY_ALL;
         debug!("query_drives: performing WMI Query: '{}'", query);
         let q_res = WmiAPI::get_api(NS_CVIM2)?.raw_query(query)?;
-        let mut result: Vec<PhysicalDrive> = Vec::new();
+        let mut result: Vec<PhysicalDisk> = Vec::new();
         for res in q_res {
             let res_map = QueryRes::new(&res);
-            result.push(PhysicalDrive::new(res_map)?);
+            result.push(PhysicalDisk::new(res_map)?);
         }
         Ok(result)
     }
 
-    pub fn by_index(disk_index: usize) -> Result<PhysicalDrive, MigError> {
+    pub fn by_index(disk_index: usize) -> Result<PhysicalDisk, MigError> {
         let query = format!("{} WHERE Index={}", QUERY_ALL, disk_index);
         debug!("get_drive: performing WMI Query: '{}'", query);
         let mut q_res = WmiAPI::get_api(NS_CVIM2)?.raw_query(&query)?;
@@ -70,7 +88,7 @@ impl<'a> PhysicalDrive {
             1 => {
                 let res = q_res.pop().unwrap();
                 let res_map = QueryRes::new(&res);
-                Ok(PhysicalDrive::new(res_map)?)
+                Ok(PhysicalDisk::new(res_map)?)
             }
             _ => Err(MigError::from_remark(
                 MigErrorKind::InvParam,
@@ -82,9 +100,9 @@ impl<'a> PhysicalDrive {
         }
     }
 
-    fn new(res_map: QueryRes) -> Result<PhysicalDrive, MigError> {
+    fn new(res_map: QueryRes) -> Result<PhysicalDisk, MigError> {
         let disk_index = res_map.get_int_property("Index")? as usize;
-        Ok(PhysicalDrive {
+        Ok(PhysicalDisk {
             name: String::from(res_map.get_string_property("Caption")?),
             device_id: String::from(res_map.get_string_property("DeviceID")?),
             media_type: String::from(res_map.get_string_property("MediaType")?), // TODO: parse this value fixed / removable

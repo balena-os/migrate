@@ -13,8 +13,8 @@ use crate::{
 };
 
 pub(crate) mod volume;
-pub(crate) mod physical_drive;
-pub(crate) use physical_drive::PhysicalDrive;
+pub(crate) mod physical_disk;
+pub(crate) use physical_disk::PhysicalDisk;
 pub(crate) mod logical_disk;
 pub(crate) use logical_disk::LogicalDisk;
 

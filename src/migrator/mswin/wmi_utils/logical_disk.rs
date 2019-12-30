@@ -1,4 +1,5 @@
 use log::debug;
+use std::fmt;
 
 // use log::{debug};
 use super::QueryRes;
@@ -49,6 +50,25 @@ pub(crate) struct LogicalDisk {
     free_space: u64,
     compressed: bool,
     dirty: bool,
+}
+
+impl fmt::Display for LogicalDisk {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        // The `f` value implements the `Write` trait, which is what the
+        // write! macro is expecting. Note that this formatting ignores the
+        // various flags provided to format strings.
+        write!(
+            f,
+            "LOGDISK[{},id:{},stat:{},media:{:?},fs:{:?},size:{},free:{}]",
+            self.name,
+            self.device_id,
+            self.status,
+            self.media_type,
+            self.file_system,
+            self.size,
+            self.free_space
+        )
+    }
 }
 
 #[allow(dead_code)]
