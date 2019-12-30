@@ -6,7 +6,7 @@ use crate::{
         win_api::{get_volume_disk_extents, is_efi_boot},
         wmi_utils::{
             volume::{DriveType, Volume},
-            LogicalDrive, Partition, PhysicalDrive,
+            LogicalDisk, Partition, PhysicalDrive,
         },
     },
 };
@@ -25,7 +25,7 @@ const VOL_UUID_REGEX: &str =
 pub(crate) struct VolumeInfo {
     pub part_uuid: String,
     pub volume: Volume,
-    pub logical_drive: LogicalDrive,
+    pub logical_drive: LogicalDisk,
     pub physical_drive: PhysicalDrive,
     pub partition: Partition,
 }
@@ -65,7 +65,12 @@ impl DriveInfo {
 
         let volumes = Volume::query_all()?;
         for volume in volumes {
-            debug!("new: looking at volume {}, type: {:?}, driveletter: {:?}", volume.get_device_id(), volume.get_drive_type(), volume.get_drive_letter());
+            debug!(
+                "new: looking at volume {}, type: {:?}, driveletter: {:?}",
+                volume.get_device_id(),
+                volume.get_drive_type(),
+                volume.get_drive_letter()
+            );
             match volume.get_drive_type() {
                 DriveType::LocalDisk | DriveType::RemovableDisk => (),
                 _ => {
@@ -79,10 +84,10 @@ impl DriveInfo {
             }
 
             let logical_drive = if let Some(drive_letter) = volume.get_drive_letter() {
-                LogicalDrive::query_for_name(drive_letter)?
+                LogicalDisk::query_for_name(drive_letter)?
             } else {
                 if volume.is_system() {
-                    let mut swapped_efi_drive: Option<LogicalDrive> = None;
+                    let mut swapped_efi_drive: Option<LogicalDisk> = None;
                     swap(&mut swapped_efi_drive, &mut efi_drive);
                     if let Some(efi_drive) = swapped_efi_drive {
                         efi_drive

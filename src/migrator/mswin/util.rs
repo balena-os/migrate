@@ -6,7 +6,7 @@ use std::path::{Path, PathBuf};
 use crate::common::{file_exists, path_append};
 use crate::{
     common::{call, MigError, MigErrorKind},
-    mswin::wmi_utils::{LogicalDrive, WmiUtils},
+    mswin::wmi_utils::{LogicalDisk, WmiUtils},
 };
 
 const DRIVE_LETTERS: &[&str] = &[
@@ -35,7 +35,7 @@ pub(crate) fn to_linux_path(path: &Path) -> PathBuf {
 }
 
 // find or mount EFI LogicalDrive
-pub(crate) fn mount_efi() -> Result<LogicalDrive, MigError> {
+pub(crate) fn mount_efi() -> Result<LogicalDisk, MigError> {
     // get drive letters in use
     let drive_letters = WmiUtils::query_drive_letters()?;
 
@@ -47,8 +47,8 @@ pub(crate) fn mount_efi() -> Result<LogicalDrive, MigError> {
         file_exists(path_append(dl, CHECK_EFI_PATH))
     }) {
         // found EFI drive - return
-        debug!("mount_efi: found efi bootmgrfw on '{}'", drive_letter );
-        Ok(LogicalDrive::query_for_name(drive_letter)?)
+        debug!("mount_efi: found efi bootmgrfw on '{}'", drive_letter);
+        Ok(LogicalDisk::query_for_name(drive_letter)?)
     } else {
         // find free drive letter
 
@@ -60,10 +60,13 @@ pub(crate) fn mount_efi() -> Result<LogicalDrive, MigError> {
             }
         }) {
             // mount EFI drive
-            debug!("mount_efi: attempting to mount efi drive on '{}'", drive_letter );
+            debug!(
+                "mount_efi: attempting to mount efi drive on '{}'",
+                drive_letter
+            );
             let cmd_res = call("mountvol", &[drive_letter, "/S"], true)?;
             if cmd_res.status.success() && cmd_res.stderr.is_empty() {
-                Ok(LogicalDrive::query_for_name(drive_letter)?)
+                Ok(LogicalDisk::query_for_name(drive_letter)?)
             } else {
                 Err(MigError::from_remark(
                     MigErrorKind::ExecProcess,

@@ -39,7 +39,7 @@ impl MediaType {
 }
 
 #[derive(Debug, Clone)]
-pub(crate) struct LogicalDrive {
+pub(crate) struct LogicalDisk {
     name: String,
     device_id: String,
     status: String,
@@ -52,7 +52,7 @@ pub(crate) struct LogicalDrive {
 }
 
 #[allow(dead_code)]
-impl<'a> LogicalDrive {
+impl<'a> LogicalDisk {
     /*
         pub(crate) fn query_drive_letters() -> Result<Vec<String>, MigError> {
             let mut result: Vec<String> = Vec::new();
@@ -63,13 +63,13 @@ impl<'a> LogicalDrive {
         }
     */
 
-    pub(crate) fn query_for_name(name: &str) -> Result<LogicalDrive, MigError> {
+    pub(crate) fn query_for_name(name: &str) -> Result<LogicalDisk, MigError> {
         let query = format!("{} where Name='{}'", QUERY_BASE, name);
         debug!("query_drive_for_name: performing WMI Query: '{}'", query);
 
         let q_res = WmiAPI::get_api(NS_CVIM2)?.raw_query(&query)?;
         if q_res.len() > 0 {
-            Ok(LogicalDrive::new(QueryRes::new(&q_res[0]))?)
+            Ok(LogicalDisk::new(QueryRes::new(&q_res[0]))?)
         } else {
             Err(MigError::from_remark(
                 MigErrorKind::NotFound,
@@ -81,21 +81,21 @@ impl<'a> LogicalDrive {
         }
     }
 
-    pub(crate) fn query_all() -> Result<Vec<LogicalDrive>, MigError> {
+    pub(crate) fn query_all() -> Result<Vec<LogicalDisk>, MigError> {
         let query = QUERY_BASE;
         debug!("query_all: performing WMI Query: '{}'", query);
 
         let q_res = WmiAPI::get_api(NS_CVIM2)?.raw_query(query)?;
-        let mut result: Vec<LogicalDrive> = Vec::new();
+        let mut result: Vec<LogicalDisk> = Vec::new();
         for res in q_res {
             let res_map = QueryRes::new(&res);
-            result.push(LogicalDrive::new(res_map)?);
+            result.push(LogicalDisk::new(res_map)?);
         }
         Ok(result)
     }
 
-    pub(crate) fn new(res_map: QueryRes) -> Result<LogicalDrive, MigError> {
-        debug!("new: creating logical drive");
+    pub(crate) fn new(res_map: QueryRes) -> Result<LogicalDisk, MigError> {
+        debug!("new: creating logical disk");
 
         for key in res_map.q_result.keys() {
             debug!(
@@ -105,7 +105,7 @@ impl<'a> LogicalDrive {
             );
         }
 
-        Ok(LogicalDrive {
+        Ok(LogicalDisk {
             name: String::from(res_map.get_string_property("Caption")?),
             device_id: String::from(res_map.get_string_property("DeviceID")?),
             status: String::from(res_map.get_string_property("Status")?),

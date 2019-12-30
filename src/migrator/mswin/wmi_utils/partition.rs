@@ -1,4 +1,4 @@
-use super::{LogicalDrive, QueryRes, NS_CVIM2};
+use super::{LogicalDisk, QueryRes, NS_CVIM2};
 use crate::{
     common::{MigError, MigErrorKind},
     mswin::win_api::wmi_api::WmiAPI,
@@ -102,7 +102,7 @@ impl<'a> Partition {
         Ok(result)
     }
 
-    pub fn query_logical_drive(&self) -> Result<Option<LogicalDrive>, MigError> {
+    pub fn query_logical_drive(&self) -> Result<Option<LogicalDisk>, MigError> {
         let query = &format!("ASSOCIATORS OF {{Win32_DiskPartition.DeviceID='{}'}} WHERE AssocClass = Win32_LogicalDiskToPartition",self.device_id);
         debug!("query_logical_drive: performing WMI Query: '{}'", query);
 
@@ -112,7 +112,7 @@ impl<'a> Partition {
             1 => {
                 let res = q_res.pop().unwrap();
                 let res_map = QueryRes::new(&res);
-                Ok(Some(LogicalDrive::new(res_map)?))
+                Ok(Some(LogicalDisk::new(res_map)?))
             }
             _ => Err(MigError::from_remark(
                 MigErrorKind::InvParam,

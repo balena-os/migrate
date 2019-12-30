@@ -1,6 +1,6 @@
 // extern crate wmi;
 
-use log::info;
+use log::{info, debug};
 use std::collections::HashMap;
 // use std::rc::Rc;
 
@@ -15,8 +15,8 @@ use crate::{
 pub(crate) mod volume;
 pub(crate) mod physical_drive;
 pub(crate) use physical_drive::PhysicalDrive;
-pub(crate) mod logical_drive;
-pub(crate) use logical_drive::LogicalDrive;
+pub(crate) mod logical_disk;
+pub(crate) use logical_disk::LogicalDisk;
 
 pub(crate) mod partition;
 pub(crate) use partition::Partition;
@@ -209,17 +209,12 @@ impl WmiUtils {
     */
 
     pub fn query_drive_letters() -> Result<Vec<String>, MigError> {
-        const QUERY: &str = "SELECT DeviceID FROM Win32_LogicalDisk";
-        let q_res = WmiAPI::get_api(NS_CVIM2)?.raw_query(QUERY)?;
+        debug!("query_drive_letters: enumerating logical disks");
         let mut result: Vec<String> = Vec::new();
-        for res in q_res {
-            /*for key in res.keys() {
-                debug!("query_drive_letters: key: {}, value: {:?}", key, res.get(key).unwrap());
-            }*/
-            result.push(String::from(
-                QueryRes::new(&res).get_string_property("DeviceID")?,
-            ));
-        }
+        LogicalDisk::query_all()?.iter().all(|logical_drive| {
+            result.push(String::from(logical_drive.get_device_id()));
+            true
+        });
         result.sort();
         Ok(result)
     }
