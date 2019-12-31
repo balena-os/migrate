@@ -5,12 +5,14 @@ use regex::Regex;
 use std::path::{Path, PathBuf};
 
 use crate::linux::linux_common::to_std_device_path;
+use crate::linux::linux_defs::UDEVADM_CMD;
 use crate::{
     common::{call, file_exists, path_append, MigErrCtx, MigError, MigErrorKind},
     defs::{DISK_BY_LABEL_PATH, DISK_BY_PARTUUID_PATH, DISK_BY_UUID_PATH},
     linux::linux_defs::LSBLK_CMD,
 };
 use std::collections::HashMap;
+use std::panic::resume_unwind;
 
 // const GPT_EFI_PART: &str = "C12A7328-F81F-11D2-BA4B-00A0C93EC93B";
 
@@ -124,9 +126,10 @@ impl<'a> LsblkInfo {
     pub fn lsblk_partition_from_dev_path<P: AsRef<Path>>(
         path: P,
     ) -> Result<LsblkPartition, MigError> {
+        debug!("lsblk_partition_from_dev_path: {}", path.as_ref().display());
         let lsblk_str = LsblkInfo::call_lsblk(Some(path.as_ref()))?;
         if let Some(ref line) = lsblk_str.lines().nth(0) {
-            if let Some(result) = LsblkInfo::parse_line(line)? {
+            if let Some(result) = LsblkInfo::parse_lsblk_line(line)? {
                 if let ResultType::Partition(partition) = result {
                     Ok(partition)
                 } else {
@@ -144,11 +147,13 @@ impl<'a> LsblkInfo {
     }
 
     pub fn lsblk_device_from_dev_path<P: AsRef<Path>>(path: P) -> Result<LsblkDevice, MigError> {
+        debug!("lsblk_device_from_dev_path: {}", path.as_ref().display());
+
         let lsblk_str = LsblkInfo::call_lsblk(Some(path.as_ref()))?;
         let mut lsblk_lines = lsblk_str.lines().enumerate();
 
         let mut device = if let Some((_index, line)) = lsblk_lines.next() {
-            if let Some(result) = LsblkInfo::parse_line(line)? {
+            if let Some(result) = LsblkInfo::parse_lsblk_line(line)? {
                 match result {
                     ResultType::Drive(device) => device,
                     _ => {
@@ -166,7 +171,7 @@ impl<'a> LsblkInfo {
         };
 
         for (_index, line) in lsblk_lines {
-            if let Some(result) = LsblkInfo::parse_line(line)? {
+            if let Some(result) = LsblkInfo::parse_lsblk_line(line)? {
                 match result {
                     ResultType::Partition(parttition) => {
                         if let Some(ref mut children) = device.children {
@@ -192,6 +197,7 @@ impl<'a> LsblkInfo {
     }
 
     pub fn all() -> Result<LsblkInfo, MigError> {
+        debug!("all:");
         LsblkInfo::from_string(&LsblkInfo::call_lsblk(None)?)
     }
 
@@ -203,6 +209,7 @@ impl<'a> LsblkInfo {
         &'a self,
         partuuid: &str,
     ) -> Result<(&'a LsblkDevice, &'a LsblkPartition), MigError> {
+        debug!("get_devices_for_partuuid: {}", partuuid);
         for device in &self.blockdevices {
             if let Some(ref children) = device.children {
                 if let Some(partition) = children.iter().find(|part| {
@@ -226,6 +233,8 @@ impl<'a> LsblkInfo {
         &'a self,
         uuid: &str,
     ) -> Result<(&'a LsblkDevice, &'a LsblkPartition), MigError> {
+        debug!("get_devices_for_uuid: {}", uuid);
+
         for device in &self.blockdevices {
             if let Some(ref children) = device.children {
                 if let Some(partition) = children.iter().find(|part| {
@@ -249,6 +258,7 @@ impl<'a> LsblkInfo {
         &'a self,
         label: &str,
     ) -> Result<(&'a LsblkDevice, &'a LsblkPartition), MigError> {
+        debug!("get_devices_for_label: {}", label);
         for device in &self.blockdevices {
             if let Some(ref children) = device.children {
                 if let Some(partition) = children.iter().find(|part| {
@@ -273,7 +283,7 @@ impl<'a> LsblkInfo {
         path: P,
     ) -> Result<(&'a LsblkDevice, &'a LsblkPartition), MigError> {
         let path = path.as_ref();
-        trace!("get_path_info: '{}", path.display());
+        debug!("get_devices_for_path: '{}", path.display());
         let abs_path = path.canonicalize().context(MigErrCtx::from_remark(
             MigErrorKind::Upstream,
             &format!("failed to canonicalize path: '{}'", path.display()),
@@ -339,17 +349,16 @@ impl<'a> LsblkInfo {
         part_path: P,
     ) -> Result<(&'a LsblkDevice, &'a LsblkPartition), MigError> {
         let part_path = part_path.as_ref();
-        trace!("get_devinfo_from_partition: '{}", part_path.display());
+        debug!("get_devices_for_partition: '{}", part_path.display());
 
         let part_path = to_std_device_path(part_path)?;
 
         if let Some(part_name) = part_path.file_name() {
             let cmp_name = part_name.to_string_lossy();
-            if let Some(lsblk_dev) = self
-                .blockdevices
-                .iter()
-                .find(|&dev| *&cmp_name.starts_with(&dev.name))
-            {
+            if let Some(lsblk_dev) = self.blockdevices.iter().find(|&dev| {
+                debug!("cmp: {} == dev: {}", cmp_name, dev.name);
+                *&cmp_name.starts_with(&dev.name)
+            }) {
                 Ok((lsblk_dev, lsblk_dev.get_devinfo_from_part_name(&cmp_name)?))
             } else {
                 Err(MigError::from_remark(
@@ -368,36 +377,144 @@ impl<'a> LsblkInfo {
         }
     }
 
-    fn call_lsblk(device: Option<&Path>) -> Result<String, MigError> {
+    fn call_lsblk(device: Option<&Path>) -> Result<LsblkInfo, MigError> {
+        // TODO: use udevadm info instead
+        // call lsblk -l -o NAME [device]
+        // then udevadmin info /name
+
+        // TODO: determine which columns are better retrieved from udevadm
+        // wanted:
+        // RO,SIZE,TYPE
+        //
+        const LSBLK_COLS: &str = "NAME,MAJ:MIN,FSTYPE,MOUNTPOINT,LABEL,UUID,PARTUUID";
+
+        let mut args = vec!["-b", "-P", "-o", LSBLK_COLS];
+        if let Some(device) = device {
+            args.push(&device.to_string_lossy())
+        }
+
+        let lsblk_cmd_res = call(LSBLK_CMD, &args, true)?;
+        if lsblk_cmd_res.status.success() {
+            let mut lsblk_info: LsblkInfo = LsblkInfo {
+                blockdevices: Vec::new(),
+            };
+
+            for line in lsblk_cmd_res.stdout.lines().iter().skip(1) {
+                // TODO: make it 'udevadm info -q property {device}'
+                let lsblk_params = LsblkInfo::parse_lsblk_line(line)?;
+                let dev_name = if let Some(name) = lsblk_params.get("NAME") {
+                } else {
+                    return Err(MigError::from_remark(
+                        MigErrorKind::ExecProcess,
+                        "call_lsblk: Failed to retrieve device name for lsblk info",
+                    ));
+                };
+
+                let udev_cmd_res = call(UDEVADM_CMD, &["info", "-q", "property", dev_name], true)?;
+                if udev_cmd_res.status.success() {
+                    let udev_params = LsblkInfo::parse_udev_info(&udev_cmd_res.stdout)?;
+                    if let Some(dev_type) = udev_params.get("DEVTYPE") {
+                        match dev_type.as_str() {
+                            "partition" => {
+                                let partition = LsblkPartition::new(&lsblk_params, &udev_params);
+                                if let Some(last_dev) = lsblk_info.blockdevices.last_mut() {
+                                    if let Some(ref mut children) = last_dev.children {
+                                        children.push(partition)
+                                    } else {
+                                        let mut children:Vec<LsblkPartition> = Vec::new();
+                                        children.push(partition)
+                                        last_dev.children = Some(children)
+                                    }
+                                } else {
+                                    return Err(MigError::from_remark(
+                                        MigErrorKind::ExecProcess,
+                                        "call_lsblk: Invalid state - trying to add LsblkPartition to non existing LsblkDevice",
+                                    ));
+                                }
+                            }
+                            "disk" => {
+                                lsblk_info
+                                    .blockdevices
+                                    .push(LsblkDevice::new(&lsblk_params, &udev_params));
+                            }
+                            _ => {
+                                return Err(MigError::from_remark(
+                                    MigErrorKind::ExecProcess,
+                                    &format!("call_lsblk: invalid device type string while parsing lsblk output: '{}' for device '{:?}'", dev_type, device)
+                                ));
+                            }
+                        }
+                    } else {
+                        return Err(MigError::from_remark(
+                            MigErrorKind::ExecProcess,
+                            &format!(
+                                "new: failed to determine block device attributes for device: {}, parameter DEVTYPE not found in udevadmn output",
+                                dev_name
+                            ),
+                        ));
+                    }
+                } else {
+                    return Err(MigError::from_remark(
+                        MigErrorKind::ExecProcess,
+                        &format!(
+                            "new: failed to determine block device attributes for device: {} with args: '{:?}', stderr: {}",
+                            dev_name, args, lsblk_cmd_res.stderr
+                        ),
+                    ));
+                }
+            }
+
+            Ok(lsblk_info)
+        } else {
+            return Err(MigError::from_remark(
+                MigErrorKind::ExecProcess,
+                &format!(
+                    "new: failed to determine lsblk block device attributes for device: with args: '{:?}', stderr: {}",
+                    args, lsblk_cmd_res.stderr
+                ),
+            ));
+        }
+
+        /*
+        const COLUMNS_V2: &str =
+            "NAME,KNAME,MAJ:MIN,FSTYPE,MOUNTPOINT,LABEL,UUID,PARTUUID,RO,SIZE,TYPE";
+        const COLUMNS_V1: &str = "NAME,KNAME,MAJ:MIN,FSTYPE,MOUNTPOINT,LABEL,UUID";
+
         #[allow(unused_assignments)]
-        let mut dev_name = String::new();
+        let mut dev_name = String::from("-any-");
         let args = if let Some(device) = device {
             dev_name = String::from(&*device.to_string_lossy());
-            vec![
-                "-b",
-                "-P",
-                "-o",
-                "NAME,KNAME,MAJ:MIN,FSTYPE,MOUNTPOINT,LABEL,UUID,PARTUUID,RO,SIZE,TYPE",
-                dev_name.as_str(),
-            ]
+            vec!["-b", "-P", "-o", COLUMNS_V1, dev_name.as_str()]
         } else {
-            vec![
-                "-b",
-                "-P",
-                "-o",
-                "NAME,KNAME,MAJ:MIN,FSTYPE,MOUNTPOINT,LABEL,UUID,PARTUUID,RO,SIZE,TYPE",
-            ]
+            vec!["-b", "-P", "-o", COLUMNS_V1]
         };
 
         let cmd_res = call(LSBLK_CMD, &args, true)?;
         if cmd_res.status.success() {
             Ok(cmd_res.stdout)
         } else {
-            return Err(MigError::from_remark(
-                MigErrorKind::ExecProcess,
-                "new: failed to determine block device attributes for",
-            ));
+            // less output columns on older lsblk version
+            let args = if let Some(device) = device {
+                dev_name = String::from(&*device.to_string_lossy());
+                vec!["-b", "-P", "-o", COLUMNS_V2, dev_name.as_str()]
+            } else {
+                vec!["-b", "-P", "-o", COLUMNS_V2]
+            };
+
+            let cmd_res = call(LSBLK_CMD, &args, true)?;
+            if cmd_res.status.success() {
+                Ok(cmd_res.stdout)
+            } else {
+                return Err(MigError::from_remark(
+                    MigErrorKind::ExecProcess,
+                    &format!(
+                        "new: failed to determine block device attributes for device: '{}', stderr: {}",
+                        dev_name, cmd_res.stderr
+                    ),
+                ));
+            }
         }
+        */
     }
 
     pub fn from_string(data: &str) -> Result<LsblkInfo, MigError> {
@@ -408,7 +525,7 @@ impl<'a> LsblkInfo {
         for line in data.lines() {
             trace!("from_list: processing line: '{}'", line);
             // parse current line into hashmap
-            if let Some(result) = LsblkInfo::parse_line(line)? {
+            if let Some(result) = LsblkInfo::parse_lsblk_line(line)? {
                 match result {
                     ResultType::Drive(device) => {
                         lsblk_info.blockdevices.push(device);
@@ -475,11 +592,33 @@ impl<'a> LsblkInfo {
         Ok(lsblk_info)
     }
 
-    fn parse_line(line: &str) -> Result<Option<ResultType>, MigError> {
+    fn parse_udev_info(text: &str) -> Result<HashMap<String, String>, MigError> {
+        lazy_static! {
+            static ref UDEV_PARAM_RE: Regex = Regex::new(r##"^([^=]+)=(.*)$"##).unwrap();
+        }
+
+        let mut params: HashMap<String, String> = HashMap::new();
+        // TODO: implement
+
+        for line in text.lines() {
+            if let Some(captures) = UDEV_PARAM_RE.captures(line) {
+                params.insert(
+                    String::from(captures.get(1).unwrap().as_str()),
+                    String::from(captures.get(2).unwrap().as_str()),
+                )
+            } else {
+                warn!("Failed to parse udevadm output: '{}'", line);
+                return Err(MigError::displayed());
+            }
+        }
+        Ok(params)
+    }
+
+    fn parse_lsblk_line(line: &str) -> Result<HashMap<String, String>, MigError> {
         trace!("parse_line called with '{}'", line);
 
         lazy_static! {
-            static ref PARAM_RE: Regex =
+            static ref LSBLK_PARAM_RE: Regex =
                 Regex::new(r##"^([\S^=]+)="([^"]*)"(\s+(.*))?$"##).unwrap();
         }
 
@@ -490,7 +629,7 @@ impl<'a> LsblkInfo {
         // parse current line into hashmap
         loop {
             trace!("parsing '{}'", curr_pos);
-            if let Some(captures) = PARAM_RE.captures(curr_pos) {
+            if let Some(captures) = LSBLK_PARAM_RE.captures(curr_pos) {
                 let param_name = captures.get(1).unwrap().as_str();
                 let param_value = captures.get(2).unwrap().as_str();
 
@@ -515,76 +654,80 @@ impl<'a> LsblkInfo {
                     break;
                 }
             } else {
-                warn!("Failed to parse '{}'", curr_pos);
+                warn!("Failed to parse lsblk output '{}'", curr_pos);
                 return Err(MigError::displayed());
             }
         }
 
-        let dev_type = LsblkInfo::get_str(&params, "TYPE")?;
+        Ok(params)
+    }
 
-        trace!("got type: '{}'", dev_type);
+    /*
+            let dev_type = LsblkInfo::get_str(&params, "TYPE")?;
 
-        match dev_type.as_str() {
-            "disk" => Ok(Some(ResultType::Drive(LsblkDevice {
-                name: LsblkInfo::get_str(&params, "NAME")?,
-                kname: LsblkInfo::get_str(&params, "KNAME")?,
-                maj_min: LsblkInfo::get_str(&params, "MAJ:MIN")?,
-                uuid: if let Some(uuid) = params.get("UUID") {
-                    Some(uuid.clone())
-                } else {
-                    None
-                },
-                size: LsblkInfo::get_u64(&params, "SIZE")?,
-                children: None,
-            }))),
-            "part" => {
-                Ok(Some(ResultType::Partition(LsblkPartition {
+            trace!("got type: '{}'", dev_type);
+
+            match dev_type.as_str() {
+                "disk" => Ok(Some(ResultType::Drive(LsblkDevice {
                     name: LsblkInfo::get_str(&params, "NAME")?,
                     kname: LsblkInfo::get_str(&params, "KNAME")?,
                     maj_min: LsblkInfo::get_str(&params, "MAJ:MIN")?,
-                    fstype: if let Some(fstype) = params.get("FSTYPE") {
-                        Some(fstype.clone())
-                    } else {
-                        None
-                    },
-                    mountpoint: LsblkInfo::get_pathbuf_or_none(&params, "MOUNTPOINT"),
-                    label: if let Some(label) = params.get("LABEL") {
-                        Some(label.clone())
-                    } else {
-                        None
-                    },
                     uuid: if let Some(uuid) = params.get("UUID") {
                         Some(uuid.clone())
                     } else {
                         None
                     },
-                    ro: LsblkInfo::get_str(&params, "RO")?,
                     size: LsblkInfo::get_u64(&params, "SIZE")?,
-                    parttype: None,
-                    partlabel: if let Some(label) = params.get("LABEL") {
-                        Some(label.clone())
-                    } else {
-                        None
-                    },
-                    partuuid: if let Some(partuuid) = params.get("PARTUUID") {
-                        trace!("Adding partuuid: {}", &partuuid);
-                        Some(partuuid.clone())
-                    } else {
-                        trace!("Not adding partuuid");
-                        None
-                    },
-                    // TODO: bit dodgy this one
-                    index: None,
-                })))
-            }
+                    children: None,
+                }))),
+                "part" => {
+                    Ok(Some(ResultType::Partition(LsblkPartition {
+                        name: LsblkInfo::get_str(&params, "NAME")?,
+                        kname: LsblkInfo::get_str(&params, "KNAME")?,
+                        maj_min: LsblkInfo::get_str(&params, "MAJ:MIN")?,
+                        fstype: if let Some(fstype) = params.get("FSTYPE") {
+                            Some(fstype.clone())
+                        } else {
+                            None
+                        },
+                        mountpoint: LsblkInfo::get_pathbuf_or_none(&params, "MOUNTPOINT"),
+                        label: if let Some(label) = params.get("LABEL") {
+                            Some(label.clone())
+                        } else {
+                            None
+                        },
+                        uuid: if let Some(uuid) = params.get("UUID") {
+                            Some(uuid.clone())
+                        } else {
+                            None
+                        },
+                        ro: LsblkInfo::get_str(&params, "RO")?,
+                        size: LsblkInfo::get_u64(&params, "SIZE")?,
+                        parttype: None,
+                        partlabel: if let Some(label) = params.get("LABEL") {
+                            Some(label.clone())
+                        } else {
+                            None
+                        },
+                        partuuid: if let Some(partuuid) = params.get("PARTUUID") {
+                            trace!("Adding partuuid: {}", &partuuid);
+                            Some(partuuid.clone())
+                        } else {
+                            trace!("Not adding partuuid");
+                            None
+                        },
+                        // TODO: bit dodgy this one
+                        index: None,
+                    })))
+                }
 
-            _ => {
-                warn!("not processing line, type unknown: '{}'", line);
-                Ok(None)
+                _ => {
+                    warn!("not processing line, type unknown: '{}'", line);
+                    Ok(None)
+                }
             }
         }
-    }
-
+    */
     fn get_str(params: &HashMap<String, String>, name: &str) -> Result<String, MigError> {
         if let Some(res) = params.get(name) {
             Ok(res.clone())
