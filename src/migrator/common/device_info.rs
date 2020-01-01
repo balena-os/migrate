@@ -71,15 +71,7 @@ impl DeviceInfo {
         Ok(DeviceInfo {
             drive: String::from(drive.get_path().to_string_lossy()),
             mountpoint,
-            drive_size: if let Some(size) = drive.size {
-                size
-            } else {
-                error!(
-                    "The required parameter drive_size could not be found for '{}'",
-                    drive.get_path().display()
-                );
-                return Err(MigError::displayed());
-            },
+            drive_size: drive.size,
             device: String::from(partition.get_path().to_string_lossy()),
             index: if let Some(index) = partition.index {
                 Some(index)
