@@ -36,17 +36,6 @@ const DEFAULT_PARTITION_ALIGNMENT_KIB: u64 = 4096; // KiB
                                                    // TODO: true might be the better default but can be very slow in combination with mkfs_direct_io
 const DEFAULT_MAX_DATA: bool = true;
 
-// TODO: replace removed command checks ?
-/*pub const REQUIRED_CMDS: &[&str] = &[
-    EXT_FMT_CMD,
-    FAT_FMT_CMD,
-    TAR_CMD,
-    LSBLK_CMD,
-    PARTPROBE_CMD,
-    // SFDISK_CMD,
-    PARTED_CMD,
-];*/
-
 pub(crate) fn write_balena_os(
     device: &Path,
     mounts: &mut Mounts,
@@ -388,58 +377,57 @@ fn format(lsblk_dev: &LsblkDevice, fs_dump: &CheckedFSDump) -> bool {
         let mut part_idx: usize = 0;
 
         while (part_idx < children.len()) && (part_idx < PART_NAME.len()) {
-            if let Some(ref part_type) = children[dev_idx].parttype {
-                match part_type.as_ref() {
-                    "0xc" | "0xe" => {
-                        debug!("Formatting fat partition at index {}/{}", dev_idx, part_idx);
-                        if !sub_format(
-                            &children[dev_idx].get_path(),
-                            PART_NAME[part_idx],
-                            true,
-                            fat_check,
-                            false,
-                        ) {
-                            return false;
-                        } else {
-                            part_idx += 1;
-                        }
-                    }
-                    "0x83" => {
-                        debug!(
-                            "Formatting linux partition at index {}/{}",
-                            dev_idx, part_idx
-                        );
-                        let direct_io = if let Some(mkfs_direct) = fs_dump.mkfs_direct {
-                            mkfs_direct
-                        } else {
-                            false
-                        };
-
-                        if !sub_format(
-                            &children[dev_idx].get_path(),
-                            PART_NAME[part_idx],
-                            false,
-                            check,
-                            direct_io,
-                        ) {
-                            return false;
-                        } else {
-                            part_idx += 1;
-                        }
-                    }
-                    "0x5" | "0xf" => {
-                        debug!(
-                            "Skipping extended partition at index {}/{}",
-                            dev_idx, part_idx
-                        );
-                    }
-                    _ => {
-                        error!(
-                            "Invalid partition, type: {} found at index {}/{}",
-                            part_type, dev_idx, part_idx
-                        );
+            let part_entry_type = children[part_idx].part_entry_type.as_str();
+            match part_entry_type {
+                "0xc" | "0xe" => {
+                    debug!("Formatting fat partition at index {}/{}", dev_idx, part_idx);
+                    if !sub_format(
+                        &children[dev_idx].get_path(),
+                        PART_NAME[part_idx],
+                        true,
+                        fat_check,
+                        false,
+                    ) {
                         return false;
+                    } else {
+                        part_idx += 1;
                     }
+                }
+                "0x83" => {
+                    debug!(
+                        "Formatting linux partition at index {}/{}",
+                        dev_idx, part_idx
+                    );
+                    let direct_io = if let Some(mkfs_direct) = fs_dump.mkfs_direct {
+                        mkfs_direct
+                    } else {
+                        false
+                    };
+
+                    if !sub_format(
+                        &children[dev_idx].get_path(),
+                        PART_NAME[part_idx],
+                        false,
+                        check,
+                        direct_io,
+                    ) {
+                        return false;
+                    } else {
+                        part_idx += 1;
+                    }
+                }
+                "0x5" | "0xf" => {
+                    debug!(
+                        "Skipping extended partition at index {}/{}",
+                        dev_idx, part_idx
+                    );
+                }
+                _ => {
+                    error!(
+                        "Invalid partition, type: {} found at index {}/{}",
+                        part_entry_type, dev_idx, part_idx
+                    );
+                    return false;
                 }
             }
 
@@ -668,7 +656,7 @@ fn part_reread(
             "part_reread: calling LsblkInfo::for_device('{}')",
             device.display()
         );
-        let lsblk_dev = LsblkInfo::lsblk_device_from_dev_path(device)?;
+        let lsblk_dev = LsblkDevice::from_device_path(device)?;
         if let Some(children) = &lsblk_dev.children {
             if children.len() >= num_partitions {
                 debug!(

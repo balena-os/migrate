@@ -238,20 +238,10 @@ impl<'a> BootManager for GrubBootManager {
                     "Grub root string is not implemented for partuuid ",
                 ));
             } else {
-                if let Some(index) = boot_path.device_info.index {
-                    format!(
-                        "search --no-floppy --fs-uuid --set=root {},{}{}",
-                        boot_path.device_info.drive, part_type, index
-                    )
-                } else {
-                    return Err(MigError::from_remark(
-                        MigErrorKind::NotFound,
-                        &format!(
-                            "Could not find grub id for device '{}'",
-                            boot_path.device_info.device
-                        ),
-                    ));
-                }
+                format!(
+                    "search --no-floppy --fs-uuid --set=root {},{}{}",
+                    boot_path.device_info.drive, part_type, boot_path.device_info.index
+                )
             }
         };
 
