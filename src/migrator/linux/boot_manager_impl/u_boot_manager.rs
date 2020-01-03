@@ -1,7 +1,7 @@
 use chrono::Local;
 use failure::ResultExt;
 use lazy_static::lazy_static;
-use log::{debug, error, info, trace, warn};
+use log::{debug, error, info, warn};
 use nix::mount::{mount, umount, MsFlags};
 use regex::Regex;
 use std::fs::{remove_file, File};
@@ -263,11 +263,11 @@ impl<'a> BootManager for UBootManager {
         _s2_cfg: &mut Stage2ConfigBuilder,
     ) -> Result<bool, MigError> {
         // TODO: calculate/ensure  required space on /boot /bootmgr
-        trace!("can_migrate: entered");
+        debug!("can_migrate: entered");
 
         // find the u-boot boot device
         // this is where uEnv.txt has to go
-        let lsblk_info = LsblkInfo::all()?;
+        let lsblk_info = LsblkInfo::new()?;
 
         let bootmgr_path = self.find_bootmgr_path(mig_info, &lsblk_info)?;
         info!(

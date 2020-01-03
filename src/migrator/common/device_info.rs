@@ -11,7 +11,7 @@ use crate::{
 #[cfg(target_os = "linux")]
 use crate::linux::{
     linux_common::get_fs_space,
-    lsblk_info::{LsblkDevice, LsblkPartition},
+    lsblk_info::{block_device::BlockDevice, partition::Partition},
 };
 
 #[cfg(target_os = "windows")]
@@ -32,7 +32,7 @@ pub(crate) struct DeviceInfo {
     pub device: String,
     // the partition index
     // TODO: make optional
-    pub index: Option<u16>,
+    pub index: u16,
     // the partition fs type
     pub fs_type: String,
     // the partition uuid
@@ -52,8 +52,8 @@ pub(crate) struct DeviceInfo {
 impl DeviceInfo {
     #[cfg(target_os = "linux")]
     pub fn from_lsblkinfo(
-        drive: &LsblkDevice,
-        partition: &LsblkPartition,
+        drive: &BlockDevice,
+        partition: &Partition,
     ) -> Result<DeviceInfo, MigError> {
         let (mountpoint, fs_size, fs_free) = if let Some(ref mountpoint) = partition.mountpoint {
             let (fs_size, fs_free) = get_fs_space(mountpoint)?;
@@ -73,11 +73,7 @@ impl DeviceInfo {
             mountpoint,
             drive_size: drive.size,
             device: String::from(partition.get_path().to_string_lossy()),
-            index: if let Some(index) = partition.index {
-                Some(index)
-            } else {
-                None
-            },
+            index: partition.index,
             fs_type: if let Some(ref fstype) = partition.fstype {
                 fstype.clone()
             } else {
@@ -89,16 +85,8 @@ impl DeviceInfo {
             },
             uuid: partition.uuid.clone(),
             part_uuid: partition.partuuid.clone(),
-            part_label: partition.partlabel.clone(),
-            part_size: if let Some(size) = partition.size {
-                size
-            } else {
-                error!(
-                    "The required parameter size could not be found for '{}'",
-                    partition.get_path().display()
-                );
-                return Err(MigError::displayed());
-            },
+            part_label: partition.label.clone(),
+            part_size: partition.size,
             fs_size,
             fs_free,
         })

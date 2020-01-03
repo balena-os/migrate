@@ -12,7 +12,7 @@ use failure::ResultExt;
 #[cfg(target_os = "linux")]
 use crate::{
     common::{MigErrCtx, MigErrorKind},
-    linux::lsblk_info::{LsblkDevice, LsblkInfo, LsblkPartition},
+    linux::lsblk_info::{block_device::BlockDevice, partition::Partition, LsblkInfo},
 };
 
 #[cfg(target_os = "windows")]
@@ -44,8 +44,8 @@ impl PathInfo {
     pub fn from_mounted<P1: AsRef<Path>, P2: AsRef<Path>>(
         path: P1,
         _mountpoint: P2,
-        drive: &LsblkDevice,
-        partition: &LsblkPartition,
+        drive: &BlockDevice,
+        partition: &Partition,
     ) -> Result<PathInfo, MigError> {
         let abs_path = path
             .as_ref()

@@ -23,7 +23,7 @@ use crate::{
     defs::DEF_BLOCK_SIZE,
     linux::{
         linux_defs::{EXT_FMT_CMD, FAT_FMT_CMD, LSBLK_CMD, PARTED_CMD, PARTPROBE_CMD, TAR_CMD},
-        lsblk_info::{LsblkDevice, LsblkInfo},
+        lsblk_info::block_device::BlockDevice,
         stage2::{mounts::Mounts, FlashResult, PART_NAME},
     },
 };
@@ -341,7 +341,7 @@ fn sub_format(
     }
 }
 
-fn format(lsblk_dev: &LsblkDevice, fs_dump: &CheckedFSDump) -> bool {
+fn format(lsblk_dev: &BlockDevice, fs_dump: &CheckedFSDump) -> bool {
     if let Some(ref children) = lsblk_dev.children {
         // write an empty /etc/mtab to make mkfs happy
         let mtab_path = PathBuf::from("/etc/mtab");
@@ -617,7 +617,7 @@ fn part_reread(
     device: &Path,
     timeout: u64,
     num_partitions: usize,
-) -> Result<LsblkDevice, MigError> {
+) -> Result<BlockDevice, MigError> {
     debug!(
         "part_reread: entered with: '{}', timeout: {}, num_partitions: {}",
         device.display(),
@@ -656,7 +656,7 @@ fn part_reread(
             "part_reread: calling LsblkInfo::for_device('{}')",
             device.display()
         );
-        let lsblk_dev = LsblkDevice::from_device_path(device)?;
+        let lsblk_dev = BlockDevice::from_device_path(device)?;
         if let Some(children) = &lsblk_dev.children {
             if children.len() >= num_partitions {
                 debug!(

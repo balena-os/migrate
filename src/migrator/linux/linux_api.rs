@@ -20,7 +20,7 @@ pub(crate) struct LinuxAPI {
 impl LinuxAPI {
     pub fn new() -> Result<LinuxAPI, MigError> {
         Ok(LinuxAPI {
-            lsblk_info: LsblkInfo::all()?,
+            lsblk_info: LsblkInfo::new()?,
         })
     }
 }
