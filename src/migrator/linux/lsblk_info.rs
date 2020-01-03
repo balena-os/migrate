@@ -247,6 +247,7 @@ impl<'a> LsblkInfo {
             blockdevices: Vec::new(),
         };
 
+        let maj_min_re = Regex::new(r#"^(\d+):\d+$"#).unwrap();
         for lsblk_result in lsblk_results {
             let udev_result = call_udevadm(lsblk_result.get_str("NAME")?)?;
             match udev_result.get_str("DEVTYPE")? {
@@ -265,9 +266,31 @@ impl<'a> LsblkInfo {
                         ));
                     }
                 }
-                "disk" => lsblk_info
-                    .blockdevices
-                    .push(BlockDevice::new(&lsblk_result, &udev_result)?),
+                "disk" => {
+                    let dev_maj_min = lsblk_result.get_str("MAJ:MIN")?;
+                    if let Some(captures) = maj_min_re.captures(dev_maj_min) {
+                        let this_maj = captures.get(1).unwrap().as_str();
+                        if BLOC_DEV_SUPP_MAJ_NUMBERS
+                            .iter()
+                            .find(|sup_maj| this_maj == **sup_maj)
+                            .is_some()
+                        {
+                            lsblk_info
+                                .blockdevices
+                                .push(BlockDevice::new(&lsblk_result)?);
+                        } else {
+                            return Err(MigError::from_remark(
+                                MigErrorKind::InvParam,
+                                &format!("Unsupported device maj:min: {}", dev_maj_min),
+                            ));
+                        }
+                    } else {
+                        return Err(MigError::from_remark(
+                            MigErrorKind::InvParam,
+                            &format!("Unsupported device maj:min: {}", dev_maj_min),
+                        ));
+                    }
+                }
                 _ => {
                     return Err(MigError::from_remark(
                         MigErrorKind::InvParam,
@@ -459,7 +482,7 @@ impl<'a> LsblkInfo {
 
 #[cfg(test)]
 mod tests {
-    use crate::linux::lsblk_info::{parse_lsblk_line, LsblkInfo};
+    use crate::linux::lsblk_info::parse_lsblk_line;
 
     const LSBLK_OUTPUT1: &str = r##"NAME="sda" KNAME="sda" MAJ:MIN="8:0" FSTYPE="" MOUNTPOINT="" LABEL="" UUID="" PARTUUID="" RO="0" SIZE="2000365289472" TYPE="disk"
 NAME="sda1" KNAME="sda1" MAJ:MIN="8:1" FSTYPE="ext4" MOUNTPOINT="/run/media/thomas/003bd8b2-bc1d-4fc0-a08b-a72427945ff5" LABEL="" UUID="003bd8b2-bc1d-4fc0-a08b-a72427945ff5" PARTUUID="406be993-ed9b-41eb-8902-1603bd368d88" RO="0" SIZE="2000363192320" TYPE="part"

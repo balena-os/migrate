@@ -1,10 +1,9 @@
-use failure::ResultExt;
 use log::debug;
 use std::path::{Path, PathBuf};
 
 use crate::linux::lsblk_info::ResultParams;
 use crate::{
-    common::{MigErrCtx, MigError, MigErrorKind},
+    common::{MigError, MigErrorKind},
     linux::lsblk_info::{call_lsblk_for, call_udevadm, partition::Partition},
 };
 
@@ -24,8 +23,7 @@ impl<'a> BlockDevice {
 
         let lsblk_results = call_lsblk_for(&device)?;
         if let Some(lsblk_result) = lsblk_results.get(0) {
-            let mut lsblk_device: BlockDevice =
-                BlockDevice::new(&lsblk_result, &call_udevadm(device)?)?;
+            let mut lsblk_device: BlockDevice = BlockDevice::new(&lsblk_result)?;
             // add partitions
             for lsblk_result in lsblk_results.iter().skip(1) {
                 let dev_name = lsblk_result.get_str("NAME")?;
@@ -61,10 +59,7 @@ impl<'a> BlockDevice {
         }
     }
 
-    pub fn new(
-        lsblk_result: &ResultParams,
-        udevadm_params: &ResultParams,
-    ) -> Result<BlockDevice, MigError> {
+    pub fn new(lsblk_result: &ResultParams) -> Result<BlockDevice, MigError> {
         Ok(BlockDevice {
             // lsblk params: NAME,KNAME,MAJ:MIN,FSTYPE,MOUNTPOINT,LABEL,UUID,SIZE
             name: String::from(lsblk_result.get_str("NAME")?),
