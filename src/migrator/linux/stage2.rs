@@ -210,6 +210,9 @@ impl<'a> Stage2 {
                     );
                 }
             }
+        } else {
+            // stop logging to memory buffer
+            let _res = Logger::set_log_dest(&LogDestination::Stderr, NO_STREAM);
         }
 
         return Ok(Stage2 {
@@ -501,14 +504,7 @@ impl<'a> Stage2 {
             info!("Not flashing due to config parameter no_flash");
             Logger::flush();
             sync();
-            // let _res = Logger::set_log_dest(&LogDestination::StreamStderr, NO_STREAM);
-            let log_dest = if self.config.is_log_console() {
-                LogDestination::Stderr
-            } else {
-                LogDestination::Buffer
-            };
-
-            let _res = Logger::set_log_dest(&log_dest, NO_STREAM);
+            let _res = Logger::set_log_dest(&LogDestination::Stderr, NO_STREAM);
         }
 
         self.mounts.borrow_mut().unmount_boot_devs()?;
