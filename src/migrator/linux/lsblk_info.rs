@@ -193,7 +193,7 @@ fn call_udevadm<P: AsRef<Path>>(device: P) -> Result<ResultParams, MigError> {
 }
 
 fn parse_lsblk_line(line: &str) -> Result<ResultParams, MigError> {
-    debug!("parse_line: called with '{}'", line);
+    trace!("parse_line: called with '{}'", line);
 
     lazy_static! {
         static ref LSBLK_PARAM_RE: Regex =
@@ -217,14 +217,17 @@ fn parse_lsblk_line(line: &str) -> Result<ResultParams, MigError> {
 
             if let Some(ref rest) = captures.get(4) {
                 curr_pos = rest.as_str();
-                debug!(
+                trace!(
                     "Found param: '{}', value '{}', rest '{}'",
-                    param_name, param_value, curr_pos
+                    param_name,
+                    param_value,
+                    curr_pos
                 );
             } else {
-                debug!(
+                trace!(
                     "Found param: '{}', value '{}', rest None",
-                    param_name, param_value
+                    param_name,
+                    param_value
                 );
                 break;
             }
