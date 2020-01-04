@@ -66,7 +66,7 @@ impl MigrateInfo {
         info!(
             "Working directory is '{}' on '{}'",
             work_dir.display(),
-            work_path.device_info.drive
+            work_path.device_info.device
         );
 
         let log_path = if let Some(log_dev) = config.migrate.get_log_device() {

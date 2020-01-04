@@ -130,10 +130,12 @@ fn call_lsblk_for<P: AsRef<Path>>(device: &P) -> Result<Vec<ResultParams>, MigEr
 }
 
 fn call_lsblk(args: Vec<&str>) -> Result<Vec<ResultParams>, MigError> {
+    debug!("call_lsblk: with args {:?}", args);
     let lsblk_cmd_res = call(LSBLK_CMD, &args, true)?;
     if lsblk_cmd_res.status.success() {
         let mut lsblk_results: Vec<ResultParams> = Vec::new();
-        for line in lsblk_cmd_res.stdout.lines().skip(1) {
+        for line in lsblk_cmd_res.stdout.lines() {
+            //.skip(1)
             lsblk_results.push(parse_lsblk_line(line)?);
         }
         Ok(lsblk_results)
@@ -149,6 +151,7 @@ fn call_lsblk(args: Vec<&str>) -> Result<Vec<ResultParams>, MigError> {
 }
 
 fn call_udevadm<P: AsRef<Path>>(device: P) -> Result<ResultParams, MigError> {
+    debug!("call_udevadm: with device {:?}", device.as_ref().display());
     let udev_cmd_res = call(
         UDEVADM_CMD,
         &[
@@ -203,7 +206,7 @@ fn parse_lsblk_line(line: &str) -> Result<ResultParams, MigError> {
 
     // parse current line into hashmap
     loop {
-        debug!("parsing '{}'", curr_pos);
+        trace!("parsing '{}'", curr_pos);
         if let Some(captures) = LSBLK_PARAM_RE.captures(curr_pos) {
             let param_name = captures.get(1).unwrap().as_str();
             let param_value = captures.get(2).unwrap().as_str();
@@ -249,15 +252,14 @@ impl<'a> LsblkInfo {
 
         let maj_min_re = Regex::new(r#"^(\d+):\d+$"#).unwrap();
         for lsblk_result in lsblk_results {
-            let udev_result = call_udevadm(lsblk_result.get_str("NAME")?)?;
-            match udev_result.get_str("DEVTYPE")? {
-                "partition" => {
+            //let udev_result = call_udevadm(lsblk_result.get_str("NAME")?)?;
+            match lsblk_result.get_str("TYPE")? {
+                "part" => {
                     if let Some(block_device) = lsblk_info.blockdevices.last_mut() {
                         if let Some(ref mut children) = block_device.children {
-                            children.push(Partition::new(&lsblk_result, &udev_result)?);
+                            children.push(Partition::new(&lsblk_result)?);
                         } else {
-                            block_device.children =
-                                Some(vec![Partition::new(&lsblk_result, &udev_result)?]);
+                            block_device.children = Some(vec![Partition::new(&lsblk_result)?]);
                         }
                     } else {
                         return Err(MigError::from_remark(
@@ -279,23 +281,17 @@ impl<'a> LsblkInfo {
                                 .blockdevices
                                 .push(BlockDevice::new(&lsblk_result)?);
                         } else {
-                            return Err(MigError::from_remark(
-                                MigErrorKind::InvParam,
-                                &format!("Unsupported device maj:min: {}", dev_maj_min),
-                            ));
+                            warn!("Unsupported device maj:min: {}", dev_maj_min);
+                            continue;
                         }
                     } else {
-                        return Err(MigError::from_remark(
-                            MigErrorKind::InvParam,
-                            &format!("Unsupported device maj:min: {}", dev_maj_min),
-                        ));
+                        warn!("Unsupported device maj:min: {}", dev_maj_min);
+                        continue;
                     }
                 }
                 _ => {
-                    return Err(MigError::from_remark(
-                        MigErrorKind::InvParam,
-                        &format!("Invalid device type: {}", udev_result.get_str("DEVTYPE")?),
-                    ))
+                    //warn!("Invalid device type: {}", lsblk_result.get_str("TYPE")?);
+                    continue;
                 }
             }
         }
@@ -450,18 +446,27 @@ impl<'a> LsblkInfo {
         &'a self,
         part_path: P,
     ) -> Result<(&'a BlockDevice, &'a Partition), MigError> {
-        let part_path = part_path.as_ref();
+        let part_path = to_std_device_path(part_path.as_ref())?;
         debug!("get_devices_for_partition: '{}", part_path.display());
 
-        let part_path = to_std_device_path(part_path)?;
-
+        // let part_path = to_std_device_path(part_path)?;
         if let Some(part_name) = part_path.file_name() {
             let cmp_name = part_name.to_string_lossy();
-            if let Some(lsblk_dev) = self.blockdevices.iter().find(|&dev| {
-                debug!("cmp: {} == dev: {}", cmp_name, dev.name);
-                *&cmp_name.starts_with(&dev.name)
-            }) {
-                Ok((lsblk_dev, lsblk_dev.get_devinfo_from_part_name(&cmp_name)?))
+            let mut result: Option<(&BlockDevice, &Partition)> = None;
+            if self
+                .blockdevices
+                .iter()
+                .find(|&dev| {
+                    if let Ok(partition) = dev.get_devinfo_from_part_name(&*cmp_name) {
+                        result = Some((dev, partition));
+                        true
+                    } else {
+                        false
+                    }
+                })
+                .is_some()
+            {
+                Ok(result.unwrap())
             } else {
                 Err(MigError::from_remark(
                     MigErrorKind::NotFound,

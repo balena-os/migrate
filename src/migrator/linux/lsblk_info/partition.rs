@@ -25,10 +25,9 @@ pub(crate) struct Partition {
 }
 
 impl Partition {
-    pub fn new(
-        lsblk_result: &ResultParams,
-        udev_result: &ResultParams,
-    ) -> Result<Partition, MigError> {
+    pub fn new(lsblk_result: &ResultParams) -> Result<Partition, MigError> {
+        let name = format!("/dev/{}", lsblk_result.get_str("NAME")?);
+        let udev_result = call_udevadm(&name)?;
         Ok(Partition {
             name: String::from(lsblk_result.get_str("NAME")?),
             kname: String::from(lsblk_result.get_str("KNAME")?),
@@ -52,7 +51,7 @@ impl Partition {
         if lsblk_results.len() == 1 {
             let udev_result = call_udevadm(&partition)?;
             match udev_result.get_str("DEVTYPE")? {
-                "partition" => Ok(Partition::new(&lsblk_results[0], &udev_result)?),
+                "partition" => Ok(Partition::new(&lsblk_results[0])?),
                 _ => Err(MigError::from_remark(
                     MigErrorKind::InvParam,
                     &format!(

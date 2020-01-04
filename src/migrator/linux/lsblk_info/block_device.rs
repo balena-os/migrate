@@ -1,10 +1,11 @@
 use log::debug;
 use std::path::{Path, PathBuf};
 
+use crate::common::path_append;
 use crate::linux::lsblk_info::ResultParams;
 use crate::{
     common::{MigError, MigErrorKind},
-    linux::lsblk_info::{call_lsblk_for, call_udevadm, partition::Partition},
+    linux::lsblk_info::{call_lsblk_for, partition::Partition},
 };
 
 #[derive(Debug, Clone)]
@@ -26,11 +27,9 @@ impl<'a> BlockDevice {
             let mut lsblk_device: BlockDevice = BlockDevice::new(&lsblk_result)?;
             // add partitions
             for lsblk_result in lsblk_results.iter().skip(1) {
-                let dev_name = lsblk_result.get_str("NAME")?;
-                let udev_result = call_udevadm(&dev_name)?;
-                match udev_result.get_str("DEVTYPE")? {
-                    "partition" => {
-                        let partition = Partition::new(&lsblk_result, &udev_result)?;
+                match lsblk_result.get_str("TYPE")? {
+                    "part" => {
+                        let partition = Partition::new(&lsblk_result)?;
                         if let Some(ref mut children) = lsblk_device.children {
                             children.push(partition)
                         } else {
@@ -44,7 +43,7 @@ impl<'a> BlockDevice {
                             MigErrorKind::InvParam,
                             &format!(
                             "from_device_path: invalid device type, expected partition, got: '{}'",
-                            udev_result.get_str("DEVTYPE")?
+                            lsblk_result.get_str("TYPE")?
                         ),
                         ))
                     }
@@ -71,6 +70,7 @@ impl<'a> BlockDevice {
         })
     }
 
+    #[allow(dead_code)]
     pub fn get_devinfo_from_part_name(
         &'a self,
         part_name: &str,
@@ -96,6 +96,6 @@ impl<'a> BlockDevice {
     }
 
     pub fn get_path(&self) -> PathBuf {
-        PathBuf::from(&format!("/dev/{}", self.name))
+        path_append("/dev", &self.name)
     }
 }
