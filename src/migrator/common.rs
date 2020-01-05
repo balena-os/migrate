@@ -222,9 +222,9 @@ pub fn check_tcp_connect(host: &str, port: u16, timeout: u64) -> Result<(), MigE
     }
 }
 
-const GIB_SIZE: u64 = 1024 * 1024 * 1024;
-const MIB_SIZE: u64 = 1024 * 1024;
 const KIB_SIZE: u64 = 1024;
+const MIB_SIZE: u64 = 1024 * KIB_SIZE;
+const GIB_SIZE: u64 = 1024 * MIB_SIZE;
 
 pub fn format_size_with_unit(size: u64) -> String {
     if size > (10 * GIB_SIZE) {
