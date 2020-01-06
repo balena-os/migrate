@@ -64,7 +64,7 @@ dependencies = [
 
 [[package]]
 name = "balena_migrate"
-version = "0.1.0"
+version = "0.1.1"
 dependencies = [
  "chrono 0.4.6 (registry+https://github.com/rust-lang/crates.io-index)",
  "clap 2.33.0 (registry+https://github.com/rust-lang/crates.io-index)",
@@ -76,7 +76,7 @@ dependencies = [
  "libc 0.2.58 (git+https://github.com/rust-lang/libc)",
  "log 0.4.6 (registry+https://github.com/rust-lang/crates.io-index)",
  "md-5 0.8.0 (registry+https://github.com/rust-lang/crates.io-index)",
- "mod_logger 0.5.1 (git+https://github.com/samothx/ModuleLogger.git)",
+ "mod_logger 0.5.4 (git+https://github.com/samothx/ModuleLogger.git)",
  "nix 0.14.0 (registry+https://github.com/rust-lang/crates.io-index)",
  "regex 1.1.6 (registry+https://github.com/rust-lang/crates.io-index)",
  "serde 1.0.92 (registry+https://github.com/rust-lang/crates.io-index)",
@@ -386,8 +386,8 @@ dependencies = [
 
 [[package]]
 name = "mod_logger"
-version = "0.5.1"
-source = "git+https://github.com/samothx/ModuleLogger.git#9bd117d28d69d01bc77a80ece3bba27b92ecadb8"
+version = "0.5.4"
+source = "git+https://github.com/samothx/ModuleLogger.git#2956dbb7e2a40f54f893328ad27de84b8d99b172"
 dependencies = [
  "chrono 0.4.6 (registry+https://github.com/rust-lang/crates.io-index)",
  "colored 1.8.0 (registry+https://github.com/rust-lang/crates.io-index)",
@@ -882,7 +882,7 @@ dependencies = [
 "checksum miniz-sys 0.1.12 (registry+https://github.com/rust-lang/crates.io-index)" = "1e9e3ae51cea1576ceba0dde3d484d30e6e5b86dee0b2d412fe3a16a15c98202"
 "checksum miniz_oxide 0.2.1 (registry+https://github.com/rust-lang/crates.io-index)" = "c468f2369f07d651a5d0bb2c9079f8488a66d5466efe42d0c5c6466edcb7f71e"
 "checksum miniz_oxide_c_api 0.2.1 (registry+https://github.com/rust-lang/crates.io-index)" = "b7fe927a42e3807ef71defb191dc87d4e24479b221e67015fe38ae2b7b447bab"
-"checksum mod_logger 0.5.1 (git+https://github.com/samothx/ModuleLogger.git)" = "<none>"
+"checksum mod_logger 0.5.4 (git+https://github.com/samothx/ModuleLogger.git)" = "<none>"
 "checksum nix 0.14.0 (registry+https://github.com/rust-lang/crates.io-index)" = "0d10caafde29a846a82ae0af70414e4643e072993441033b2c93217957e2f867"
 "checksum num-integer 0.1.41 (registry+https://github.com/rust-lang/crates.io-index)" = "b85e541ef8255f6cf42bbfe4ef361305c6c135d10919ecc26126c4e5ae94bc09"
 "checksum num-traits 0.1.43 (registry+https://github.com/rust-lang/crates.io-index)" = "92e5113e9fd4cc14ded8e499429f396a20f98c772a47cc8622a736e1ec843c31"

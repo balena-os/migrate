@@ -25,7 +25,7 @@ pub(crate) use debug_config::DebugConfig;
 
 use crate::{
     common::{file_exists, path_append},
-    defs::DEFAULT_MIGRATE_CONFIG,
+    defs::{DEFAULT_MIGRATE_CONFIG, VERSION},
 };
 
 const MODULE: &str = "migrator::common::config";
@@ -50,7 +50,7 @@ pub(crate) struct Config {
 impl<'a> Config {
     pub fn new() -> Result<Config, MigError> {
         let arg_matches = App::new("balena-migrate")
-            .version("0.1")
+            .version(VERSION)
             .author("Thomas Runte <thomasr@balena.io>")
             .about("Migrates devices to BalenaOS")
             .arg(

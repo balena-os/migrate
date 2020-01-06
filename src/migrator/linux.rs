@@ -43,6 +43,7 @@ pub(crate) mod lsblk_info;
 pub(crate) mod linux_common;
 use crate::common::file_size;
 use crate::common::stage2_config::MountConfig;
+use crate::defs::VERSION;
 use crate::linux::linux_common::{get_mem_info, whereis};
 use crate::linux::lsblk_info::LsblkInfo;
 pub(crate) use linux_common::is_admin;
@@ -67,6 +68,7 @@ impl<'a> LinuxMigrator {
         // We need to be root to do this
 
         let config = Config::new()?;
+        info!("balena-migrate {}", VERSION);
 
         if !is_admin()? {
             error!("please run this program as root");

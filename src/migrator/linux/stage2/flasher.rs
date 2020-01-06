@@ -4,7 +4,7 @@ use flate2::read::GzDecoder;
 use log::{debug, error, info};
 use mod_logger::Logger;
 use nix::unistd::sync;
-use std::fs::File;
+use std::fs::{File, OpenOptions};
 use std::io::{Read, Write};
 use std::path::Path;
 use std::process::{Command, Stdio};
@@ -21,7 +21,8 @@ use crate::{
     },
 };
 
-const DD_BLOCK_SIZE: usize = 4_194_304;
+// TODO: minimum recommended size 128K
+const DD_BLOCK_SIZE: usize = 128 * 1024; // 4_194_304;
 const UDEVADM_PARAMS: &[&str] = &["settle", "-t", "10"];
 
 // TODO: replace removed command checks ?
@@ -64,7 +65,7 @@ pub(crate) fn flash_balena_os(
     res
 }
 
-fn flash_gzip_internal(dd_cmd: &str, target_path: &Path, image_path: &Path) -> FlashResult {
+fn flash_gzip_internal(_dd_cmd: &str, target_path: &Path, image_path: &Path) -> FlashResult {
     debug!("opening: '{}'", image_path.display());
 
     let mut decoder = GzDecoder::new(match File::open(&image_path) {
@@ -79,7 +80,7 @@ fn flash_gzip_internal(dd_cmd: &str, target_path: &Path, image_path: &Path) -> F
         }
     });
 
-    debug!("invoking dd");
+    /* debug!("invoking dd");
 
     let mut dd_child = match Command::new(dd_cmd)
         .args(&[
@@ -100,16 +101,38 @@ fn flash_gzip_internal(dd_cmd: &str, target_path: &Path, image_path: &Path) -> F
             return FlashResult::FailRecoverable;
         }
     };
+    */
+
+    debug!("opening output file '{}", target_path.display());
+    let mut out_file = match OpenOptions::new()
+        .write(true)
+        .read(false)
+        .create(false)
+        .open(&target_path)
+    {
+        Ok(file) => file,
+        Err(why) => {
+            error!(
+                "Failed to open output file '{}', error: {:?}",
+                target_path.display(),
+                why
+            );
+            return FlashResult::FailRecoverable;
+        }
+    };
 
     let start_time = Instant::now();
     let mut last_elapsed = Duration::new(0, 0);
     let mut write_count: usize = 0;
 
     let mut fail_res = FlashResult::FailRecoverable;
-    if let Some(ref mut stdin) = dd_child.stdin {
-        let mut buffer: [u8; DD_BLOCK_SIZE] = [0; DD_BLOCK_SIZE];
+    // TODO: might pay to put buffer on page boundary
+    let mut buffer: [u8; DD_BLOCK_SIZE] = [0; DD_BLOCK_SIZE];
+    loop {
+        // fill buffer
+        let mut buff_fill: usize = 0;
         loop {
-            let bytes_read = match decoder.read(&mut buffer) {
+            let bytes_read = match decoder.read(&mut buffer[buff_fill..]) {
                 Ok(bytes_read) => bytes_read,
                 Err(why) => {
                     error!(
@@ -122,83 +145,94 @@ fn flash_gzip_internal(dd_cmd: &str, target_path: &Path, image_path: &Path) -> F
             };
 
             if bytes_read > 0 {
-                fail_res = FlashResult::FailNonRecoverable;
+                buff_fill += bytes_read;
+                if buff_fill < buffer.len() {
+                    continue;
+                }
+            }
+            break;
+        }
 
-                let bytes_written = match stdin.write(&buffer[0..bytes_read]) {
-                    Ok(bytes_written) => bytes_written,
-                    Err(why) => {
-                        error!("Failed to write uncompressed data to dd, error {:?}", why);
-                        return fail_res;
-                    }
-                };
+        if buff_fill > 0 {
+            fail_res = FlashResult::FailNonRecoverable;
 
-                write_count += bytes_written;
-
-                if bytes_read != bytes_written {
-                    error!(
-                        "Read/write count mismatch, read {}, wrote {}",
-                        bytes_read, bytes_written
-                    );
+            let bytes_written = match out_file.write(&buffer[0..buff_fill]) {
+                Ok(bytes_written) => bytes_written,
+                Err(why) => {
+                    error!("Failed to write uncompressed data to dd, error {:?}", why);
                     return fail_res;
                 }
+            };
 
-                let curr_elapsed = start_time.elapsed();
-                let since_last = match curr_elapsed.checked_sub(last_elapsed) {
-                    Some(dur) => dur,
-                    None => Duration::from_secs(0),
-                };
+            write_count += bytes_written;
 
-                if since_last.as_secs() >= 10 {
-                    last_elapsed = curr_elapsed;
-                    let secs_elapsed = curr_elapsed.as_secs();
-                    info!(
-                        "{} written @ {}/sec in {} seconds",
-                        format_size_with_unit(write_count as u64),
-                        format_size_with_unit(write_count as u64 / secs_elapsed),
-                        secs_elapsed
-                    );
-                    Logger::flush();
-                }
-            } else {
-                break;
-            }
-        }
-
-        match dd_child.wait_with_output() {
-            Ok(cmd_res) => {
-                if !cmd_res.status.success() {
-                    let stderr = match str::from_utf8(&cmd_res.stderr) {
-                        Ok(stderr) => stderr,
-                        Err(_) => "- invalid utf8 -",
-                    };
-                    error!(
-                        "dd reported an error: code: {:?}, stderr: {}",
-                        cmd_res.status.code(),
-                        stderr
-                    );
-                    // might pay to still try and finish as all input was written
-                }
-            }
-            Err(why) => {
-                error!("Error while waiting for dd to terminate:{:?}", why);
-                Logger::flush();
+            if buff_fill != bytes_written {
+                error!(
+                    "Read/write count mismatch, read {}, wrote {}",
+                    buff_fill, bytes_written
+                );
                 return fail_res;
             }
+
+            let curr_elapsed = start_time.elapsed();
+            let since_last = match curr_elapsed.checked_sub(last_elapsed) {
+                Some(dur) => dur,
+                None => Duration::from_secs(0),
+            };
+
+            if since_last.as_secs() >= 10 {
+                last_elapsed = curr_elapsed;
+                let secs_elapsed = curr_elapsed.as_secs();
+                info!(
+                    "{} written @ {}/sec in {} seconds",
+                    format_size_with_unit(write_count as u64),
+                    format_size_with_unit(write_count as u64 / secs_elapsed),
+                    secs_elapsed
+                );
+                Logger::flush();
+            }
+
+            if buff_fill < buffer.len() {
+                break;
+            }
+        } else {
+            break;
         }
-
-        let secs_elapsed = start_time.elapsed().as_secs();
-        info!(
-            "{} written @ {}/sec in {} seconds",
-            format_size_with_unit(write_count as u64),
-            format_size_with_unit(write_count as u64 / secs_elapsed),
-            secs_elapsed
-        );
-
-        FlashResult::Ok
-    } else {
-        error!("Failed to get a stdin for dd");
-        FlashResult::FailRecoverable
     }
+
+    /*
+    match dd_child.wait_with_output() {
+        Ok(cmd_res) => {
+            if !cmd_res.status.success() {
+                let stderr = match str::from_utf8(&cmd_res.stderr) {
+                    Ok(stderr) => stderr,
+                    Err(_) => "- invalid utf8 -",
+                };
+                error!(
+                    "dd reported an error: code: {:?}, stderr: {}",
+                    cmd_res.status.code(),
+                    stderr
+                );
+                // might pay to still try and finish as all input was written
+            }
+        }
+        Err(why) => {
+            error!("Error while waiting for dd to terminate:{:?}", why);
+            Logger::flush();
+            return fail_res;
+        }
+    }
+    */
+
+    let secs_elapsed = start_time.elapsed().as_secs();
+    info!(
+        "{} written @ {}/sec in {} seconds",
+        format_size_with_unit(write_count as u64),
+        format_size_with_unit(write_count as u64 / secs_elapsed),
+        secs_elapsed
+    );
+
+    FlashResult::Ok
 }
 
 fn flash_gzip_external(dd_cmd: &str, target_path: &Path, image_path: &Path) -> FlashResult {
