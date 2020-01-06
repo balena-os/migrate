@@ -11,7 +11,7 @@ use clap::{App, Arg};
 use super::{MigErrCtx, MigError, MigErrorKind};
 
 pub(crate) mod migrate_config;
-pub(crate) use migrate_config::{DeviceSpec, MigMode, MigrateConfig};
+pub(crate) use migrate_config::{MigMode, MigrateConfig};
 
 pub(crate) mod balena_config;
 pub(crate) use balena_config::BalenaConfig;
@@ -246,7 +246,7 @@ mod tests {
             config::{
                 balena_config::ImageType,
                 balena_config::{FileRef, PartCheck},
-                migrate_config::MigrateWifis,
+                migrate_config::{MigrateWifis,DeviceSpec,},
             },
             file_digest::HashInfo,
         },

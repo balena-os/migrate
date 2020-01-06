@@ -61,7 +61,10 @@ pub const DEF_BLOCK_SIZE: usize = 512;
 pub const STAGE1_MEM_THRESHOLD: u64 = 1024 * 1024 * 100; // 100 MB
 
 // Default balena partition labels and FS types
+// TODO:move to linux_defs
+#[allow(dead_code)]
 pub const BALENA_BOOT_PART: &str = "resin-boot";
+#[allow(dead_code)]
 pub const BALENA_BOOT_FSTYPE: &str = "vfat";
 
 pub const BALENA_ROOTA_PART: &str = "resin-rootA";
@@ -76,6 +79,7 @@ pub const BALENA_API_PORT: u16 = 80;
 pub const BALENA_DATA_PART: &str = "resin-data";
 pub const BALENA_DATA_FSTYPE: &str = "ext4";
 
+#[allow(dead_code)]
 pub const PART_NAME: &[&str] = &[
     BALENA_BOOT_PART,
     BALENA_ROOTA_PART,
@@ -83,6 +87,7 @@ pub const PART_NAME: &[&str] = &[
     BALENA_STATE_PART,
     BALENA_DATA_PART,
 ];
+#[allow(dead_code)]
 pub const PART_FSTYPE: &[&str] = &[
     BALENA_BOOT_FSTYPE,
     BALENA_ROOTA_FSTYPE,

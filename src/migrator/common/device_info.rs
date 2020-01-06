@@ -103,8 +103,8 @@ impl DeviceInfo {
             drive_size: vol_info.physical_drive.get_size(),
             // the partition device path
             device: String::from(vol_info.volume.get_device_id()),
-            // TODO: the partition index - this value is not correct in windows as hidden partotions are not counted
-            index: None,
+            // TODO: the partition index - this value is not correct in windows as hidden partions are not counted
+            index: 0,
             // the partition fs type
             fs_type: String::from(vol_info.volume.get_file_system().to_linux_str()),
             // the partition uuid
