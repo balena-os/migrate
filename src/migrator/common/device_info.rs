@@ -4,7 +4,7 @@ use log::error;
 use std::path::PathBuf;
 
 use crate::{
-    common::{MigError, MigErrorKind},
+    common::{path_append, MigError, MigErrorKind},
     defs::{DISK_BY_LABEL_PATH, DISK_BY_PARTUUID_PATH, DISK_BY_UUID_PATH},
 };
 
@@ -153,6 +153,8 @@ impl DeviceInfo {
     pub fn get_kernel_cmd(&self) -> String {
         if let Some(ref partuuid) = self.part_uuid {
             format!("PARTUUID={}", partuuid)
+        } else if let Some(ref uuid) = self.uuid {
+            format!("UUID={}", uuid)
         } else {
             if let Some(ref uuid) = self.uuid {
                 format!("UUID={}", uuid)
@@ -163,18 +165,14 @@ impl DeviceInfo {
     }
 
     pub fn get_alt_path(&self) -> PathBuf {
-        if let Some(ref uuid) = self.uuid {
-            PathBuf::from(&format!("{}/{}", DISK_BY_UUID_PATH, uuid))
+        if let Some(ref partuuid) = self.part_uuid {
+            path_append(DISK_BY_PARTUUID_PATH, partuuid)
+        } else if let Some(ref uuid) = self.uuid {
+            path_append(DISK_BY_UUID_PATH, uuid)
+        } else if let Some(ref label) = self.part_label {
+            path_append(DISK_BY_LABEL_PATH, label)
         } else {
-            if let Some(ref partuuid) = self.part_uuid {
-                PathBuf::from(&format!("{}/{}", DISK_BY_PARTUUID_PATH, partuuid))
-            } else {
-                if let Some(ref label) = self.part_label {
-                    PathBuf::from(&format!("{}/{}", DISK_BY_LABEL_PATH, label))
-                } else {
-                    PathBuf::from(&format!("{}/{}", "/dev", &self.device))
-                }
-            }
+            path_append("/dev", &self.device)
         }
     }
 }

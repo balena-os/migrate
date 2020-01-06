@@ -7,7 +7,8 @@ use std::path::{Path, PathBuf};
 use crate::linux::linux_common::to_std_device_path;
 use crate::linux::linux_defs::UDEVADM_CMD;
 use crate::{
-    common::{call, MigErrCtx, MigError, MigErrorKind},
+    common::{call, path_append, MigErrCtx, MigError, MigErrorKind},
+    defs::{DISK_BY_LABEL_PATH, DISK_BY_PARTUUID_PATH, DISK_BY_UUID_PATH},
     linux::linux_defs::LSBLK_CMD,
 };
 use std::collections::HashMap;
@@ -102,17 +103,25 @@ impl<'a> ResultParams {
         }
     }
 
-    pub fn get_opt_pathbuf(&'a self, name: &str) -> Option<PathBuf> {
+    pub fn get_opt_pathbuf(&self, name: &str) -> Option<PathBuf> {
         if let Some(res) = self.param_map.get(name) {
-            if res.is_empty() {
-                None
-            } else {
-                Some(PathBuf::from(res))
-            }
+            Some(PathBuf::from(res))
         } else {
             None
         }
     }
+    /*    pub fn get_alt_path(&self) -> PathBuf {
+            if let Some(ref partuuid) = self.partuuid {
+                path_append(DISK_BY_PARTUUID_PATH, partuuid)
+            } else if let Some(ref uuid) = self.uuid {
+                path_append(DISK_BY_UUID_PATH, uuid)
+            } else if let Some(ref label) = self.label {
+                path_append(DISK_BY_LABEL_PATH, label)
+            } else {
+                path_append("/dev", &self.name)
+            }
+        }
+    */
 }
 
 fn call_lsblk_all() -> Result<Vec<ResultParams>, MigError> {
@@ -510,31 +519,61 @@ NAME="nvme0n1p8" KNAME="nvme0n1p8" MAJ:MIN="259:8" FSTYPE="ext4" MOUNTPOINT="/" 
         parse_lsblk_line(LSBLK_OUTPUT1).unwrap();
     }
     /*
-    #[test]
-    fn get_partition_by_partuuid() -> () {
-        let lsblk_info = LsblkInfo::from_string(LSBLK_OUTPUT1).unwrap();
-        let (drive, partition) = lsblk_info
-            .get_devices_for_partuuid("02cf676b-12b6-4510-88e3-804bf71e00f1")
-            .unwrap();
-        assert!(drive.name == "nvme0n1");
-        assert!(partition.name == "nvme0n1p7");
-    }
+        #[test]
+        fn get_partition_by_partuuid() -> () {
+            let lsblk_info = LsblkInfo::from_string(LSBLK_OUTPUT1).unwrap();
+            let (drive, partition) = lsblk_info
+                .get_devices_for_partuuid("02cf676b-12b6-4510-88e3-804bf71e00f1")
+                .unwrap();
+            assert!(drive.name == "nvme0n1");
+            assert!(partition.name == "nvme0n1p7");
+        }
 
-    #[test]
-    fn get_partition_by_uuid() -> () {
-        let lsblk_info = LsblkInfo::from_string(LSBLK_OUTPUT1).unwrap();
-        let (drive, partition) = lsblk_info.get_devices_for_uuid("500EC0840EC06516").unwrap();
-        assert!(drive.name == "nvme0n1");
-        assert!(partition.name == "nvme0n1p4");
-    }
+        #[test]
+        fn get_partition_by_uuid() -> () {
+            let lsblk_info = LsblkInfo::from_string(LSBLK_OUTPUT1).unwrap();
+            let (drive, partition) = lsblk_info.get_devices_for_uuid("500EC0840EC06516").unwrap();
+            assert!(drive.name == "nvme0n1");
+            assert!(partition.name == "nvme0n1p4");
+        }
 
 
-    #[test]
-    fn get_partition_by_label() -> () {
-        let lsblk_info = LsblkInfo::from_string(LSBLK_OUTPUT1).unwrap();
-        let (drive, partition) = lsblk_info.get_devices_for_label("ESP").unwrap();
-        assert!(drive.name == "nvme0n1");
-        assert!(partition.name == "nvme0n1p1");
-    }
-    */
+        #[test]
+        fn get_partition_by_label() -> () {
+            let lsblk_info = LsblkInfo::from_string(LSBLK_OUTPUT1).unwrap();
+            let (drive, partition) = lsblk_info.get_devices_for_label("ESP").unwrap();
+            assert!(drive.name == "nvme0n1");
+            assert!(partition.name == "nvme0n1p1");
+        use crate::linux::lsblk_info::LsblkInfo;
+
+        const LSBLK_OUTPUT1: &str = r##"NAME="loop0" KNAME="loop0" MAJ:MIN="7:0" FSTYPE="squashfs" MOUNTPOINT="/snap/core/7270" LABEL="" UUID="" RO="1" SIZE="92778496" TYPE="loop"
+    NAME="loop1" KNAME="loop1" MAJ:MIN="7:1" FSTYPE="squashfs" MOUNTPOINT="/snap/core18/1066" LABEL="" UUID="" RO="1" SIZE="57069568" TYPE="loop"
+    NAME="loop2" KNAME="loop2" MAJ:MIN="7:2" FSTYPE="squashfs" MOUNTPOINT="/snap/core18/1074" LABEL="" UUID="" RO="1" SIZE="57069568" TYPE="loop"
+    NAME="loop3" KNAME="loop3" MAJ:MIN="7:3" FSTYPE="squashfs" MOUNTPOINT="/snap/gnome-3-28-1804/71" LABEL="" UUID="" RO="1" SIZE="157192192" TYPE="loop"
+    NAME="loop4" KNAME="loop4" MAJ:MIN="7:4" FSTYPE="squashfs" MOUNTPOINT="/snap/core/7396" LABEL="" UUID="" RO="1" SIZE="92983296" TYPE="loop"
+    NAME="loop5" KNAME="loop5" MAJ:MIN="7:5" FSTYPE="squashfs" MOUNTPOINT="/snap/gnome-logs/61" LABEL="" UUID="" RO="1" SIZE="1032192" TYPE="loop"
+    NAME="loop6" KNAME="loop6" MAJ:MIN="7:6" FSTYPE="squashfs" MOUNTPOINT="/snap/gtk-common-themes/1313" LABEL="" UUID="" RO="1" SIZE="44879872" TYPE="loop"
+    NAME="loop7" KNAME="loop7" MAJ:MIN="7:7" FSTYPE="squashfs" MOUNTPOINT="/snap/vlc/1049" LABEL="" UUID="" RO="1" SIZE="212713472" TYPE="loop"
+    NAME="loop8" KNAME="loop8" MAJ:MIN="7:8" FSTYPE="squashfs" MOUNTPOINT="/snap/gnome-3-28-1804/67" LABEL="" UUID="" RO="1" SIZE="157184000" TYPE="loop"
+    NAME="loop9" KNAME="loop9" MAJ:MIN="7:9" FSTYPE="squashfs" MOUNTPOINT="/snap/gnome-system-monitor/100" LABEL="" UUID="" RO="1" SIZE="3825664" TYPE="loop"
+    NAME="loop10" KNAME="loop10" MAJ:MIN="7:10" FSTYPE="squashfs" MOUNTPOINT="/snap/gtk2-common-themes/5" LABEL="" UUID="" RO="1" SIZE="135168" TYPE="loop"
+    NAME="loop11" KNAME="loop11" MAJ:MIN="7:11" FSTYPE="squashfs" MOUNTPOINT="/snap/gimp/189" LABEL="" UUID="" RO="1" SIZE="229728256" TYPE="loop"
+    NAME="loop12" KNAME="loop12" MAJ:MIN="7:12" FSTYPE="squashfs" MOUNTPOINT="/snap/spotify/36" LABEL="" UUID="" RO="1" SIZE="189870080" TYPE="loop"
+    NAME="loop13" KNAME="loop13" MAJ:MIN="7:13" FSTYPE="squashfs" MOUNTPOINT="/snap/gnome-characters/296" LABEL="" UUID="" RO="1" SIZE="15462400" TYPE="loop"
+    NAME="loop14" KNAME="loop14" MAJ:MIN="7:14" FSTYPE="squashfs" MOUNTPOINT="/snap/gnome-calculator/406" LABEL="" UUID="" RO="1" SIZE="4218880" TYPE="loop"
+    NAME="nvme0n1" KNAME="nvme0n1" MAJ:MIN="259:0" FSTYPE="" MOUNTPOINT="" LABEL="" UUID="" RO="0" SIZE="512110190592" TYPE="disk"
+    NAME="nvme0n1p1" KNAME="nvme0n1p1" MAJ:MIN="259:1" FSTYPE="vfat" MOUNTPOINT="/boot/efi" LABEL="ESP SPACE" UUID="42D3-AAB8" RO="0" SIZE="713031680" TYPE="part"
+    NAME="nvme0n1p2" KNAME="nvme0n1p2" MAJ:MIN="259:2" FSTYPE="" MOUNTPOINT="" LABEL="" UUID="" RO="0" SIZE="134217728" TYPE="part"
+    NAME="nvme0n1p3" KNAME="nvme0n1p3" MAJ:MIN="259:3" FSTYPE="" MOUNTPOINT="" LABEL="" UUID="" RO="0" SIZE="79322677248" TYPE="part"
+    NAME="nvme0n1p4" KNAME="nvme0n1p4" MAJ:MIN="259:4" FSTYPE="ntfs" MOUNTPOINT="" LABEL="WINRETOOLS" UUID="500EC0840EC06516" RO="0" SIZE="1038090240" TYPE="part"
+    NAME="nvme0n1p5" KNAME="nvme0n1p5" MAJ:MIN="259:5" FSTYPE="ntfs" MOUNTPOINT="" LABEL="Image mit Space" UUID="C614C0AC14C0A0B3" RO="0" SIZE="10257170432" TYPE="part"
+    NAME="nvme0n1p6" KNAME="nvme0n1p6" MAJ:MIN="259:6" FSTYPE="ntfs" MOUNTPOINT="" LABEL="DELLSUPPORT" UUID="AA88E9D888E9A2D5" RO="0" SIZE="1212153856" TYPE="part"
+    NAME="nvme0n1p7" KNAME="nvme0n1p7" MAJ:MIN="259:7" FSTYPE="ext4" MOUNTPOINT="/" LABEL="" UUID="b305522d-faa7-49fc-a7d1-70dae48bcc3e" RO="0" SIZE="419430400000" TYPE="part"
+    "##;
+
+        #[test]
+        fn read_output_ok1() {
+            let _lsblk_info = LsblkInfo::from_list(LSBLK_OUTPUT1).unwrap();
+        }
+        */
 }

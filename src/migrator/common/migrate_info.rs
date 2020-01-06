@@ -1,4 +1,4 @@
-use log::{debug, error, info, trace, warn};
+use log::{debug, error, info, warn};
 
 use crate::{
     common::{
@@ -17,15 +17,13 @@ use crate::{
 };
 
 // *************************************************************************************************
-// * Digested / Checked device-type independent properties from config and information retrieved
-// * from device required for stage1 of migration
+// * migrate_info holds digested and checked device-type independent properties from config and
+// information retrieved from device required for stage1 of migration
 // *************************************************************************************************
 
 pub(crate) mod balena_cfg_json;
 pub(crate) use balena_cfg_json::BalenaCfgJson;
 use std::path::PathBuf;
-
-//use crate::linux::migrate_info::lsblk_info::;
 
 #[derive(Debug)]
 pub(crate) struct MigrateInfo {
@@ -51,18 +49,14 @@ pub(crate) struct MigrateInfo {
 // TODO: sort out error reporting with Displayed
 
 impl MigrateInfo {
+    #[allow(clippy::cognitive_complexity)] //TODO refactor this function to fix the clippy warning
     pub(crate) fn new(config: &Config) -> Result<MigrateInfo, MigError> {
-        trace!("new: entered");
+        debug!("new: entered");
         let os_api = OSApi::new()?;
         let os_arch = os_api.get_os_arch()?;
-
-        debug!(
-            "Calling PathInfo::from_path on '{}'",
-            config.migrate.get_work_dir().display()
-        );
-
-        let work_path = PathInfo::from_path(config.migrate.get_work_dir())?;
+        let work_path = os_api.path_info_from_path(config.migrate.get_work_dir())?;
         let work_dir = &work_path.path;
+
         info!(
             "Working directory is '{}' on '{}'",
             work_dir.display(),
@@ -98,12 +92,12 @@ impl MigrateInfo {
                 CheckedImageType::Flasher(checked_ref)
             }
             ImageType::FileSystems(ref fs_dump) => {
-                // make sure all files are present and in /workdir, generate total size and partitioning config in miginfo
+                // make sure all files are present and in workdir
                 CheckedImageType::FileSystems(CheckedFSDump {
                     device_slug: fs_dump.device_slug.clone(),
                     check: fs_dump.check.clone(),
-                    max_data: fs_dump.max_data.clone(),
-                    mkfs_direct: fs_dump.mkfs_direct.clone(),
+                    max_data: fs_dump.max_data,
+                    mkfs_direct: fs_dump.mkfs_direct,
                     extended_blocks: fs_dump.extended_blocks,
                     boot: CheckedPartDump {
                         archive: MigrateInfo::check_dump(&fs_dump.boot, &work_path)?,
@@ -136,7 +130,7 @@ impl MigrateInfo {
         let config_file = if let Some(file_info) =
             FileInfo::new(config.balena.get_config_path(), &work_dir)?
         {
-            if let None = file_info.rel_path {
+            if file_info.rel_path.is_none() {
                 error!("The balena OS config was found outside of the working directory. This setup is not supported");
                 return Err(MigError::displayed());
             }
@@ -159,13 +153,13 @@ impl MigrateInfo {
                 }
             }
 
-            // check config
+            // check config, balena_cfg_json::check is done later when device info is present
             let balena_cfg = BalenaCfgJson::new(file_info)?;
             info!(
                 "The balena config file looks ok: '{}'",
                 balena_cfg.get_rel_path().display()
             );
-            //balena_cfg.check()
+
             balena_cfg
         } else {
             error!("The balena config has not been specified or cannot be accessed. Automatic download is not yet implemented, so you need to specify and supply all required files");
@@ -261,7 +255,7 @@ impl MigrateInfo {
 
             let wifi_list = WifiConfig::scan(list)?;
 
-            if wifi_list.len() > 0 {
+            if !wifi_list.is_empty() {
                 for wifi in &wifi_list {
                     info!("Found config for wifi: {}", wifi.get_ssid());
                 }
@@ -274,11 +268,11 @@ impl MigrateInfo {
             Vec::new()
         };
 
-        if nwmgr_files.is_empty() && wifis.is_empty() {
-            if config.migrate.require_nwmgr_configs() {
-                error!("No Network manager files were found, the device might not be able to come online");
-                return Err(MigError::from(MigErrorKind::Displayed));
-            }
+        if nwmgr_files.is_empty() && wifis.is_empty() && config.migrate.require_nwmgr_configs() {
+            error!(
+                "No Network manager files were found, the device might not be able to come online"
+            );
+            return Err(MigError::from(MigErrorKind::Displayed));
         }
 
         let result = MigrateInfo {

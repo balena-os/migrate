@@ -1,10 +1,9 @@
 use super::MigMode;
 use crate::common::{file_digest::HashInfo, MigError, MigErrorKind};
+use crate::defs::DEFAULT_API_CHECK_TIMEOUT;
 use log::debug;
 use serde::{Deserialize, Serialize};
 use std::path::PathBuf;
-
-use crate::defs::DEFAULT_API_CHECK_TIMEOUT;
 
 // TODO: also store optional bootable flag, partition type and start offset ?
 #[derive(Debug, Serialize, Deserialize, Clone)]
@@ -43,6 +42,7 @@ pub(crate) struct FileRef {
     pub hash: Option<HashInfo>,
 }
 
+#[allow(clippy::large_enum_variant)] //TODO refactor to remove clippy warning
 #[derive(Debug, Serialize, Deserialize, Clone)]
 pub(crate) enum ImageType {
     #[serde(rename = "dd")]
@@ -52,19 +52,11 @@ pub(crate) enum ImageType {
 }
 
 #[derive(Debug, Deserialize)]
-pub(crate) struct ApiInfo {
-    host: Option<String>,
-    port: Option<u16>,
-    check: Option<bool>,
-    key: Option<String>,
-}
-
-#[derive(Debug, Deserialize)]
 pub(crate) struct BalenaConfig {
     image: Option<ImageType>,
     config: Option<FileRef>,
     app_name: Option<String>,
-    api: Option<ApiInfo>,
+    check_api: Option<bool>,
     check_vpn: Option<bool>,
     check_timeout: Option<u64>,
 }
@@ -75,7 +67,7 @@ impl<'a> BalenaConfig {
             image: None,
             config: None,
             app_name: None,
-            api: None,
+            check_api: None,
             check_vpn: None,
             check_timeout: None,
         }
@@ -84,14 +76,14 @@ impl<'a> BalenaConfig {
     pub fn check(&self, mig_mode: &MigMode) -> Result<(), MigError> {
         debug!("check: {:?}", self);
         if let MigMode::Immediate = mig_mode {
-            if let None = self.image {
+            if self.image.is_none() {
                 return Err(MigError::from_remark(
                     MigErrorKind::InvParam,
-                        "check: no balena OS image was specified in mode: IMMEDIATE",
+                    "check: no balena OS image was specified in mode: IMMEDIATE",
                 ));
             }
 
-            if let None = self.config {
+            if self.config.is_none() {
                 return Err(MigError::from_remark(
                     MigErrorKind::InvParam,
                     "check: no config.json was specified in mode: IMMEDIATE",
@@ -105,6 +97,14 @@ impl<'a> BalenaConfig {
     pub fn is_check_vpn(&self) -> bool {
         if let Some(ref check_vpn) = self.check_vpn {
             *check_vpn
+        } else {
+            true
+        }
+    }
+
+    pub fn is_check_api(&self) -> bool {
+        if let Some(ref check_api) = self.check_api {
+            *check_api
         } else {
             true
         }
@@ -131,7 +131,7 @@ impl<'a> BalenaConfig {
         if let Some(ref path) = self.image {
             path
         } else {
-            panic!("image path is not set");
+            panic!("The image path is not set in config");
         }
     }
 
@@ -139,7 +139,7 @@ impl<'a> BalenaConfig {
         if let Some(ref path) = self.config {
             path
         } else {
-            panic!("config path is not set");
+            panic!("The balena config.json path is not set in config");
         }
     }
 }

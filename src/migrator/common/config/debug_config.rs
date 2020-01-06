@@ -1,4 +1,4 @@
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 
 use super::MigMode;
 use crate::common::MigError;
@@ -19,7 +19,6 @@ impl<'a> DebugConfig {
     pub fn default() -> DebugConfig {
         DebugConfig {
             force_flash_device: None,
-            // TODO: default to false when project is mature
             no_flash: None,
             hacks: None,
         }
@@ -58,8 +57,15 @@ impl<'a> DebugConfig {
         }
     }
 
+    pub fn get_force_flash_device(&'a self) -> Option<&'a Path> {
+        if let Some(ref val) = self.force_flash_device {
+            Some(val)
+        } else {
+            None
+        }
+    }
+
     pub fn check(&self, _mig_mode: &MigMode) -> Result<(), MigError> {
-        // TODO: implement
         Ok(())
     }
 }

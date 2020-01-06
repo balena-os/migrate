@@ -318,11 +318,11 @@ impl<'a> QueryRes<'a> {
             match variant {
                 Variant::BOOL(val) => {
                     Ok(*val)
-                }, 
-                Variant::STRING(val) => {                
+                },
+                Variant::STRING(val) => {
                     Ok(val.eq_ignore_ascii_case("true"))
                 },
-                Variant::NULL() => {               
+                Variant::NULL() => {
                     Ok(default)
                 }
                 _=> {
@@ -342,12 +342,17 @@ impl<'a> QueryRes<'a> {
             match variant {
                 Variant::BOOL(val) => {
                     Ok(*val)
-                }, 
-                Variant::STRING(val) => {                
+                },
+                Variant::STRING(val) => {
                     Ok(val.eq_ignore_ascii_case("true"))
                 },
+<<<<<<< HEAD
                 _ => {                
                     Err(MigError::from_remark(MigErrorKind::InvParam,&format!("get_bool_property: unexpected variant type, not BOOL for key: '{}' value: {:?}", prop_name, variant)))
+=======
+                _ => {
+                    Err(MigError::from_remark(MigErrorKind::InvParam,&format!("{}::get_bool_property: unexpected variant type, not BOOL for key: '{}' value: {:?}", MODULE, prop_name, variant)))
+>>>>>>> consolidate
                 }
             }
         } else {

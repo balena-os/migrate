@@ -19,11 +19,9 @@ balena:
       path: <enter image path here> 
   config: 
     path: config.json
-  app_name: <enter application name here> 
-  api: 
-    host: "api.balena-cloud.com"
-    port: 443
-    check: true
+  app_name: <enter application name here>
+  ## check for api connection
+  check_api: true
   check_vpn: true
   check_timeout: 20
 debug:

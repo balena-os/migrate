@@ -1,3 +1,6 @@
+// the extractor module used by balena-extract- extract individual partitions from balena image to tar
+// gzipped archives and print config snippet for balena-migrate.yml
+
 use clap::{App, Arg};
 use failure::ResultExt;
 use log::{debug, error, info, trace, warn};
@@ -53,18 +56,19 @@ pub(crate) struct Extractor {
     disk: Disk,
 }
 
-// TODO: Extractor could modify config / save new ImageType
+// TODO: Extractor could modify config / save new ImageType with the usual downside of destroying comments & so on
 // TODO: Save ImageType as yml file
 
 pub fn extract() -> Result<(), MigError> {
     Logger::create();
     Logger::set_color(true);
-    Logger::set_log_dest(&LogDestination::BufferStderr, NO_STREAM).context(
-        MigErrCtx::from_remark(MigErrorKind::Upstream, "failed to set up logging"),
-    )?;
+    Logger::set_log_dest(&LogDestination::Stderr, NO_STREAM).context(MigErrCtx::from_remark(
+        MigErrorKind::Upstream,
+        "failed to set up logging",
+    ))?;
 
     if !is_admin()? {
-        error!("please run this program as root");
+        error!("Please run this program as root");
         return Err(MigError::from(MigErrorKind::Displayed));
     }
 
@@ -77,6 +81,7 @@ impl Extractor {
     fn new() -> Result<Extractor, MigError> {
         trace!("new: entered");
 
+        // define , collect command line options
         let arg_matches = App::new("balena-extract")
             .version("0.1")
             .author("Thomas Runte <thomasr@balena.io>")
@@ -93,6 +98,13 @@ impl Extractor {
                     .help("Sets the level of verbosity"),
             )
             .arg(
+                Arg::with_name("output-dir")
+                    .short("o")
+                    .long("output-dir")
+                    .value_name("path")
+                    .help("Sets the output directory"),
+            )
+            .arg(
                 Arg::with_name("device-type")
                     .short("d")
                     .long("device-type")
@@ -102,11 +114,6 @@ impl Extractor {
             )
             .get_matches();
 
-        println!(
-            "Logger set, level  {}",
-            arg_matches.occurrences_of("verbose")
-        );
-
         match arg_matches.occurrences_of("verbose") {
             0 => (),
             1 => Logger::set_default_level(&Level::Info),
@@ -114,17 +121,24 @@ impl Extractor {
             _ => Logger::set_default_level(&Level::Trace),
         }
 
-        let work_dir = PathBuf::from(".")
+        let out_path = if let Some(path) = arg_matches.value_of("output-dir") {
+            path
+        } else {
+            "."
+        };
+
+        let work_dir = PathBuf::from(out_path)
             .canonicalize()
             .context(MigErrCtx::from_remark(
                 MigErrorKind::Upstream,
-                "Failed to cannonicalize path '.'",
+                &format!("Failed to cannonicalize path '{}'", out_path),
             ))?;
+
         info!("Using working directory '{}'", work_dir.display());
 
-        // TODO: support more devices
         let extract_device = if let Some(value) = arg_matches.value_of("device-type") {
             match value {
+                // TODO: add more device types, why are there no RPI's
                 "beaglebone-black" => String::from(value),
                 "beaglebone-green" => String::from(value),
                 _ => {
@@ -144,41 +158,40 @@ impl Extractor {
             if file.exists() {
                 file.canonicalize().context(MigErrCtx::from_remark(
                     MigErrorKind::Upstream,
-                    &format!("Failed to cannonicalize path '{}'", file.display()),
+                    &format!("Failed to canonicalize path '{}'", file.display()),
                 ))?
             } else {
                 error!("Could not find image file: '{}'", value);
                 return Err(MigError::displayed());
             }
         } else {
-            error!("No image file was specified.");
+            error!("Missing mandatory parameter image file.");
             return Err(MigError::displayed());
         };
         info!("Using image file '{}'", image_file.display());
 
-        for command in REQUIRED_CMDS {
-            match whereis(command) {
-                Ok(_cmd_path) => (),
-                Err(why) => {
-                    error!(
-                        "Could not find required command: '{}': error: {:?}",
-                        command, why
-                    );
-                    return Err(MigError::displayed());
-                }
+        if !REQUIRED_CMDS.iter().all(|cmd| match whereis(cmd) {
+            Ok(_cmd) => true,
+            Err(why) => {
+                error!(
+                    "Could not find required command: '{}': error: {:?}",
+                    cmd, why
+                );
+                false
             }
+        }) {
+            return Err(MigError::displayed());
         }
 
-        debug!("new: working with file '{}'", image_file.display());
         if is_file_type(&image_file, &FileType::GZipOSImage)? {
             match Disk::from_gzip_img(&image_file) {
                 Ok(gzip_img) => {
                     debug!("new: is gzipped image '{}'", image_file.display());
-                    return Ok(Extractor {
+                    Ok(Extractor {
                         work_dir,
                         disk: gzip_img,
                         device_slug: extract_device,
-                    });
+                    })
                 }
                 Err(why) => {
                     error!(
@@ -186,41 +199,39 @@ impl Extractor {
                         image_file.display(),
                         why
                     );
-                    return Err(MigError::displayed());
+                    Err(MigError::displayed())
+                }
+            }
+        } else if is_file_type(&image_file, &FileType::OSImage)? {
+            match Disk::from_drive_file(&image_file, None) {
+                Ok(plain_img) => {
+                    debug!("new: is plain image '{}'", image_file.display());
+                    Ok(Extractor {
+                        work_dir,
+                        disk: plain_img,
+                        device_slug: extract_device,
+                    })
+                }
+                Err(why) => {
+                    error!(
+                        "Unable to open the image file '{}', error: {:?}",
+                        image_file.display(),
+                        why
+                    );
+                    Err(MigError::displayed())
                 }
             }
         } else {
-            if is_file_type(&image_file, &FileType::OSImage)? {
-                match Disk::from_drive_file(&image_file, None) {
-                    Ok(plain_img) => {
-                        debug!("new: is plain image '{}'", image_file.display());
-                        return Ok(Extractor {
-                            work_dir,
-                            disk: plain_img,
-                            device_slug: extract_device,
-                        });
-                    }
-                    Err(why) => {
-                        error!(
-                            "Unable to open the image file '{}', error: {:?}",
-                            image_file.display(),
-                            why
-                        );
-                        return Err(MigError::displayed());
-                    }
-                }
-            } else {
-                error!(
-                    "Unable to open the image file '{}', an unexpected file type was found",
-                    image_file.display(),
-                );
-                return Err(MigError::displayed());
-            }
+            error!(
+                "Unable to open the image file '{}', an unexpected file type was found",
+                image_file.display(),
+            );
+            Err(MigError::displayed())
         }
     }
 
     pub fn do_extract(&mut self, output_path: Option<&Path>) -> Result<ImageType, MigError> {
-        trace!("extract: entered");
+        trace!("do_extract: entered");
         let work_dir = &self.work_dir;
 
         let mountpoint = match mktemp(true, Some(MOUNTPOINT_TEMPLATE), Some(work_dir)) {
@@ -247,21 +258,11 @@ impl Extractor {
         };
 
         let mut extract_err: Option<MigError> = None;
-        // let mut part_extract_idx: usize = 0;
-
         let mut partitions: Vec<Partition> = Vec::new();
-
         let mut part_iterator = PartitionIterator::new(&mut self.disk)?;
-
         let mut extended_blocks: u64 = 0;
 
-        loop {
-            let raw_part = if let Some(raw_part) = part_iterator.next() {
-                raw_part
-            } else {
-                break;
-            };
-
+        while let Some(raw_part) = part_iterator.next() {
             let part_idx = partitions.len();
 
             match PartitionType::from_ptype(raw_part.ptype) {
@@ -278,6 +279,7 @@ impl Extractor {
                 }
             }
 
+            // TODO: partition names & types are hardcoded. Find a way to make this dynamic
             let mut partition = Partition {
                 name: PART_NAME[part_idx],
                 fstype: PART_FSTYPE[part_idx],
@@ -316,14 +318,14 @@ impl Extractor {
                 }
             }
 
-            if let Some(_) = extract_err {
+            if extract_err.is_some() {
                 break;
             }
 
             partitions.push(partition);
         }
 
-        // TODO: try to umount
+        // TODO: try to umount, otherwise the following might fail
         let _res = remove_dir(&mountpoint);
         let _res = remove_file(&tmp_name);
 
@@ -346,9 +348,18 @@ impl Extractor {
                         ),
                     ))?
                     .to_path_buf();
+            } else {
+                return Err(MigError::from_remark(
+                    MigErrorKind::NotFound,
+                    &format!(
+                        "No archive found for partition '{}', aborting",
+                        partition.name
+                    ),
+                ));
             }
         }
 
+        // TODO: expected number of partitions is hardcoded, make dynamic, same for above names, types
         if partitions.len() == 5 {
             let res = ImageType::FileSystems(FSDump {
                 device_slug: self.device_slug.clone(),
@@ -382,7 +393,7 @@ impl Extractor {
 
             let yaml_config = serde_yaml::to_string(&res).context(MigErrCtx::from_remark(
                 MigErrorKind::Upstream,
-                &format!("Failed to serialize config to yaml"),
+                &"Failed to serialize config to yaml".to_string(),
             ))?;
 
             let mut entabbed_cfg = String::new();
@@ -461,7 +472,7 @@ impl Extractor {
                     return Err(MigError::from_remark(
                         MigErrorKind::InvParam,
                         &format!(
-                            "Read write bytes mismatch witing to '{}'",
+                            "Read write bytes mismatch writing to '{}'",
                             tmp_name.display()
                         ),
                     ));
@@ -474,6 +485,7 @@ impl Extractor {
             );
         }
 
+        // find/use the first unused loop device to loop mount partition content using losetup
         let cmd_res = call(LOSETUP_CMD, &["-f", &tmp_name.to_string_lossy()], true)?;
 
         if !cmd_res.status.success() {
@@ -486,6 +498,7 @@ impl Extractor {
             ));
         }
 
+        // get the name of the associated loop device ?
         let cmd_res = call(
             LOSETUP_CMD,
             &["-O", "name", "-j", &tmp_name.to_string_lossy()],
@@ -495,16 +508,16 @@ impl Extractor {
         if !cmd_res.status.success() {
             return Err(MigError::from_remark(
                 MigErrorKind::ExecProcess,
-                &format!("Failed to locate mounted loop device"),
+                &"Failed to locate mounted loop device".to_string(),
             ));
         }
 
-        let device = if let Some(output) = cmd_res.stdout.lines().into_iter().last() {
+        let device = if let Some(output) = cmd_res.stdout.lines().last() {
             String::from(output)
         } else {
             return Err(MigError::from_remark(
                 MigErrorKind::ExecProcess,
-                &format!("Failed to parse mounted loop device"),
+                &"Failed to parse mounted loop device".to_string(),
             ));
         };
 
@@ -514,8 +527,6 @@ impl Extractor {
             device,
             mountpoint.display()
         );
-
-        // TODO: use losetup and then mount, mount -o loop seems to not work in ubuntu-14
 
         mount(
             Some(device.as_str()),
@@ -540,29 +551,80 @@ impl Extractor {
             path_append(work_dir, &format!("{}.tgz", partition.name))
         };
 
-        // TODO: Try to archive using rust builtin tar / gzip have to traverse directories myself
+        #[cfg(feature = "extract_builtin_tar")]
+        let write_tar = || -> Result<(), MigError> {
+            // TODO: Try to archive using rust builtin tar / gzip,
+            // Needs some more attention, adding files to fs root looks different from what external
+            // tar does and archiving failed on rootA partition with
+            //  { inner: Os { code: 2, kind: NotFound, message: "No such file or directory" } }
 
-        let cmd_res = call(
-            TAR_CMD,
-            &[
-                "-czf",
-                &arch_name.to_string_lossy(),
-                "-C",
-                &mountpoint.to_string_lossy(),
-                ".",
-            ],
-            true,
-        )?;
+            info!("extract: using builtin tar");
 
-        if !cmd_res.status.success() {
-            return Err(MigError::from_remark(
-                MigErrorKind::ExecProcess,
-                &format!(
-                    "Failed to archive extracted partition, msg: {}",
-                    cmd_res.stderr
-                ),
+            use flate2::{write::GzEncoder, Compression};
+            use std::fs::File;
+            use tar::Builder;
+
+            let mut archive = Builder::new(GzEncoder::new(
+                File::create(&arch_name).context(MigErrCtx::from_remark(
+                    MigErrorKind::Upstream,
+                    &format!(
+                        "Failed to create partition archive in file '{}'",
+                        arch_name.display()
+                    ),
+                ))?,
+                Compression::default(),
             ));
-        }
+
+            archive
+                .append_dir_all("./", mountpoint)
+                .context(MigErrCtx::from_remark(
+                    MigErrorKind::Upstream,
+                    &format!(
+                        "Failed to add partition content to archive '{}'",
+                        arch_name.display()
+                    ),
+                ))?;
+
+            archive.finish().context(MigErrCtx::from_remark(
+                MigErrorKind::Upstream,
+                &format!("Failed create partition archive '{}'", arch_name.display()),
+            ))?;
+
+            Ok(())
+        };
+
+        #[cfg(not(feature = "extract_builtin_tar"))]
+        let write_tar = || -> Result<(), MigError> {
+            // TODO: replace with the above rust builtin tar when its ready
+
+            info!("extract: using external tar");
+
+            let cmd_res = call(
+                TAR_CMD,
+                &[
+                    "-czf",
+                    &arch_name.to_string_lossy(),
+                    "-C",
+                    &mountpoint.to_string_lossy(),
+                    ".",
+                ],
+                true,
+            )?;
+
+            if !cmd_res.status.success() {
+                return Err(MigError::from_remark(
+                    MigErrorKind::ExecProcess,
+                    &format!(
+                        "Failed to archive extracted partition, msg: {}",
+                        cmd_res.stderr
+                    ),
+                ));
+            }
+
+            Ok(())
+        };
+
+        write_tar()?;
 
         sync();
         thread::sleep(Duration::from_secs(1));
@@ -610,77 +672,4 @@ impl Extractor {
 
         Ok(())
     }
-
-    /*
-        // Read partition table at offset up to the first empty or extended partition
-        // return offset of next partition table for extended partition or None for end of table
-
-        // TODO: ensure that about using 0 size partition as
-
-        fn read_part_tbl(
-            &mut self,
-            offset: u64,
-            table: &mut Vec<Partition>,
-        ) -> Result<Option<u64>, MigError> {
-            trace!("read_part_tbl: entered with offset {}", offset);
-            let mut buffer: [u8; DEF_BLOCK_SIZE] = [0; DEF_BLOCK_SIZE];
-
-            self.image_file
-                .fill(offset * DEF_BLOCK_SIZE as u64, &mut buffer)?;
-
-            let mbr: MasterBootRecord = unsafe { mem::transmute(buffer) };
-
-            if (mbr.boot_sig1 != 0x55) || (mbr.boot_sig2 != 0xAA) {
-                error!(
-                    "invalid mbr sig1: {:x}, sig2: {:x}",
-                    mbr.boot_sig1, mbr.boot_sig2
-                );
-                return Err(MigError::from_remark(
-                    MigErrorKind::InvParam,
-                    "unexpeted signatures found in partition table",
-                ));
-            }
-
-            for partition in &mbr.part_tbl {
-                let part_idx = table.len();
-
-                if part_idx >= PART_NAME.len() || partition.num_sectors == 0 {
-                    return Ok(None);
-                }
-
-                if (partition.ptype == 0xF) || (partition.ptype == 0x5) {
-                    debug!(
-                        "return extended partition offset: {}",
-                        offset + partition.first_lba as u64
-                    );
-                    return Ok(Some(offset + partition.first_lba as u64));
-                } else {
-                    let part_info = Partition {
-                        name: PART_NAME[part_idx],
-                        fstype: PART_FSTYPE[part_idx],
-                        start_lba: offset + partition.first_lba as u64,
-                        num_sectors: partition.num_sectors as u64,
-                        ptype: partition.ptype,
-                        status: partition.status,
-                        archive: None,
-                    };
-
-                    debug!(
-                        "partition name: {}, fstype: {}, status: {:x}, type: {:x}, start: {}, size: {}",
-                        part_info.name,
-                        part_info.fstype,
-                        part_info.status,
-                        part_info.ptype,
-                        part_info.start_lba,
-                        part_info.num_sectors
-                    );
-
-                    table.push(part_info);
-                }
-            }
-            debug!("return no further offset");
-            Ok(None)
-        }
-
-    */
 }

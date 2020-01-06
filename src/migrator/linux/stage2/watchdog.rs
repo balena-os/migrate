@@ -23,7 +23,7 @@ const WD_IOC_GETTIMELEFT: u8 = 10;
 
 const WDIOF_MAGICCLOSE: u32 = 0x0100; /* Supports magic close char */
 
-const SECOND_2_NANO: u32 = 1000000000;
+const SECOND_2_NANO: u32 = 1_000_000_000;
 
 #[repr(C)]
 #[derive(Clone)]
@@ -207,7 +207,7 @@ pub(crate) struct WatchdogHandler {
 }
 
 impl WatchdogHandler {
-    pub fn new(watchdogs: &Vec<WatchdogCfg>) -> Result<WatchdogHandler, MigError> {
+    pub fn new(watchdogs: &[WatchdogCfg]) -> Result<WatchdogHandler, MigError> {
         let mut dogs: Vec<Watchdog> = Vec::new();
 
         for watchdog_cfg in watchdogs {
@@ -282,13 +282,9 @@ impl WatchdogHandler {
             }
         }
 
-        loop {
-            if let Some(mut current) = dogs.pop() {
-                current.kick();
-                current.close();
-            } else {
-                break;
-            }
+        while let Some(mut current) = dogs.pop() {
+            current.kick();
+            current.close();
         }
     }
 }

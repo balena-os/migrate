@@ -27,7 +27,7 @@ impl IntelNuc {
         config: &Config,
         s2_cfg: &mut Stage2ConfigBuilder,
     ) -> Result<IntelNuc, MigError> {
-        const SUPPORTED_OSSES: &'static [&'static str] = &[
+        const SUPPORTED_OSSES: &[&str] = &[
             "Ubuntu 18.04.3 LTS",
             "Ubuntu 18.04.2 LTS",
             "Ubuntu 16.04.2 LTS",
@@ -41,7 +41,7 @@ impl IntelNuc {
 
         expect_type(&mig_info.kernel_file.path, &FileType::KernelAMD64)?;
 
-        if let None = SUPPORTED_OSSES.iter().position(|&r| r == os_name) {
+        if SUPPORTED_OSSES.iter().position(|&r| r == os_name).is_none() {
             let message = format!(
                 "The OS '{}' is not supported for device type IntelNuc",
                 os_name,
@@ -62,16 +62,13 @@ impl IntelNuc {
         let secure_boot = is_secure_boot()?;
         info!(
             "Secure boot is {}enabled",
-            match secure_boot {
-                true => "",
-                false => "not ",
-            }
+            if secure_boot { "" } else { "not " }
         );
 
-        if secure_boot == true {
-            let message = format!(
+        if secure_boot {
+            let message =
                 "balena-migrate does not currently support systems with secure boot enabled."
-            );
+                    .to_string();
             error!("{}", &message);
             return Err(MigError::from_remark(MigErrorKind::InvParam, &message));
         }

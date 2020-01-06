@@ -49,6 +49,7 @@ pub(crate) struct RaspiBootManager<'a> {
     dtb_files: &'a [&'a str],
 }
 
+#[allow(clippy::new_ret_no_self)] //TODO refactor this to fix cluppy warning
 impl RaspiBootManager<'_> {
     pub fn new(boot_type: &BootType) -> Result<impl BootManager + 'static, MigError> {
         match boot_type {
@@ -67,7 +68,7 @@ impl RaspiBootManager<'_> {
                     "Invalid boot type encountered for RaspiBootManager: {:?}",
                     boot_type
                 );
-                return Err(MigError::displayed());
+                Err(MigError::displayed())
             }
         }
     }
@@ -103,6 +104,8 @@ impl BootManager for RaspiBootManager<'_> {
 
         debug!("configured dtb files: {}", mig_info.dtb_file.len());
 
+        #[allow(clippy::redundant_pattern_matching)]
+        //TODO refactor this function to fix the clippy warning
         for file in self.dtb_files {
             if let None = mig_info.dtb_file.iter().find(|file_info| {
                 debug!(
@@ -134,6 +137,7 @@ impl BootManager for RaspiBootManager<'_> {
         Ok(true)
     }
 
+    #[allow(clippy::cognitive_complexity)] //TODO refactor this function to fix the clippy warning
     fn setup(
         &self,
         mig_info: &MigrateInfo,
@@ -283,6 +287,7 @@ impl BootManager for RaspiBootManager<'_> {
         }
 
         let balena_config = is_balena_file(&config_path)?;
+        // TODO: try to make sure valid configs, are saved independently from migrator tag
         if !balena_config {
             // backup config.txt
             let backup_file = format!("{}.{}", RPI_CONFIG_TXT, system_time.as_secs());
@@ -325,15 +330,17 @@ impl BootManager for RaspiBootManager<'_> {
                 MigErrorKind::Upstream,
                 &format!("Failed to open file '{}'", config_path.display()),
             ))?;
+
+            // TODO: remove potentially harmfull configs
+
             for line in BufReader::new(config_file).lines() {
                 match line {
                     Ok(line) => {
                         // TODO: more modifications to /boot/config.txt
-                        if initrd_re.is_match(&line) {
-                            config_str.push_str(&format!("# {}\n", line));
-                        } else if kernel_re.is_match(&line) {
-                            config_str.push_str(&format!("# {}\n", line));
-                        } else if uart_re.is_match(&line) {
+                        if initrd_re.is_match(&line)
+                            || kernel_re.is_match(&line)
+                            || uart_re.is_match(&line)
+                        {
                             config_str.push_str(&format!("# {}\n", line));
                         } else if let BootType::Raspi64 = self.boot_type {
                             if sixty4_bits_re.is_match(&line) {
@@ -429,7 +436,7 @@ impl BootManager for RaspiBootManager<'_> {
                         .unwrap()
                         .replace_all(mod_cmdline.as_ref(), rep),
                 );
-                mod_cmdline.push_str(&format!(" console=tty1 console=serial0,115200"));
+                mod_cmdline.push_str(&" console=tty1 console=serial0,115200".to_string());
 
                 trace!("cmdline: '{}'", mod_cmdline);
 
@@ -453,7 +460,7 @@ impl BootManager for RaspiBootManager<'_> {
         };
 
         // save the backup locations to s2_config
-        if boot_cfg_bckup.len() > 0 {
+        if !boot_cfg_bckup.is_empty() {
             s2_cfg.set_boot_bckup(boot_cfg_bckup);
         }
 

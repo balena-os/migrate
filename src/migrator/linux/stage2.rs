@@ -85,6 +85,7 @@ impl<'a> Stage2 {
     // try to mount former root device and /boot if it is on a separate partition and
     // load the stage2 config
 
+    #[allow(clippy::cognitive_complexity)] //TODO refactor this function to fix the clippy warning
     pub fn try_init() -> Result<Stage2, MigError> {
         Logger::set_default_level(&INIT_LOG_LEVEL);
 
@@ -178,16 +179,14 @@ impl<'a> Stage2 {
         // try switch logging to a persistent log
         let log_path = if let Some(log_path) = mounts.get_log_path() {
             Some(path_append(log_path, MIGRATE_LOG_FILE))
-        } else {
-            if stage2_cfg.is_no_flash() || mounts.is_work_no_copy() {
-                if let Some(work_path) = mounts.get_work_path() {
-                    Some(path_append(work_path, MIGRATE_LOG_FILE))
-                } else {
-                    None
-                }
+        } else if stage2_cfg.is_no_flash() || mounts.is_work_no_copy() {
+            if let Some(work_path) = mounts.get_work_path() {
+                Some(path_append(work_path, MIGRATE_LOG_FILE))
             } else {
                 None
             }
+        } else {
+            None
         };
 
         if let Some(ref log_path) = log_path {
@@ -215,15 +214,16 @@ impl<'a> Stage2 {
             let _res = Logger::set_log_dest(&LogDestination::Stderr, NO_STREAM);
         }
 
-        return Ok(Stage2 {
+        Ok(Stage2 {
             mounts: RefCell::new(mounts),
             config: stage2_cfg,
             recoverable_state: false,
-        });
+        })
     }
 
     // Do the actual work once drives are mounted and config is read
 
+    #[allow(clippy::cognitive_complexity)] //TODO refactor this function to fix the clippy warning
     pub fn migrate(&mut self) -> Result<(), MigError> {
         debug!("migrate: entered");
 
@@ -233,7 +233,7 @@ impl<'a> Stage2 {
         // Recover device type and restore original boot configuration
 
         let mut watchdog_handler = if let Some(watchdogs) = self.config.get_watchdogs() {
-            if watchdogs.len() > 0 {
+            if !watchdogs.is_empty() {
                 match WatchdogHandler::new(watchdogs) {
                     Ok(handler) => Some(handler),
                     Err(why) => {
@@ -248,6 +248,7 @@ impl<'a> Stage2 {
             None
         };
 
+        // TODO: this will not work for grub, boot once
         let migrate_delay = self.config.get_migrate_delay();
         if migrate_delay > 0 {
             let start_time = Instant::now();
@@ -266,7 +267,8 @@ impl<'a> Stage2 {
 
         thread::sleep(Duration::from_secs(DEBUG_CONSOLE_DELAY));
 
-        let device = device_impl::from_config(device_type, boot_type)?;
+        let device = device_impl::from_config(device_type, *boot_type)?;
+
         if device.restore_boot(&self.mounts.borrow(), &self.config) {
             info!("Boot configuration was restored sucessfully");
             // boot config restored can reboot
@@ -501,12 +503,14 @@ impl<'a> Stage2 {
         // Write our buffered log to workdir before unmounting if we are not flashing anyway
 
         if self.config.is_no_flash() {
+            // TODO: check recoverable flag, but what to ?
             info!("Not flashing due to config parameter no_flash");
             Logger::flush();
             sync();
             let _res = Logger::set_log_dest(&LogDestination::Stderr, NO_STREAM);
         }
 
+        // TODO: check this
         self.mounts.borrow_mut().unmount_boot_devs()?;
 
         info!("Unmounted file systems");
@@ -676,6 +680,7 @@ impl<'a> Stage2 {
         }
 
         // we can hope to successfully reboot again after writing config.json and system-connections
+        sync();
         self.recoverable_state = true;
 
         if let Some(data_mountpoint) = self.mounts.borrow().get_balena_data_mountpoint() {

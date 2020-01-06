@@ -4,6 +4,7 @@ use lazy_static::lazy_static;
 use log::{debug, error, info, trace, warn};
 use regex::{Regex, RegexBuilder};
 use std::fs::{copy, read_link, read_to_string};
+use std::mem::MaybeUninit;
 use std::path::{Path, PathBuf};
 
 use libc::getuid;
@@ -87,7 +88,7 @@ pub(crate) fn whereis(cmd: &str) -> Result<String, MigError> {
                 &format!("whereis: no command output for {}", cmd),
             ))
         } else {
-            let mut words = cmd_res.stdout.split(" ");
+            let mut words = cmd_res.stdout.split(' ');
             if let Some(s) = words.nth(1) {
                 Ok(String::from(s))
             } else {
@@ -272,7 +273,7 @@ pub(crate) fn is_secure_boot() -> Result<bool, MigError> {
         );
         Err(MigError::from_remark(
             MigErrorKind::InvParam,
-            &format!("is_secure_boot: failed to parse command output"),
+            &"is_secure_boot: failed to parse command output".to_string(),
         ))
     } else {
         Ok(false)
@@ -349,7 +350,7 @@ pub(crate) fn to_std_device_path(device: &Path) -> Result<PathBuf, MigError> {
                 device.display(),
                 why
             );
-            return Ok(PathBuf::from(device));
+            Ok(PathBuf::from(device))
         }
     }
 }
@@ -361,20 +362,18 @@ pub(crate) fn drive_to_partition(drive: &Path, part_num: usize) -> Result<PathBu
     }
     let path_str = String::from(&*drive.to_string_lossy());
     if let Some(ref captures) = PART2DRIVE_RE.captures(&path_str) {
-        if let Some(_) = captures.get(3) {
+        if captures.get(3).is_some() {
             Ok(PathBuf::from(format!("{}{}", path_str, part_num)))
+        } else if captures.get(4).is_some() {
+            Ok(PathBuf::from(format!("{}p{}", path_str, part_num)))
         } else {
-            if let Some(_) = captures.get(4) {
-                Ok(PathBuf::from(format!("{}p{}", path_str, part_num)))
-            } else {
-                Err(MigError::from_remark(
-                    MigErrorKind::InvParam,
-                    &format!(
-                        "Failed to derive partition name from drive name: '{}'",
-                        drive.display()
-                    ),
-                ))
-            }
+            Err(MigError::from_remark(
+                MigErrorKind::InvParam,
+                &format!(
+                    "Failed to derive partition name from drive name: '{}'",
+                    drive.display()
+                ),
+            ))
         }
     } else {
         Err(MigError::from_remark(
@@ -553,22 +552,20 @@ pub(crate) fn get_kernel_root_info() -> Result<(PathBuf, Option<String>), MigErr
                 DISK_BY_PARTUUID_PATH,
                 captures.get(1).unwrap().as_str(),
             ))
+        } else if let Some(captures) = RegexBuilder::new(ROOT_UUID_REGEX)
+            .case_insensitive(true)
+            .build()
+            .unwrap()
+            .captures(root_dev)
+        {
+            debug!("Got root device UUID: {:?}", captures.get(1));
+            Some(path_append(
+                DISK_BY_UUID_PATH,
+                captures.get(1).unwrap().as_str(),
+            ))
         } else {
-            if let Some(captures) = RegexBuilder::new(ROOT_UUID_REGEX)
-                .case_insensitive(true)
-                .build()
-                .unwrap()
-                .captures(root_dev)
-            {
-                debug!("Got root device UUID: {:?}", captures.get(1));
-                Some(path_append(
-                    DISK_BY_UUID_PATH,
-                    captures.get(1).unwrap().as_str(),
-                ))
-            } else {
-                debug!("Got plain root device UUID: {:?}", captures.get(1));
-                None
-            }
+            debug!("Got plain root device UUID: {:?}", captures.get(1));
+            None
         } {
             debug!("trying device path: '{}'", uuid_part.display());
             to_std_device_path(&uuid_part)?

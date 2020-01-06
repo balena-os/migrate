@@ -21,7 +21,7 @@ use crate::{
     },
 };
 
-const DD_BLOCK_SIZE: usize = 4194304;
+const DD_BLOCK_SIZE: usize = 4_194_304;
 const UDEVADM_PARAMS: &[&str] = &["settle", "-t", "10"];
 
 // TODO: replace removed command checks ?
@@ -225,7 +225,7 @@ fn flash_gzip_external(dd_cmd: &str, target_path: &Path, image_path: &Path) -> F
             .output()
         {
             Ok(dd_cmd_res) => {
-                if dd_cmd_res.status.success() == true {
+                if dd_cmd_res.status.success() {
                     return FlashResult::Ok;
                 } else {
                     error!(

@@ -177,9 +177,10 @@ pub(crate) fn call(cmd: &str, args: &[&str], trim_stdout: bool) -> Result<CmdRes
         ))?;
 
     Ok(CmdRes {
-        stdout: match trim_stdout {
-            true => String::from(String::from_utf8_lossy(&output.stdout).trim()),
-            false => String::from(String::from_utf8_lossy(&output.stdout)),
+        stdout: if trim_stdout {
+            String::from(String::from_utf8_lossy(&output.stdout).trim())
+        } else {
+            String::from(String::from_utf8_lossy(&output.stdout))
         },
         stderr: String::from(String::from_utf8_lossy(&output.stderr)),
         status: output.status,

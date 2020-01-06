@@ -144,7 +144,7 @@ impl UBootManager {
                         Some(ref mountpoint) => (mountpoint, false),
                         None => {
                             // make mountpoint directory if none exists
-                            if let None = tmp_mountpoint {
+                            if tmp_mountpoint.is_none() {
                                 debug!("creating mountpoint");
                                 let cmd_res = call(
                                     MKTEMP_CMD,
@@ -224,18 +224,16 @@ impl UBootManager {
                         return Ok(PathInfo::from_mounted(
                             mountpoint, mountpoint, blk_device, &partition,
                         )?);
-                    } else {
-                        if mounted {
-                            debug!(
-                                "unmouting '{}', from {}",
-                                partition.get_path().display(),
-                                mountpoint.display()
-                            );
-                            umount(mountpoint).context(MigErrCtx::from_remark(
-                                MigErrorKind::Upstream,
-                                &format!("Failed to unmount '{}'", mountpoint.display()),
-                            ))?;
-                        }
+                    } else if mounted {
+                        debug!(
+                            "unmouting '{}', from {}",
+                            partition.get_path().display(),
+                            mountpoint.display()
+                        );
+                        umount(mountpoint).context(MigErrCtx::from_remark(
+                            MigErrorKind::Upstream,
+                            &format!("Failed to unmount '{}'", mountpoint.display()),
+                        ))?;
                     }
                 }
             }
@@ -476,7 +474,7 @@ impl<'a> BootManager for UBootManager {
         } else {
             return Err(MigError::from_remark(
                 MigErrorKind::NotFound,
-                &format!("The device tree blob (dtb_file) could not be found"),
+                &"The device tree blob (dtb_file) could not be found".to_string(),
             ));
         };
 

@@ -29,15 +29,10 @@ impl MigMode {
             "immediate" => Ok(MigMode::Immediate),
             //            "agent" => Ok(MigMode::Agent),
             "pretend" => Ok(MigMode::Pretend),
-            _ => {
-                return Err(MigError::from_remark(
-                    MigErrorKind::InvParam,
-                    &format!(
-                        "new: invalid value for parameter mode: '{}'",
-                        mode
-                    ),
-                ));
-            }
+            _ => Err(MigError::from_remark(
+                MigErrorKind::InvParam,
+                &format!("new: invalid value for parameter mode: '{}'", mode),
+            )),
         }
     }
 }
@@ -121,11 +116,9 @@ pub(crate) struct MigrateConfig {
     watchdogs: Option<Vec<WatchdogCfg>>,
     delay: Option<u64>,
     kernel_opts: Option<String>,
-    force_flash_device: Option<PathBuf>,
 }
 
 impl<'a> MigrateConfig {
-    // TODO: implement log & backup config getters
     pub fn default() -> MigrateConfig {
         MigrateConfig {
             work_dir: None,
@@ -146,7 +139,6 @@ impl<'a> MigrateConfig {
             watchdogs: None,
             delay: None,
             kernel_opts: None,
-            force_flash_device: None,
         }
     }
 
@@ -154,17 +146,17 @@ impl<'a> MigrateConfig {
         match self.get_mig_mode() {
             //MigMode::Agent => Err(MigError::from(MigErrorKind::NotImpl)),
             _ => {
-                if let None = self.work_dir {
+                if self.work_dir.is_none() {
                     error!("A required parameter was not found: 'work_dir'");
                     return Err(MigError::displayed());
                 }
 
-                if let None = self.kernel {
+                if self.kernel.is_none() {
                     error!("A required parameter was not found: 'kernel_path'");
                     return Err(MigError::displayed());
                 }
 
-                if let None = self.initrd {
+                if self.initrd.is_none() {
                     error!("A required parameter was not found: 'initrd_path'");
                     return Err(MigError::displayed());
                 }
@@ -173,6 +165,8 @@ impl<'a> MigrateConfig {
             }
         }
     }
+
+    // defaults are implemented in getter functions
 
     pub fn is_gzip_internal(&self) -> bool {
         if let Some(val) = self.gzip_internal {
@@ -203,14 +197,14 @@ impl<'a> MigrateConfig {
         if let Some(val) = self.require_nwmgr_config {
             return val;
         }
-        return true;
+        true
     }
 
     pub fn get_nwmgr_files(&'a self) -> &'a [PathBuf] {
         if let Some(ref val) = self.nwmgr_files {
             return val.as_slice();
         }
-        return NO_NMGR_FILES;
+        NO_NMGR_FILES
     }
 
     pub fn set_mig_mode(&mut self, mode: &MigMode) {
@@ -249,14 +243,6 @@ impl<'a> MigrateConfig {
         }
     }
 
-    pub fn get_force_flash_device(&'a self) -> Option<&'a Path> {
-        if let Some(ref val) = self.force_flash_device {
-            Some(val)
-        } else {
-            None
-        }
-    }
-
     pub fn get_reboot(&'a self) -> &'a Option<u64> {
         &self.reboot
     }
@@ -272,16 +258,14 @@ impl<'a> MigrateConfig {
     pub fn get_wifis(&self) -> MigrateWifis {
         if let Some(ref wifis) = self.wifis {
             MigrateWifis::List(wifis.clone())
-        } else {
-            if let Some(ref all_wifis) = self.all_wifis {
-                if *all_wifis {
-                    MigrateWifis::All
-                } else {
-                    MigrateWifis::None
-                }
+        } else if let Some(ref all_wifis) = self.all_wifis {
+            if *all_wifis {
+                MigrateWifis::All
             } else {
                 MigrateWifis::None
             }
+        } else {
+            MigrateWifis::None
         }
     }
 
@@ -295,6 +279,41 @@ impl<'a> MigrateConfig {
         } else {
             false
         }
+    }
+
+    pub fn get_dtb_refs(&'a self) -> Option<&'a Vec<FileRef>> {
+        if let Some(ref path) = self.device_tree {
+            Some(path)
+        } else {
+            None
+        }
+    }
+
+    pub fn get_log_device(&'a self) -> Option<&'a DeviceSpec> {
+        if let Some(ref log_info) = self.log {
+            if let Some(ref val) = log_info.drive {
+                return Some(val);
+            }
+        }
+        None
+    }
+
+    pub fn get_log_level(&'a self) -> &'a str {
+        if let Some(ref log_info) = self.log {
+            if let Some(ref val) = log_info.level {
+                return val;
+            }
+        }
+        "warn"
+    }
+
+    pub fn get_log_console(&self) -> bool {
+        if let Some(ref log_info) = self.log {
+            if let Some(console) = log_info.console {
+                return console;
+            }
+        }
+        false
     }
 
     // The following functions can only be safely called after check has succeeded
@@ -321,40 +340,5 @@ impl<'a> MigrateConfig {
         } else {
             panic!("initramfs path is not set");
         }
-    }
-
-    pub fn get_dtb_refs(&'a self) -> Option<&'a Vec<FileRef>> {
-        if let Some(ref path) = self.device_tree {
-            Some(path)
-        } else {
-            None
-        }
-    }
-
-    pub fn get_log_device(&'a self) -> Option<&'a DeviceSpec> {
-        if let Some(ref log_info) = self.log {
-            if let Some(ref val) = log_info.drive {
-                return Some(val);
-            }
-        }
-        return None;
-    }
-
-    pub fn get_log_level(&'a self) -> &'a str {
-        if let Some(ref log_info) = self.log {
-            if let Some(ref val) = log_info.level {
-                return val;
-            }
-        }
-        return "warn";
-    }
-
-    pub fn get_log_console(&self) -> bool {
-        if let Some(ref log_info) = self.log {
-            if let Some(console) = log_info.console {
-                return console;
-            }
-        }
-        return false;
     }
 }

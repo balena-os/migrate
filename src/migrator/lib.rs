@@ -1,3 +1,5 @@
+// main file of library - exports top level functions and aggregates modules
+
 #[cfg(target_os = "linux")]
 #[macro_use]
 extern crate nix;
@@ -42,6 +44,7 @@ pub fn stage2() -> Result<(), MigError> {
     use nix::unistd::sync;
     use std::panic;
 
+    // try to catch and log panics - panics aren't helpful during boot/initramfs
     let res = panic::catch_unwind(|| -> Result<(), MigError> {
         let mut stage2 = match Stage2::try_init() {
             Ok(res) => res,
@@ -72,12 +75,12 @@ pub fn stage2() -> Result<(), MigError> {
     });
 
     if let Err(why) = res {
+        // this is what's being executed if a panic occurred in the above
         error!("A panic occurred in stage2 {:?}", why);
         Logger::flush();
         sync();
         let _res = Stage2::default_exit();
         ()
-    } else {
     }
 
     Ok(())

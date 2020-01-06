@@ -1,3 +1,5 @@
+# [target.'cfg(target_arch="x86_64")']
+# rustflags = ["--cfg extract_builtin_tar = yes"]
 [target.x86_64-pc-windows-msvc]
 rustflags = ["-C", "target-feature=+crt-static", "-C" , "link-args=-Wl,-zstack-size=10485760"]
 [target.i686-pc-windows-msvc]

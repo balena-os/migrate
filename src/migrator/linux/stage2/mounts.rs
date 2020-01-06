@@ -91,6 +91,7 @@ impl<'a> Mounts {
     // get lsblk info for starters and pick all devices from there
     // might get us in trouble with devices showing up slowly though
 
+    #[allow(clippy::cognitive_complexity)] //TODO refactor this function to fix the clippy warning
     pub fn new() -> Result<Mounts, MigError> {
         debug!("new: entered");
         thread::sleep(Duration::new(5, 0));
@@ -561,14 +562,12 @@ impl<'a> Mounts {
                         return Err(MigError::displayed());
                     }
                 };
-        } else {
-            if !file_exists(&part_label) {
-                warn!(
-                    "Unable to find labeled partition: '{}'",
-                    part_label.display()
-                );
-                parts_found = false;
-            }
+        } else if !file_exists(&part_label) {
+            warn!(
+                "Unable to find labeled partition: '{}'",
+                part_label.display()
+            );
+            parts_found = false;
         }
 
         let mut part_label = path_append(DISK_BY_LABEL_PATH, BALENA_ROOTB_PART);
@@ -589,14 +588,12 @@ impl<'a> Mounts {
                         return Err(MigError::displayed());
                     }
                 };
-        } else {
-            if !file_exists(&part_label) {
-                warn!(
-                    "Unable to find labeled partition: '{}'",
-                    part_label.display()
-                );
-                parts_found = false;
-            }
+        } else if !file_exists(&part_label) {
+            warn!(
+                "Unable to find labeled partition: '{}'",
+                part_label.display()
+            );
+            parts_found = false;
         }
 
         let mut part_label = path_append(DISK_BY_LABEL_PATH, BALENA_STATE_PART);
@@ -617,14 +614,12 @@ impl<'a> Mounts {
                         return Err(MigError::displayed());
                     }
                 };
-        } else {
-            if !file_exists(&part_label) {
-                warn!(
-                    "Unable to find labeled partition: '{}'",
-                    part_label.display()
-                );
-                parts_found = false;
-            }
+        } else if !file_exists(&part_label) {
+            warn!(
+                "Unable to find labeled partition: '{}'",
+                part_label.display()
+            );
+            parts_found = false;
         }
 
         let mut part_label = path_append(DISK_BY_LABEL_PATH, BALENA_DATA_PART);
@@ -758,7 +753,7 @@ impl<'a> Mounts {
 
         for attempt in 1..3 {
             if file_exists(&device) {
-                let device = to_std_device_path(device.as_ref())?;
+                let device = to_std_device_path(device)?;
 
                 debug!(
                     "Found device '{}' on attempt {} mounting on '{}' with fstype: {}",
@@ -819,6 +814,6 @@ impl<'a> Mounts {
         }
 
         error!("failed to find log device '{}'", device.display());
-        return Err(MigError::displayed());
+        Err(MigError::displayed())
     }
 }

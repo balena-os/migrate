@@ -24,6 +24,10 @@ Balena migrate currently works on a small set of devices and linux flavors. Test
   - Raspbian GNU/Linux 8 (jessie)
   - Raspbian GNU/Linux 9 (stretch)
   - Raspbian GNU/Linux 10 (buster)
+- Raspberry PI 4 using Raspian flavors:
+  - Raspbian GNU/Linux 8 (jessie)
+  - Raspbian GNU/Linux 9 (stretch)
+  - Raspbian GNU/Linux 10 (buster)
 - Beaglebone Green / Black and Beagleboard XM using Debian 9 or Ubuntu flavors:
   - Ubuntu 18.04.2 LTS
   - Ubuntu 14.04.1 LTS
@@ -35,9 +39,10 @@ is usually trivial, adding a new device might require more effort.
 
 ## How To
 
+
 ### Stage 1 - balena-migrate
 
-Balena migrate consists of a binary executable file that needs to be executed with root privileges on the device 
+Balena migrate is a binary executable file, that needs to be executed with root privileges on the device 
 that will be migrated. There are several command line parameters that can be set and the program will be looking 
 for a YAML configuration file - by default in ```./balena-migrate.yml```.
 
@@ -46,45 +51,91 @@ Depending on the configuration ```balena-migrate``` will do one of the following
 be present and configured. 
 - **immediate** - check requirements for migration and migrate the system immediately. All required settings and files need 
 to be present and configured. 
-- **extract** - extract partitions from image and store their contents as tar files to allow file system 
-level writing of balena OS. Will produce a configuration snippet for balena-migrate.yml  
 
-The following options are concepts that have been disccussed but are not implemented:
-- connected - check requirements for migration and try to retrieve missing files from the balena cloud. 
+The following modes are concepts that have been disccussed but are not implemented:
+- **connected** - check requirements for migration and try to retrieve missing files from the balena cloud. 
 Migrate immediately once all requirements are met. This mode is not implemented yet. 
-- agent - Connect to balena cloud and install ```balena-migrate``` as a service. 
+- **agent** - connect to balena cloud and install ```balena-migrate``` as a service. 
 Migration can be configured and triggered from the balena dashboard. This mode is not implemented yet.
 
-In stage 1 ```balena-migrate``` tries to determine the running OS, device architecture and the exact device type. 
+In stage 1 ```balena-migrate``` tries to determine the running OS, device architecture, boot manager and the exact device type. 
 Based on that information it decides if the device can be migrated.
 For a successful migration ```balena-migrate``` needs to be able to modify the boot setup and boot into a balena kernel 
 and initramfs. The files needed are device dependent - usualy a kernel image, an initramfs that contains stage2 executable 
-of ```balena-stage2``` and possibly one or more device tree blob files. These files currently have to be provided. 
+of ```balena-stage2``` and possibly one or more device tree blob files. These files currently have to be provided as part 
+of the configuration. 
 
 #### Providing the Stage 2 Boot Configuration
 
 The current version of the migrator provides pre build kernel and initramfs files as well as DTB files for all supported 
-devices. The script ```mk_mig_config``` can be used to create a basic migrator config. The script will copy the kernel 
-and other necessary files to the target directory. It expects to be run from withinth migrator project directory with 
-a successful build present for the target plattform. For intel-nuc and raspberrypi devices a static linked **musl** build 
-is required. The tools necessary for cross compiling and compiling for musl must be installed.
+devices. The script ```script/mk_mig_config``` can be used to create a basic migrator config. The script will copy the kernel 
+and other necessary files to the target directory. It expects to be run from within the migrator project directory with 
+a successful build present for the target plattform. For intel-nuc and raspberrypi devices on linux, a static linked 
+**musl** build is currently required as the initramfs does not provide libgcc. 
 
+#### Creating the migration Kernel, InitramFS and DTB's
+
+The balena migrate kernel, initramfs and the device tree blobs necessary to boot the device are taken from a 
+yocto build of balenaOS. The necessary modifications to the baleno OS build are contained in 
+[meta-balena][https://github.com/balena-os/meta-balena] but not yet merged.
+Instead they are checked into the **zlk/migrate** branch. The modifications add a new target 
+ (eg.: balena-image-migrator-initramfs-beagleboard-xm-20190711031218.rootfs.cpio.gz for the beageboard XM) for a 
+ modified initramfs that contains additional packets required for migration stage2. The patch also contains 
+ modifications to the kernel required by migration.
+ 
+ With the migrator patches living on a branch, creating the migrator initramfs and kernel is currently a 
+ tedious task. The branch can only be compiled together with a matching device implementation of balenaOS 
+ which can be hard to identify in terms of compatibility. 
+ 
+ Once compiled, the kernel (balena kernel without attached initramfs), migrator initramfs and dtb files 
+ have to be extracted from the build and integrated into the balena-boot folder of the migrator project. 
+ 
+ It is highly advisable to complete and merge the **zlk/migrate** branch into meta-balena master as soon as 
+ possible. To ease the creation of migrator configurations, one of the following strategies could be applied:
+  
+ ##### Create a fully functional version of the Migrator Initramfs within the Yocto Build
+ This strategy would comprise compiling and injecting the migrator stage2 executable as part of the yocto 
+ build. The OS build would supply a fully functional migrator initramfs with no need to use the 
+ ```mk_mig_config``` script (see below).
+Downside of the approach is that compiling the correct version of migrator stage2 is complex and hardware 
+dependant (needs to be set up in the hardware dependent part of balena OS ?)  and the initramfs would be 
+bundled with a fixed version of the migrator. In the current stage of the project the migrator is still 
+changing a lot so that commonly the injected stage2 would have to be replaced.    
+  
+ ##### Create a Migrator Initramfs Shell
+ This approach is what is happening currently. The initramfs shell could be more complete missing only 
+ the migrator stage2 executable which would be injected during configuration as it is done now. Advantage 
+ is that no hardware specific code needs to be compiled within the yocto build and that the configuration 
+ would remain flexible regarding migrator versions.
+     
+
+#### Compiling the Migrator Executables
+
+The tools necessary for cross compiling and compiling for musl must be installed.
+Due to the complex setup involved in creating cross compiled and statically linked binaries in rust the project 
+currently uses the [rust-embedded cross][https://github.com/rust-embedded/cross] cross compilation tools to compile. 
+The rust-embedded/cross project introduces the **cross** command that replaces the regular rust **cargo** command. 
+ 
 For intel-nuc build:
  
-```cargo build --target=x86_64-unknown-linux-musl --release```
+```cross build --target=x86_64-unknown-linux-musl --release```
 
 For beaglebone / beagleboard build:
  
-```cargo build --target=armv7-unknown-linux-gnueabihf --release```
+```cross build --target=armv7-unknown-linux-gnueabihf --release```
 
-For raspberrypi build 
+For raspberrypi3 build 
 
-``` cargo build --target=armv7-unknown-linux-musleabihf --release```
-
-The raspberry pi build currently does not work for me as cross compiled musl build. Instead I compile this version on a 
-raspberry pi natively. 
-
+``` cross build --target=armv7-unknown-linux-musleabihf --release```
+    
 Once libgcc is integrated in the migration initramfs the musl builds will be obsolete.   
+
+#### Configuring the migration Initramfs
+
+The migration initramfs provided by the balena yocto build is currently not fully set up for migration. 
+The starter scripts (init.d) inside initramfs need to be modified and the migrator stage2 executable and 
+an additional starter script need to be injected.
+
 
 ```mk_mig_config``` configures a migration initramfs by unpacking the standard migrate initramfs, deleting and injecting
  initramfs scripts in init.d and adding the ```balena-stage2``` executable to the bin folder. The initramfs is then repacked
@@ -112,18 +163,22 @@ sudo ./script/mk_mig_config -d raspberrypi3 -t migrate-rpi3/
 The above will create a basic configuration in ```migrate-rpi3``` that needs to be completed by supplying and configuring a balenaOS image,
 and a config.json file as well as further configuration as required.
 
+The kernel builds, dtb files and initial initramfs files are created in a yocto build. Tested versions for all 
+supported devices can be found checked in to the subdirectories in ```balena_boot```. 
+
 #### Providing the Balena Image
 
 ```balena-migrate``` also needs a balena OS image file which will be flashed to the device in stage 2. ```balena-migrate```
 also currently requires a config.json file to be provided. 
-Both these files can be can be downloaded from the dashboard. A downloaded image can usually **not** be fed to the 
+Both these files can be downloaded from the dashboard. A downloaded image can usually **not** be fed to the 
 migrator directly. The migrator needs to operate with as little diskspace as possible when flashing the image because 
-in the the image will temporarily be stored in memory while the disk is being flashed. 
+the image will temporarily be stored in memory while the disk is being flashed. 
 For this reason the migrator uses a gzip compressed image that can be streamed directly to dd rather than the zip 
 compressed image that can be downloaded from the dashboard. Also for certain devices the image downloaded from the 
-dashboard is a flasher image that contains the actual balena-os image. 
+dashboard is a flasher image that contains the actual balena-os image. In this case the actual image needs to be extracted 
+from the flasher image. 
 
-There is a script in ```scripts/extract.sh``` that will extract all required files from a flasher image and save them in 
+There is a script in ```script/extract.sh``` that will extract all required files from a flasher image and save them in 
 a format that the migrator can operate with. 
 ``` 
   extract - extract balena OS image and grub config from balena OS flasher image
@@ -148,10 +203,10 @@ If configured ```balena-migrate``` will scan the device for wifi configurations 
 NetworkManager connection files. There is plenty of room for improvement here - currently scanning network configs 
 is very basic (only SSID & secret key) and supports only wifi configurations in wpa_supplicant, conmanager and 
 NetworkManager format. The SSID's that are migrated are determined by two flags in ```balena-migrate.yml```. The 
-```all_wifis``` flasg when when set to true will attempt to migrate all wifi configurations found. The ```wfifis```  
-flag consists of a list of ssids. Only ssids contained in the list wil be migrated.
+```all_wifis``` flag when when set to true will attempt to migrate all wifi configurations found. The ```wifis``` flag
+consists of a list of ssids. Only ssids contained in the list wil be migrated.
 If no network configurations are migrated ```balena-migrate``` will refuse to migrate the device, to not create an 
-offline device. This behaviour can be overridden by setting the flag ```require_nwmgr_config``` to false.
+offline device. This behaviour can be overridden by setting the flag ```require_nwmgr_config``` to ```false```.
 
 Further network configuration can be supplied in NetworkManager connection files and configured using the 
 ```nwmgr_files```  parameter in ```balena-migrate.yml```.   
@@ -163,16 +218,37 @@ than flashing with dd. When writing on FS level the device is being partitioned 
 allows the use of bad block detection and mapping. The actual data is then restored from gzip archives.
 Use the ```check: ro``` or ```check: rw``` option (see snippet below) to perform read or read-write (slow) checks while 
 formatting.
+
 To be able to use this feature the partitions and the partition dimensions of the balenaOS image have to be extracted 
-in a separated step to migration.
-This can be done by ```balena-migate``` in extract mode. In this mode ```balena-migrate``` will extract the partition 
-archives and output a configuration snippet that can be used to add the configuraton to ```balena-migrate.yml``` 
+in a separate step to migration.
+This can be done using the ```balena-extract``` executable. ```balena-extract``` will extract the partition 
+archives and output a configuration snippet that can be used to add the configuration to ```balena-migrate.yml``` 
+```
+balena-extract 0.1
+Thomas Runte <thomasr@balena.io>
+Extracts features from balena OS Images
+
+USAGE:
+    balena-extract [FLAGS] <image> --device-type <type>
+
+FLAGS:
+    -h, --help       Prints help information
+    -V, --version    Prints version information
+    -v               Sets the level of verbosity
+
+OPTIONS:
+    -d, --device-type <type>    specify image device slug for extraction
+
+ARGS:
+    <image>    use balena OS image
+```
+Example invocation:
 
 ```shell script
-sudo balena-migrate -m extract \
-     -i bbg/balena-cloud-bbtest-beaglebone-green-2.29.2+rev3-dev-v9.0.1.os.img.gz  \
-     -w . \
-     -d beaglebone-green \ 
+sudo balena-extract \
+     -d beaglebone-green \
+     bbg/balena-cloud-bbtest-beaglebone-green-2.29.2+rev3-dev-v9.0.1.os.img.gz 
+
 image config:
     ---
     fs:
@@ -211,22 +287,22 @@ image config:
           path: resin-data.tgz
           hash:
             md5: 57d78c6cfe8a6b13b283804822e0c518
-
-
 ``` 
+The above config snippet must be added to ```balena-migrate.yml``` and the partition archives 
+(```resin-xxx.tgz```) need to be present in the working directory. 
       
 #### Choosing the installation device
 
 ```balena-migrate``` needs to be able to determine the installation device. Usually it will choose the device that 
 contains the boot setup. Unfortunately this task is not trivial as boot partitions could potentially reside on a 
 different drive from the root partition which makes it hard to detect and is generally not supported by balena OS. When 
-migrating devices with more complex disk layouts and more than one OS ```balena-migrate``` should be used with great 
+migrating devices with more complex disk layouts and more than one OS installed, ```balena-migrate``` should be used with great 
 caution and might not be the right tool at all.        
 
    
 #### Backup Configuration
 
-```balena-migrate``` can also be configured to create a backup that will automatically be converted to volumes once 
+```balena-migrate``` can be configured to create a backup that will automatically be converted to volumes once 
 balena-os is running on the device.
 ```balena-migrate.yml``` contains a section for backup configuration. The backup is grouped into volumes - volume names 
 corresponding to the top level directories of the backup archive. 
@@ -425,7 +501,7 @@ Before attempting to migrate stage2 will restore the original boot setup to allo
 its former setup if something goes wrong. To do this other partitions might have be 
 remounted. 
 
-The next step is to move all files required to initramfs. Typically this is the balena OS image, config.json, 
+The next step is to move all files required by the migrator to initramfs. Typically this is the balena OS image, config.json, 
 network manager configurations and the backup.
 
 Once all files are safely copied to initramfs the mounted partitions are unmounted and the balena-os image is 
@@ -447,9 +523,10 @@ Migrating windows devices to Balena is a challenge, due to the absence of well d
 As in linux systems ```balena-migrate``` will collect information about the system to determine if it can be migrated 
 and to decide on a suitable strategy. 
 Currently the only tested strategy works only on EFI enabled systems. ```balena-migrate``` will mount the EFI partition 
-and install a migration boot environment using a balena kernel and initramfs that is configured to boot using a
-```startup.nsh``` file that is placed in ```\EFI\BOOT```. For this to work the windows EFI boot configuration needs to 
-be removed. ```balena-migrate``` will move the windows EFI boot files to a backup directory on the EFI drive. 
+and install a migration boot environment using a balena kernel and initramfs that is configured to boot using a 
+syslinux EFI boot manager. In this scenario the syslinux boot manager replaces the windows boot manager. The strategy has 
+been proven to work, but needs further improvements. Currently unlike on linux there is no fallback strategy 
+(boot back to windows) once the migrator has booted into migration initramfs. 
 
 
 
@@ -460,5 +537,3 @@ be removed. ```balena-migrate``` will move the windows EFI boot files to a backu
 - Try to programatically create a new partition and write a bootable linux image to it.
 - Try to use BCDEdit or other available tools/interfaces to make the partition boot.
 - Try to set up a minimal linux to do migration after being booted.
-
- 

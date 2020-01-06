@@ -63,11 +63,8 @@ balena:
     #   md5: <insert md5 of config>    
   ## application name
   app_name: <insert application name>
-  ## api checks
-  api:
-    host: api.balena-cloud.com
-    port: 443
-    check: true
+  ## check for api connection
+  check_api: true
   ## check for vpn connection
   check_vpn: true
   ## timeout for checks

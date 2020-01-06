@@ -142,7 +142,7 @@ impl<'a> BootManager for GrubBootManager {
             grub_version.0, grub_version.1
         );
 
-        if grub_version.0 < String::from(GRUB_MIN_VERSION) {
+        if grub_version.0 < GRUB_MIN_VERSION.parse().unwrap() {
             error!("Your version of grub-install ({}.{}) is not supported. balena-migrate requires grub version 2 or higher.", grub_version.0, grub_version.1);
             return Ok(false);
         }
