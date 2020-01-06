@@ -19,7 +19,7 @@ use crate::{
         stage2_config::{CheckedImageType, Stage2Config},
         MigErrCtx, MigError, MigErrorKind,
     },
-    defs::{FailMode, BACKUP_FILE, SYSTEM_CONNECTIONS_DIR},
+    defs::{FailMode, BACKUP_FILE, SYSTEM_CONNECTIONS_DIR, VERSION},
     linux::{
         device_impl,
         linux_common::{get_mem_info, whereis},
@@ -95,7 +95,10 @@ impl<'a> Stage2 {
 
         match Logger::set_log_dest(&log_dest, NO_STREAM) {
             Ok(_s) => {
-                info!("Balena Migrate Stage 2 rev {} initializing", S2_REV);
+                info!(
+                    "Balena Migrate Stage 2 version {} rev {} initializing",
+                    VERSION, S2_REV
+                );
             }
             Err(_why) => {
                 println!("failed to initalize logger");
@@ -202,6 +205,8 @@ impl<'a> Stage2 {
                     );
                 }
             }
+        } else {
+            let _res = Logger::set_log_dest(&LogDestination::Stderr, NO_STREAM);
         }
 
         Ok(Stage2 {
