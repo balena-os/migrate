@@ -19,17 +19,17 @@ migrate:
   kernel: 
     path: balena.zImage
     hash: 
-      md5: 20dcc74754ace896e9f609650e5ee29d 
+      md5: c1a090825ca99a6a3e42f2cad158e0c0
   ## path to stage2 initramfs
   initrd: 
     path: balena.initramfs.cpio.gz
-    hash:
-      md5: f7fac19120fa11c88ea7e03ac466b294
+  #  hash:
+  #    md5: f7fac19120fa11c88ea7e03ac466b294
   ## path to stage2 device tree blob - better be a balena dtb matching the device type
-  # device_tree: 
-  #   path: balena.dtb
-  #   hash: 
-  #     md5: <MD5 Hash>    
+  device_tree:
+    path: bcm2711-rpi-4-b.dtb
+    hash:
+      md5: e3171dcf3803baf4b0b7806e27f1c23b
   ## backup configuration, configured files are copied to balena and mounted as volumes
   backup:
   ## network manager configuration files

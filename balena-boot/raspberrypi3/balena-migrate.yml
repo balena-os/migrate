@@ -19,7 +19,7 @@ migrate:
   kernel: 
     path: balena.zImage
     hash: 
-      md5: 20dcc74754ace896e9f609650e5ee29d 
+      md5: d4f40eba6fd8aa8ce0ad9408c7794df7 
   ## path to stage2 initramfs
   initrd: 
     path: balena.initrd.cpio.gz
