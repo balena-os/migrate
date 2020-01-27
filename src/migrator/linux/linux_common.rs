@@ -20,6 +20,8 @@ use crate::{
 };
 
 use crate::common::dir_exists;
+use crate::linux::linux_defs::NIX_NONE;
+use nix::mount::{mount, MsFlags};
 
 const MOKUTIL_ARGS_SB_STATE: [&str; 1] = ["--sb-state"];
 
@@ -167,16 +169,16 @@ pub(crate) fn is_efi_boot() -> Result<bool, MigError> {
 }
 */
 
-pub(crate) fn mktemp<P: AsRef<Path>>(
+pub(crate) fn mktemp(
     dir: bool,
     pattern: Option<&str>,
-    path: Option<P>,
+    path: Option<PathBuf>,
 ) -> Result<PathBuf, MigError> {
     let mut cmd_args: Vec<&str> = Vec::new();
 
     let mut _dir_path: Option<String> = None;
     if let Some(path) = path {
-        _dir_path = Some(String::from(path.as_ref().to_string_lossy()));
+        _dir_path = Some(String::from(path.to_string_lossy()));
         cmd_args.push("-p");
         cmd_args.push(_dir_path.as_ref().unwrap());
     }
@@ -202,6 +204,37 @@ pub(crate) fn mktemp<P: AsRef<Path>>(
             ),
         ))
     }
+}
+
+pub(crate) fn tmp_mount<P: AsRef<Path>>(
+    device: P,
+    fs_type: &Option<String>,
+) -> Result<PathBuf, MigError> {
+    // let no_path: Option<Path> = None;
+    let mount_dir = mktemp(true, None, None::<PathBuf>)?;
+    let fs_type = if let Some(fs_type) = fs_type {
+        Some(fs_type.as_str().as_bytes())
+    } else {
+        None
+    };
+
+    mount(
+        Some(device.as_ref()),
+        &mount_dir,
+        fs_type,
+        MsFlags::empty(),
+        NIX_NONE,
+    )
+    .context(MigErrCtx::from_remark(
+        MigErrorKind::Upstream,
+        &format!(
+            "Failed to mount '{}' on '{}'",
+            device.as_ref().display(),
+            mount_dir.display()
+        ),
+    ))?;
+
+    Ok(mount_dir)
 }
 
 /******************************************************************

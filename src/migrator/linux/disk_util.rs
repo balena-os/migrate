@@ -117,6 +117,11 @@ pub(crate) struct PartInfo {
     pub start_lba: u64,
     pub num_sectors: u64,
 }
+impl PartInfo {
+    pub fn is_bootable(&self) -> bool {
+        (self.status & 0x80) == 0x80
+    }
+}
 
 pub(crate) struct Disk {
     disk: Box<dyn ImageFile>,

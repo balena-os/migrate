@@ -234,7 +234,8 @@ impl Extractor {
         trace!("do_extract: entered");
         let work_dir = &self.work_dir;
 
-        let mountpoint = match mktemp(true, Some(MOUNTPOINT_TEMPLATE), Some(work_dir)) {
+        let mountpoint = match mktemp(true, Some(MOUNTPOINT_TEMPLATE), Some(self.work_dir.clone()))
+        {
             Ok(path) => path,
             Err(why) => {
                 error!(
@@ -246,7 +247,11 @@ impl Extractor {
         };
 
         // make file name
-        let tmp_name = match mktemp(false, Some(EXTRACT_FILE_TEMPLATE), Some(work_dir)) {
+        let tmp_name = match mktemp(
+            false,
+            Some(EXTRACT_FILE_TEMPLATE),
+            Some(self.work_dir.clone()),
+        ) {
             Ok(path) => path,
             Err(why) => {
                 error!(
@@ -339,12 +344,12 @@ impl Extractor {
             if let Some(ref mut file_ref) = partition.archive {
                 file_ref.path = file_ref
                     .path
-                    .strip_prefix(work_dir)
+                    .strip_prefix(&self.work_dir)
                     .context(MigErrCtx::from_remark(
                         MigErrorKind::Upstream,
                         &format!(
                             "Failed to strip workdir '{}' off path '{}'",
-                            work_dir.display(),
+                            self.work_dir.display(),
                             file_ref.path.display()
                         ),
                     ))?

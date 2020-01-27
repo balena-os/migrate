@@ -280,6 +280,14 @@ impl<'a> MigrateConfig {
         }
     }
 
+    pub fn get_force_flash_device(&self) -> Option<PathBuf> {
+        if let Some(ref val) = self.force_flash_device {
+            Some(val.clone())
+        } else {
+            None
+        }
+    }
+
     pub fn get_reboot(&'a self) -> &'a Option<u64> {
         &self.reboot
     }
