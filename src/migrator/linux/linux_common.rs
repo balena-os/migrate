@@ -4,6 +4,7 @@ use lazy_static::lazy_static;
 use log::{debug, error, info, trace, warn};
 use regex::{Regex, RegexBuilder};
 use std::fs::{copy, read_link, read_to_string};
+use std::mem::MaybeUninit;
 use std::path::{Path, PathBuf};
 
 use libc::getuid;
@@ -141,7 +142,6 @@ pub(crate) fn get_os_arch() -> Result<OSArch, MigError> {
 pub(crate) fn get_mem_info() -> Result<(u64, u64), MigError> {
     trace!("get_mem_info: entered");
     // TODO: could add loads, uptime if needed
-    use std::mem::MaybeUninit;
     let mut s_info: libc::sysinfo = unsafe { MaybeUninit::<libc::sysinfo>::zeroed().assume_init() };
     let res = unsafe { libc::sysinfo(&mut s_info) };
     if res == 0 {
@@ -580,13 +580,19 @@ pub(crate) fn get_kernel_root_info() -> Result<(PathBuf, Option<String>), MigErr
 
     debug!("Using root device: '{}'", root_device.display());
 
-    let root_fs_type =
-        if let Some(captures) = Regex::new(&ROOT_FSTYPE_REGEX).unwrap().captures(&cmd_line) {
-            Some(String::from(captures.get(1).unwrap().as_str()))
-        } else {
-            warn!("failed to parse {} for root fs type", cmd_line);
-            None
-        };
+    let root_fs_type = if let Some(captures) = RegexBuilder::new(&ROOT_FSTYPE_REGEX)
+        .case_insensitive(true)
+        .build()
+        .unwrap()
+        .captures(&cmd_line)
+    {
+        let fstype = captures.get(1).unwrap().as_str();
+        debug!("Got root fstype: '{}'", fstype);
+        Some(String::from(fstype))
+    } else {
+        warn!("failed to parse {} for root fs type", cmd_line);
+        None
+    };
 
     Ok((root_device, root_fs_type))
 }

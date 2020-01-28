@@ -8,9 +8,8 @@ use std::str::FromStr;
 use serde::{Deserialize, Serialize};
 use serde_yaml;
 
+#[allow(dead_code)]
 pub const EMPTY_BACKUPS: &[(String, String)] = &[];
-
-const MODULE: &str = "stage2::stage2:config";
 
 use crate::{
     common::{
@@ -64,12 +63,6 @@ impl CheckedImageType {
 }
 
 #[derive(Debug, Deserialize, Serialize, Clone)]
-pub(crate) struct Stage2LogConfig {
-    pub device: PathBuf,
-    pub fstype: String,
-}
-
-#[derive(Debug, Deserialize, Serialize, Clone)]
 pub(crate) struct MountConfig {
     // the device to mount
     device: PathBuf,
@@ -88,12 +81,17 @@ impl<'a> MountConfig {
         }
     }
 
+    #[allow(dead_code)]
     pub fn get_device(&'a self) -> &'a Path {
         &self.device.as_path()
     }
+
+    #[allow(dead_code)]
     pub fn get_fstype(&'a self) -> &'a str {
         &self.fstype
     }
+
+    #[allow(dead_code)]
     pub fn get_path(&'a self) -> &'a Path {
         &self.path.as_path()
     }
@@ -113,6 +111,8 @@ pub(crate) struct Stage2Config {
     no_flash: bool,
     // which device to flash - derive from /root partition if not set (windows)
     force_flash_device: Option<PathBuf>,
+    // free form debug parameters
+    hacks: Option<Vec<String>>,
     // balena config file
     balena_config: PathBuf,
     // balena OS image file in work_path
@@ -128,7 +128,7 @@ pub(crate) struct Stage2Config {
     // stage 2 log level
     log_level: String,
     // stage 2 log destination
-    log_to: Option<Stage2LogConfig>,
+    log_to: Option<PathBuf>,
     // log also to console
     log_console: bool,
     // device type
@@ -158,13 +158,13 @@ impl<'a> Stage2Config {
         ))?)
     }
 
+    #[allow(dead_code)]
     pub fn from_config<P: AsRef<Path>>(path: &P) -> Result<Stage2Config, MigError> {
         // TODO: Dummy, parse from yaml
         let config_str = read_to_string(path).context(MigErrCtx::from_remark(
             MigErrorKind::Upstream,
             &format!(
-                "{}::from_config: failed to read stage2_config from file: '{}'",
-                MODULE,
+                "from_config: failed to read stage2_config from file: '{}'",
                 path.as_ref().display()
             ),
         ))?;
@@ -172,10 +172,12 @@ impl<'a> Stage2Config {
         Stage2Config::from_str(&config_str)
     }
 
+    #[allow(dead_code)]
     pub fn is_log_console(&self) -> bool {
         self.log_console
     }
 
+    #[allow(dead_code)]
     pub fn get_log_level(&self) -> Level {
         if let Ok(level) = Level::from_str(&self.log_level) {
             level
@@ -184,26 +186,40 @@ impl<'a> Stage2Config {
         }
     }
 
-    pub fn get_log_device(&'a self) -> Option<(&'a Path, &'a str)> {
-        if let Some(ref log_to) = self.log_to {
-            Some((&log_to.device, &log_to.fstype))
+    #[allow(dead_code)]
+    pub fn get_hacks(&'a self) -> Option<&'a Vec<String>> {
+        if let Some(ref hacks) = self.hacks {
+            Some(hacks)
         } else {
             None
         }
     }
 
+    #[allow(dead_code)]
+    pub fn get_log_device(&'a self) -> Option<&'a Path> {
+        if let Some(ref log_to) = self.log_to {
+            Some(&log_to)
+        } else {
+            None
+        }
+    }
+
+    #[allow(dead_code)]
     pub fn has_backup(&self) -> bool {
         self.has_backup
     }
 
+    #[allow(dead_code)]
     pub fn is_no_flash(&self) -> bool {
         self.no_flash
     }
 
+    #[allow(dead_code)]
     pub fn is_gzip_internal(&self) -> bool {
         self.gzip_internal
     }
 
+    #[allow(dead_code)]
     pub fn get_force_flash_device(&'a self) -> Option<&'a PathBuf> {
         if let Some(ref flash_device) = self.force_flash_device {
             Some(flash_device)
@@ -212,6 +228,7 @@ impl<'a> Stage2Config {
         }
     }
 
+    #[allow(dead_code)]
     pub fn get_migrate_delay(&self) -> u64 {
         if let Some(val) = self.migrate_delay {
             val
@@ -220,6 +237,7 @@ impl<'a> Stage2Config {
         }
     }
 
+    #[allow(dead_code)]
     pub fn get_watchdogs(&self) -> Option<&Vec<WatchdogCfg>> {
         if let Some(ref val) = self.watchdogs {
             Some(val)
@@ -228,22 +246,27 @@ impl<'a> Stage2Config {
         }
     }
 
+    #[allow(dead_code)]
     pub fn get_boot_type(&'a self) -> &'a BootType {
         &self.boot_type
     }
 
+    #[allow(dead_code)]
     pub fn get_device_type(&'a self) -> &'a DeviceType {
         &self.device_type
     }
 
+    #[allow(dead_code)]
     pub fn get_balena_image(&'a self) -> &'a CheckedImageType {
         &self.balena_image
     }
 
+    #[allow(dead_code)]
     pub fn get_balena_config(&'a self) -> &'a Path {
         self.balena_config.as_path()
     }
 
+    #[allow(dead_code)]
     pub fn get_boot_backups(&'a self) -> &'a [(String, String)] {
         if let Some(ref boot_bckup) = self.boot_bckup {
             boot_bckup.as_slice()
@@ -252,10 +275,12 @@ impl<'a> Stage2Config {
         }
     }
 
+    #[allow(dead_code)]
     pub fn get_work_path(&'a self) -> &'a PathType {
         &self.work_path
     }
 
+    #[allow(dead_code)]
     pub fn get_fail_mode(&'a self) -> &'a FailMode {
         &self.fail_mode
     }
@@ -336,12 +361,13 @@ pub(crate) struct Stage2ConfigBuilder {
     has_backup: Required<bool>,
     gzip_internal: Required<bool>,
     log_level: Required<String>,
-    log_to: Optional<Stage2LogConfig>,
+    log_to: Optional<PathBuf>,
     log_console: Required<bool>,
     device_type: Required<DeviceType>,
     boot_type: Required<BootType>,
     migrate_delay: Optional<u64>,
     watchdogs: Optional<Vec<WatchdogCfg>>,
+    hacks: Optional<Vec<String>>,
 }
 
 impl<'a> Stage2ConfigBuilder {
@@ -363,6 +389,7 @@ impl<'a> Stage2ConfigBuilder {
             boot_type: Required::new("boot_type", None),
             migrate_delay: Optional::new(None),
             watchdogs: Optional::new(None),
+            hacks: Optional::new(None),
         }
     }
 
@@ -384,6 +411,7 @@ impl<'a> Stage2ConfigBuilder {
             boot_type: *self.boot_type.get()?,
             migrate_delay: *self.migrate_delay.get(),
             watchdogs: self.watchdogs.get().clone(),
+            hacks: self.hacks.get().clone(),
         };
 
         Ok(result)
@@ -444,13 +472,28 @@ impl<'a> Stage2ConfigBuilder {
         self.work_path.set_ref(val);
     }
 
+    pub fn set_hacks(&mut self, val: &Vec<String>) {
+        self.hacks.set_ref(val);
+    }
+
+    #[allow(dead_code)]
     pub fn set_boot_bckup(&mut self, boot_backup: Vec<(String, String)>) {
         self.boot_bckup.set(boot_backup);
     }
 
+    #[allow(dead_code)]
     pub fn set_has_backup(&mut self, val: bool) -> bool {
         self.has_backup.set(val);
         val
+    }
+
+    #[cfg(target_os = "windows")]
+    pub fn get_has_backup(&self) -> bool {
+        if let Ok(has_backup) = self.has_backup.get() {
+            *has_backup
+        } else {
+            false
+        }
     }
 
     pub fn set_gzip_internal(&mut self, val: bool) {
@@ -465,7 +508,7 @@ impl<'a> Stage2ConfigBuilder {
         self.log_level.set(val);
     }
 
-    pub fn set_log_to(&mut self, val: Stage2LogConfig) {
+    pub fn set_log_to(&mut self, val: PathBuf) {
         self.log_to.set(val);
     }
 

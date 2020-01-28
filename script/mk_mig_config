@@ -110,6 +110,13 @@ case ${DEVICE_TYPE} in
     RELEASE_DIR_MIGRATE="${PROJECT_ROOT}/target/armv7-unknown-linux-musleabihf/release"
     RELEASE_DIR_STAGE2="${PROJECT_ROOT}/target/armv7-unknown-linux-musleabihf/release"
     ;;
+  raspberrypi2)
+    # TODO: these are the RPI3 files, exchange
+    BOOT_DIR="${PROJECT_ROOT}/balena-boot/raspberrypi2"
+    COPY_FILES="balena.zImage bcm2710-rpi-3-b.dtb bcm2710-rpi-3-b-plus.dtb"
+    RELEASE_DIR_MIGRATE="${PROJECT_ROOT}/target/armv7-unknown-linux-musleabihf/release"
+    RELEASE_DIR_STAGE2="${PROJECT_ROOT}/target/armv7-unknown-linux-musleabihf/release"
+    ;;
   raspberrypi4-64)
     BOOT_DIR="${PROJECT_ROOT}/balena-boot/raspberrypi4-64"
     COPY_FILES="balena.zImage bcm2711-rpi-4-b.dtb"

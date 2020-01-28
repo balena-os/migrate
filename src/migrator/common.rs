@@ -25,8 +25,7 @@ pub(crate) mod path_info;
 
 pub(crate) mod file_digest;
 
-pub(crate) mod disk_util;
-
+#[cfg(target_os = "linux")]
 pub(crate) mod backup;
 
 pub(crate) mod migrate_info;
@@ -106,6 +105,7 @@ pub(crate) fn is_balena_file<P: AsRef<Path>>(file_name: P) -> Result<bool, MigEr
     }
 }
 
+#[allow(dead_code)]
 pub(crate) fn parse_file<P: AsRef<Path>>(
     fname: P,
     regex: &Regex,
@@ -283,9 +283,9 @@ pub fn check_tcp_connect(host: &str, port: u16, timeout: u64) -> Result<(), MigE
     }
 }
 
-const GIB_SIZE: u64 = 1024 * 1024 * 1024;
-const MIB_SIZE: u64 = 1024 * 1024;
 const KIB_SIZE: u64 = 1024;
+const MIB_SIZE: u64 = 1024 * KIB_SIZE;
+const GIB_SIZE: u64 = 1024 * MIB_SIZE;
 
 pub fn format_size_with_unit(size: u64) -> String {
     if size > (10 * GIB_SIZE) {

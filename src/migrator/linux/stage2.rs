@@ -32,6 +32,9 @@ use crate::{
 
 // later ensure all other required commands
 
+mod stage2_defs;
+pub(crate) use stage2_defs::*;
+
 mod fs_writer;
 
 mod flasher;
@@ -49,7 +52,7 @@ const S2_REV: u32 = 5;
 
 // TODO: set this to Info once mature
 const INIT_LOG_LEVEL: Level = Level::Trace;
-
+const DEBUG_CONSOLE_DELAY: u64 = 5;
 const MIGRATE_TEMP_DIR: &str = "/migrate_tmp";
 
 // TODO: replace removed command checks ?
@@ -126,6 +129,7 @@ impl<'a> Stage2 {
             }
             Err(why) => {
                 error!("Failed to mount boot file system, giving up: {:?}", why);
+                thread::sleep(Duration::new(2 * DEBUG_CONSOLE_DELAY, 0));
                 return Err(MigError::displayed());
             }
         };
@@ -147,6 +151,7 @@ impl<'a> Stage2 {
                     stage2_cfg_file.display(),
                     why
                 );
+                thread::sleep(Duration::new(2 * DEBUG_CONSOLE_DELAY, 0));
                 // TODO: could try to restore former boot config anyway
                 return Err(MigError::displayed());
             }
@@ -171,6 +176,8 @@ impl<'a> Stage2 {
                 warn!("mount_all returned an error: {:?}", why);
             }
         }
+
+        //thread::sleep(Duration::new(10, 0));
 
         // try switch logging to a persistent log
         let log_path = if let Some(log_path) = mounts.get_log_path() {
@@ -206,6 +213,7 @@ impl<'a> Stage2 {
                 }
             }
         } else {
+            // stop logging to memory buffer
             let _res = Logger::set_log_dest(&LogDestination::Stderr, NO_STREAM);
         }
 
@@ -220,7 +228,7 @@ impl<'a> Stage2 {
 
     #[allow(clippy::cognitive_complexity)] //TODO refactor this function to fix the clippy warning
     pub fn migrate(&mut self) -> Result<(), MigError> {
-        trace!("migrate: entered");
+        debug!("migrate: entered");
 
         let device_type = self.config.get_device_type();
         let boot_type = self.config.get_boot_type();
@@ -243,6 +251,7 @@ impl<'a> Stage2 {
             None
         };
 
+        // TODO: this will not work for grub, boot once
         let migrate_delay = self.config.get_migrate_delay();
         if migrate_delay > 0 {
             let start_time = Instant::now();
@@ -259,7 +268,10 @@ impl<'a> Stage2 {
             info!("Done waiting, continuing now");
         }
 
-        let device = device_impl::from_config(*device_type, *boot_type)?;
+        thread::sleep(Duration::from_secs(DEBUG_CONSOLE_DELAY));
+
+        let device = device_impl::from_config(device_type, *boot_type)?;
+
         if device.restore_boot(&self.mounts.borrow(), &self.config) {
             info!("Boot configuration was restored sucessfully");
             // boot config restored can reboot
@@ -270,7 +282,7 @@ impl<'a> Stage2 {
 
         sync();
         // TODO: debug, remove this
-        thread::sleep(Duration::from_secs(3));
+        thread::sleep(Duration::from_secs(DEBUG_CONSOLE_DELAY));
 
         info!("migrating {:?} boot type: {:?}", device_type, &boot_type);
 
@@ -494,19 +506,14 @@ impl<'a> Stage2 {
         // Write our buffered log to workdir before unmounting if we are not flashing anyway
 
         if self.config.is_no_flash() {
+            // TODO: check recoverable flag, but what to ?
             info!("Not flashing due to config parameter no_flash");
             Logger::flush();
             sync();
-            // let _res = Logger::set_log_dest(&LogDestination::StreamStderr, NO_STREAM);
-            let log_dest = if self.config.is_log_console() {
-                LogDestination::Stderr
-            } else {
-                LogDestination::Buffer
-            };
-
-            let _res = Logger::set_log_dest(&log_dest, NO_STREAM);
+            let _res = Logger::set_log_dest(&LogDestination::Stderr, NO_STREAM);
         }
 
+        // TODO: check this
         self.mounts.borrow_mut().unmount_boot_devs()?;
 
         info!("Unmounted file systems");
@@ -676,6 +683,7 @@ impl<'a> Stage2 {
         }
 
         // we can hope to successfully reboot again after writing config.json and system-connections
+        sync();
         self.recoverable_state = true;
 
         if let Some(data_mountpoint) = self.mounts.borrow().get_balena_data_mountpoint() {

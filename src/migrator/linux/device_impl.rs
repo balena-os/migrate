@@ -17,7 +17,7 @@ mod raspberrypi;
 const DEVICE_TREE_MODEL: &str = "/proc/device-tree/model";
 
 pub(crate) fn from_config(
-    device_type: DeviceType,
+    device_type: &DeviceType,
     boot_type: BootType,
 ) -> Result<Box<dyn Device>, MigError> {
     match device_type {
@@ -28,6 +28,9 @@ pub(crate) fn from_config(
             boot_type,
         ))),
         DeviceType::BeagleboardXM => Ok(Box::new(beaglebone::BeagleboardXM::from_boot_type(
+            boot_type,
+        ))),
+        DeviceType::RaspberryPi2 => Ok(Box::new(raspberrypi::RaspberryPi2::from_boot_type(
             boot_type,
         ))),
         DeviceType::RaspberryPi3 => Ok(Box::new(raspberrypi::RaspberryPi3::from_boot_type(

@@ -5,8 +5,8 @@ use crate::{
     common::{
         boot_manager::BootManager,
         config::migrate_config::UEnvStrategy,
+        device_info::DeviceInfo,
         migrate_info::MigrateInfo,
-        path_info::PathInfo,
         stage2_config::{Stage2Config, Stage2ConfigBuilder},
         Config, MigError, MigErrorKind,
     },
@@ -253,15 +253,16 @@ impl Device for BeagleboneGreen {
             String::from(BBG_KOPTS)
         };
 
-        self.boot_manager.setup(mig_info, s2_cfg, &kernel_opts)
+        self.boot_manager
+            .setup(mig_info, config, s2_cfg, &kernel_opts)
     }
 
     fn restore_boot(&self, mounts: &Mounts, config: &Stage2Config) -> bool {
         self.boot_manager.restore(mounts, config)
     }
 
-    fn get_boot_device(&self) -> PathInfo {
-        self.boot_manager.get_bootmgr_path()
+    fn get_boot_device(&self) -> DeviceInfo {
+        self.boot_manager.get_bootmgr_path().device_info
     }
 }
 
@@ -343,15 +344,16 @@ impl Device for BeagleboneBlack {
             String::from(BBB_KOPTS)
         };
 
-        self.boot_manager.setup(mig_info, s2_cfg, &kernel_opts)
+        self.boot_manager
+            .setup(mig_info, config, s2_cfg, &kernel_opts)
     }
 
     fn restore_boot(&self, mounts: &Mounts, config: &Stage2Config) -> bool {
         self.boot_manager.restore(mounts, config)
     }
 
-    fn get_boot_device(&self) -> PathInfo {
-        self.boot_manager.get_bootmgr_path()
+    fn get_boot_device(&self) -> DeviceInfo {
+        self.boot_manager.get_bootmgr_path().device_info
     }
 }
 
@@ -438,10 +440,11 @@ impl<'a> Device for BeagleboardXM {
             String::from(BBXM_KOPTS)
         };
 
-        self.boot_manager.setup(mig_info, s2_cfg, &kernel_opts)
+        self.boot_manager
+            .setup(mig_info, config, s2_cfg, &kernel_opts)
     }
 
-    fn get_boot_device(&self) -> PathInfo {
-        self.boot_manager.get_bootmgr_path()
+    fn get_boot_device(&self) -> DeviceInfo {
+        self.boot_manager.get_bootmgr_path().device_info
     }
 }

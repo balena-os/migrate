@@ -1,7 +1,7 @@
 use chrono::Local;
 use failure::ResultExt;
 use lazy_static::lazy_static;
-use log::{debug, error, info, trace, warn};
+use log::{debug, error, info, warn};
 use nix::mount::{mount, umount, MsFlags};
 use regex::Regex;
 use std::fs::{create_dir_all, remove_file, File};
@@ -23,7 +23,7 @@ use crate::{
         stage2_config::{Stage2Config, Stage2ConfigBuilder},
         Config, FileInfo, MigErrCtx, MigError, MigErrorKind,
     },
-    defs::{BootType, BALENA_FILE_TAG, MIG_DTB_NAME, MIG_INITRD_NAME, MIG_KERNEL_NAME},
+    defs::{BootType, BALENA_FILE_TAG, MIG_INITRD_NAME, MIG_KERNEL_NAME},
     linux::{
         linux_common::restore_backups,
         linux_defs::{
@@ -98,6 +98,10 @@ __ROOT_DEV_ID__
 // on that device.
 
 const UENV_TXT2: &str = r###"
+// TODO: use individual, correctly named files rather than one dedicated one
+pub const MIG_DTB_NAME: &str = "balena-migrate.dtb";
+
+const UENV_TXT: &str = r###"
 loadaddr=0x82000000
 fdtaddr=0x88000000
 rdaddr=0x88080000
@@ -139,6 +143,20 @@ pub(crate) struct UBootManager {
 }
 
 impl UBootManager {
+    pub fn for_stage2() -> UBootManager {
+        UBootManager {
+            bootmgr_path: None,
+            bootmgr_alt_path: None,
+            mmc_index: 1,
+            strategy: UEnvStrategy::Manual,
+            dtb_name: String::new(),
+            kernel_dest: None,
+            initrd_dest: None,
+            dtb_dest: None,
+            uenv_dest: None,
+        }
+    }
+
     pub fn new(mmc_index: u8, strategy: UEnvStrategy, dtb_name: String) -> UBootManager {
         UBootManager {
             bootmgr_path: None,
@@ -198,9 +216,7 @@ impl UBootManager {
     ) -> Result<Option<PathInfo>, MigError> {
         // this looks into /boot and /
         if let Some(bootmgr_path) = UBootManager::find_uboot_files(ROOT_PATH) {
-            return Ok(Some(
-                PathInfo::from_path(bootmgr_path, lsblk_info)?.unwrap(),
-            ));
+            return Ok(Some(PathInfo::from_path(bootmgr_path)?));
         }
 
         lazy_static! {
@@ -491,7 +507,7 @@ impl UBootManager {
             boot_req_space += if !file_exists(self.get_target_file_name(
                 &BootFileType::DtbFile,
                 Some(&bootmgr_path.path),
-                MIG_DTB_NAME,
+                self.dtb_name.clone(),
             )?) {
                 dtb_file.size
             } else {
@@ -504,15 +520,16 @@ impl UBootManager {
 
         debug!(
             "check_bootmgr_path: required: {}, available: {}",
-            boot_req_space, bootmgr_path.fs_free
+            boot_req_space, bootmgr_path.device_info.fs_free
         );
-        Ok(boot_req_space < bootmgr_path.fs_free)
+        Ok(boot_req_space < bootmgr_path.device_info.fs_free)
     }
 
     // uname setup strategy for fn setup
     fn strategy_uname(
         &mut self,
         mig_info: &MigrateInfo,
+        _config: &Config,
         s2_cfg: &mut Stage2ConfigBuilder,
         kernel_opts: &str,
         uname: &str,
@@ -556,7 +573,8 @@ impl UBootManager {
         );
 
         if let Some(dtb_src) = &mig_info.dtb_file.get(0) {
-            let dtb_dest = self.get_target_file_name(&BootFileType::DtbFile, None, MIG_DTB_NAME)?;
+            let dtb_dest =
+                self.get_target_file_name(&BootFileType::DtbFile, None, self.dtb_name.clone())?;
             let dtb_dir = if let Some(parent) = dtb_dest.parent() {
                 parent
             } else {
@@ -692,7 +710,7 @@ impl UBootManager {
 
         let dtb_dest = if let Some(dtb_file) = &mig_info.dtb_file.get(0) {
             let dtb_dest = self
-                .get_target_file_name(&BootFileType::DtbFile, None, MIG_DTB_NAME)?
+                .get_target_file_name(&BootFileType::DtbFile, None, self.dtb_name.clone())?
                 .to_path_buf();
             UBootManager::copy_and_check(&dtb_file, &dtb_dest)?;
 
@@ -751,10 +769,10 @@ impl UBootManager {
         let result = [kernel_dest, initrd_dest, dtb_dest].iter().all(|path| {
             let mut done = false;
             if let Some(ref boot_path) = self.bootmgr_path {
-                if (boot_path.mountpoint != PathBuf::from(ROOT_PATH))
-                    && path.starts_with(&boot_path.mountpoint)
+                if (boot_path.device_info.mountpoint != PathBuf::from(ROOT_PATH))
+                    && path.starts_with(&boot_path.device_info.mountpoint)
                 {
-                    match path.strip_prefix(&boot_path.mountpoint) {
+                    match path.strip_prefix(&boot_path.device_info.mountpoint) {
                         Ok(path) => {
                             paths.push(path.to_path_buf());
                             done = true
@@ -762,7 +780,7 @@ impl UBootManager {
                         Err(why) => error!(
                             "cannot remove prefix '{}' from '{}', error: {:?}",
                             path.display(),
-                            boot_path.mountpoint.display(),
+                            boot_path.device_info.mountpoint.display(),
                             why
                         ),
                     }
@@ -771,10 +789,10 @@ impl UBootManager {
                     done = true;
                 }
             } else if let Some(ref boot_path) = self.bootmgr_alt_path {
-                if (boot_path.mountpoint != PathBuf::from(ROOT_PATH))
-                    && path.starts_with(&boot_path.mountpoint)
+                if (boot_path.device_info.mountpoint != PathBuf::from(ROOT_PATH))
+                    && path.starts_with(&boot_path.device_info.mountpoint)
                 {
-                    match path.strip_prefix(&boot_path.mountpoint) {
+                    match path.strip_prefix(&boot_path.device_info.mountpoint) {
                         Ok(path) => {
                             paths.push(path_append(ROOT_PATH, path));
                             done = true
@@ -782,7 +800,7 @@ impl UBootManager {
                         Err(why) => error!(
                             "cannot remove prefix '{}' from '{}', error: {:?}",
                             path.display(),
-                            boot_path.mountpoint.display(),
+                            boot_path.device_info.mountpoint.display(),
                             why
                         ),
                     }
@@ -859,18 +877,18 @@ impl BootManager for UBootManager {
         _s2_cfg: &mut Stage2ConfigBuilder,
     ) -> Result<bool, MigError> {
         // TODO: calculate/ensure  required space on /boot /bootmgr
-        trace!("can_migrate: entered");
+        debug!("can_migrate: entered");
 
         // find the u-boot boot device
         // this is where uEnv.txt has to go
 
-        let lsblk_info = LsblkInfo::all()?;
+        let lsblk_info = LsblkInfo::new()?;
         if let Some(path) = UBootManager::find_bootmgr_path(mig_info, &lsblk_info)? {
             info!(
                 "Found uboot boot manager files in '{}', device: '{}', mountpoint: '{}', fs type: {}",
                 path.path.display(),
-                path.device_info.device.display(),
-                path.mountpoint.display(),
+                path.device_info.device,
+                path.device_info.mountpoint.display(),
                 path.device_info.fs_type,
             );
 
@@ -878,8 +896,8 @@ impl BootManager for UBootManager {
                 info!(
                     "Using boot manager path '{}', device: '{}', mountpoint: '{}', fs type: {}",
                     path.path.display(),
-                    path.device_info.device.display(),
-                    path.mountpoint.display(),
+                    path.device_info.device,
+                    path.device_info.mountpoint.display(),
                     path.device_info.fs_type,
                 );
 
@@ -912,61 +930,59 @@ impl BootManager for UBootManager {
         }
 
         // no uboot files found or not enough space there, try (again) in / or /boot
-        if let Some(path) = PathInfo::from_path(BOOT_PATH, &lsblk_info)? {
-            if self.check_bootmgr_path(&path, mig_info)? {
-                info!(
-                    "Using boot manager path '{}', device: '{}', mountpoint: '{}', fs type: {}",
-                    path.path.display(),
-                    path.device_info.device.display(),
-                    path.mountpoint.display(),
-                    path.device_info.fs_type,
-                );
+        let path = PathInfo::from_path(BOOT_PATH)?;
+        if self.check_bootmgr_path(&path, mig_info)? {
+            info!(
+                "Using boot manager path '{}', device: '{}', mountpoint: '{}', fs type: {}",
+                path.path.display(),
+                path.device_info.device,
+                path.device_info.mountpoint.display(),
+                path.device_info.fs_type,
+            );
 
-                // if no uboot files were found - this is the path for all files
-                if self.bootmgr_path.is_none() {
-                    self.bootmgr_path = Some(path.clone())
-                }
-
-                self.bootmgr_alt_path = Some(path);
-                return Ok(true);
+            // if no uboot files were found - this is the path for all files
+            if self.bootmgr_path.is_none() {
+                self.bootmgr_path = Some(path.clone())
             }
 
-            match &self.strategy {
-                UEnvStrategy::UName(_uname) => {
-                    error!(
-                        "Can't_migrate with boot manager path {}",
-                        path.path.display()
-                    );
-                    // save this anyway, gotta figure out in setup
-                    return Ok(false);
-                }
-                UEnvStrategy::Manual => {
-                    warn!(
-                        "Can't_migrate with boot manager path {} : checking for space elsewhere",
-                        path.path.display()
-                    );
-                }
+            self.bootmgr_alt_path = Some(path);
+            return Ok(true);
+        }
+
+        match &self.strategy {
+            UEnvStrategy::UName(_uname) => {
+                error!(
+                    "Can't_migrate with boot manager path {}",
+                    path.path.display()
+                );
+                // save this anyway, gotta figure out in setup
+                return Ok(false);
+            }
+            UEnvStrategy::Manual => {
+                warn!(
+                    "Can't_migrate with boot manager path {} : checking for space elsewhere",
+                    path.path.display()
+                );
             }
         }
 
-        if let Some(path) = PathInfo::from_path(ROOT_PATH, &lsblk_info)? {
-            if self.check_bootmgr_path(&path, mig_info)? {
-                info!(
-                    "Using boot manager path '{}', device: '{}, mountpoint: '{}', fs type: {}",
-                    path.path.display(),
-                    path.device_info.device.display(),
-                    path.mountpoint.display(),
-                    path.device_info.fs_type,
-                );
+        let path = PathInfo::from_path(ROOT_PATH)?;
+        if self.check_bootmgr_path(&path, mig_info)? {
+            info!(
+                "Using boot manager path '{}', device: '{}, mountpoint: '{}', fs type: {}",
+                path.path.display(),
+                path.device_info.device,
+                path.device_info.mountpoint.display(),
+                path.device_info.fs_type,
+            );
 
-                // if no uboot files were found - this is the path for all files
-                if self.bootmgr_path.is_none() {
-                    self.bootmgr_path = Some(path.clone())
-                }
-
-                self.bootmgr_alt_path = Some(path);
-                return Ok(true);
+            // if no uboot files were found - this is the path for all files
+            if self.bootmgr_path.is_none() {
+                self.bootmgr_path = Some(path.clone())
             }
+
+            self.bootmgr_alt_path = Some(path);
+            return Ok(true);
         }
 
         error!("Could not find a directory with sufficient space to store the migrate kernel, initramfs and dtb file.");
@@ -976,6 +992,7 @@ impl BootManager for UBootManager {
     fn setup(
         &mut self,
         mig_info: &MigrateInfo,
+        config: &Config,
         s2_cfg: &mut Stage2ConfigBuilder,
         kernel_opts: &str,
     ) -> Result<(), MigError> {
@@ -1006,7 +1023,7 @@ impl BootManager for UBootManager {
 
             if let Some(captures) = Regex::new(UBOOT_DRIVE_REGEX)
                 .unwrap()
-                .captures(&dev_name.to_string_lossy())
+                .captures(dev_name.as_str())
             {
                 String::from(captures.get(1).unwrap().as_str())
             } else {
@@ -1014,7 +1031,7 @@ impl BootManager for UBootManager {
                     MigErrorKind::InvParam,
                     &format!(
                         "failed to parse partition numbers from boot device name '{}'",
-                        dev_name.display()
+                        dev_name
                     ),
                 ));
             }
@@ -1023,7 +1040,7 @@ impl BootManager for UBootManager {
         match self.strategy {
             UEnvStrategy::UName(ref uname) => {
                 let uname_str = uname.clone();
-                self.strategy_uname(mig_info, s2_cfg, kernel_opts, &uname_str)
+                self.strategy_uname(mig_info, config, s2_cfg, kernel_opts, &uname_str)
             }
             UEnvStrategy::Manual => self.strategy_manual(mig_info, s2_cfg, kernel_opts, &part_num),
         }

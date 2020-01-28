@@ -11,6 +11,7 @@ use std::str;
 use std::thread;
 use std::time::{Duration, SystemTime};
 
+use crate::defs::PART_FSTYPE;
 use crate::{
     common::{
         call, call_with_stdin,
@@ -19,11 +20,11 @@ use crate::{
         stage2_config::{CheckedFSDump, CheckedImageType, Stage2Config},
         MigErrCtx, MigError, MigErrorKind,
     },
-    defs::{DEF_BLOCK_SIZE, PART_INFO},
+    defs::{DEF_BLOCK_SIZE, PART_NAME},
     linux::{
         linux_common::whereis,
         linux_defs::{EXT_FMT_CMD, FAT_FMT_CMD, LSBLK_CMD, PARTPROBE_CMD, SFDISK_CMD, TAR_CMD},
-        lsblk_info::{LsblkDevice, LsblkInfo},
+        lsblk_info::block_device::BlockDevice,
         stage2::{mounts::Mounts, FlashResult},
     },
 };
@@ -84,7 +85,7 @@ pub(crate) fn write_balena_os(
     if let CheckedImageType::FileSystems(ref fs_dump) = config.get_balena_image() {
         let res = partition_sfdisk(device, fs_dump, &cmd_path);
         if let FlashResult::Ok = res {
-            let lsblk_dev = match part_reread(device, 30, PART_INFO.len(), &cmd_path) {
+            let lsblk_dev = match part_reread(device, 30, PART_NAME.len(), &cmd_path) {
                 Ok(lsblk_device) => lsblk_device,
                 Err(why) => {
                     error!(
@@ -383,7 +384,7 @@ fn sub_format(
 }
 
 fn format(
-    lsblk_dev: &LsblkDevice,
+    lsblk_dev: &BlockDevice,
     fs_dump: &CheckedFSDump,
     cmd_path: &HashMap<&str, String>,
 ) -> bool {
@@ -430,18 +431,18 @@ fn format(
 
         let mut dev_idx: usize = 0;
         let mut part_idx: usize = 0;
-        let has_ext_part = children.len() > PART_INFO.len();
+        let has_ext_part = children.len() > PART_NAME.len();
         let dev_path = PathBuf::from("/dev");
 
-        while (dev_idx < children.len()) && (part_idx < PART_INFO.len()) {
-            let index = if let Some(index) = children[dev_idx].index {
-                index
-            } else {
-                (dev_idx + 1) as u16
-            };
+        while (dev_idx < children.len())
+            && (part_idx < PART_NAME.len())
+            && (part_idx < PART_FSTYPE.len())
+        {
+            let index = children[dev_idx].index;
 
             if index != 4 || !has_ext_part {
-                let (part_label, part_fs_type) = PART_INFO[part_idx];
+                let part_label = PART_NAME[part_idx];
+                let part_fs_type = PART_FSTYPE[part_idx];
                 let part_path = path_append(&dev_path, &children[dev_idx].name);
 
                 let is_fat = part_fs_type.contains("fat");
@@ -477,11 +478,11 @@ fn format(
             dev_idx += 1;
         }
 
-        if part_idx < PART_INFO.len() {
+        if part_idx < PART_NAME.len() {
             error!(
                 "format: not all partitions were formatted: {}/{}",
                 part_idx,
-                PART_INFO.len()
+                PART_NAME.len()
             );
             false
         } else {
@@ -699,7 +700,7 @@ fn part_reread(
     timeout: u64,
     num_partitions: usize,
     cmd_path: &HashMap<&str, String>,
-) -> Result<LsblkDevice, MigError> {
+) -> Result<BlockDevice, MigError> {
     debug!(
         "part_reread: entered with: '{}', timeout: {}, num_partitions: {}",
         device.display(),
@@ -737,7 +738,7 @@ fn part_reread(
             "part_reread: calling LsblkInfo::for_device('{}')",
             device.display()
         );
-        let lsblk_dev = LsblkInfo::for_device(device)?;
+        let lsblk_dev = BlockDevice::from_device_path(device)?;
         if let Some(children) = &lsblk_dev.children {
             if children.len() >= num_partitions {
                 debug!(

@@ -7,7 +7,6 @@ use std::path::PathBuf;
 
 use std::time::SystemTime;
 
-use crate::linux::lsblk_info::LsblkInfo;
 use crate::{
     common::{
         boot_manager::BootManager,
@@ -95,13 +94,7 @@ impl BootManager for RaspiBootManager<'_> {
             return Ok(false);
         }
 
-        let lsblk_info = LsblkInfo::all()?;
-        self.bootmgr_path = if let Some(boot_path) = PathInfo::from_path(BOOT_PATH, &lsblk_info)? {
-            Some(boot_path)
-        } else {
-            error!("Could not get path info from '{}'", BOOT_PATH);
-            return Err(MigError::displayed());
-        };
+        self.bootmgr_path = Some(PathInfo::from_path(BOOT_PATH)?);
 
         // TODO: provide a way to supply digests for DTB files
 
@@ -144,6 +137,7 @@ impl BootManager for RaspiBootManager<'_> {
     fn setup(
         &mut self,
         mig_info: &MigrateInfo,
+        _config: &Config,
         s2_cfg: &mut Stage2ConfigBuilder,
         kernel_opts: &str,
     ) -> Result<(), MigError> {
@@ -289,6 +283,7 @@ impl BootManager for RaspiBootManager<'_> {
         }
 
         let balena_config = is_balena_file(&config_path)?;
+        // TODO: try to make sure valid configs, are saved independently from migrator tag
         if !balena_config {
             // backup config.txt
             let backup_file = format!("{}.{}", RPI_CONFIG_TXT, system_time.as_secs());
@@ -331,6 +326,9 @@ impl BootManager for RaspiBootManager<'_> {
                 MigErrorKind::Upstream,
                 &format!("Failed to open file '{}'", config_path.display()),
             ))?;
+
+            // TODO: remove potentially harmfull configs
+
             for line in BufReader::new(config_file).lines() {
                 match line {
                     Ok(line) => {

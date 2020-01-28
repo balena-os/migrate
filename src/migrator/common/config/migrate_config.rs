@@ -9,7 +9,6 @@ use crate::{
 use crate::common::config::balena_config::FileRef;
 use serde::{Deserialize, Serialize};
 
-const MODULE: &str = "common::config::migrate_config";
 const NO_NMGR_FILES: &[PathBuf] = &[];
 
 const NO_BACKUP_VOLUMES: &[VolumeConfig] = &[];
@@ -32,10 +31,7 @@ impl MigMode {
             "pretend" => Ok(MigMode::Pretend),
             _ => Err(MigError::from_remark(
                 MigErrorKind::InvParam,
-                &format!(
-                    "{}::new: invalid value for parameter mode: '{}'",
-                    MODULE, mode
-                ),
+                &format!("new: invalid value for parameter mode: '{}'", mode),
             )),
         }
     }
@@ -93,11 +89,25 @@ pub(crate) enum MigrateWifis {
     List(Vec<String>),
 }
 
+#[derive(Debug, Deserialize, Clone)]
+pub(crate) enum DeviceSpec {
+    #[serde(rename = "uuid")]
+    Uuid(String),
+    #[serde(rename = "partuuid")]
+    PartUuid(String),
+    #[serde(rename = "devpath")]
+    DevicePath(PathBuf),
+    #[serde(rename = "path")]
+    Path(PathBuf),
+    #[serde(rename = "label")]
+    Label(String),
+}
+
 #[derive(Debug, Deserialize)]
-pub struct LogConfig {
+pub(crate) struct LogConfig {
     pub console: Option<bool>,
     pub level: Option<String>,
-    pub drive: Option<PathBuf>,
+    pub drive: Option<DeviceSpec>,
 }
 
 #[derive(Debug, Deserialize)]
@@ -127,7 +137,6 @@ pub(crate) struct MigrateConfig {
 }
 
 impl<'a> MigrateConfig {
-    // TODO: implement log & backup config getters
     pub fn default() -> MigrateConfig {
         MigrateConfig {
             work_dir: None,
@@ -186,6 +195,8 @@ impl<'a> MigrateConfig {
         }
     }
 
+    // defaults are implemented in getter functions
+
     pub fn is_gzip_internal(&self) -> bool {
         if let Some(val) = self.gzip_internal {
             val
@@ -194,6 +205,7 @@ impl<'a> MigrateConfig {
         }
     }
 
+    #[cfg(target_os = "linux")]
     pub fn is_tar_internal(&self) -> bool {
         if let Some(val) = self.tar_internal {
             val
@@ -268,14 +280,6 @@ impl<'a> MigrateConfig {
         }
     }
 
-    pub fn get_force_flash_device(&'a self) -> Option<&'a Path> {
-        if let Some(ref val) = self.force_flash_device {
-            Some(val)
-        } else {
-            None
-        }
-    }
-
     pub fn get_reboot(&'a self) -> &'a Option<u64> {
         &self.reboot
     }
@@ -314,32 +318,6 @@ impl<'a> MigrateConfig {
         }
     }
 
-    // The following functions can only be safely called after check has succeeded
-
-    pub fn get_work_dir(&'a self) -> &'a Path {
-        if let Some(ref dir) = self.work_dir {
-            dir
-        } else {
-            panic!("work_dir is not set");
-        }
-    }
-
-    pub fn get_kernel_path(&'a self) -> &'a FileRef {
-        if let Some(ref path) = self.kernel {
-            path
-        } else {
-            panic!("kernel path is not set");
-        }
-    }
-
-    pub fn get_initrd_path(&'a self) -> &'a FileRef {
-        if let Some(ref path) = self.initrd {
-            path
-        } else {
-            panic!("initramfs path is not set");
-        }
-    }
-
     pub fn get_dtb_refs(&'a self) -> Option<&'a Vec<FileRef>> {
         if let Some(ref path) = self.device_tree {
             Some(path)
@@ -348,7 +326,7 @@ impl<'a> MigrateConfig {
         }
     }
 
-    pub fn get_log_device(&'a self) -> Option<&'a Path> {
+    pub fn get_log_device(&'a self) -> Option<&'a DeviceSpec> {
         if let Some(ref log_info) = self.log {
             if let Some(ref val) = log_info.drive {
                 return Some(val);
@@ -373,5 +351,31 @@ impl<'a> MigrateConfig {
             }
         }
         false
+    }
+
+    // The following functions can only be safely called after check has succeeded
+
+    pub fn get_work_dir(&'a self) -> &'a Path {
+        if let Some(ref dir) = self.work_dir {
+            dir
+        } else {
+            panic!("work_dir is not set");
+        }
+    }
+
+    pub fn get_kernel_path(&'a self) -> &'a FileRef {
+        if let Some(ref path) = self.kernel {
+            path
+        } else {
+            panic!("kernel path is not set");
+        }
+    }
+
+    pub fn get_initrd_path(&'a self) -> &'a FileRef {
+        if let Some(ref path) = self.initrd {
+            path
+        } else {
+            panic!("initramfs path is not set");
+        }
     }
 }

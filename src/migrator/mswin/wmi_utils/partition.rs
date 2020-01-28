@@ -1,12 +1,11 @@
-use super::{LogicalDrive, QueryRes, NS_CVIM2};
+use super::{LogicalDisk, QueryRes, NS_CVIM2};
 use crate::{
     common::{MigError, MigErrorKind},
     mswin::win_api::wmi_api::WmiAPI,
 };
 
 use log::debug;
-
-const MODULE: &str = "mswin::wmi_utils::partition";
+use std::fmt;
 
 #[derive(Debug, Clone)]
 pub(crate) struct Partition {
@@ -22,6 +21,26 @@ pub(crate) struct Partition {
     start_offset: u64,
 }
 
+impl fmt::Display for Partition {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        write!(
+            f,
+            "PARTITION[{},id:{},diskIdx:{},partidx:{},offset:{},blocks:{},boot:{},bootpart:{},size:{},type:{}]",
+            self.name,
+            self.device_id,
+            self.disk_index,
+            self.partition_index,
+            self.start_offset,
+            self.number_of_blocks,
+            self.bootable,
+            self.boot_partition,
+            self.size,
+            self.ptype
+        )
+    }
+}
+
+#[allow(dead_code)]
 impl<'a> Partition {
     pub(crate) fn new(disk_index: usize, res_map: QueryRes) -> Result<Partition, MigError> {
         let partition_index = res_map.get_int_property("Index")? as u64;
@@ -54,7 +73,7 @@ impl<'a> Partition {
         let device_id = res_map.get_string_property("DeviceID")?;
         // Get DiskIndex from Win32_DiskDriveToDiskPartition
         let query = &format!("ASSOCIATORS OF {{Win32_DiskPartition.DeviceID='{}'}} WHERE AssocClass = Win32_DiskDriveToDiskPartition", device_id);
-        let mut q_res = WmiAPI::get_api(NS_CVIM2)?.raw_query(query)?;
+        let q_res = WmiAPI::get_api(NS_CVIM2)?.raw_query(query)?;
         if q_res.len() == 1 {
             let disk_index = QueryRes::new(&q_res[0]).get_int_property("Index")? as usize;
             let partition_index = res_map.get_int_property("Index")? as u64;
@@ -85,8 +104,8 @@ impl<'a> Partition {
             Err(MigError::from_remark(
                 MigErrorKind::NotFound,
                 &format!(
-                    "{}::from_query: unable to find disk from partition {}",
-                    MODULE, device_id
+                    "from_query: unable to find disk from partition {}",
+                    device_id
                 ),
             ))
         }
@@ -94,7 +113,7 @@ impl<'a> Partition {
 
     pub fn get_boot_partition() -> Result<Vec<Partition>, MigError> {
         const QUERY: &str = "SELECT Caption, Index, DeviceID, Bootable, Size, NumberOfBlocks, Type, BootPartition, StartingOffset FROM Win32_DiskPartition WHERE BootPartition=true";
-        let mut q_res = WmiAPI::get_api(NS_CVIM2)?.raw_query(QUERY)?;
+        let q_res = WmiAPI::get_api(NS_CVIM2)?.raw_query(QUERY)?;
         let mut result: Vec<Partition> = Vec::new();
         for res in q_res {
             result.push(Partition::from_query(&QueryRes::new(&res))?);
@@ -103,12 +122,9 @@ impl<'a> Partition {
         Ok(result)
     }
 
-    pub fn query_logical_drive(&self) -> Result<Option<LogicalDrive>, MigError> {
+    pub fn query_logical_drive(&self) -> Result<Option<LogicalDisk>, MigError> {
         let query = &format!("ASSOCIATORS OF {{Win32_DiskPartition.DeviceID='{}'}} WHERE AssocClass = Win32_LogicalDiskToPartition",self.device_id);
-        debug!(
-            "{}::query_logical_drive: performing WMI Query: '{}'",
-            MODULE, query
-        );
+        debug!("query_logical_drive: performing WMI Query: '{}'", query);
 
         let mut q_res = WmiAPI::get_api(NS_CVIM2)?.raw_query(query)?;
         match q_res.len() {
@@ -116,20 +132,19 @@ impl<'a> Partition {
             1 => {
                 let res = q_res.pop().unwrap();
                 let res_map = QueryRes::new(&res);
-                Ok(Some(LogicalDrive::new(res_map)?))
+                Ok(Some(LogicalDisk::new(res_map)?))
             }
             _ => Err(MigError::from_remark(
                 MigErrorKind::InvParam,
                 &format!(
-                    "{}::query_logical_drive: invalid result cout for query, expected 1, got  {}",
-                    MODULE,
+                    "query_logical_drive: invalid result cout for query, expected 1, got  {}",
                     q_res.len()
                 ),
             )),
         }
     }
 
-    pub fn get_hd_index(&self) -> usize {
+    pub fn get_disk_index(&self) -> usize {
         self.disk_index
     }
 
@@ -168,6 +183,11 @@ impl<'a> Partition {
     pub fn get_device_id(&'a self) -> &'a str {
         &self.device_id
     }
+
+    pub fn is_gpt_partition(&self) -> bool {
+        self.ptype.starts_with("GPT:")
+    }
+
     /*
         pub fn get_device(&'a self) -> &'a str {
             &self.device

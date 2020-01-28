@@ -10,12 +10,8 @@ use clap::{App, Arg};
 
 use super::{MigErrCtx, MigError, MigErrorKind};
 
-/* moved into migrate_config
-pub(crate) mod volume_config;
-pub(crate) use backup_config::BackupConfig;
-*/
 pub(crate) mod migrate_config;
-pub(crate) use migrate_config::{MigMode, MigrateConfig, MigrateWifis};
+pub(crate) use migrate_config::{MigMode, MigrateConfig};
 
 pub(crate) mod balena_config;
 pub(crate) use balena_config::BalenaConfig;
@@ -27,18 +23,6 @@ use crate::{
     common::{file_exists, path_append},
     defs::{DEFAULT_MIGRATE_CONFIG, VERSION},
 };
-
-const MODULE: &str = "migrator::common::config";
-
-// TODO: add trait ToYaml and implement for all sections
-
-/*
-pub trait YamlConfig {
-    // fn to_yaml(&self, prefix: &str) -> String;
-    // fn from_yaml(&mut self, yaml: &Yaml) -> Result<(), MigError>;
-    fn from_yaml(yaml: &Yaml) -> Result<Box<Self>, MigError>;
-}
-*/
 
 #[derive(Debug, Deserialize)]
 pub(crate) struct Config {
@@ -65,27 +49,27 @@ impl<'a> Config {
                     .short("i")
                     .long("image")
                     .value_name("FILE")
-                    .help("use balena OS image"),
+                    .help("Select balena OS image"),
             )
             .arg(
                 Arg::with_name("config")
                     .short("c")
                     .long("config")
                     .value_name("FILE")
-                    .help("use config file"),
+                    .help("Select balena-migrate config file"),
             )
             .arg(
                 Arg::with_name("work_dir")
                     .short("w")
                     .long("work_dir")
                     .value_name("DIR")
-                    .help("Work directory"),
+                    .help("Select working directory"),
             )
             .arg(
                 Arg::with_name("verbose")
                     .short("v")
                     .multiple(true)
-                    .help("Sets the level of verbosity"),
+                    .help("Set the level of verbosity"),
             )
             .get_matches();
 
@@ -109,7 +93,7 @@ impl<'a> Config {
         // config file can be specified on command line
         // if not specified it will be looked for in ./{DEFAULT_MIGRATE_CONFIG}
         // or work_dir/{DEFAULT_MIGRATE_CONFIG}
-        // If none is fouund a default is created
+        // If none is found a default is created
 
         let work_dir = if arg_matches.is_present("work_dir") {
             if let Some(dir) = arg_matches.value_of("work_dir") {
@@ -155,6 +139,7 @@ impl<'a> Config {
                 PathBuf::from(DEFAULT_MIGRATE_CONFIG)
             };
 
+            // try to locate config in absolute path or relative to tmp_work path established above
             if config_path.is_absolute() {
                 Some(config_path)
             } else if let Ok(abs_path) = config_path.canonicalize() {
@@ -169,7 +154,7 @@ impl<'a> Config {
         let mut config = if let Some(config_path) = config_path {
             if file_exists(&config_path) {
                 let mut config = Config::from_file(&config_path)?;
-                // use config path as workdir if nothing other was defined
+                // use config path as workdir if nothing else was defined
                 if !config.migrate.has_work_dir() && work_dir.is_none() {
                     config
                         .migrate
@@ -189,7 +174,7 @@ impl<'a> Config {
         }
 
         if !config.migrate.has_work_dir() {
-            error!("no workdir specified and no configuration found");
+            error!("no working directory specified and no configuration found");
             return Err(MigError::displayed());
         }
 
@@ -204,19 +189,13 @@ impl<'a> Config {
             }
         }
 
+        debug!("new: migrate mode: {:?}", config.migrate.get_mig_mode());
+
         if arg_matches.is_present("image") {
             if let Some(image) = arg_matches.value_of("image") {
                 config.balena.set_image_path(image);
             }
         }
-
-        debug!(
-            "{}::new: migrate mode: {:?}",
-            MODULE,
-            config.migrate.get_mig_mode()
-        );
-
-        debug!("{}::new: got: {:?}", MODULE, config);
 
         config.check()?;
 
@@ -231,24 +210,7 @@ impl<'a> Config {
         }
     }
 
-    // TODO: reimplement in Debug mode with serde (de)serialize
-
-    /*
-    fn get_debug_config(&mut self, yaml: &Yaml) -> Result<(), MigError> {
-        if let Some(section) = get_yaml_val(yaml, &["debug"])? {
-            self.debug = *DebugConfig::from_yaml(section)?;
-        }
-        Ok(())
-    }
-
-
-    fn print_debug_config(&self, prefix: &str, buffer: &mut String) -> () {
-        *buffer += &self.debug.to_yaml(prefix)
-    }
-    */
-
     fn from_string(config_str: &str) -> Result<Config, MigError> {
-        debug!("{}::from_string: entered", MODULE);
         Ok(
             serde_yaml::from_str(config_str).context(MigErrCtx::from_remark(
                 MigErrorKind::Upstream,
@@ -259,18 +221,14 @@ impl<'a> Config {
 
     fn from_file<P: AsRef<Path>>(file_name: &P) -> Result<Config, MigError> {
         let file_name = file_name.as_ref();
-        debug!("{}::from_file: {} entered", MODULE, file_name.display());
         info!("Using config file '{}'", file_name.display());
         Config::from_string(&read_to_string(file_name).context(MigErrCtx::from_remark(
             MigErrorKind::Upstream,
-            &format!(
-                "{}::from_file: failed to read {}",
-                MODULE,
-                file_name.display()
-            ),
+            &format!("from_file: failed to read {}", file_name.display()),
         ))?)
     }
 
+    // config is checed for validity at the end, when all has been set
     fn check(&self) -> Result<(), MigError> {
         self.migrate.check()?;
         let mode = self.migrate.get_mig_mode();
@@ -284,7 +242,14 @@ impl<'a> Config {
 mod tests {
     use super::*;
     use crate::{
-        common::config::{balena_config::FileRef, migrate_config::MigrateWifis},
+        common::{
+            config::{
+                balena_config::FileRef,
+                balena_config::ImageType,
+                migrate_config::{DeviceSpec, MigrateWifis},
+            },
+            file_digest::HashInfo,
+        },
         defs::FailMode,
     };
     use std::path::PathBuf;
@@ -302,302 +267,326 @@ mod tests {
             _ => panic!("unexpected result from get_wifis"),
         };
         assert_eq!(config.migrate.get_reboot(), &Some(10));
+        assert_eq!(config.migrate.get_log_console(), true);
+        if let Some(dev_spec) = config.migrate.get_log_device() {
+            if let DeviceSpec::DevicePath(path) = dev_spec {
+                assert_eq!(path, &PathBuf::from("/dev/sda1"));
+            }
+        }
+        assert_eq!(config.migrate.get_log_level(), "debug");
         assert_eq!(
             config.migrate.get_kernel_path(),
             &FileRef {
-                path: PathBuf::from("balena_x86_64.migrate.kernel"),
-                hash: None
+                path: PathBuf::from("balena.zImage"),
+                hash: Some(HashInfo::Md5(String::from(
+                    "f1b3e346889e190279f43e984c7b693a"
+                )))
             }
         );
         assert_eq!(
             config.migrate.get_initrd_path(),
             &FileRef {
-                path: PathBuf::from("balena_x86_64.migrate.initramfs"),
-                hash: None
+                path: PathBuf::from("balena.initrd.cpio.gz"),
+                hash: Some(HashInfo::Md5(String::from(
+                    "f1b3e346889e190279f43e984c7b693a"
+                )))
             }
         );
-        assert_eq!(config.migrate.get_fail_mode(), &FailMode::Reboot);
-        /*        assert_eq!(
-                    config.migrate.get_force_slug(),
-                    Some(String::from("dummy_device"))
-                );
-        */
-        // TODO: more cecks on backup
+
+        // TODO: more checks on backup
         let bckup_vols = config.migrate.get_backup_volumes();
         assert_eq!(bckup_vols.len(), 3);
         assert_eq!(bckup_vols.get(0).unwrap().volume, "test volume 1");
 
-        // assert_eq!(config.balena.get_image_path(), Path::new("image.gz"));
+        assert_eq!(config.migrate.get_fail_mode(), &FailMode::Reboot);
+        assert_eq!(config.migrate.get_nwmgr_files().len(), 1);
+        assert_eq!(config.migrate.is_gzip_internal(), true);
+        assert_eq!(
+            config.migrate.get_kernel_opts(),
+            Some(String::from("panic=20"))
+        );
+        assert_eq!(config.migrate.get_delay(), 60);
+        assert_eq!(config.migrate.require_nwmgr_configs(), false);
+        if let Some(watchdogs) = config.migrate.get_watchdogs() {
+            assert_eq!(watchdogs.len(), 1_);
+            assert_eq!(watchdogs[0].path, PathBuf::from("/dev/watchdog1"));
+            assert_eq!(watchdogs[0].close, Some(false));
+            assert_eq!(watchdogs[0].interval, Some(10));
+        } else {
+            panic!("No Watchdogs found");
+        }
+
+        if let ImageType::Flasher(comp) = config.balena.get_image_path() {
+            assert_eq!(
+                comp,
+                &FileRef {
+                    path: PathBuf::from(
+                        "balena-cloud-bobdev-intel-nuc-2.39.0+rev3-dev-v10.0.3.img.gz"
+                    ),
+                    hash: Some(HashInfo::Md5(String::from(
+                        "4834c4ffb3ee0cf0be850242a693c9b6",
+                    )))
+                }
+            );
+        } else {
+            panic!("Invalid image type");
+        };
+
         assert_eq!(
             config.balena.get_config_path(),
             &FileRef {
                 path: PathBuf::from("config.json"),
-                hash: None
+                hash: Some(HashInfo::Md5(String::from(
+                    "4834c4ffb3ee0cf0be850242a693c9b6"
+                )))
             }
         );
-        /*
-        assert_eq!(config.balena.get_app_name(), Some("test"));
-        assert_eq!(config.balena.get_api_host(), "api1.balena-cloud.com");
-        assert_eq!(config.balena.get_api_port(), 444);
-        assert_eq!(config.balena.is_api_check(), false);
-        assert_eq!(config.balena.get_api_key(), Some(String::from("secret")));
-        */
-        assert_eq!(config.balena.is_check_vpn(), false);
-        assert_eq!(config.balena.get_check_timeout(), 42);
+
+        assert_eq!(config.balena.is_check_vpn(), true);
+        assert_eq!(config.balena.get_check_timeout(), 20);
     }
 
     #[test]
-    fn read_conf_ok2() {
+    fn read_conf_ok2() -> () {
         let _config = Config::from_string(TEST_FS_CONFIG_OK).unwrap();
     }
 
     /*
-
-        fn assert_test_config_ok(config: &Config) -> () {
-            match config.migrate.mode {
-                MigMode::IMMEDIATE => (),
-                _ => {
-                    panic!("unexpected migrate mode");
+            fn assert_test_config_ok(config: &Config) -> () {
+                match config.migrate.mode {
+                    MigMode::IMMEDIATE => (),
+                    _ => {
+                        panic!("unexpected migrate mode");
+        fn read_conf_ok2() {
+            // same as above except for fs tpe image so just test image
+            let config = Config::from_string(TEST_FS_CONFIG_OK).unwrap();
+            if let ImageType::FileSystems(dump) = config.balena.get_image_path() {
+                assert_eq!(dump.device_slug, String::from("beaglebone-black"));
+                assert_eq!(dump.extended_blocks, 2162688);
+                assert_eq!(dump.max_data, Some(true));
+                assert_eq!(dump.mkfs_direct, Some(true));
+                if let Some(part_check) = &dump.check {
+                    if let PartCheck::ReadOnly = part_check {
+                    } else {
+                        panic!("wrong PartCheck")
+                    }
+                } else {
+                    panic!("PartCheck missing")
                 }
+
+                assert_eq!(dump.boot.blocks, 81920);
+                assert_eq!(
+                    dump.boot.archive,
+                    FileRef {
+                        path: PathBuf::from("resin-boot.tgz"),
+                        hash: Some(HashInfo::Md5(String::from("1234567890")))
+                    }
+                );
+                assert_eq!(dump.root_a.blocks, 638976);
+                assert_eq!(
+                    dump.root_a.archive,
+                    FileRef {
+                        path: PathBuf::from("resin-rootA.tgz"),
+                        hash: None
+                    }
+                );
+                assert_eq!(dump.root_b.blocks, 638976);
+                assert_eq!(
+                    dump.root_b.archive,
+                    FileRef {
+                        path: PathBuf::from("resin-rootB.tgz"),
+                        hash: None
+                    }
+                );
+                assert_eq!(dump.state.blocks, 40960);
+                assert_eq!(
+                    dump.state.archive,
+                    FileRef {
+                        path: PathBuf::from("resin-state.tgz"),
+                        hash: None
+                    }
+                );
+                assert_eq!(dump.data.blocks, 2105344);
+                assert_eq!(
+                    dump.data.archive,
+                    FileRef {
+                        path: PathBuf::from("resin-data.tgz"),
+                        hash: None
+                    }
+                );
+            } else {
+                panic!("Invalid image type");
             };
-
-            assert!(config.migrate.all_wifis == true);
-
-            if let Some(i) = config.migrate.reboot {
-                assert!(i == 10);
-            } else {
-                panic!("missing parameter migarte.reboot");
-            }
-
-            if let Some(ref log_to) = config.migrate.log_to {
-                assert!(log_to.drive == "/dev/sda1");
-                assert!(log_to.fs_type == "ext4");
-            } else {
-                panic!("no log config found");
-            }
-
-            if let Some(ref balena) = config.balena {
-                assert!(balena.get_image_path().to_string_lossy() == "image.gz");
-                assert!(balena.get_config_path().to_string_lossy() == "config.json");
-            } else {
-                panic!("no balena config found");
-            }
-
-            config.check().unwrap();
-        }
-
-
-
-        #[test]
-        fn read_write() -> () {
-            let mut config = Config::default();
-            config.from_string(TEST_CONFIG).unwrap();
-
-            let out = config.to_yaml("");
-
-            let mut new_config = Config::default();
-            new_config.from_string(&out).unwrap();
-            assert_test_config1(&new_config);
-
-            ()
         }
     */
-
     const TEST_DD_CONFIG_OK: &str = r###"
 migrate:
-  # mode AGENT, IMMEDIATE, PRETEND
-  #  AGENT - not yet implemented, connects to balena-cloud, controlled by dashboard
-  #  IMMEDIATE: migrates the device
-  #   not yet implemented:
-  #     if app, api, api_key, are given in balena section, config & image can be downloaded
-  #  PRETEND: only validates conditions for IMMEDIATE, changes nothing
+  ## migrate mode
   mode: immediate
-  # where all files are expected to be found
-  work_dir: './work/'
-  # migrate all wifi configurations found on device
-  all_wifis: true
-  # migrate only the following wifi ssid's (overrides all_wifis)
+  work_dir: ./work
+  all_wifis: false
   wifis:
     - 'Xcover'
     - 'QIFI'
     - 'bla'
-  # reboot automatically after n seconds
   reboot: 10
-  # not yet implemented, subject to change
-  log_to:
+  log:
+    console: true
     drive: "/dev/sda1"
-    fs_type: ext4
-  # the migrate kernel, might be downloaded automatically in future versions
-  kernel:
-    path: "balena_x86_64.migrate.kernel"
-  # the migrate initramfs, might be downloaded automatically in future versions
-  initrd:
-    path: "balena_x86_64.migrate.initramfs"
-  # backup configuration
+    level: debug
+  kernel: 
+    path: balena.zImage
+    hash: 
+      md5: f1b3e346889e190279f43e984c7b693a
+  initrd: 
+    path: balena.initrd.cpio.gz
+    hash:
+      md5: f1b3e346889e190279f43e984c7b693a
   backup:
-   - volume: "test volume 1"
-     items:
-     - source: /home/thomas/develop/balena.io/support
-       target: "target dir 1.1"
-     - source: "/home/thomas/develop/balena.io/customer/sonder/unitdata/UnitData files"
-       target: "target dir 1.2"
-   - volume: "test volume 2"
-     items:
-     - source: "/home/thomas/develop/balena.io/migrate/migratecfg/balena-migrate"
-       target: "target file 2.1"
-     - source: "/home/thomas/develop/balena.io/migrate/migratecfg/init-scripts"
-       target: "target dir 2.2"
-       filter: 'balena-.*'
-   - volume: "test_volume_3"
-     items:
+    - volume: "test volume 1"
+      items:
+      - source: /home/thomas/develop/balena.io/support
+        target: "target dir 1.1"
+      - source: "/home/thomas/develop/balena.io/customer/sonder/unitdata/UnitData files"
+        target: "target dir 1.2"
+    - volume: "test volume 2"
+      items:
+      - source: "/home/thomas/develop/balena.io/migrate/migratecfg/balena-migrate"
+        target: "target file 2.1"
+      - source: "/home/thomas/develop/balena.io/migrate/migratecfg/init-scripts"
+        target: "target dir 2.2"
+        filter: 'balena-.*'
+    - volume: "test_volume_3"
+      items:
       - source: "/home/thomas/develop/balena.io/migrate/migratecfg/init-scripts"
         filter: 'balena-.*'
-  ## what to do on a recoverable fail in phase 2, either reboot or rescueshell
   fail_mode: Reboot
-  ## forced use of a device slug other than the one detected
-  force_slug: 'dummy_device'
+  nwmgr_files:
+    - eth0_static
+  gzip_internal: true
+  kernel_opts: "panic=20"
+  delay: 60
+  watchdogs:
+    - path: /dev/watchdog1
+      interval: 10
+      close: false
+  require_nwmgr_config: false
 balena:
-  ## the balena image version to download (not yet implemented)
-  version:
-  ## the balena image to flash
   image:
     dd:
-      path: image.gz
-  ## the balena config file to use (can be auto generated in future versions)
-  config:
-    path: "config.json"
-  ## The balena app name - needed for download (not yet implemented) checked against present config.json
-  app_name: 'test'
-  ## Api to use for connectivity check, agent mode, downloads etc
+      path: balena-cloud-bobdev-intel-nuc-2.39.0+rev3-dev-v10.0.3.img.gz
+      hash:
+        md5: 4834c4ffb3ee0cf0be850242a693c9b6
+  config: 
+    path: config.json
+    hash:
+      md5: 4834c4ffb3ee0cf0be850242a693c9b6    
+  app_name: support-multi
   api:
-    host: "api1.balena-cloud.com"
-    port: 444
-    check: false
-    key: "secret"
-  ## VPN to use for connectivity check
-  check_vpn: false
-  ## connectivity check timeout
-  check_timeout: 42
-  ## Api key  to use for agent mode, downloads etc
+    host: api.balena-cloud.com
+    port: 443
+    check: true
+  check_vpn: true
+  check_timeout: 20
 debug:
-  ## flash to a device other than the boot device
-  force_flash_device: '/dev/sdb'
-  ## run migration up to phase2 but stop & reboot before flashing
   no_flash: true
+  force_flash_device: '/dev/sdb'
 "###;
     const TEST_FS_CONFIG_OK: &str = r###"
 migrate:
-  # migrate mode
-  # immediate migrate
-  # pretend : just run stage 1 without modifying anything
-  # extract : do not migrate extract image instead
+  ## migrate mode
   mode: immediate
-  # where required files are expected
-  work_dir: '.'
-  # migrate all found wifi configurations
-  all_wifis: true
-  # automatically reboot into stage 2 after n seconds
-  reboot: 5
+  work_dir: ./work
+  all_wifis: false
+  wifis:
+    - 'Xcover'
+    - 'QIFI'
+    - 'bla'
+  reboot: 10
   log:
-    # use this drive for stage2 persistent logging
-    drive: '/dev/sda1'
-    # stage2 log level (trace, debug, info, warn, error)
-    level: 'debug'
-  # path to stage2 kernel - must be a balena os kernel matching the device type
-  kernel:
-    path: 'balena.zImage'
-  # path to stage2 initramfs
-  initrd:
-    path: 'balena.initramfs.cpio.gz'
-  # path to stage2 device tree blob - better be a balena dtb matching the device type
-  dtb_path: 'balena.dtb'
-  # backup configuration, configured files are copied to balena and mounted as volumes
+    console: true
+    drive: "/dev/sda1"
+    level: debug
+  kernel: 
+    path: balena.zImage
+    hash: 
+      md5: f1b3e346889e190279f43e984c7b693a
+  initrd: 
+    path: balena.initrd.cpio.gz
+    hash:
+      md5: f1b3e346889e190279f43e984c7b693a
   backup:
-  # network manager configuration files
+    - volume: "test volume 1"
+      items:
+      - source: /home/thomas/develop/balena.io/support
+        target: "target dir 1.1"
+      - source: "/home/thomas/develop/balena.io/customer/sonder/unitdata/UnitData files"
+        target: "target dir 1.2"
+    - volume: "test volume 2"
+      items:
+      - source: "/home/thomas/develop/balena.io/migrate/migratecfg/balena-migrate"
+        target: "target file 2.1"
+      - source: "/home/thomas/develop/balena.io/migrate/migratecfg/init-scripts"
+        target: "target dir 2.2"
+        filter: 'balena-.*'
+    - volume: "test_volume_3"
+      items:
+      - source: "/home/thomas/develop/balena.io/migrate/migratecfg/init-scripts"
+        filter: 'balena-.*'
+  fail_mode: Reboot
   nwmgr_files:
     - eth0_static
-    - sprint
-  # use internal gzip with dd
-  gzip_internal: ~
-  # Extra kernel commandline options
+  gzip_internal: true
   kernel_opts: "panic=20"
-  # Use the given device instead of the boot device to flash to
-  force_flash_device: ~
-  # delay migration by n seconds - workaround for stem watchdog
   delay: 60
-  # test kicking watchdogs - work in progress - not currently working
   watchdogs:
-    # path to watchdog device
-    #- path: /dev/watchdog1
-      # optional interval in seconds - overrides interval read from watchdog device
-      #  interval: ~
-      # optional close, false disables MAGICCLOSE flag read from device
-      # close: false
+    - path: /dev/watchdog1
+      interval: 10
+      close: false
+  require_nwmgr_config: false
 balena:
   image:
-    # use filesystem writes instead of Flasher (dd)
     fs:
-      # needed for filesystem writes, beagleboard-xm masquerades as beaglebone-black
       device_slug: beaglebone-black
-      # make mkfs.ext4 check for bad blocks, either
-      # empty / none, -> No test
-      # ro -> Read test
-      # rw -> ReadWrite test (slow)
       check: ro
-      # maximise resin-data partition, true / false
-      # empty / true -> maximise
-      # false -> do not maximise
-      # Currently required to be empty / true - migration does not succeed with max_data set to false
       max_data: true
-      # use direct io for mkfs.ext (-D see manpage)
-      # true -> use direct io (slow)
-      # empty / false -> do not use
-      mkfs_direct: ~
-      # extended partition blocks
+      mkfs_direct: true
       extended_blocks: 2162688
-      # boot partition blocks & tar file
       boot:
         blocks: 81920
         archive:
           path: resin-boot.tgz
           hash:
             md5: 1234567890
-      # rootA partition blocks & tar file
       root_a:
         blocks: 638976
         archive:
           path: resin-rootA.tgz
-      # rootB partition blocks & tar file
       root_b:
         blocks: 638976
         archive:
           path: resin-rootB.tgz
-      # state partition blocks & tar file
       state:
         blocks: 40960
         archive:
           path: resin-state.tgz
-      # data partition blocks & tar file
       data:
         blocks: 2105344
         archive:
           path: resin-data.tgz
-  # config.json file to inject
-  config:
-    path: "config.json"
-  # application name
-  app_name: 'bbtest'
-  # api checks
+  config: 
+    path: config.json
+    hash:
+      md5: 4834c4ffb3ee0cf0be850242a693c9b6    
+  app_name: support-multi
   api:
-    host: "api.balena-cloud.com"
+    host: api.balena-cloud.com
     port: 443
     check: true
-  # check for vpn connection
   check_vpn: true
-  # timeout for checks
   check_timeout: 20
 debug:
-  # don't flash device - terminate stage2 and reboot before flashing
-  no_flash: false
+  no_flash: true
+  force_flash_device: '/dev/sdb'
 "###;
 }

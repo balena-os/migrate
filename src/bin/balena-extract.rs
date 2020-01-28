@@ -1,6 +1,9 @@
+// executable wrapper for balena-exract
+
 #[cfg(target_os = "linux")]
 fn main() {
     use balena_migrate::{common::MigErrorKind, extract};
+
     if let Err(error) = extract() {
         match error.kind() {
             MigErrorKind::Displayed => {

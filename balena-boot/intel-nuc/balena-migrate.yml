@@ -12,7 +12,7 @@ migrate:
   reboot: 5
   log:
     ## use this drive for stage2 persistent logging
-    # drive: '/dev/sda1'
+    #drive: '/dev/sda1'
     ## stage2 log level (trace, debug, info, warn, error)
     level: debug
   # path to stage2 kernel - must be a balena os kernel matching the device type
@@ -63,11 +63,8 @@ balena:
     #   md5: <insert md5 of config>    
   ## application name
   app_name: <insert application name>
-  ## api checks
-  api:
-    host: api.balena-cloud.com
-    port: 443
-    check: true
+  ## check for api connection
+  check_api: true
   ## check for vpn connection
   check_vpn: true
   ## timeout for checks

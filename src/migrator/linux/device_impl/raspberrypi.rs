@@ -1,11 +1,11 @@
-use log::{debug, error, info, trace};
+use log::{debug, error, info};
 use regex::Regex;
 
 use crate::{
     common::{
         boot_manager::BootManager,
+        device_info::DeviceInfo,
         migrate_info::MigrateInfo,
-        path_info::PathInfo,
         stage2_config::{Stage2Config, Stage2ConfigBuilder},
         Config, MigError, MigErrorKind,
     },
@@ -26,7 +26,7 @@ pub(crate) fn is_rpi(
     s2_cfg: &mut Stage2ConfigBuilder,
     model_string: &str,
 ) -> Result<Option<Box<dyn Device>>, MigError> {
-    trace!(
+    debug!(
         "raspberrypi::is_rpi: entered with model string: '{}'",
         model_string
     );
@@ -39,7 +39,18 @@ pub(crate) fn is_rpi(
             .as_str()
             .trim_matches(char::from(0));
 
+        debug!(
+            "raspberrypi::is_rpi: selection entered with string: '{}'",
+            pitype
+        );
+
         match pitype {
+            "2" => {
+                info!("Identified RaspberryPi3: model {}", model);
+                Ok(Some(Box::new(RaspberryPi2::from_config(
+                    mig_info, config, s2_cfg,
+                )?)))
+            }
             "3" => {
                 info!("Identified RaspberryPi3: model {}", model);
                 Ok(Some(Box::new(RaspberryPi3::from_config(
@@ -61,6 +72,84 @@ pub(crate) fn is_rpi(
     } else {
         debug!("no match for Raspberry PI on: {}", model_string);
         Ok(None)
+    }
+}
+
+pub(crate) struct RaspberryPi2 {
+    boot_manager: Box<dyn BootManager>,
+}
+
+impl RaspberryPi2 {
+    pub fn from_config(
+        mig_info: &MigrateInfo,
+        config: &Config,
+        s2_cfg: &mut Stage2ConfigBuilder,
+    ) -> Result<RaspberryPi2, MigError> {
+        const SUPPORTED_OSSES: &[&str] = &["Raspbian GNU/Linux 10 (buster)"];
+
+        let os_name = &mig_info.os_name;
+
+        expect_type(&mig_info.kernel_file.path, &FileType::KernelARMHF)?;
+
+        if let Some(_n) = SUPPORTED_OSSES.iter().position(|&r| r == os_name) {
+            let mut boot_manager = RaspiBootManager::new(BootType::Raspi)?;
+            if boot_manager.can_migrate(mig_info, config, s2_cfg)? {
+                Ok(RaspberryPi2 {
+                    boot_manager: Box::new(boot_manager),
+                })
+            } else {
+                Err(MigError::from(MigErrorKind::Displayed))
+            }
+        } else {
+            let message = format!("The OS '{}' is not supported for RaspberryPi2", os_name,);
+            error!("{}", message);
+            return Err(MigError::from_remark(MigErrorKind::InvParam, &message));
+        }
+    }
+
+    pub fn from_boot_type(boot_type: BootType) -> RaspberryPi2 {
+        RaspberryPi2 {
+            boot_manager: from_boot_type(boot_type),
+        }
+    }
+}
+
+impl Device for RaspberryPi2 {
+    fn get_device_slug(&self) -> &'static str {
+        "raspberry-pi2"
+    }
+
+    fn get_device_type(&self) -> DeviceType {
+        DeviceType::RaspberryPi2
+    }
+
+    fn get_boot_type(&self) -> BootType {
+        self.boot_manager.get_boot_type()
+    }
+
+    fn setup(
+        &mut self,
+        mig_info: &mut MigrateInfo,
+        config: &Config,
+        s2_cfg: &mut Stage2ConfigBuilder,
+    ) -> Result<(), MigError> {
+        let kernel_opts = if let Some(ref kernel_opts) = config.migrate.get_kernel_opts() {
+            kernel_opts.clone()
+        } else {
+            String::from("")
+        };
+
+        self.boot_manager
+            .setup(mig_info, config, s2_cfg, &kernel_opts)
+    }
+
+    fn restore_boot(&self, mounts: &Mounts, config: &Stage2Config) -> bool {
+        info!("restoring boot configuration for Raspberry Pi 2");
+        restore_backups(mounts.get_boot_mountpoint(), config.get_boot_backups())
+    }
+
+    fn get_boot_device(&self) -> DeviceInfo {
+        self.boot_manager.get_bootmgr_path().device_info
     }
 }
 
@@ -132,7 +221,8 @@ impl Device for RaspberryPi3 {
             String::from("")
         };
 
-        self.boot_manager.setup(mig_info, s2_cfg, &kernel_opts)
+        self.boot_manager
+            .setup(mig_info, config, s2_cfg, &kernel_opts)
     }
 
     fn restore_boot(&self, mounts: &Mounts, config: &Stage2Config) -> bool {
@@ -140,8 +230,8 @@ impl Device for RaspberryPi3 {
         restore_backups(mounts.get_boot_mountpoint(), config.get_boot_backups())
     }
 
-    fn get_boot_device(&self) -> PathInfo {
-        self.boot_manager.get_bootmgr_path()
+    fn get_boot_device(&self) -> DeviceInfo {
+        self.boot_manager.get_bootmgr_path().device_info
     }
 }
 
@@ -213,7 +303,8 @@ impl Device for RaspberryPi4_64 {
             String::from("")
         };
 
-        self.boot_manager.setup(mig_info, s2_cfg, &kernel_opts)
+        self.boot_manager
+            .setup(mig_info, config, s2_cfg, &kernel_opts)
     }
 
     fn restore_boot(&self, mounts: &Mounts, config: &Stage2Config) -> bool {
@@ -221,7 +312,7 @@ impl Device for RaspberryPi4_64 {
         restore_backups(mounts.get_boot_mountpoint(), config.get_boot_backups())
     }
 
-    fn get_boot_device(&self) -> PathInfo {
-        self.boot_manager.get_bootmgr_path()
+    fn get_boot_device(&self) -> DeviceInfo {
+        self.boot_manager.get_bootmgr_path().device_info
     }
 }

@@ -4,8 +4,8 @@ use crate::{
     common::{
         boot_manager::BootManager,
         device::Device,
+        device_info::DeviceInfo,
         migrate_info::MigrateInfo,
-        path_info::PathInfo,
         stage2_config::{Stage2Config, Stage2ConfigBuilder},
         Config, MigError, MigErrorKind,
     },
@@ -34,6 +34,7 @@ impl IntelNuc {
             "Ubuntu 14.04.2 LTS",
             "Ubuntu 14.04.5 LTS",
             "Ubuntu 14.04.6 LTS",
+            "Manjaro Linux",
         ];
 
         let os_name = &mig_info.os_name;
@@ -126,14 +127,15 @@ impl<'a> Device for IntelNuc {
             String::from("")
         };
 
-        self.boot_manager.setup(mig_info, s2_cfg, &kernel_opts)
+        self.boot_manager
+            .setup(mig_info, config, s2_cfg, &kernel_opts)
     }
 
     fn restore_boot(&self, mounts: &Mounts, config: &Stage2Config) -> bool {
         self.boot_manager.restore(mounts, config)
     }
 
-    fn get_boot_device(&self) -> PathInfo {
-        self.boot_manager.get_bootmgr_path()
+    fn get_boot_device(&self) -> DeviceInfo {
+        self.boot_manager.get_bootmgr_path().device_info
     }
 }

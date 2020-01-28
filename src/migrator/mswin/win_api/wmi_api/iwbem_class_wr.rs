@@ -32,6 +32,7 @@ pub struct IWbemClassWrapper {
     pub inner: PMIWbemClassObject,
 }
 
+#[allow(dead_code)]
 impl IWbemClassWrapper {
     pub fn new(ptr: PMIWbemClassObject) -> Self {
         debug!(

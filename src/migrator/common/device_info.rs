@@ -1,23 +1,37 @@
+#[cfg(target_os = "linux")]
 use log::error;
+
 use std::path::PathBuf;
 
 use crate::{
-    common::{path_append, MigError},
+    common::{path_append, MigError, MigErrorKind},
     defs::{DISK_BY_LABEL_PATH, DISK_BY_PARTUUID_PATH, DISK_BY_UUID_PATH},
 };
 
 #[cfg(target_os = "linux")]
-use crate::linux::lsblk_info::{LsblkDevice, LsblkPartition};
+use crate::linux::{
+    linux_common::get_fs_space,
+    lsblk_info::{block_device::BlockDevice, partition::Partition},
+};
+
+#[cfg(target_os = "windows")]
+use crate::{
+    common::os_api::{OSApi, OSApiImpl},
+    mswin::drive_info::VolumeInfo,
+};
 
 #[derive(Debug, Clone)]
 pub(crate) struct DeviceInfo {
     // the drive device path
-    pub drive: PathBuf,
+    pub drive: String,
+    // the devices mountpoint
+    pub mountpoint: PathBuf,
     // the drive size
     pub drive_size: u64,
     // the partition device path
-    pub device: PathBuf,
+    pub device: String,
     // the partition index
+    // TODO: make optional
     pub index: u16,
     // the partition fs type
     pub fs_type: String,
@@ -29,33 +43,37 @@ pub(crate) struct DeviceInfo {
     pub part_label: Option<String>,
     // the partition size
     pub part_size: u64,
-    // the fs size
+    // The file system size
+    pub fs_size: u64,
+    // the fs free space
+    pub fs_free: u64,
 }
 
 impl DeviceInfo {
     #[cfg(target_os = "linux")]
-    pub fn new(drive: &LsblkDevice, partition: &LsblkPartition) -> Result<DeviceInfo, MigError> {
-        Ok(DeviceInfo {
-            drive: drive.get_path(),
-            drive_size: if let Some(size) = drive.size {
-                size
-            } else {
-                error!(
-                    "The required parameter drive_size could not be found for '{}'",
-                    drive.get_path().display()
-                );
-                return Err(MigError::displayed());
-            },
-            device: partition.get_path(),
-            index: if let Some(index) = partition.index {
-                index
-            } else {
-                error!(
-                    "The required parameter index could not be found for '{}'",
+    pub fn from_lsblkinfo(
+        drive: &BlockDevice,
+        partition: &Partition,
+    ) -> Result<DeviceInfo, MigError> {
+        let (mountpoint, fs_size, fs_free) = if let Some(ref mountpoint) = partition.mountpoint {
+            let (fs_size, fs_free) = get_fs_space(mountpoint)?;
+            (mountpoint.clone(), fs_size, fs_free)
+        } else {
+            return Err(MigError::from_remark(
+                MigErrorKind::NotFound,
+                &format!(
+                    "The required parameter mountpoint could not be found for '{}'",
                     partition.get_path().display()
-                );
-                return Err(MigError::displayed());
-            },
+                ),
+            ));
+        };
+
+        Ok(DeviceInfo {
+            drive: String::from(drive.get_path().to_string_lossy()),
+            mountpoint,
+            drive_size: drive.size,
+            device: String::from(partition.get_path().to_string_lossy()),
+            index: partition.index,
             fs_type: if let Some(ref fstype) = partition.fstype {
                 fstype.clone()
             } else {
@@ -67,15 +85,61 @@ impl DeviceInfo {
             },
             uuid: partition.uuid.clone(),
             part_uuid: partition.partuuid.clone(),
-            part_label: partition.partlabel.clone(),
-            part_size: if let Some(size) = partition.size {
+            part_label: partition.label.clone(),
+            part_size: partition.size,
+            fs_size,
+            fs_free,
+        })
+    }
+
+    #[cfg(target_os = "windows")]
+    pub fn from_volume_info(vol_info: &VolumeInfo) -> Result<DeviceInfo, MigError> {
+        Ok(DeviceInfo {
+            // the drive device path
+            drive: String::from(vol_info.physical_drive.get_device_id()),
+            // the devices mountpoint
+            mountpoint: PathBuf::from(vol_info.logical_drive.get_name()),
+            // the drive size
+            drive_size: vol_info.physical_drive.get_size(),
+            // the partition device path
+            device: String::from(vol_info.volume.get_device_id()),
+            // TODO: the partition index - this value is not correct in windows as hidden partions are not counted
+            index: 0,
+            // the partition fs type
+            fs_type: String::from(vol_info.volume.get_file_system().to_linux_str()),
+            // the partition uuid
+            uuid: None,
+            // the partition partuuid
+            part_uuid: Some(vol_info.part_uuid.clone()),
+            // the partition label
+            part_label: if let Some(label) = vol_info.volume.get_label() {
+                Some(String::from(label))
+            } else {
+                None
+            },
+            // the partition size
+            part_size: vol_info.partition.get_size(),
+            fs_size: if let Some(size) = vol_info.volume.get_capacity() {
                 size
             } else {
-                error!(
-                    "The required parameter size could not be found for '{}'",
-                    partition.get_path().display()
-                );
-                return Err(MigError::displayed());
+                return Err(MigError::from_remark(
+                    MigErrorKind::NotFound,
+                    &format!(
+                        "Required parameter size was not found for '{}'",
+                        vol_info.volume.get_device_id()
+                    ),
+                ));
+            },
+            fs_free: if let Some(free) = vol_info.volume.get_free_space() {
+                free
+            } else {
+                return Err(MigError::from_remark(
+                    MigErrorKind::NotFound,
+                    &format!(
+                        "Required parameter size was not found for '{}'",
+                        vol_info.volume.get_device_id()
+                    ),
+                ));
             },
         })
     }
@@ -86,17 +150,27 @@ impl DeviceInfo {
         } else if let Some(ref partuuid) = self.part_uuid {
             format!("partuuid={}", partuuid)
         } else {
-            String::from(self.device.to_string_lossy())
+            format!("root={}", self.device.as_str())
         }
     }
 
+    #[cfg(target_os = "windows")]
+    pub fn for_efi() -> Result<DeviceInfo, MigError> {
+        OSApi::new()?.device_info_for_efi()
+    }
+
+    #[allow(dead_code)]
     pub fn get_kernel_cmd(&self) -> String {
         if let Some(ref partuuid) = self.part_uuid {
             format!("PARTUUID={}", partuuid)
         } else if let Some(ref uuid) = self.uuid {
             format!("UUID={}", uuid)
         } else {
-            String::from(self.device.to_string_lossy())
+            if let Some(ref uuid) = self.uuid {
+                format!("UUID={}", uuid)
+            } else {
+                self.device.clone()
+            }
         }
     }
 

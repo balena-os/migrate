@@ -12,10 +12,10 @@ use crate::{
         backup, call,
         config::balena_config::ImageType,
         device::Device,
-        dir_exists, format_size_with_unit,
+        dir_exists, file_size, format_size_with_unit,
         migrate_info::MigrateInfo,
         path_append,
-        stage2_config::{PathType, Stage2ConfigBuilder, Stage2LogConfig},
+        stage2_config::{MountConfig, PathType, Stage2ConfigBuilder},
         Config, MigErrCtx, MigError, MigErrorKind, MigMode,
     },
     defs::{
@@ -35,17 +35,15 @@ pub(crate) mod boot_manager_impl;
 pub(crate) mod stage2;
 
 pub(crate) mod linux_api;
-use linux_api::LinuxAPI;
 
 pub(crate) mod lsblk_info;
 //pub(crate) use lsblk_info::LsblkInfo;
 
+pub(crate) mod disk_util;
+
 pub(crate) mod linux_common;
-use crate::common::file_size;
-use crate::common::stage2_config::MountConfig;
 use crate::defs::VERSION;
 use crate::linux::linux_common::{get_mem_info, whereis};
-use crate::linux::lsblk_info::LsblkInfo;
 pub(crate) use linux_common::is_admin;
 use mod_logger::{LogDestination, Logger};
 
@@ -59,14 +57,12 @@ pub(crate) struct LinuxMigrator {
     config: Config,
     stage2_config: Stage2ConfigBuilder,
     device: Box<dyn Device>,
-    lsblk_info: LsblkInfo,
 }
 
 impl<'a> LinuxMigrator {
     pub fn migrate() -> Result<(), MigError> {
         // **********************************************************************
         // We need to be root to do this
-
         let config = Config::new()?;
         info!("balena-migrate {}", VERSION);
 
@@ -75,16 +71,14 @@ impl<'a> LinuxMigrator {
             return Err(MigError::from(MigErrorKind::Displayed));
         }
 
-        match config.migrate.get_mig_mode() {
-            _ => {
-                let mut migrator = LinuxMigrator::try_init(config)?;
-                let res = match migrator.config.migrate.get_mig_mode() {
-                    MigMode::Immediate => migrator.do_migrate(),
-                    MigMode::Pretend => Ok(()),
-                    //MigMode::Agent => Err(MigError::from(MigErrorKind::NotImpl)),
-                };
+        let mut migrator = LinuxMigrator::try_init(config)?;
+
+        match migrator.config.migrate.get_mig_mode() {
+            MigMode::Immediate => migrator.do_migrate(),
+            MigMode::Pretend => {
                 Logger::flush();
-                res
+                sync();
+                Ok(())
             }
         }
     }
@@ -97,6 +91,15 @@ impl<'a> LinuxMigrator {
         trace!("LinuxMigrator::try_init: entered");
 
         info!("migrate mode: {:?}", config.migrate.get_mig_mode());
+
+        let log_file = path_append(config.migrate.get_work_dir(), "stage1.log");
+
+        Logger::set_log_file(&LogDestination::Stderr, &log_file, true).context(
+            MigErrCtx::from_remark(
+                MigErrorKind::Upstream,
+                &format!("Failed to set logging to '{}'", log_file.display()),
+            ),
+        )?;
 
         // A simple replacement for ensured commands
         for command in REQUIRED_CMDS {
@@ -116,9 +119,7 @@ impl<'a> LinuxMigrator {
         // Get os architecture & name & disk properties, check required paths
         // find wifis etc..
 
-        let lsblk_info = LsblkInfo::all()?;
-        let linux_api = LinuxAPI::new(&lsblk_info);
-        let mig_info = match MigrateInfo::new(&config, &linux_api) {
+        let mig_info = match MigrateInfo::new(&config) {
             Ok(mig_info) => {
                 info!(
                     "OS Architecture is {}, OS Name is '{}'",
@@ -195,12 +196,12 @@ impl<'a> LinuxMigrator {
         // Pick the current root device as flash device
 
         let boot_info = device.get_boot_device();
-        let flash_device = &boot_info.device_info.drive;
-        let flash_dev_size = boot_info.device_info.drive_size;
+        let flash_device = &boot_info.drive;
+        let flash_dev_size = boot_info.drive_size;
 
         info!(
             "The install drive is {}, size: {}",
-            boot_info.device_info.drive.display(),
+            boot_info.drive,
             format_size_with_unit(flash_dev_size)
         );
 
@@ -223,7 +224,7 @@ impl<'a> LinuxMigrator {
         if flash_dev_size < MIN_DISK_SIZE {
             error!(
                 "The size of the install drive '{}' = {} is too small to install balenaOS",
-                flash_device.display(),
+                flash_device,
                 format_size_with_unit(flash_dev_size)
             );
             return Err(MigError::from(MigErrorKind::Displayed));
@@ -234,7 +235,6 @@ impl<'a> LinuxMigrator {
             config,
             device,
             stage2_config,
-            lsblk_info,
         })
     }
 
@@ -244,35 +244,27 @@ impl<'a> LinuxMigrator {
 
     #[allow(clippy::cognitive_complexity)] //TODO refactor this function to fix the clippy warning
     fn do_migrate(&mut self) -> Result<(), MigError> {
-        // TODO: prepare logging
-
+        trace!("Entered do_migrate");
         let work_dir = &self.mig_info.work_path.path;
-        let log_file = path_append(work_dir, "stage1.log");
-
-        Logger::set_log_file(&LogDestination::Stderr, &log_file, true).context(
-            MigErrCtx::from_remark(
-                MigErrorKind::Upstream,
-                &format!("Failed to set logging to '{}'", log_file.display()),
-            ),
-        )?;
-
         let boot_device = self.device.get_boot_device();
 
-        if self.mig_info.work_path.device_info.device == boot_device.device_info.device {
+        //if &self.mig_info.work_path.device_info.device == &boot_device.device {
+        if self.mig_info.work_path.device_info.device == boot_device.device {
             self.stage2_config
                 .set_work_path(&PathType::Path(self.mig_info.work_path.path.clone()));
         } else {
-            let (_lsblk_device, lsblk_part) = self.lsblk_info.get_path_devs(&work_dir)?;
+            //let (_lsblk_device, lsblk_part) = os_api.get_lsblk_info()?.get_path_devs(&work_dir)?;
+            let work_device = &self.mig_info.work_path.device_info;
             self.stage2_config
                 .set_work_path(&PathType::Mount(MountConfig::new(
-                    &lsblk_part.get_alt_path(),
-                    lsblk_part.fstype.as_ref().unwrap(),
-                    work_dir
-                        .strip_prefix(lsblk_part.mountpoint.as_ref().unwrap())
-                        .context(MigErrCtx::from_remark(
+                    &work_device.get_alt_path(),
+                    work_device.fs_type.as_str(),
+                    work_dir.strip_prefix(&work_device.mountpoint).context(
+                        MigErrCtx::from_remark(
                             MigErrorKind::Upstream,
                             "failed to create relative work path",
-                        ))?,
+                        ),
+                    )?,
                 )));
         }
 
@@ -301,22 +293,24 @@ impl<'a> LinuxMigrator {
             ))?;
         }
 
-        for file in &self.mig_info.nwmgr_files {
-            if let Some(file_name) = file.path.file_name() {
-                let tgt = path_append(&nwmgr_path, file_name);
-                copy(&file.path, &tgt).context(MigErrCtx::from_remark(
-                    MigErrorKind::Upstream,
-                    &format!(
-                        "Failed to copy '{}' to '{}'",
-                        file.path.display(),
-                        tgt.display()
-                    ),
-                ))?;
-            } else {
-                return Err(MigError::from_remark(
-                    MigErrorKind::Upstream,
-                    &format!("unable to processs path: '{}'", file.path.display()),
-                ));
+        if dir_exists(&nwmgr_path)? {
+            for file in &self.mig_info.nwmgr_files {
+                if let Some(file_name) = file.path.file_name() {
+                    let tgt = path_append(&nwmgr_path, file_name);
+                    copy(&file.path, &tgt).context(MigErrCtx::from_remark(
+                        MigErrorKind::Upstream,
+                        &format!(
+                            "Failed to copy '{}' to '{}'",
+                            file.path.display(),
+                            tgt.display()
+                        ),
+                    ))?;
+                } else {
+                    return Err(MigError::from_remark(
+                        MigErrorKind::Upstream,
+                        &format!("unable to processs path: '{}'", file.path.display()),
+                    ));
+                }
             }
         }
 
@@ -386,7 +380,7 @@ impl<'a> LinuxMigrator {
         // *****************************************************************************************
         // Finish Stage2ConfigBuilder & create stage2 config file
 
-        if let Some(device) = self.config.migrate.get_force_flash_device() {
+        if let Some(device) = self.config.debug.get_force_flash_device() {
             warn!("Forcing flash device to '{}'", device.display());
             self.stage2_config
                 .set_force_flash_device(device.to_path_buf());
@@ -403,6 +397,10 @@ impl<'a> LinuxMigrator {
 
         if let Some(watchdogs) = self.config.migrate.get_watchdogs() {
             self.stage2_config.set_watchdogs(watchdogs);
+        }
+
+        if let Some(hacks) = self.config.debug.get_hacks() {
+            self.stage2_config.set_hacks(hacks)
         }
 
         self.stage2_config
@@ -423,19 +421,12 @@ impl<'a> LinuxMigrator {
             .set_log_level(String::from(self.config.migrate.get_log_level()));
 
         if let Some(ref log_path) = self.mig_info.log_path {
-            if log_path.device != boot_device.device_info.device {
-                info!(
-                    "Set up log device as '{}' with file system type '{}'",
-                    log_path.get_alt_path().display(),
-                    log_path.fs_type
-                );
+            if log_path != &boot_device.get_alt_path() {
+                info!("Set up log device as '{}'", log_path.display(),);
 
-                self.stage2_config.set_log_to(Stage2LogConfig {
-                    device: log_path.get_alt_path(),
-                    fstype: log_path.fs_type.clone(),
-                });
+                self.stage2_config.set_log_to(log_path.clone());
             } else {
-                warn!("Log partition '{}' is not on a distinct drive from flash drive: '{}' - ignoring", log_path.device.display(), boot_device.device_info.drive.display());
+                warn!("Log partition '{}' is not on a distinct drive from flash drive: '{}' - ignoring", log_path.display(), boot_device.drive);
             }
         }
 
@@ -451,11 +442,16 @@ impl<'a> LinuxMigrator {
                 "Migration stage 1 was successfull, rebooting system in {} seconds",
                 *delay
             );
+            Logger::flush();
             sync();
             let delay = Duration::new(*delay, 0);
             thread::sleep(delay);
             println!("Rebooting now..");
             call(REBOOT_CMD, &["-f"], false)?;
+        } else {
+            println!(
+                "Migration stage 1 was successful, please reboot system to finalize migration"
+            );
         }
 
         trace!("done");

@@ -9,7 +9,6 @@ use crate::{
     common::{
         boot_manager::BootManager,
         call, dir_exists,
-        disk_util::LabelType,
         file_digest::check_digest,
         file_exists, format_size_with_unit,
         migrate_info::MigrateInfo,
@@ -20,12 +19,12 @@ use crate::{
     },
     defs::{BootType, MIG_INITRD_NAME, MIG_KERNEL_NAME},
     linux::{
+        disk_util::LabelType,
         linux_defs::{
             BOOT_PATH, GRUB_CONFIG_DIR, GRUB_CONFIG_FILE, GRUB_MIN_VERSION, KERNEL_CMDLINE_PATH,
             ROOT_PATH,
         },
-        linux_defs::{CHMOD_CMD, GRUB_REBOOT_CMD, GRUB_UPDT_CMD},
-        lsblk_info::LsblkInfo,
+        linux_defs::{CHMOD_CMD, GRUB_INSTALL_CMD, GRUB_REBOOT_CMD, GRUB_UPDT_CMD},
         stage2::mounts::Mounts,
     },
 };
@@ -69,14 +68,15 @@ impl<'a> GrubBootManager {
     fn get_grub_version() -> Result<(String, String), MigError> {
         trace!("get_grub_version: entered");
 
-        let cmd_res =
-            call(GRUB_UPDT_CMD, &GRUB_UPDT_VERSION_ARGS, true).context(MigErrCtx::from_remark(
+        let cmd_res = call(GRUB_INSTALL_CMD, &GRUB_UPDT_VERSION_ARGS, true).context(
+            MigErrCtx::from_remark(
                 MigErrorKind::Upstream,
                 &format!(
                     "get_grub_version: call '{} {:?}'",
-                    GRUB_UPDT_CMD, GRUB_UPDT_VERSION_ARGS
+                    GRUB_INSTALL_CMD, GRUB_UPDT_VERSION_ARGS
                 ),
-            ))?;
+            ),
+        )?;
 
         if cmd_res.status.success() {
             let re = Regex::new(GRUB_UPDT_VERSION_RE).unwrap();
@@ -132,14 +132,7 @@ impl BootManager for GrubBootManager {
             return Ok(false);
         }
 
-        let lsblk_info = LsblkInfo::all()?;
-
-        let boot_path = if let Some(boot_path) = PathInfo::from_path(BOOT_PATH, &lsblk_info)? {
-            boot_path
-        } else {
-            error!("Could not find boot path '{}'", BOOT_PATH);
-            return Err(MigError::displayed());
-        };
+        let boot_path = PathInfo::from_path(BOOT_PATH)?;
 
         let grub_version = GrubBootManager::get_grub_version()?;
         info!(
@@ -175,7 +168,7 @@ impl BootManager for GrubBootManager {
             0
         };
 
-        if boot_path.fs_free < boot_req_space {
+        if boot_path.device_info.fs_free < boot_req_space {
             error!("The boot directory '{}' does not have enough space to store the migrate kernel and initramfs. Required space is {}",
                    boot_path.path.display(), format_size_with_unit(boot_req_space));
             return Ok(false);
@@ -189,6 +182,7 @@ impl BootManager for GrubBootManager {
     fn setup(
         &mut self,
         mig_info: &MigrateInfo,
+        _config: &Config,
         _s2_cfg: &mut Stage2ConfigBuilder,
         kernel_opts: &str,
     ) -> Result<(), MigError> {
@@ -203,7 +197,7 @@ impl BootManager for GrubBootManager {
 
         // path to kernel & initramfs at boot time depends on how /boot is mounted
         // either / (for a /boot mount or /boot for a directory of /root file system)
-        let grub_boot: &Path = if boot_path.path == boot_path.mountpoint {
+        let grub_boot: &Path = if boot_path.path == boot_path.device_info.mountpoint {
             // /boot is a mounted filesystem
             &Path::new(ROOT_PATH)
         } else {
@@ -219,7 +213,7 @@ impl BootManager for GrubBootManager {
                     MigErrorKind::InvParam,
                     &format!(
                         "Invalid partition type for '{}'",
-                        boot_path.device_info.drive.display()
+                        boot_path.device_info.drive
                     ),
                 ));
             }
@@ -229,20 +223,24 @@ impl BootManager for GrubBootManager {
 
         info!(
             "Boot partition type for '{}' is '{}'",
-            boot_path.device_info.drive.display(),
-            part_mod
+            boot_path.device_info.drive, part_mod
         );
 
         let root_cmd = if let Some(ref uuid) = boot_path.device_info.uuid {
-            // TODO: try partuuid too ?local setRootA="set root='${GRUB_BOOT_DEV},msdos${ROOT_PART_NO}'"
+            // TODO: try partuuid too ? local setRootA="set root='${GRUB_BOOT_DEV},msdos${ROOT_PART_NO}'"
             format!("search --no-floppy --fs-uuid --set=root {}", uuid)
         } else {
-            format!(
-                "search --no-floppy --fs-uuid --set=root {},{}{}",
-                boot_path.device_info.drive.to_string_lossy(),
-                part_type,
-                boot_path.device_info.index
-            )
+            if let Some(ref _partuuid) = boot_path.device_info.part_uuid {
+                return Err(MigError::from_remark(
+                    MigErrorKind::FeatureMissing,
+                    "Grub root string is not implemented for partuuid ",
+                ));
+            } else {
+                format!(
+                    "search --no-floppy --fs-uuid --set=root {},{}{}",
+                    boot_path.device_info.drive, part_type, boot_path.device_info.index
+                )
+            }
         };
 
         debug!("root set to '{}", root_cmd);
