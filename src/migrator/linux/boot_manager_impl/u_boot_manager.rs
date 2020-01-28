@@ -1,15 +1,14 @@
 use chrono::Local;
 use failure::ResultExt;
-use lazy_static::lazy_static;
 use log::{debug, error, info, warn};
-use nix::mount::{mount, umount, MsFlags};
 use regex::Regex;
-use std::fs::{create_dir_all, remove_file, File, OpenOptions};
+use std::fs::{self, create_dir_all, remove_file, File, OpenOptions};
 use std::io::{Read, Seek, SeekFrom, Write};
 use std::path::{Path, PathBuf};
 
 use crate::common::dir_exists;
 use crate::common::file_digest::check_digest;
+use crate::linux::disk_util::{Disk, PartitionIterator};
 use crate::{
     common::{
         boot_manager::BootManager,
@@ -22,7 +21,7 @@ use crate::{
         stage2_config::{Stage2Config, Stage2ConfigBuilder},
         Config, FileInfo, MigErrCtx, MigError, MigErrorKind,
     },
-    defs::{BootType, BALENA_FILE_TAG, MIG_DTB_NAME, MIG_INITRD_NAME, MIG_KERNEL_NAME},
+    defs::{BootType, BALENA_FILE_TAG, MIG_INITRD_NAME, MIG_KERNEL_NAME},
     linux::{
         linux_common::{get_kernel_root_info, restore_backups, tmp_mount},
         linux_defs::{
@@ -42,7 +41,6 @@ enum BootFileType {
     KernelFile,
     Initramfs,
     DtbFile,
-    UEnvFile,
 }
 
 const UBOOT_DEV_OFFSET: u64 = 0x60000;
@@ -102,7 +100,7 @@ uenvcmd=run loadall; run mmcargs; echo debug: [${bootargs}] ... ; echo debug: [b
 #[derive(Debug)]
 struct UBootInfo {
     // which device to flash
-    flash_device: LsblkDevice,
+    flash_device: BlockDevice,
     // MLO is installed in MBR
     in_mbr: bool,
     // where to install uboot boot manager (if not in MBR)
@@ -498,7 +496,7 @@ impl UBootManager {
 
         let dtb_dest = if let Some(dtb_file) = &mig_info.dtb_file.get(0) {
             let dtb_dest = self
-                .get_target_file_name(&BootFileType::DtbFile, None, MIG_DTB_NAME)?
+                .get_target_file_name(&BootFileType::DtbFile, None, None)?
                 .to_path_buf();
             UBootManager::copy_and_check(&dtb_file, &dtb_dest)?;
 
@@ -890,7 +888,7 @@ impl BootManager for UBootManager {
             } else {
                 // Not enough space for kernel / initamfs etc where boot files where found
                 match &self.strategy {
-                    UEnvStrategy::UName(_uname) => {
+                    UEnvStrategy::UName => {
                         // Uname strategy need kerne etc right there can't do this
                         error!(
                             "Can't_migrate with boot manager path {}",
@@ -933,7 +931,7 @@ impl BootManager for UBootManager {
         }
 
         match &self.strategy {
-            UEnvStrategy::UName(_uname) => {
+            UEnvStrategy::UName => {
                 error!(
                     "Can't_migrate with boot manager path {}",
                     path.path.display()

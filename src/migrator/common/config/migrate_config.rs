@@ -42,7 +42,7 @@ const DEFAULT_MIG_MODE: MigMode = MigMode::Pretend;
 #[derive(Debug, PartialEq, Serialize, Deserialize, Clone)]
 pub(crate) enum UEnvStrategy {
     #[serde(rename = "uname")]
-    UName(String),
+    UName,
     #[serde(rename = "manual")]
     Manual,
 }

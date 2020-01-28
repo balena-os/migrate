@@ -8,8 +8,12 @@ use std::str::FromStr;
 use serde::{Deserialize, Serialize};
 use serde_yaml;
 
-#[allow(dead_code)]
-pub const EMPTY_BACKUPS: &[(String, String)] = &[];
+pub const EMPTY_BACKUPS: &[BackupCfg] = &[];
+
+const MODULE: &str = "stage2::stage2:config";
+
+use crate::defs::DeviceSpec;
+use crate::linux::lsblk_info::partition::Partition;
 
 use crate::{
     common::{
@@ -98,6 +102,35 @@ impl<'a> MountConfig {
 }
 
 #[derive(Debug, Deserialize, Serialize, Clone)]
+pub(crate) struct BackupCfg {
+    pub device: DeviceSpec,
+    pub source: PathBuf,
+    pub backup: PathBuf,
+}
+
+impl BackupCfg {
+    pub fn new(device: Partition, source: &Path, backup: &Path) -> BackupCfg {
+        BackupCfg {
+            device: if let Some(uuid) = device.uuid {
+                DeviceSpec::Uuid(uuid)
+            } else {
+                if let Some(partuuid) = device.partuuid {
+                    DeviceSpec::PartUuid(partuuid)
+                } else {
+                    if let Some(label) = device.label {
+                        DeviceSpec::Label(label)
+                    } else {
+                        DeviceSpec::DevicePath(device.get_path())
+                    }
+                }
+            },
+            source: source.to_path_buf(),
+            backup: backup.to_path_buf(),
+        }
+    }
+}
+
+#[derive(Debug, Deserialize, Serialize, Clone)]
 pub(crate) enum PathType {
     Path(PathBuf),
     Mount(MountConfig),
@@ -120,7 +153,7 @@ pub(crate) struct Stage2Config {
     // working directory  in path on root or mount partition
     work_path: PathType,
     // backed up former boot configuration (from , to) expected in boot manager
-    boot_bckup: Option<Vec<(String, String)>>,
+    boot_bckup: Option<Vec<BackupCfg>>,
     // backup present in work_dir/backup.tgz
     has_backup: bool,
     // use rust internal gzip
@@ -266,8 +299,7 @@ impl<'a> Stage2Config {
         self.balena_config.as_path()
     }
 
-    #[allow(dead_code)]
-    pub fn get_boot_backups(&'a self) -> &'a [(String, String)] {
+    pub fn get_boot_backups(&'a self) -> &'a [BackupCfg] {
         if let Some(ref boot_bckup) = self.boot_bckup {
             boot_bckup.as_slice()
         } else {
@@ -357,7 +389,7 @@ pub(crate) struct Stage2ConfigBuilder {
     balena_config: Required<PathBuf>,
     balena_image: Required<CheckedImageType>,
     work_path: Required<PathType>,
-    boot_bckup: Optional<Vec<(String, String)>>,
+    boot_bckup: Optional<Vec<BackupCfg>>,
     has_backup: Required<bool>,
     gzip_internal: Required<bool>,
     log_level: Required<String>,
@@ -477,7 +509,7 @@ impl<'a> Stage2ConfigBuilder {
     }
 
     #[allow(dead_code)]
-    pub fn set_boot_bckup(&mut self, boot_backup: Vec<(String, String)>) {
+    pub fn set_boot_bckup(&mut self, boot_backup: Vec<BackupCfg>) {
         self.boot_bckup.set(boot_backup);
     }
 

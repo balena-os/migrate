@@ -2,7 +2,6 @@
 use crate::{
     common::{
         boot_manager::BootManager,
-        config::migrate_config::UEnvStrategy,
         migrate_info::MigrateInfo,
         path_info::PathInfo,
         stage2_config::{Stage2Config, Stage2ConfigBuilder},

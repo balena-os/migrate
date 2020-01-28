@@ -1,5 +1,6 @@
 use serde::{Deserialize, Serialize};
 use std::fmt::{self, Display, Formatter};
+use std::path::PathBuf;
 
 // where does the stage 2 config file live
 pub const STAGE2_CFG_FILE: &str = "balena-stage2.yml";
@@ -134,6 +135,20 @@ pub enum OSArch {
         PPC64EL,
         S390EX,
     */
+}
+
+#[derive(Debug, Deserialize, Serialize, Clone)]
+pub(crate) enum DeviceSpec {
+    #[serde(rename = "uuid")]
+    Uuid(String),
+    #[serde(rename = "partuuid")]
+    PartUuid(String),
+    #[serde(rename = "devpath")]
+    DevicePath(PathBuf),
+    #[serde(rename = "path")]
+    Path(PathBuf),
+    #[serde(rename = "label")]
+    Label(String),
 }
 
 impl Display for OSArch {

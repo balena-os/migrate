@@ -4,7 +4,6 @@ pub const ROOT_PATH: &str = "/";
 
 pub const MIGRATE_LOG_FILE: &str = "migrate.log";
 
-pub const DEFAULT_UNAME_STR: &str = "4.1.4.53-balenaOS-2.38.0+rev1";
 pub const MLO_FILE_NAME: &str = "MLO";
 pub const UENV_FILE_NAME: &str = "uEnv.txt";
 pub const UBOOT_FILE_NAME: &str = "u-boot.img";
