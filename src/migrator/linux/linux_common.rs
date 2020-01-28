@@ -20,6 +20,7 @@ use crate::{
 };
 
 use crate::common::dir_exists;
+use crate::common::stage2_config::BackupCfg;
 use crate::linux::linux_defs::NIX_NONE;
 use nix::mount::{mount, MsFlags};
 
@@ -319,12 +320,14 @@ pub(crate) fn is_secure_boot() -> Result<bool, MigError> {
 
 // TODO: allow restoring from work_dir to Boot
 
-pub(crate) fn restore_backups(root_path: &Path, backups: &[(String, String)]) -> bool {
+pub(crate) fn restore_backups(root_path: &Path, backups: &[BackupCfg]) -> bool {
     // restore boot config backups
     let mut res = true;
     for backup in backups {
-        let src = path_append(root_path, &backup.1);
-        let tgt = path_append(root_path, &backup.0);
+        let device = &backup.device;
+
+        let src = path_append(root_path, &backup.source);
+        let tgt = path_append(root_path, &backup.backup);
         if let Err(why) = copy(&src, &tgt) {
             error!(
                 "Failed to restore '{}' to '{}', error: {:?}",
