@@ -42,8 +42,7 @@ pub(crate) struct MigrateInfo {
     pub kernel_file: FileInfo,
 
     pub initrd_file: FileInfo,
-
-    pub dtb_file: Vec<FileInfo>,
+    //pub dtb_file: Vec<FileInfo>,
 }
 
 // TODO: sort out error reporting with Displayed
@@ -194,26 +193,6 @@ impl MigrateInfo {
             return Err(MigError::displayed());
         };
 
-        let dtb_files = if let Some(dtb_refs) = config.migrate.get_dtb_refs() {
-            let mut dtb_files: Vec<FileInfo> = Vec::new();
-            for dtb_ref in dtb_refs {
-                if let Some(file_info) = FileInfo::new(dtb_ref, work_dir)? {
-                    os_api.expect_type(&file_info.path, &FileType::DTB)?;
-                    info!(
-                        "The balena migrate device tree blob looks ok: '{}'",
-                        file_info.path.display()
-                    );
-                    dtb_files.push(file_info);
-                } else {
-                    error!("The migrate device tree blob '{}' cannot be accessed. Automatic download is not yet implemented, so you need to specify and supply all required files", dtb_ref.path.display());
-                    return Err(MigError::displayed());
-                }
-            }
-            dtb_files
-        } else {
-            Vec::new()
-        };
-
         let mut nwmgr_files: Vec<FileInfo> = Vec::new();
 
         for file in config.migrate.get_nwmgr_files() {
@@ -283,7 +262,6 @@ impl MigrateInfo {
             image_file: os_image,
             kernel_file,
             initrd_file,
-            dtb_file: dtb_files,
             nwmgr_files,
             config_file,
             wifis,

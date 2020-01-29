@@ -112,7 +112,7 @@ pub(crate) enum BootType {
 #[derive(Debug, Deserialize, Serialize, Clone, Copy)]
 pub(crate) enum DeviceType {
     BeagleboneGreen,
-    BeagleboneBlack,
+    // BeagleboneBlack,
     BeagleboardXM,
     IntelNuc,
     RaspberryPi2,

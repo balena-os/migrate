@@ -15,6 +15,7 @@ const MODULE: &str = "stage2::stage2:config";
 use crate::defs::DeviceSpec;
 use crate::linux::lsblk_info::partition::Partition;
 
+use crate::common::device_info::DeviceInfo;
 use crate::{
     common::{
         config::{balena_config::PartCheck, migrate_config::WatchdogCfg},
@@ -109,7 +110,7 @@ pub(crate) struct BackupCfg {
 }
 
 impl BackupCfg {
-    pub fn new(device: Partition, source: &Path, backup: &Path) -> BackupCfg {
+    pub fn from_partition(device: Partition, source: &Path, backup: &Path) -> BackupCfg {
         BackupCfg {
             device: if let Some(uuid) = device.uuid {
                 DeviceSpec::Uuid(uuid)
@@ -121,6 +122,25 @@ impl BackupCfg {
                         DeviceSpec::Label(label)
                     } else {
                         DeviceSpec::DevicePath(device.get_path())
+                    }
+                }
+            },
+            source: source.to_path_buf(),
+            backup: backup.to_path_buf(),
+        }
+    }
+    pub fn from_device_info(device: &DeviceInfo, source: &Path, backup: &Path) -> BackupCfg {
+        BackupCfg {
+            device: if let Some(ref uuid) = device.uuid {
+                DeviceSpec::Uuid(uuid.clone())
+            } else {
+                if let Some(ref partuuid) = device.part_uuid {
+                    DeviceSpec::PartUuid(partuuid.clone())
+                } else {
+                    if let Some(ref label) = device.part_label {
+                        DeviceSpec::Label(label.clone())
+                    } else {
+                        DeviceSpec::DevicePath(PathBuf::from(&device.device))
                     }
                 }
             },

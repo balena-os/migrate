@@ -3,10 +3,10 @@ use log::{debug, error, info, trace, warn};
 use regex::Regex;
 use std::fs::{copy, read_to_string, File};
 use std::io::{BufRead, BufReader, Write};
-use std::path::PathBuf;
 
 use std::time::SystemTime;
 
+use crate::common::stage2_config::BackupCfg;
 use crate::{
     common::{
         boot_manager::BootManager,
@@ -37,28 +37,35 @@ const RPI_BOOT_PATH: &str = "/boot";
 
 // TODO: more specific lists for PRI types ?
 
-const RPI3_DTB_FILES: &[&str] = &["bcm2710-rpi-3-b.dtb", "bcm2710-rpi-3-b-plus.dtb"];
-
-const RPI4_64_DTB_FILES: &[&str] = &["bcm2711-rpi-4-b.dtb"];
-
-pub(crate) struct RaspiBootManager<'a> {
+pub(crate) struct RaspiBootManager {
     bootmgr_path: Option<PathInfo>,
     boot_type: BootType,
-    dtb_files: &'a [&'a str],
+    dtb_files: Vec<String>,
 }
 
 #[allow(clippy::new_ret_no_self)] //TODO refactor this to fix cluppy warning
-impl RaspiBootManager<'_> {
-    pub fn new(boot_type: BootType) -> Result<impl BootManager + 'static, MigError> {
+impl RaspiBootManager {
+    pub fn for_stage2(boot_type: BootType) -> impl BootManager + 'static {
+        RaspiBootManager {
+            bootmgr_path: None,
+            boot_type: boot_type,
+            dtb_files: Vec::new(),
+        }
+    }
+
+    pub fn new(
+        boot_type: BootType,
+        dtb_files: Vec<String>,
+    ) -> Result<impl BootManager + 'static, MigError> {
         match boot_type {
             BootType::Raspi => Ok(RaspiBootManager {
                 bootmgr_path: None,
-                dtb_files: RPI3_DTB_FILES,
+                dtb_files,
                 boot_type,
             }),
             BootType::Raspi64 => Ok(RaspiBootManager {
                 bootmgr_path: None,
-                dtb_files: RPI4_64_DTB_FILES,
+                dtb_files,
                 boot_type,
             }),
             _ => {
@@ -72,7 +79,7 @@ impl RaspiBootManager<'_> {
     }
 }
 
-impl BootManager for RaspiBootManager<'_> {
+impl BootManager for RaspiBootManager {
     fn get_boot_type(&self) -> BootType {
         self.boot_type
     }
@@ -98,29 +105,9 @@ impl BootManager for RaspiBootManager<'_> {
 
         // TODO: provide a way to supply digests for DTB files
 
-        debug!("configured dtb files: {}", mig_info.dtb_file.len());
-
         #[allow(clippy::redundant_pattern_matching)]
         //TODO refactor this function to fix the clippy warning
         for file in self.dtb_files {
-            if let None = mig_info.dtb_file.iter().find(|file_info| {
-                debug!(
-                    "looking for: '{}' - cmp: '{}'",
-                    file,
-                    file_info.path.display()
-                );
-                if let Some(ref rel_path) = file_info.rel_path {
-                    rel_path == &PathBuf::from(file)
-                } else {
-                    false
-                }
-            }) {
-                warn!(
-                    "Required DTB file '{}' was not found in files configured in device_tree",
-                    file,
-                );
-            }
-
             if !file_exists(path_append(&mig_info.work_path.path, file)) {
                 error!(
                     "The file '{}' could not be found in the working directory",
@@ -221,11 +208,11 @@ impl BootManager for RaspiBootManager<'_> {
                 "Failed to create timestamp",
             ))?;
 
-        let mut boot_cfg_bckup: Vec<(String, String)> = Vec::new();
+        let mut boot_cfg_bckup: Vec<BackupCfg> = Vec::new();
 
         for file in self.dtb_files {
-            let src_path = path_append(&mig_info.work_path.path, file);
-            let tgt_path = path_append(&RPI_BOOT_PATH, file);
+            let src_path = path_append(&mig_info.work_path.path, &file);
+            let tgt_path = path_append(&RPI_BOOT_PATH, &file);
 
             if file_exists(&tgt_path) {
                 let backup_file = format!("{}-{}", file, system_time.as_secs());
@@ -238,7 +225,11 @@ impl BootManager for RaspiBootManager<'_> {
                         backup_path.display()
                     ),
                 ))?;
-                boot_cfg_bckup.push((file.to_string(), backup_file));
+                boot_cfg_bckup.push(BackupCfg::from_device_info(
+                    &boot_path.device_info,
+                    &src_path,
+                    &backup_path,
+                ));
             }
 
             copy(&src_path, &tgt_path).context(MigErrCtx::from_remark(
@@ -249,28 +240,6 @@ impl BootManager for RaspiBootManager<'_> {
                     tgt_path.display()
                 ),
             ))?;
-
-            if let Some(file_info) = mig_info.dtb_file.iter().find(|&file_info| {
-                if let Some(ref rel_path) = file_info.rel_path {
-                    &&*rel_path.to_string_lossy() == file
-                } else {
-                    false
-                }
-            }) {
-                debug!("Found digest for '{}', checking ", file);
-                match check_digest(&tgt_path, &file_info.hash_info) {
-                    Ok(res) => {
-                        if !res {
-                            // TODO: implement rollback, return error
-                            warn!("Digest did not match on '{}' proceeding anyway", file)
-                        }
-                    }
-                    Err(why) => warn!(
-                        "Failed to check digest on file '{}', error: {:?}, proceeding anyway",
-                        file, why
-                    ),
-                }
-            }
         }
 
         let config_path = path_append(&boot_path.path, RPI_CONFIG_TXT);
@@ -298,7 +267,11 @@ impl BootManager for RaspiBootManager<'_> {
                 ),
             ))?;
 
-            boot_cfg_bckup.push((String::from(RPI_CONFIG_TXT), backup_file.clone()));
+            boot_cfg_bckup.push(BackupCfg::from_device_info(
+                &boot_path.device_info,
+                &config_path,
+                &backup_path,
+            ));
 
             info!(
                 "Created backup of '{}' in '{}'",
@@ -387,7 +360,11 @@ impl BootManager for RaspiBootManager<'_> {
                 ),
             ))?;
 
-            boot_cfg_bckup.push((String::from(RPI_CMDLINE_TXT), backup_file.clone()));
+            boot_cfg_bckup.push(BackupCfg::from_device_info(
+                &boot_path.device_info,
+                &config_path,
+                &backup_path,
+            ));
         }
 
         let cmdline_str = match read_to_string(&cmdline_path) {

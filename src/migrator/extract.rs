@@ -232,7 +232,6 @@ impl Extractor {
 
     pub fn do_extract(&mut self, output_path: Option<&Path>) -> Result<ImageType, MigError> {
         trace!("do_extract: entered");
-        let work_dir = &self.work_dir;
 
         let mountpoint = match mktemp(true, Some(MOUNTPOINT_TEMPLATE), Some(self.work_dir.clone()))
         {

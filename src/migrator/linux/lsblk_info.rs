@@ -553,14 +553,17 @@ impl<'a> LsblkInfo {
                 }
             };
 
-            let get_u64 = |p: &HashMap<String, String>, s: &str| -> Result<Option<u64>, MigError> {
+            let get_u64 = |p: &HashMap<String, String>, s: &str| -> Result<u64, MigError> {
                 if let Some(res) = p.get(s) {
-                    Ok(Some(res.parse::<u64>().context(MigErrCtx::from_remark(
+                    Ok(res.parse::<u64>().context(MigErrCtx::from_remark(
                         MigErrorKind::Upstream,
                         &format!("Failed to parse u64 from '{}'", s),
-                    ))?))
+                    ))?)
                 } else {
-                    Ok(None)
+                    Err(MigError::from_remark(
+                        MigErrorKind::NotFound,
+                        &format!("Parameter not found: '{}'", s),
+                    ))
                 }
             };
 
@@ -663,13 +666,11 @@ impl<'a> LsblkInfo {
                             } else {
                                 None
                             },
-                            ro: get_str(&params, "RO")?,
+                            ro: get_str(&params, "RO")? == "1",
                             size: get_u64(&params, "SIZE")?,
-                            parttype: None,
-                            partlabel: None,
                             partuuid: None,
                             // TODO: bit dodgy this one
-                            index: Some((children.len() + 1) as u16),
+                            index: (children.len() + 1) as u16,
                             part_entry_type: "".to_string(),
                         });
                     } else {

@@ -150,7 +150,7 @@ fn get_uboot_cfg(config: &Config, dev_type: DeviceType) -> (u8, UEnvStrategy) {
         } else {
             match dev_type {
                 DeviceType::BeagleboneGreen => 1,
-                DeviceType::BeagleboneBlack => 1,
+                //DeviceType::BeagleboneBlack => 1,
                 DeviceType::BeagleboardXM => 0,
                 _ => 0,
             }
