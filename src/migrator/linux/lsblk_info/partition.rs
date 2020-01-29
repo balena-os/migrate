@@ -78,19 +78,15 @@ impl Partition {
     pub fn get_linux_path(&self) -> Result<PathBuf, MigError> {
         let dev_path = if let Some(ref uuid) = self.uuid {
             path_append(DISK_BY_UUID_PATH, uuid)
+        } else if let Some(ref partuuid) = self.partuuid {
+            path_append(DISK_BY_PARTUUID_PATH, partuuid)
+        } else if let Some(ref label) = self.label {
+            path_append(DISK_BY_LABEL_PATH, label)
         } else {
-            if let Some(ref partuuid) = self.partuuid {
-                path_append(DISK_BY_PARTUUID_PATH, partuuid)
-            } else {
-                if let Some(ref label) = self.label {
-                    path_append(DISK_BY_LABEL_PATH, label)
-                } else {
-                    return Err(MigError::from_remark(
-                        MigErrorKind::NotFound,
-                        &format!("No unique device path found for device: '{}'", self.name),
-                    ));
-                }
-            }
+            return Err(MigError::from_remark(
+                MigErrorKind::NotFound,
+                &format!("No unique device path found for device: '{}'", self.name),
+            ));
         };
         if file_exists(&dev_path) {
             Ok(dev_path)

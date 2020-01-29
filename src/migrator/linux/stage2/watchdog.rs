@@ -1,3 +1,5 @@
+#![allow(unused_doc_comments)]
+
 use libc::c_int;
 use log::{debug, error, info, warn};
 use std::fs::{File, OpenOptions};
@@ -33,9 +35,24 @@ struct WatchdogInfo {
     identity: [u8; 32],    /* Identity of the board */
 }
 
+/// # Safety
+/// Clippy wants this and cargo does not like it
+/// This unsafe function is only declared here and called elsewhere
 ioctl_read!(wdioc_get_timeout, WD_IOC_MAGIC, WD_IOC_GETTIMEOUT, c_int);
+
+/// # Safety
+/// Clippy wants this and cargo does not like it
+/// This unsafe function is only declared here and called elsewhere
 ioctl_read!(wdioc_get_timeleft, WD_IOC_MAGIC, WD_IOC_GETTIMELEFT, c_int);
+
+/// # Safety
+/// Clippy wants this and cargo does not like it
+/// This unsafe function is only declared here and called elsewhere
 ioctl_read!(wdioc_keepalive, WD_IOC_MAGIC, WD_IOC_KEEPALIVE, c_int);
+
+/// # Safety
+/// Clippy wants this and cargo does not like it
+/// This unsafe function is only declared here and called elsewhere
 ioctl_read_buf!(wdioc_get_support, WD_IOC_MAGIC, WD_IOC_GETSUPPORT, u8);
 
 // ioctl_read!(wdioc_get_status, WD_IOC_MAGIC, WD_IOC_GETSTATUS, c_int);

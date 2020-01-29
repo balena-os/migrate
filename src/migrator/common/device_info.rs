@@ -165,12 +165,10 @@ impl DeviceInfo {
             format!("PARTUUID={}", partuuid)
         } else if let Some(ref uuid) = self.uuid {
             format!("UUID={}", uuid)
+        } else if let Some(ref uuid) = self.uuid {
+            format!("UUID={}", uuid)
         } else {
-            if let Some(ref uuid) = self.uuid {
-                format!("UUID={}", uuid)
-            } else {
-                self.device.clone()
-            }
+            self.device.clone()
         }
     }
 

@@ -34,7 +34,7 @@ use crate::{
 };
 
 // TODO: this might be a bit of a tight fit, allow (s|h)d([a-z])(\d+) too ?
-const UBOOT_DRIVE_FILTER_REGEX: &str = r#"^mmcblk\d+$"#;
+// const UBOOT_DRIVE_FILTER_REGEX: &str = r#"^mmcblk\d+$"#;
 const UBOOT_DRIVE_REGEX: &str = r#"^/dev/mmcblk\d+p(\d+)$"#;
 #[derive(Debug, Clone)]
 enum BootFileType {
@@ -44,7 +44,7 @@ enum BootFileType {
 }
 
 const UBOOT_DEV_OFFSET: u64 = 0x60000;
-const UBOOT_MAGIC_WORD: u32 = 0x27051956;
+const UBOOT_MAGIC_WORD: u32 = 0x2705_1956;
 
 const BALENA_UBOOT_UNAME: &str = "balena-migrate";
 
@@ -141,8 +141,8 @@ impl UBootManager {
 
     fn u32_from_big_endian(buffer: &[u8], offset: usize) -> u32 {
         let mut res: u32 = 0;
-        for i in offset..offset + 4 {
-            res = res * 0x100 + (buffer[i] as u32);
+        for i in buffer.iter().skip(offset).take(4) {
+            res = res * 0x100 + (buffer[*i as usize] as u32);
         }
         res
     }
@@ -150,7 +150,7 @@ impl UBootManager {
     fn get_target_file_name(
         file_type: BootFileType,
         base_path: &Path,
-        file: Option<String>,
+        file: Option<&str>,
     ) -> PathBuf {
         // TODO: cache results in object ?
         // TODO: switch BootFileType / Strategy inside out
@@ -237,7 +237,7 @@ impl UBootManager {
                 boot_req_space += if !file_exists(UBootManager::get_target_file_name(
                     BootFileType::DtbFile,
                     &path.path.as_path(),
-                    Some(dtb_name.clone()),
+                    Some(dtb_name.as_str()),
                 )) {
                     fs::metadata(&cfg_dtb_name)
                         .context(MigErrCtx::from_remark(
@@ -271,7 +271,7 @@ impl UBootManager {
         // backup all found uEnv.txt files
         // TODO: this will not work for files in different drives from install_path.
 
-        for uenv_path in uboot_info.uenv_path {
+        for uenv_path in &uboot_info.uenv_path {
             if !is_balena_file(&uenv_path)? {
                 let backup_uenv = format!(
                     "{}-{}",
@@ -334,7 +334,7 @@ impl UBootManager {
         } else {
             return Err(MigError::from_remark(
                 MigErrorKind::InvState,
-                &format!("setup: incomplete configuration, missing install_path"),
+                "setup: incomplete configuration, missing install_path",
             ));
         };
 
@@ -370,12 +370,12 @@ impl UBootManager {
             ))?;
         }
 
-        for dtb_name in self.dtb_names {
+        for dtb_name in &self.dtb_names {
             let dtb_src = path_append(&mig_info.work_path.path, &dtb_name);
             let dtb_dest = UBootManager::get_target_file_name(
                 BootFileType::DtbFile,
                 &install_path.path,
-                Some(dtb_name),
+                Some(dtb_name.as_str()),
             );
 
             // TODO: inconsistent - no hash checking here
@@ -398,6 +398,7 @@ impl UBootManager {
         //backup all found uEnv.txt files
         let mut boot_cfg_bckup: Vec<BackupCfg> = Vec::new();
         UBootManager::backup_uenv(&uboot_info, &mut boot_cfg_bckup)?;
+        s2_cfg.set_boot_bckup(boot_cfg_bckup);
 
         let uenv_path = path_append(&install_path.path, UENV_FILE_NAME);
 
@@ -457,7 +458,7 @@ impl UBootManager {
         } else {
             return Err(MigError::from_remark(
                 MigErrorKind::InvState,
-                &format!("setup: incomplete configuration, missing install_path"),
+                "setup: incomplete configuration, missing install_path",
             ));
         };
 
@@ -490,9 +491,9 @@ impl UBootManager {
             mig_info.kernel_file.path.display(),
             kernel_dest.display()
         );
-        copied_files.push(kernel_dest);
 
         call(CHMOD_CMD, &["+x", &kernel_dest.to_string_lossy()], false)?;
+        copied_files.push(kernel_dest);
 
         let initrd_dest = UBootManager::get_target_file_name(
             BootFileType::Initramfs,
@@ -533,7 +534,7 @@ impl UBootManager {
         }
 
         let mut boot_cfg_bckup: Vec<BackupCfg> = Vec::new();
-        UBootManager::backup_uenv(&uboot_info, &mut boot_cfg_bckup);
+        UBootManager::backup_uenv(&uboot_info, &mut boot_cfg_bckup)?;
         s2_cfg.set_boot_bckup(boot_cfg_bckup);
 
         // **********************************************************************
@@ -660,7 +661,7 @@ impl BootManager for UBootManager {
         debug!("can_migrate: using flash device '{}'", flash_device.name);
 
         let mut uboot_info = UBootInfo {
-            flash_device: flash_device,
+            flash_device,
             in_mbr: false,
             mlo_path: None,
             install_path: None,
@@ -724,30 +725,22 @@ impl BootManager for UBootManager {
                         &lsblk_part,
                     )?;
 
-                    if uboot_info.install_path.is_none() {
-                        if self.check_boot_req_space(&path_info, mig_info)? {
-                            // enough space to install hereget_
-                            uboot_info.install_path = Some(path_info.clone());
-                        }
+                    if uboot_info.install_path.is_none()
+                        && self.check_boot_req_space(&path_info, mig_info)?
+                    {
+                        // enough space to install hereget_
+                        uboot_info.install_path = Some(path_info.clone());
                     }
 
-                    if uboot_info.mlo_path.is_none() {
-                        if partition.is_bootable()
-                            && ((partition.ptype == 0xe) || (partition.ptype == 0xc))
-                        {
-                            // a bootable FAT partition - look for uboot boot loader
-                            info!(
-                                "Found potential uboot bootloader partition '{:?}'",
-                                partition
-                            );
-
-                            if path_append(&mountpoint, MLO_FILE_NAME).exists()
-                                && path_append(&mountpoint, UBOOT_FILE_NAME).exists()
-                            {
-                                // uboot boot manager found here
-                                uboot_info.mlo_path = Some(path_info.clone());
-                            }
-                        }
+                    if uboot_info.mlo_path.is_none()
+                        && partition.is_bootable()
+                        && ((partition.ptype == 0xe) || (partition.ptype == 0xc))
+                        && path_append(&mountpoint, MLO_FILE_NAME).exists()
+                        && path_append(&mountpoint, UBOOT_FILE_NAME).exists()
+                    {
+                        info!("Found uboot bootloader partition '{:?}'", partition);
+                        // uboot boot manager found here
+                        uboot_info.mlo_path = Some(path_info.clone());
                     }
 
                     // check for existing uEnv.txt files that might need to be hidden / backed up
@@ -845,7 +838,7 @@ impl BootManager for UBootManager {
             }
         } else {
             error!("setup: boot manager is missing config data",);
-            return Err(MigError::displayed());
+            Err(MigError::displayed())
         }
 
         // TODO: allow devices other than mmcblk

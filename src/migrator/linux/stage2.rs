@@ -230,8 +230,8 @@ impl<'a> Stage2 {
     pub fn migrate(&mut self) -> Result<(), MigError> {
         debug!("migrate: entered");
 
-        let device_type = self.config.get_device_type();
-        let boot_type = self.config.get_boot_type();
+        let device_type = *self.config.get_device_type();
+        let boot_type = *self.config.get_boot_type();
 
         // Recover device type and restore original boot configuration
 
@@ -270,7 +270,7 @@ impl<'a> Stage2 {
 
         thread::sleep(Duration::from_secs(DEBUG_CONSOLE_DELAY));
 
-        let device = device_impl::from_config(device_type, *boot_type)?;
+        let device = device_impl::from_config(device_type, boot_type)?;
 
         if device.restore_boot(&self.mounts.borrow(), &self.config) {
             info!("Boot configuration was restored sucessfully");

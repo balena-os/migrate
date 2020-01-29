@@ -324,8 +324,6 @@ pub(crate) fn restore_backups(root_path: &Path, backups: &[BackupCfg]) -> bool {
     // restore boot config backups
     let mut res = true;
     for backup in backups {
-        let device = &backup.device;
-
         let src = path_append(root_path, &backup.source);
         let tgt = path_append(root_path, &backup.backup);
         if let Err(why) = copy(&src, &tgt) {
@@ -687,7 +685,7 @@ pub(crate) fn is_file_type<P: AsRef<Path>>(file: P, ftype: &FileType) -> Result<
         FileType::KernelAARCH64 => Ok(KERNEL_AARCH64_FTYPE_RE.is_match(&cmd_res.stdout)),
         FileType::Json => Ok(OS_CFG_FTYPE_RE.is_match(&cmd_res.stdout)),
         FileType::Text => Ok(TEXT_FTYPE_RE.is_match(&cmd_res.stdout)),
-        FileType::DTB => Ok(DTB_FTYPE_RE.is_match(&cmd_res.stdout)),
+        // FileType::DTB => Ok(DTB_FTYPE_RE.is_match(&cmd_res.stdout)),
         FileType::GZipTar => Ok(GZIP_TAR_FTYPE_RE.is_match(&cmd_res.stdout)),
     }
 }

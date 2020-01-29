@@ -183,7 +183,7 @@ pub(crate) enum FileType {
     InitRD,
     Json,
     Text,
-    DTB,
+    // DTB,
     GZipTar,
 }
 
@@ -198,7 +198,7 @@ impl FileType {
             //           FileType::KernelI386 => "balena migrate kernel image for I386",
             FileType::KernelAARCH64 => "balena migrate kernel image for AARCH64",
             FileType::InitRD => "balena migrate initramfs",
-            FileType::DTB => "Device Tree Blob",
+            // FileType::DTB => "Device Tree Blob",
             FileType::Json => "balena config.json file",
             FileType::Text => "Text file",
             FileType::GZipTar => "Gzipped Tar file",

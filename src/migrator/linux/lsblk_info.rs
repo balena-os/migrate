@@ -284,11 +284,13 @@ impl<'a> LsblkInfo {
                     let dev_maj_min = lsblk_result.get_str("MAJ:MIN")?;
                     if let Some(captures) = maj_min_re.captures(dev_maj_min) {
                         let this_maj = captures.get(1).unwrap().as_str();
-                        if BLOC_DEV_SUPP_MAJ_NUMBERS
+
+                        #[allow(clippy::search_is_some)]
+                        let res = BLOC_DEV_SUPP_MAJ_NUMBERS
                             .iter()
                             .find(|sup_maj| this_maj == **sup_maj)
-                            .is_some()
-                        {
+                            .is_some();
+                        if res {
                             lsblk_info
                                 .blockdevices
                                 .push(BlockDevice::new(&lsblk_result)?);
@@ -465,20 +467,16 @@ impl<'a> LsblkInfo {
         if let Some(part_name) = part_path.file_name() {
             let cmp_name = part_name.to_string_lossy();
             let mut result: Option<(&BlockDevice, &Partition)> = None;
-            if self
-                .blockdevices
-                .iter()
-                .find(|&dev| {
-                    if let Ok(partition) = dev.get_devinfo_from_part_name(&*cmp_name) {
-                        result = Some((dev, partition));
-                        true
-                    } else {
-                        false
-                    }
-                })
-                .is_some()
-            {
-                Ok(result.unwrap())
+            let _res = self.blockdevices.iter().find(|&dev| {
+                if let Ok(partition) = dev.get_devinfo_from_part_name(&*cmp_name) {
+                    result = Some((dev, partition));
+                    true
+                } else {
+                    false
+                }
+            });
+            if let Some(result) = result {
+                Ok(result)
             } else {
                 Err(MigError::from_remark(
                     MigErrorKind::NotFound,
@@ -494,206 +492,6 @@ impl<'a> LsblkInfo {
                 &format!("The device path is not valid '{}'", part_path.display()),
             ))
         }
-    }
-
-    fn call_lsblk(device: Option<&Path>) -> Result<LsblkInfo, MigError> {
-        #[allow(unused_assignments)]
-        let mut dev_name = String::new();
-        let args = if let Some(device) = device {
-            dev_name = String::from(&*device.to_string_lossy());
-            vec![
-                "-b",
-                "-P",
-                "-o",
-                "NAME,KNAME,MAJ:MIN,FSTYPE,MOUNTPOINT,LABEL,UUID,RO,SIZE,TYPE",
-                dev_name.as_str(),
-            ]
-        } else {
-            vec![
-                "-b",
-                "-P",
-                "-o",
-                "NAME,KNAME,MAJ:MIN,FSTYPE,MOUNTPOINT,LABEL,UUID,RO,SIZE,TYPE",
-            ]
-        };
-
-        let cmd_res = call(LSBLK_CMD, &args, true)?;
-        if cmd_res.status.success() {
-            Ok(LsblkInfo::from_list(&cmd_res.stdout)?)
-        } else {
-            Err(MigError::from_remark(
-                MigErrorKind::ExecProcess,
-                "new: failed to determine block device attributes for",
-            ))
-        }
-    }
-
-    fn from_list(list: &str) -> Result<LsblkInfo, MigError> {
-        let param_re = Regex::new(r##"^([\S^=]+)="([^"]*)"(\s+(.*))?$"##).unwrap();
-
-        let mut lsblk_info: LsblkInfo = LsblkInfo {
-            blockdevices: Vec::new(),
-        };
-
-        let mut curr_dev: Option<BlockDevice> = None;
-
-        for line in list.lines() {
-            trace!("from_list: processing line: '{}'", line);
-            let mut curr_pos = line;
-            let mut params: HashMap<String, String> = HashMap::new();
-
-            let get_str = |p: &HashMap<String, String>, s: &str| -> Result<String, MigError> {
-                if let Some(res) = p.get(s) {
-                    Ok(res.clone())
-                } else {
-                    Err(MigError::from_remark(
-                        MigErrorKind::NotFound,
-                        &format!("Parameter '{}' not found in '{}'", s, line),
-                    ))
-                }
-            };
-
-            let get_u64 = |p: &HashMap<String, String>, s: &str| -> Result<u64, MigError> {
-                if let Some(res) = p.get(s) {
-                    Ok(res.parse::<u64>().context(MigErrCtx::from_remark(
-                        MigErrorKind::Upstream,
-                        &format!("Failed to parse u64 from '{}'", s),
-                    ))?)
-                } else {
-                    Err(MigError::from_remark(
-                        MigErrorKind::NotFound,
-                        &format!("Parameter not found: '{}'", s),
-                    ))
-                }
-            };
-
-            let get_pathbuf_or_none = |p: &HashMap<String, String>, s: &str| -> Option<PathBuf> {
-                if let Some(res) = p.get(s) {
-                    if res.is_empty() {
-                        None
-                    } else {
-                        Some(PathBuf::from(res))
-                    }
-                } else {
-                    None
-                }
-            };
-
-            // parse current line into hashmap
-            loop {
-                trace!("looking at '{}'", curr_pos);
-                if let Some(captures) = param_re.captures(curr_pos) {
-                    let param_name = captures.get(1).unwrap().as_str();
-                    let param_value = captures.get(2).unwrap().as_str();
-
-                    if !param_value.is_empty() {
-                        params.insert(String::from(param_name), String::from(param_value));
-                    }
-
-                    if let Some(ref rest) = captures.get(4) {
-                        curr_pos = rest.as_str();
-                        trace!(
-                            "Found param: '{}', value '{}', rest '{}'",
-                            param_name,
-                            param_value,
-                            curr_pos
-                        );
-                    } else {
-                        trace!(
-                            "Found param: '{}', value '{}', rest None",
-                            param_name,
-                            param_value
-                        );
-                        break;
-                    }
-                } else {
-                    warn!("Failed to parse '{}'", curr_pos);
-                    break;
-                }
-            }
-
-            let dev_type = get_str(&params, "TYPE")?;
-
-            trace!("got type: '{}'", dev_type);
-
-            // TODO: remove loop - just for testing
-            match dev_type.as_str() {
-                "disk" | "loop" => {
-                    if let Some(curr_dev) = curr_dev {
-                        lsblk_info.blockdevices.push(curr_dev);
-                    }
-
-                    curr_dev = Some(BlockDevice {
-                        name: get_str(&params, "NAME")?,
-                        kname: get_str(&params, "KNAME")?,
-                        maj_min: get_str(&params, "MAJ:MIN")?,
-                        uuid: if let Some(uuid) = params.get("UUID") {
-                            Some(uuid.clone())
-                        } else {
-                            None
-                        },
-                        size: get_u64(&params, "SIZE")?,
-                        children: None,
-                    });
-                }
-                "part" => {
-                    if let Some(ref mut curr_dev) = curr_dev {
-                        let children = if let Some(ref mut children) = curr_dev.children {
-                            children
-                        } else {
-                            curr_dev.children = Some(Vec::new());
-                            curr_dev.children.as_mut().unwrap()
-                        };
-
-                        children.push(Partition {
-                            name: get_str(&params, "NAME")?,
-                            kname: get_str(&params, "KNAME")?,
-                            maj_min: get_str(&params, "MAJ:MIN")?,
-                            fstype: if let Some(fstype) = params.get("FSTYPE") {
-                                Some(fstype.clone())
-                            } else {
-                                None
-                            },
-                            mountpoint: get_pathbuf_or_none(&params, "MOUNTPOINT"),
-                            label: if let Some(label) = params.get("LABEL") {
-                                Some(label.clone())
-                            } else {
-                                None
-                            },
-                            part_table_type: "".to_string(),
-                            uuid: if let Some(uuid) = params.get("UUID") {
-                                Some(uuid.clone())
-                            } else {
-                                None
-                            },
-                            ro: get_str(&params, "RO")? == "1",
-                            size: get_u64(&params, "SIZE")?,
-                            partuuid: None,
-                            // TODO: bit dodgy this one
-                            index: (children.len() + 1) as u16,
-                            part_entry_type: "".to_string(),
-                        });
-                    } else {
-                        return Err(MigError::from_remark(
-                            MigErrorKind::InvState,
-                            &format!(
-                                "Invalid state while parsing lsblk output line '{}', no device",
-                                line
-                            ),
-                        ));
-                    };
-                }
-
-                _ => debug!("not processing line, type unknown: '{}'", line),
-            }
-        }
-
-        if let Some(curr_dev) = curr_dev {
-            lsblk_info.blockdevices.push(curr_dev);
-            // curr_dev = None;
-        }
-
-        Ok(lsblk_info)
     }
 }
 

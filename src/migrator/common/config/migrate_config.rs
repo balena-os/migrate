@@ -120,7 +120,7 @@ pub(crate) struct MigrateConfig {
     log: Option<LogConfig>,
     kernel: Option<FileRef>,
     initrd: Option<FileRef>,
-    device_tree: Option<Vec<FileRef>>,
+    // device_tree: Option<Vec<FileRef>>,
     // TODO: check fail mode processing
     fail_mode: Option<FailMode>,
     backup: Option<Vec<VolumeConfig>>,
@@ -147,7 +147,7 @@ impl<'a> MigrateConfig {
             log: None,
             kernel: None,
             initrd: None,
-            device_tree: None,
+            // device_tree: None,
             fail_mode: None,
             backup: None,
             nwmgr_files: None,
@@ -326,13 +326,13 @@ impl<'a> MigrateConfig {
         }
     }
 
-    pub fn get_dtb_refs(&'a self) -> Option<&'a Vec<FileRef>> {
+    /*pub fn get_dtb_refs(&'a self) -> Option<&'a Vec<FileRef>> {
         if let Some(ref path) = self.device_tree {
             Some(path)
         } else {
             None
         }
-    }
+    }*/
 
     pub fn get_log_device(&'a self) -> Option<&'a DeviceSpec> {
         if let Some(ref log_info) = self.log {

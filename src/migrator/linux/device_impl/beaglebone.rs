@@ -40,7 +40,7 @@ const BBXM_KOPTS: &str = "";
 
 const BBG_KOPTS: &str = "";
 
-const BBB_KOPTS: &str = "";
+// const BBB_KOPTS: &str = "";
 
 // Supported models
 // TI OMAP3 BeagleBoard xM
@@ -85,10 +85,7 @@ pub(crate) fn is_bb(
         // TODO: found this device model string on a beaglebone-green running debian wheezy
         debug!("match found for BeagleboneGreen");
         Ok(Some(Box::new(BeagleboneGreen::from_config(
-            mig_info,
-            config,
-            s2_cfg,
-            String::from("am335x"),
+            mig_info, config, s2_cfg,
         )?)))
     } else if let Some(captures) = Regex::new(BB_MODEL_REGEX).unwrap().captures(model_string) {
         let model = captures
@@ -97,26 +94,18 @@ pub(crate) fn is_bb(
             .as_str()
             .trim_matches(char::from(0));
 
-        let chip_name = captures.get(3).unwrap().as_str().to_lowercase();
-
         match model {
             "xM" => {
                 debug!("match found for BeagleboardXM");
                 // TODO: dtb-name is a guess replace with real one
                 Ok(Some(Box::new(BeagleboardXM::from_config(
-                    mig_info,
-                    config,
-                    s2_cfg,
-                    String::from("omap3-beagle-xm.dtb"),
+                    mig_info, config, s2_cfg,
                 )?)))
             }
             "Green" => {
                 debug!("match found for BeagleboneGreen");
                 Ok(Some(Box::new(BeagleboneGreen::from_config(
-                    mig_info,
-                    config,
-                    s2_cfg,
-                    format!("{}-boardgreen.dtb", chip_name),
+                    mig_info, config, s2_cfg,
                 )?)))
             }
             /*
@@ -176,7 +165,6 @@ impl BeagleboneGreen {
         mig_info: &MigrateInfo,
         config: &Config,
         s2_cfg: &mut Stage2ConfigBuilder,
-        chip_name: String,
     ) -> Result<BeagleboneGreen, MigError> {
         let os_name = &mig_info.os_name;
 
@@ -385,7 +373,6 @@ impl BeagleboardXM {
         mig_info: &MigrateInfo,
         config: &Config,
         s2_cfg: &mut Stage2ConfigBuilder,
-        dtb_name: String,
     ) -> Result<BeagleboardXM, MigError> {
         let os_name = &mig_info.os_name;
 

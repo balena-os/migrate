@@ -112,7 +112,7 @@ impl RaspberryPi2 {
         } else {
             let message = format!("The OS '{}' is not supported for RaspberryPi2", os_name,);
             error!("{}", message);
-            return Err(MigError::from_remark(MigErrorKind::InvParam, &message));
+            Err(MigError::from_remark(MigErrorKind::InvParam, &message))
         }
     }
 

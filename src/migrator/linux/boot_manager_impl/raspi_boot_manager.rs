@@ -48,7 +48,7 @@ impl RaspiBootManager {
     pub fn for_stage2(boot_type: BootType) -> impl BootManager + 'static {
         RaspiBootManager {
             bootmgr_path: None,
-            boot_type: boot_type,
+            boot_type,
             dtb_files: Vec::new(),
         }
     }
@@ -107,7 +107,7 @@ impl BootManager for RaspiBootManager {
 
         #[allow(clippy::redundant_pattern_matching)]
         //TODO refactor this function to fix the clippy warning
-        for file in self.dtb_files {
+        for file in &self.dtb_files {
             if !file_exists(path_append(&mig_info.work_path.path, file)) {
                 error!(
                     "The file '{}' could not be found in the working directory",
@@ -210,7 +210,7 @@ impl BootManager for RaspiBootManager {
 
         let mut boot_cfg_bckup: Vec<BackupCfg> = Vec::new();
 
-        for file in self.dtb_files {
+        for file in &self.dtb_files {
             let src_path = path_append(&mig_info.work_path.path, &file);
             let tgt_path = path_append(&RPI_BOOT_PATH, &file);
 

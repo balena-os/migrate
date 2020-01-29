@@ -150,7 +150,7 @@ fn create_int<'a>(
 
     let mut written = false;
     let os_api = OSApi::new()?;
-    for ref volume in config {
+    for volume in config.iter() {
         info!("backup to volume: '{}'", volume.volume);
 
         for item in &volume.items {

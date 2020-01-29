@@ -8,9 +8,7 @@ use std::str::FromStr;
 use serde::{Deserialize, Serialize};
 use serde_yaml;
 
-pub const EMPTY_BACKUPS: &[BackupCfg] = &[];
-
-const MODULE: &str = "stage2::stage2:config";
+const EMPTY_BACKUPS: &[BackupCfg] = &[];
 
 use crate::defs::DeviceSpec;
 use crate::linux::lsblk_info::partition::Partition;
@@ -114,35 +112,28 @@ impl BackupCfg {
         BackupCfg {
             device: if let Some(uuid) = device.uuid {
                 DeviceSpec::Uuid(uuid)
+            } else if let Some(partuuid) = device.partuuid {
+                DeviceSpec::PartUuid(partuuid)
+            } else if let Some(label) = device.label {
+                DeviceSpec::Label(label)
             } else {
-                if let Some(partuuid) = device.partuuid {
-                    DeviceSpec::PartUuid(partuuid)
-                } else {
-                    if let Some(label) = device.label {
-                        DeviceSpec::Label(label)
-                    } else {
-                        DeviceSpec::DevicePath(device.get_path())
-                    }
-                }
+                DeviceSpec::DevicePath(device.get_path())
             },
             source: source.to_path_buf(),
             backup: backup.to_path_buf(),
         }
     }
+
     pub fn from_device_info(device: &DeviceInfo, source: &Path, backup: &Path) -> BackupCfg {
         BackupCfg {
             device: if let Some(ref uuid) = device.uuid {
                 DeviceSpec::Uuid(uuid.clone())
+            } else if let Some(ref partuuid) = device.part_uuid {
+                DeviceSpec::PartUuid(partuuid.clone())
+            } else if let Some(ref label) = device.part_label {
+                DeviceSpec::Label(label.clone())
             } else {
-                if let Some(ref partuuid) = device.part_uuid {
-                    DeviceSpec::PartUuid(partuuid.clone())
-                } else {
-                    if let Some(ref label) = device.part_label {
-                        DeviceSpec::Label(label.clone())
-                    } else {
-                        DeviceSpec::DevicePath(PathBuf::from(&device.device))
-                    }
-                }
+                DeviceSpec::DevicePath(PathBuf::from(&device.device))
             },
             source: source.to_path_buf(),
             backup: backup.to_path_buf(),
@@ -524,6 +515,7 @@ impl<'a> Stage2ConfigBuilder {
         self.work_path.set_ref(val);
     }
 
+    #[allow(clippy::ptr_arg)]
     pub fn set_hacks(&mut self, val: &Vec<String>) {
         self.hacks.set_ref(val);
     }
