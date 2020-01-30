@@ -317,8 +317,8 @@ impl UBootManager {
         uboot_info: &UBootInfo,
         mig_info: &MigrateInfo,
         _config: &Config,
-        s2_cfg: &mut Stage2ConfigBuilder,
         kernel_opts: &str,
+        boot_cfg_bckup: &mut Vec<BackupCfg>,
     ) -> Result<(), MigError> {
         // **********************************************************************
         // copy new kernel & initramfs
@@ -397,9 +397,7 @@ impl UBootManager {
         }
 
         //backup all found uEnv.txt files
-        let mut boot_cfg_bckup: Vec<BackupCfg> = Vec::new();
-        UBootManager::backup_uenv(&uboot_info, &mut boot_cfg_bckup)?;
-        s2_cfg.set_boot_bckup(boot_cfg_bckup);
+        UBootManager::backup_uenv(&uboot_info, boot_cfg_bckup)?;
 
         let uenv_path = path_append(&install_path.path, UENV_FILE_NAME);
 
@@ -439,8 +437,8 @@ impl UBootManager {
         &self,
         uboot_info: &UBootInfo,
         mig_info: &MigrateInfo,
-        s2_cfg: &mut Stage2ConfigBuilder,
         kernel_opts: &str,
+        boot_cfg_bckup: &mut Vec<BackupCfg>,
     ) -> Result<(), MigError> {
         // **********************************************************************
         // read drive number & partition number from kernel / initramfs location
@@ -534,9 +532,7 @@ impl UBootManager {
             copied_files.push(dtb_dest);
         }
 
-        let mut boot_cfg_bckup: Vec<BackupCfg> = Vec::new();
-        UBootManager::backup_uenv(&uboot_info, &mut boot_cfg_bckup)?;
-        s2_cfg.set_boot_bckup(boot_cfg_bckup);
+        UBootManager::backup_uenv(&uboot_info, boot_cfg_bckup)?;
 
         // **********************************************************************
         // ** create new /uEnv.txt
@@ -826,17 +822,100 @@ impl BootManager for UBootManager {
         s2_cfg: &mut Stage2ConfigBuilder,
         kernel_opts: &str,
     ) -> Result<(), MigError> {
-        // for sake of panic avoidance - later code functions relies on this
+        // TODO: setup MLO/u-boot.img
 
         if let Some(ref uboot_info) = self.uboot_info {
-            match self.strategy {
-                UEnvStrategy::UName => {
-                    self.strategy_uname(uboot_info, mig_info, config, s2_cfg, kernel_opts)
-                }
-                UEnvStrategy::Manual => {
-                    self.strategy_manual(uboot_info, mig_info, s2_cfg, kernel_opts)
-                }
+            let mut boot_cfg_bckup: Vec<BackupCfg> = Vec::new();
+
+            // copy u-boot boot manager
+            if let Some(ref mlo_path) = uboot_info.mlo_path {
+                let mlo_src = path_append(&mlo_path.path, MLO_FILE_NAME);
+                let mlo_dest = path_append(
+                    &mlo_path.path,
+                    format!(
+                        "{}-{}",
+                        &mlo_src.to_string_lossy(),
+                        Local::now().format("%s")
+                    ),
+                );
+                fs::rename(&mlo_src, &mlo_dest).context(MigErrCtx::from_remark(
+                    MigErrorKind::Upstream,
+                    &format!(
+                        "Failed to rename '{}' to '{}'",
+                        mlo_src.display(),
+                        mlo_dest.display()
+                    ),
+                ))?;
+
+                boot_cfg_bckup.push(BackupCfg::from_device_info(
+                    &mlo_path.device_info,
+                    mlo_src.as_path(),
+                    mlo_dest.as_path(),
+                ));
+
+                let mlo_dest = mlo_src;
+                let mlo_src = path_append(&mig_info.work_path.path, MLO_FILE_NAME);
+                fs::copy(&mlo_src, &mlo_dest).context(MigErrCtx::from_remark(
+                    MigErrorKind::Upstream,
+                    &format!(
+                        "Failed to copy '{}' to '{}'",
+                        mlo_src.display(),
+                        mlo_dest.display()
+                    ),
+                ))?;
+
+                let uboot_src = path_append(&mlo_path.path, UBOOT_FILE_NAME);
+                let uboot_dest = path_append(
+                    &mlo_path.path,
+                    format!(
+                        "{}-{}",
+                        &uboot_src.to_string_lossy(),
+                        Local::now().format("%s")
+                    ),
+                );
+                fs::rename(&uboot_src, &uboot_dest).context(MigErrCtx::from_remark(
+                    MigErrorKind::Upstream,
+                    &format!(
+                        "Failed to rename '{}' to '{}'",
+                        uboot_src.display(),
+                        uboot_dest.display()
+                    ),
+                ))?;
+
+                boot_cfg_bckup.push(BackupCfg::from_device_info(
+                    &mlo_path.device_info,
+                    uboot_src.as_path(),
+                    uboot_dest.as_path(),
+                ));
+
+                let uboot_dest = uboot_src;
+                let uboot_src = path_append(&mig_info.work_path.path, UBOOT_FILE_NAME);
+                fs::copy(&uboot_src, &uboot_dest).context(MigErrCtx::from_remark(
+                    MigErrorKind::Upstream,
+                    &format!(
+                        "Failed to copy '{}' to '{}'",
+                        uboot_src.display(),
+                        uboot_dest.display()
+                    ),
+                ))?;
+            } else {
+                if uboot_info.in_mbr {}
             }
+
+            let res = match self.strategy {
+                UEnvStrategy::UName => self.strategy_uname(
+                    uboot_info,
+                    mig_info,
+                    config,
+                    kernel_opts,
+                    &mut boot_cfg_bckup,
+                ),
+                UEnvStrategy::Manual => {
+                    self.strategy_manual(uboot_info, mig_info, kernel_opts, &mut boot_cfg_bckup)
+                }
+            };
+            s2_cfg.set_boot_bckup(boot_cfg_bckup);
+            res
         } else {
             error!("setup: boot manager is missing config data",);
             Err(MigError::displayed())

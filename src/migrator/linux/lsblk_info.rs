@@ -21,6 +21,8 @@ use block_device::BlockDevice;
 
 // const GPT_EFI_PART: &str = "C12A7328-F81F-11D2-BA4B-00A0C93EC93B";
 
+// TODO: take care of updating mountpoints, eg wih findmnt
+
 const BLOC_DEV_SUPP_MAJ_NUMBERS: [&str; 45] = [
     "3", "8", "9", "21", "33", "34", "44", "48", "49", "50", "51", "52", "53", "54", "55", "56",
     "57", "58", "64", "65", "66", "67", "68", "69", "70", "71", "72", "73", "74", "75", "76", "77",
