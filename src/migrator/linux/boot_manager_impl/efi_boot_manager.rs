@@ -1,3 +1,4 @@
+use crate::linux::stage2::mounts::MOUNT_DIR;
 use crate::{
     common::{
         boot_manager::BootManager,
@@ -9,6 +10,7 @@ use crate::{
     defs::BootType,
     linux::{linux_common::restore_backups, stage2::mounts::Mounts},
 };
+use std::path::PathBuf;
 
 pub(crate) struct EfiBootManager {
     #[allow(dead_code)]
@@ -49,13 +51,13 @@ impl BootManager for EfiBootManager {
         Err(MigError::from(MigErrorKind::NotImpl))
     }
 
-    fn restore(&self, mounts: &Mounts, config: &Stage2Config) -> bool {
+    fn restore(&self, _mounts: &Mounts, config: &Stage2Config) -> bool {
         if self.msw_device {
             // TODO: restore boot to windows
             // a) convince syslinux to boot windows
             // b) enforce default boot to windows
         }
 
-        restore_backups(mounts.get_boot_mountpoint(), config.get_boot_backups())
+        restore_backups(config.get_boot_backups(), Some(PathBuf::from(MOUNT_DIR)))
     }
 }

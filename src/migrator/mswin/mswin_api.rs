@@ -7,7 +7,7 @@ use std::path::{Path, PathBuf};
 use crate::common::MigErrCtx;
 use crate::{
     common::{
-        config::migrate_config::DeviceSpec, device_info::DeviceInfo, os_api::OSApiImpl,
+        config::migrate_config::DeviceSpec, device_info::DeviceInfo, os_api::OSApi,
         path_info::PathInfo, MigError, MigErrorKind,
     },
     defs::{FileType, OSArch},
@@ -34,7 +34,7 @@ impl MSWinApi {
     }
 }
 
-impl OSApiImpl for MSWinApi {
+impl OSApi for MSWinApi {
     fn canonicalize<P: AsRef<Path>>(&self, path: P) -> Result<PathBuf, MigError> {
         let abs_path = path
             .as_ref()

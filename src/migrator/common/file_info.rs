@@ -77,7 +77,7 @@ impl FileInfo {
         trace!("working with path: '{}'", checked_path.display());
 
         let abs_path =
-            OSApi::new()?
+            OSApiImpl::new()?
                 .canonicalize(&checked_path)
                 .context(MigErrCtx::from_remark(
                     MigErrorKind::Upstream,

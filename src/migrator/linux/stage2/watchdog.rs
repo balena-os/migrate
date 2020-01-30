@@ -1,5 +1,5 @@
 #![allow(unused_doc_comments)]
-
+// TODO: Think about removing this module - can we actually disable watchdogs in balena?
 use libc::c_int;
 use log::{debug, error, info, warn};
 use std::fs::{File, OpenOptions};

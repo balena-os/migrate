@@ -3,7 +3,7 @@ use std::path::{Path, PathBuf};
 
 use crate::{
     common::{
-        config::migrate_config::DeviceSpec, device_info::DeviceInfo, os_api::OSApiImpl,
+        config::migrate_config::DeviceSpec, device_info::DeviceInfo, os_api::OSApi,
         path_info::PathInfo, MigErrCtx, MigError, MigErrorKind,
     },
     defs::{FileType, OSArch},
@@ -25,7 +25,7 @@ impl LinuxAPI {
     }
 }
 
-impl OSApiImpl for LinuxAPI {
+impl OSApi for LinuxAPI {
     fn canonicalize<P: AsRef<Path>>(&self, path: P) -> Result<PathBuf, MigError> {
         Ok(path
             .as_ref()
@@ -65,15 +65,18 @@ impl OSApiImpl for LinuxAPI {
 
         Ok(partition.get_linux_path()?)
     }
+
     fn get_mem_info(&self) -> Result<(u64, u64), MigError> {
         get_mem_info()
     }
+
     fn device_info_for_efi(&self) -> Result<DeviceInfo, MigError> {
         Err(MigError::from_remark(
             MigErrorKind::InvState,
             "device_info_for_efi is no implemented in linux_api",
         ))
     }
+
     fn to_linux_path<P: AsRef<Path>>(&self, path: P) -> Result<PathBuf, MigError> {
         Ok(PathBuf::from(path.as_ref()))
     }

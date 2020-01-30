@@ -149,7 +149,7 @@ fn create_int<'a>(
     trace!("create_int entered with: {:?}", config);
 
     let mut written = false;
-    let os_api = OSApi::new()?;
+    let os_api = OSApiImpl::new()?;
     for volume in config.iter() {
         info!("backup to volume: '{}'", volume.volume);
 

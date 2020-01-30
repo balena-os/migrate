@@ -14,9 +14,10 @@ use crate::{
         boot_manager_impl::{from_boot_type, RaspiBootManager},
         device_impl::Device,
         linux_common::{expect_type, restore_backups},
-        stage2::mounts::Mounts,
+        stage2::mounts::{Mounts, MOUNT_DIR},
     },
 };
+use std::path::PathBuf;
 
 const RPI_MODEL_REGEX: &str = r#"^Raspberry\s+Pi\s+(\S+)\s+Model\s+(.*)$"#;
 const RPI2_DTB_FILES: &[&str] = &["bcm2709-rpi-2-b.dtb"];
@@ -152,9 +153,9 @@ impl Device for RaspberryPi2 {
             .setup(mig_info, config, s2_cfg, &kernel_opts)
     }
 
-    fn restore_boot(&self, mounts: &Mounts, config: &Stage2Config) -> bool {
+    fn restore_boot(&self, _mounts: &Mounts, config: &Stage2Config) -> bool {
         info!("restoring boot configuration for Raspberry Pi 2");
-        restore_backups(mounts.get_boot_mountpoint(), config.get_boot_backups())
+        restore_backups(config.get_boot_backups(), Some(PathBuf::from(MOUNT_DIR)))
     }
 
     fn get_boot_device(&self) -> DeviceInfo {
@@ -240,9 +241,9 @@ impl Device for RaspberryPi3 {
             .setup(mig_info, config, s2_cfg, &kernel_opts)
     }
 
-    fn restore_boot(&self, mounts: &Mounts, config: &Stage2Config) -> bool {
+    fn restore_boot(&self, _mounts: &Mounts, config: &Stage2Config) -> bool {
         info!("restoring boot configuration for Raspberry Pi 3");
-        restore_backups(mounts.get_boot_mountpoint(), config.get_boot_backups())
+        restore_backups(config.get_boot_backups(), Some(PathBuf::from(MOUNT_DIR)))
     }
 
     fn get_boot_device(&self) -> DeviceInfo {
@@ -328,9 +329,9 @@ impl Device for RaspberryPi4_64 {
             .setup(mig_info, config, s2_cfg, &kernel_opts)
     }
 
-    fn restore_boot(&self, mounts: &Mounts, config: &Stage2Config) -> bool {
+    fn restore_boot(&self, _mounts: &Mounts, config: &Stage2Config) -> bool {
         info!("restoring boot configuration for Raspberry Pi 4");
-        restore_backups(mounts.get_boot_mountpoint(), config.get_boot_backups())
+        restore_backups(config.get_boot_backups(), Some(PathBuf::from(MOUNT_DIR)))
     }
 
     fn get_boot_device(&self) -> DeviceInfo {

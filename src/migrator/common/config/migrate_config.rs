@@ -10,7 +10,6 @@ use crate::common::config::balena_config::FileRef;
 use serde::{Deserialize, Serialize};
 
 const NO_NMGR_FILES: &[PathBuf] = &[];
-
 const NO_BACKUP_VOLUMES: &[VolumeConfig] = &[];
 
 #[derive(Debug, PartialEq, Deserialize, Clone)]

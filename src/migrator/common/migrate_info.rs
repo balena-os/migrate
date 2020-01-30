@@ -51,7 +51,7 @@ impl MigrateInfo {
     #[allow(clippy::cognitive_complexity)] //TODO refactor this function to fix the clippy warning
     pub(crate) fn new(config: &Config) -> Result<MigrateInfo, MigError> {
         debug!("new: entered");
-        let os_api = OSApi::new()?;
+        let os_api = OSApiImpl::new()?;
         let os_arch = os_api.get_os_arch()?;
         let work_path = os_api.path_info_from_path(config.migrate.get_work_dir())?;
         let work_dir = &work_path.path;
@@ -294,7 +294,7 @@ impl MigrateInfo {
                 return Err(MigError::displayed());
             };
 
-            let os_api = OSApi::new()?;
+            let os_api = OSApiImpl::new()?;
             let file_path_info = os_api.path_info_from_path(&file_info.path)?;
             if file_path_info.device_info.mountpoint != work_path.device_info.mountpoint {
                 error!("The file '{}' appears to reside on a different partition from the working directory. This setup is not supported", file_ref.path.display());

@@ -34,7 +34,7 @@ use crate::{
     },
 };
 
-const MOUNT_DIR: &str = "/tmp_mount";
+pub(crate) const MOUNT_DIR: &str = "/tmp_mount";
 const BOOTFS_DIR: &str = "boot";
 const WORKFS_DIR: &str = "work";
 const LOGFS_DIR: &str = "log";

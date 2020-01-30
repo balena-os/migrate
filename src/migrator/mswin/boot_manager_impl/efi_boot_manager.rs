@@ -300,7 +300,7 @@ impl BootManager for EfiBootManager {
 
         // create syslinux config file
         let syslinux_cfg_path = path_append(balena_efi_dir, EFI_SYSLINUX_CONFIG_FILE_X64);
-        let os_api = OSApi::new()?;
+        let os_api = OSApiImpl::new()?;
 
         debug!("writing '{}'", &syslinux_cfg_path.display());
 

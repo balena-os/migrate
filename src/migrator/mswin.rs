@@ -16,7 +16,7 @@ use crate::{
         file_size,
         format_size_with_unit,
         migrate_info::MigrateInfo,
-        os_api::OSApiImpl,
+        os_api::OSApi,
         path_append,
         stage2_config::{MountConfig, PathType, Stage2ConfigBuilder},
         Config,
@@ -51,7 +51,7 @@ pub(crate) mod drive_info;
 pub(crate) mod wmi_utils;
 
 mod boot_manager_impl;
-use crate::common::os_api::OSApi;
+use crate::common::os_api::OSApiImpl;
 
 pub struct MSWMigrator {
     config: Config,
@@ -201,8 +201,6 @@ impl<'a> MSWMigrator {
             return Err(MigError::from(MigErrorKind::Displayed));
         }
 
-
-
         // TODO: Don't migrate if we do not have PARTUUIDS
         // TODO: maybe allow hints otherwise  ->
 
@@ -224,12 +222,12 @@ impl<'a> MSWMigrator {
 
         if &self.mig_info.work_path.device_info.device == &boot_device.device {
             self.stage2_config
-                .set_work_path(&PathType::Path(OSApi::new()?.to_linux_path(work_dir)?));
+                .set_work_path(&PathType::Path(OSApiImpl::new()?.to_linux_path(work_dir)?));
         } else {
             // in windows the mount path is usually something like [a-z]:/ which is stripped by to_linux_path
             //let work_dir = OSApi::new()?.to_linux_path(work_dir)?;
             let work_device = &self.mig_info.work_path.device_info;
-            let stripped_path = OSApi::new()?.to_linux_path(
+            let stripped_path = OSApiImpl::new()?.to_linux_path(
                 work_dir
                     .strip_prefix(&work_device.mountpoint)
                     .context(MigErrCtx::from_remark(
@@ -300,7 +298,7 @@ impl<'a> MSWMigrator {
             }
         }
 
-        let (mem_tot, mem_avail) = OSApi::new()?.get_mem_info()?;
+        let (mem_tot, mem_avail) = OSApiImpl::new()?.get_mem_info()?;
         info!(
             "Memory available is {} of {}",
             format_size_with_unit(mem_avail),

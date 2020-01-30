@@ -11,6 +11,7 @@ use crate::common::file_digest::check_digest;
 use crate::common::stage2_config::BackupCfg;
 use crate::linux::disk_util::{Disk, PartitionIterator};
 use crate::linux::lsblk_info::partition::Partition;
+use crate::linux::stage2::mounts::MOUNT_DIR;
 use crate::{
     common::{
         boot_manager::BootManager,
@@ -33,8 +34,11 @@ use crate::{
     },
 };
 
-// TODO: this might be a bit of a tight fit, allow (s|h)d([a-z])(\d+) too ?
-// const UBOOT_DRIVE_FILTER_REGEX: &str = r#"^mmcblk\d+$"#;
+// TODO: copy / flash, backup  & restore u-boot bootmanager files
+// TODO: fail on more than one DTB file for manual config
+// TODO: drop manual config mode if sure it will not be needed ?
+// TODO: enable hash checking for dtb's & u-boot boot manager files or disable config for all boot files
+
 const UBOOT_DRIVE_REGEX: &str = r#"^/dev/mmcblk\d+p(\d+)$"#;
 #[derive(Debug, Clone)]
 enum BootFileType {
@@ -95,8 +99,6 @@ mmcargs=setenv bootargs console=tty0 console=${console} ${optargs} ${cape_disabl
 uenvcmd=run loadall; run mmcargs; echo debug: [${bootargs}] ... ; echo debug: [bootz ${loadaddr} ${rdaddr}:${rdsize} ${fdtaddr}] ... ; bootz ${loadaddr} ${rdaddr}:${rdsize} ${fdtaddr};
 "###;
 
-// TODO: support multiple DTB files for different versions, copy several or just matching
-
 #[derive(Debug)]
 struct UBootInfo {
     // which device to flash
@@ -147,14 +149,13 @@ impl UBootManager {
         res
     }
 
+    // get correct u_name style filename for boot file
+    // will return target dtb directory name if n dtb filename is given
     fn get_target_file_name(
         file_type: BootFileType,
         base_path: &Path,
         file: Option<&str>,
     ) -> PathBuf {
-        // TODO: cache results in object ?
-        // TODO: switch BootFileType / Strategy inside out
-
         match file_type {
             BootFileType::KernelFile => {
                 path_append(base_path, &format!("vmlinuz-{}", BALENA_UBOOT_UNAME))
@@ -715,7 +716,7 @@ impl BootManager for UBootManager {
                     let mountpoint = if let Some(ref mountpoint) = lsblk_part.mountpoint {
                         mountpoint.clone()
                     } else {
-                        tmp_mount(lsblk_part.get_path(), &lsblk_part.fstype)?
+                        tmp_mount(lsblk_part.get_path(), &lsblk_part.fstype, &None)?
                     };
 
                     let path_info = PathInfo::from_mounted(
@@ -882,7 +883,7 @@ impl BootManager for UBootManager {
             res = false;
         }
 
-        if !restore_backups(mounts.get_boot_mountpoint(), config.get_boot_backups()) {
+        if !restore_backups(config.get_boot_backups(), Some(PathBuf::from(MOUNT_DIR))) {
             res = false;
         }
 

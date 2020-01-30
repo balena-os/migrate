@@ -51,6 +51,7 @@ pub const EXT_FMT_CMD: &str = "mkfs.ext4";
 pub const FAT_FMT_CMD: &str = "mkfs.vfat";
 
 pub const FAT_CHK_CMD: &str = "fsck.vfat";
+pub const FINDMNT_CMD: &str = "findmnt";
 
 // TODO: EFI support in Linux
 /*pub const BALENA_EFI_DIR: &str = r#"/EFI/balena-migrate"#;

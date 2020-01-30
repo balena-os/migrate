@@ -14,14 +14,14 @@ use crate::{
     defs::FileType,
     defs::{OSArch, DISK_BY_LABEL_PATH, DISK_BY_PARTUUID_PATH, DISK_BY_UUID_PATH},
     linux::linux_defs::{
-        DF_CMD, FILE_CMD, KERNEL_CMDLINE_PATH, MKTEMP_CMD, MOKUTIL_CMD, SYS_UEFI_DIR, UNAME_CMD,
-        WHEREIS_CMD,
+        DF_CMD, FILE_CMD, FINDMNT_CMD, KERNEL_CMDLINE_PATH, MKTEMP_CMD, MOKUTIL_CMD, NIX_NONE,
+        SYS_UEFI_DIR, UNAME_CMD, WHEREIS_CMD,
     },
 };
 
 use crate::common::dir_exists;
 use crate::common::stage2_config::BackupCfg;
-use crate::linux::linux_defs::NIX_NONE;
+use crate::defs::DeviceSpec;
 use nix::mount::{mount, MsFlags};
 
 const MOKUTIL_ARGS_SB_STATE: [&str; 1] = ["--sb-state"];
@@ -210,13 +210,20 @@ pub(crate) fn mktemp(
 pub(crate) fn tmp_mount<P: AsRef<Path>>(
     device: P,
     fs_type: &Option<String>,
+    mount_dir: &Option<PathBuf>,
 ) -> Result<PathBuf, MigError> {
     // let no_path: Option<Path> = None;
-    let mount_dir = mktemp(true, None, None::<PathBuf>)?;
+
     let fs_type = if let Some(fs_type) = fs_type {
         Some(fs_type.as_str().as_bytes())
     } else {
         None
+    };
+
+    let mount_dir = if let Some(mount_dir) = mount_dir {
+        mount_dir.clone()
+    } else {
+        mktemp(true, None, None::<PathBuf>)?
     };
 
     mount(
@@ -320,25 +327,75 @@ pub(crate) fn is_secure_boot() -> Result<bool, MigError> {
 
 // TODO: allow restoring from work_dir to Boot
 
-pub(crate) fn restore_backups(root_path: &Path, backups: &[BackupCfg]) -> bool {
+fn device_spec_to_path(
+    dev_spec: DeviceSpec,
+    mount: bool,
+    mount_dir: &Option<PathBuf>,
+) -> Result<PathBuf, MigError> {
+    let dev_path = match dev_spec {
+        DeviceSpec::DevicePath(ref path) => String::from(&*path.to_string_lossy()),
+        DeviceSpec::Uuid(ref uuid) => format!("{}/{}", DISK_BY_UUID_PATH, uuid),
+        DeviceSpec::Label(ref label) => format!("{}/{}", DISK_BY_LABEL_PATH, label),
+        DeviceSpec::PartUuid(ref partuuid) => format!("{}/{}", DISK_BY_PARTUUID_PATH, partuuid),
+        _ => {
+            return Err(MigError::from_remark(
+                MigErrorKind::NotImpl,
+                &format!("device_spec_to_path is not implemented for {:?}", dev_spec),
+            ));
+        }
+    };
+
+    let cmd_res = call(FINDMNT_CMD, &["-o", "TARGET", dev_path.as_str()], true)?;
+    if cmd_res.status.success() {
+        if let Some(line) = cmd_res.stdout.lines().nth(1) {
+            Ok(PathBuf::from(line))
+        } else if mount {
+            Ok(tmp_mount(dev_path, &None, mount_dir)?)
+        } else {
+            Err(MigError::from_remark(
+                MigErrorKind::InvState,
+                &format!("device is not mounted '{:?}'", dev_spec),
+            ))
+        }
+    } else if mount {
+        Ok(tmp_mount(dev_path, &None, mount_dir)?)
+    } else {
+        Err(MigError::from_remark(
+            MigErrorKind::InvState,
+            &format!("device is not mounted '{:?}'", dev_spec),
+        ))
+    }
+}
+
+pub(crate) fn restore_backups(backups: &[BackupCfg], mount_dir: Option<PathBuf>) -> bool {
     // restore boot config backups
     let mut res = true;
     for backup in backups {
-        let src = path_append(root_path, &backup.source);
-        let tgt = path_append(root_path, &backup.backup);
-        if let Err(why) = copy(&src, &tgt) {
-            error!(
-                "Failed to restore '{}' to '{}', error: {:?}",
-                src.display(),
-                tgt.display(),
-                why
-            );
-            res = false;
-        } else {
-            info!("Restored '{}' to '{}'", src.display(), tgt.display())
-        }
+        match device_spec_to_path(backup.device.clone(), true, &mount_dir) {
+            Ok(dev_root) => {
+                let src = path_append(&dev_root, &backup.source);
+                let tgt = path_append(&dev_root, &backup.backup);
+                if let Err(why) = copy(&src, &tgt) {
+                    error!(
+                        "Failed to restore '{}' to '{}', error: {:?}",
+                        src.display(),
+                        tgt.display(),
+                        why
+                    );
+                    res = false
+                } else {
+                    info!("Restored '{}' to '{}'", src.display(), tgt.display())
+                }
+            }
+            Err(why) => {
+                error!(
+                    "Failed to find/mount '{:?}', error: {:?}",
+                    backup.device, why
+                );
+                res = false;
+            }
+        };
     }
-
     res
 }
 

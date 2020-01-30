@@ -15,7 +15,7 @@ use crate::mswin::mswin_api::MSWinApi;
 #[cfg(target_os = "linux")]
 use crate::linux::linux_api::LinuxAPI;
 
-pub(crate) trait OSApiImpl {
+pub(crate) trait OSApi {
     fn get_os_arch(&self) -> Result<OSArch, MigError>;
     fn get_os_name(&self) -> Result<String, MigError>;
     fn path_info_from_path<P: AsRef<Path>>(&self, path: P) -> Result<PathInfo, MigError>;
@@ -38,20 +38,20 @@ struct OSApiContainer {
 }
 
 #[derive(Clone)]
-pub(crate) struct OSApi {
+pub(crate) struct OSApiImpl {
     inner: Arc<Mutex<OSApiContainer>>,
 }
 
-impl OSApi {
-    pub fn new() -> Result<OSApi, MigError> {
-        static mut OS_API: *const OSApi = 0 as *const OSApi;
+impl OSApiImpl {
+    pub fn new() -> Result<OSApiImpl, MigError> {
+        static mut OS_API: *const OSApiImpl = 0 as *const OSApiImpl;
         static ONCE: Once = Once::new();
 
         let os_api = unsafe {
             ONCE.call_once(|| {
                 // Make it
                 //dbg!("call_once");
-                let singleton = OSApi {
+                let singleton = OSApiImpl {
                     inner: Arc::new(Mutex::new(OSApiContainer { api_impl: None })),
                 };
 
@@ -74,7 +74,7 @@ impl OSApi {
             return Ok(shared_api);
         }
 
-        shared_api.api_impl = Some(OSApi::get_api()?);
+        shared_api.api_impl = Some(OSApiImpl::get_api()?);
 
         Ok(shared_api)
     }
@@ -96,7 +96,7 @@ impl OSApi {
     */
 }
 
-impl OSApiImpl for OSApi {
+impl OSApi for OSApiImpl {
     fn canonicalize<P: AsRef<Path>>(&self, path: P) -> Result<PathBuf, MigError> {
         self.init()?
             .api_impl
