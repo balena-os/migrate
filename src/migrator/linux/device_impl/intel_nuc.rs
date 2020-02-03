@@ -1,5 +1,7 @@
 use log::{error, info, trace};
 
+use crate::common::path_append;
+use crate::defs::{MIG_INITRD_NAME, MIG_KERNEL_NAME};
 use crate::{
     common::{
         boot_manager::BootManager,
@@ -39,7 +41,14 @@ impl IntelNuc {
 
         let os_name = &mig_info.os_name;
 
-        expect_type(&mig_info.kernel_file.path, &FileType::KernelAMD64)?;
+        expect_type(
+            &path_append(&mig_info.work_path.path, MIG_KERNEL_NAME),
+            &FileType::KernelAMD64,
+        )?;
+        expect_type(
+            &path_append(&mig_info.work_path.path, MIG_INITRD_NAME),
+            &FileType::InitRD,
+        )?;
 
         if SUPPORTED_OSSES.iter().position(|&r| r == os_name).is_none() {
             let message = format!(
@@ -51,7 +60,7 @@ impl IntelNuc {
         }
 
         // **********************************************************************
-        // ** AMD64 specific initialisation/checks
+        // ** AMD64 specific initialisation/checksget_
         // **********************************************************************
 
         // TODO: determine boot device

@@ -1,6 +1,8 @@
 use log::{debug, error, info};
 use regex::Regex;
 
+use crate::common::path_append;
+use crate::defs::{MIG_INITRD_NAME, MIG_KERNEL_NAME};
 use crate::{
     common::{
         boot_manager::BootManager,
@@ -93,7 +95,14 @@ impl RaspberryPi2 {
 
         let os_name = &mig_info.os_name;
 
-        expect_type(&mig_info.kernel_file.path, &FileType::KernelARMHF)?;
+        expect_type(
+            &path_append(&mig_info.work_path.path, MIG_KERNEL_NAME),
+            &FileType::KernelARMHF,
+        )?;
+        expect_type(
+            &path_append(&mig_info.work_path.path, MIG_INITRD_NAME),
+            &FileType::InitRD,
+        )?;
 
         if let Some(_n) = SUPPORTED_OSSES.iter().position(|&r| r == os_name) {
             let mut dtb_files: Vec<String> = Vec::new();
@@ -181,7 +190,14 @@ impl RaspberryPi3 {
 
         let os_name = &mig_info.os_name;
 
-        expect_type(&mig_info.kernel_file.path, &FileType::KernelARMHF)?;
+        expect_type(
+            &path_append(&mig_info.work_path.path, MIG_KERNEL_NAME),
+            &FileType::KernelARMHF,
+        )?;
+        expect_type(
+            &path_append(&mig_info.work_path.path, MIG_INITRD_NAME),
+            &FileType::InitRD,
+        )?;
 
         if let Some(_n) = SUPPORTED_OSSES.iter().position(|&r| r == os_name) {
             let mut dtb_files: Vec<String> = Vec::new();
@@ -269,7 +285,14 @@ impl RaspberryPi4_64 {
 
         let os_name = &mig_info.os_name;
 
-        expect_type(&mig_info.kernel_file.path, &FileType::KernelAARCH64)?;
+        expect_type(
+            &path_append(&mig_info.work_path.path, MIG_KERNEL_NAME),
+            &FileType::KernelAARCH64,
+        )?;
+        expect_type(
+            &path_append(&mig_info.work_path.path, MIG_INITRD_NAME),
+            &FileType::InitRD,
+        )?;
 
         if let Some(_n) = SUPPORTED_OSSES.iter().position(|&r| r == os_name) {
             let mut dtb_files: Vec<String> = Vec::new();

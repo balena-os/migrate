@@ -7,8 +7,8 @@ use std::io::{Read, Seek, SeekFrom, Write};
 use std::path::{Path, PathBuf};
 
 use crate::common::dir_exists;
-use crate::common::file_digest::check_digest;
 use crate::common::stage2_config::BackupCfg;
+use crate::defs::{MIG_INITRD_NAME, MIG_KERNEL_NAME};
 use crate::linux::disk_util::{Disk, PartitionIterator};
 use crate::linux::lsblk_info::partition::Partition;
 use crate::linux::stage2::mounts::MOUNT_DIR;
@@ -22,7 +22,7 @@ use crate::{
         path_append,
         path_info::PathInfo,
         stage2_config::{Stage2Config, Stage2ConfigBuilder},
-        Config, FileInfo, MigErrCtx, MigError, MigErrorKind,
+        Config, MigErrCtx, MigError, MigErrorKind,
     },
     defs::{BootType, BALENA_FILE_TAG},
     linux::{
@@ -39,6 +39,10 @@ use crate::{
 // TODO: drop manual config mode if sure it will not be needed ?
 // TODO: enable hash checking for dtb's & u-boot boot manager files or disable config for all boot files
 
+const UBOOT_MBR_OFFSET: u64 = 0x60000;
+const UBOOT_HDR_SIZE: usize = 0x40;
+
+const MLO_MBR_OFFSET: u64 = 0x20000;
 const UBOOT_DRIVE_REGEX: &str = r#"^/dev/mmcblk\d+p(\d+)$"#;
 #[derive(Debug, Clone)]
 enum BootFileType {
@@ -149,6 +153,196 @@ impl UBootManager {
         res
     }
 
+    // TODO: modify to allow setup / restore
+    // - setup: backup old uboot boot-manager, write new boot-manager to MBR
+    // - restore: restore backed boot-manager
+    fn uboot_to_mbr(
+        boot_device: &Path,
+        work_dir: &Path,
+        delete: bool,
+        s2_cfg: &mut Stage2ConfigBuilder,
+    ) -> Result<(), MigError> {
+        const BUFFER_SIZE: usize = 0x20000;
+        info!("extract_uboot_from_mbr: backup & delete u-boot in MBR");
+        match OpenOptions::new()
+            .read(true)
+            .write(true)
+            .create(false)
+            .open(boot_device)
+        {
+            Ok(ref mut boot_dev) => {
+                let mut buffer: [u8; BUFFER_SIZE] = [0; BUFFER_SIZE];
+                debug!("seek to u-boot pos");
+                let _pos = boot_dev.seek(SeekFrom::Start(UBOOT_MBR_OFFSET)).context(
+                    MigErrCtx::from_remark(
+                        MigErrorKind::Upstream,
+                        "Failed to seek to u-boot position in MBR",
+                    ),
+                )?;
+
+                boot_dev
+                    .read_exact(&mut buffer)
+                    .context(MigErrCtx::from_remark(
+                        MigErrorKind::Upstream,
+                        "Failed to read from UBOOT position in MBR",
+                    ))?;
+
+                let magic = UBootManager::u32_from_big_endian(&buffer, 0);
+                if magic != UBOOT_MAGIC_WORD {
+                    return Err(MigError::from_remark(
+                        MigErrorKind::InvParam,
+                        &format!(
+                            "Found invalid magic word at u-boot offset in MBR: 0x{:x}!=0x{:x}",
+                            magic, UBOOT_MAGIC_WORD
+                        ),
+                    ));
+                }
+
+                let data_size: usize =
+                    UBootManager::u32_from_big_endian(&buffer, 12) as usize + UBOOT_HDR_SIZE;
+                debug!("u-boot size: {}", data_size);
+                let mut bytes_written: usize = 0;
+                let mut bytes_read = buffer.len();
+
+                let uboot_backup_name = format!("u-boot.img-{}", Local::now().format("%s"));
+                let uboot_backup_path = path_append(work_dir, uboot_backup_name.as_str());
+                let mut uboot_backup = OpenOptions::new()
+                    .read(false)
+                    .write(true)
+                    .create(true)
+                    .open(&uboot_backup_path)
+                    .context(MigErrCtx::from_remark(
+                        MigErrorKind::Upstream,
+                        &format!(
+                            "Failed to open MBR u-boot backup file: '{}'",
+                            uboot_backup_path.display()
+                        ),
+                    ))?;
+
+                while bytes_read > 0 {
+                    bytes_written += uboot_backup
+                        .write(&buffer[0..std::cmp::min(data_size, bytes_read) - 1])
+                        .context(MigErrCtx::from_remark(
+                            MigErrorKind::Upstream,
+                            &format!(
+                                "Failed to write MBR to u-boot backup file: '{}'",
+                                uboot_backup_path.display()
+                            ),
+                        ))?;
+
+                    if bytes_written >= data_size {
+                        break;
+                    }
+
+                    bytes_read = boot_dev
+                        .read(&mut buffer[0..std::cmp::min(BUFFER_SIZE, data_size - bytes_written)])
+                        .context(MigErrCtx::from_remark(
+                            MigErrorKind::Upstream,
+                            "Failed to read data  from MBR",
+                        ))?;
+                }
+
+                debug!("Uboot backup written to '{}'", uboot_backup_path.display());
+                s2_cfg.set_uboot_backup(PathBuf::from(uboot_backup_name));
+                if delete {
+                    debug!("Overwriting u-boot");
+                    // buffer to zero
+                    for i in buffer.iter_mut() {
+                        *i = 0
+                    }
+                    let _pos = boot_dev.seek(SeekFrom::Start(UBOOT_MBR_OFFSET)).context(
+                        MigErrCtx::from_remark(
+                            MigErrorKind::Upstream,
+                            "Failed to seek to u-boot position in MBR",
+                        ),
+                    )?;
+                    let mut bytes_written = 0;
+                    while bytes_written < data_size {
+                        bytes_written += boot_dev
+                            .write(
+                                &buffer[0..std::cmp::min(buffer.len(), data_size - bytes_written)],
+                            )
+                            .context(MigErrCtx::from_remark(
+                                MigErrorKind::Upstream,
+                                "Failed to zero fill u-boot position in MBR",
+                            ))?;
+                    }
+                }
+
+                debug!("seek to MLO pos");
+                let _pos = boot_dev.seek(SeekFrom::Start(MLO_MBR_OFFSET)).context(
+                    MigErrCtx::from_remark(
+                        MigErrorKind::Upstream,
+                        "Failed to seek to MLO position in MBR",
+                    ),
+                )?;
+
+                boot_dev
+                    .read_exact(&mut buffer)
+                    .context(MigErrCtx::from_remark(
+                        MigErrorKind::Upstream,
+                        "Failed to read from MLO position in MBR",
+                    ))?;
+
+                let mlo_backup_name = format!("MLO-{}", Local::now().format("%s"));
+                let mlo_backup_path = path_append(work_dir, mlo_backup_name.as_str());
+                let mut mlo_backup = OpenOptions::new()
+                    .read(false)
+                    .write(true)
+                    .create(true)
+                    .open(&mlo_backup_path)
+                    .context(MigErrCtx::from_remark(
+                        MigErrorKind::Upstream,
+                        &format!(
+                            "Failed to open MBR MLO backup file: '{}'",
+                            mlo_backup_path.display()
+                        ),
+                    ))?;
+
+                mlo_backup.write(&buffer).context(MigErrCtx::from_remark(
+                    MigErrorKind::Upstream,
+                    &format!(
+                        "Failed to write MBR MLO to backup file: '{}'",
+                        mlo_backup_path.display()
+                    ),
+                ))?;
+                debug!(
+                    "MLO written to '{}', overwriting MLO",
+                    mlo_backup_path.display()
+                );
+                s2_cfg.set_mlo_backup(PathBuf::from(mlo_backup_name.as_str()));
+
+                if delete {
+                    debug!("overwriting MLO");
+                    // zerofill buffer and delete MLO in MBR
+                    for i in buffer.iter_mut() {
+                        *i = 0
+                    }
+                    let _pos = boot_dev.seek(SeekFrom::Start(MLO_MBR_OFFSET)).context(
+                        MigErrCtx::from_remark(
+                            MigErrorKind::Upstream,
+                            "Failed to seek to MLO position in MBR (second time)",
+                        ),
+                    )?;
+                    boot_dev.write(&buffer).context(MigErrCtx::from_remark(
+                        MigErrorKind::Upstream,
+                        "Failed to zero fill MLO position in MBR",
+                    ))?;
+                }
+
+                Ok(())
+            }
+            Err(why) => Err(MigError::from_remark(
+                MigErrorKind::Upstream,
+                &format!(
+                    "Failed to open boot device: '{}', error: {:?}",
+                    boot_device.display(),
+                    why
+                ),
+            )),
+        }
+    }
+
     // get correct u_name style filename for boot file
     // will return target dtb directory name if n dtb filename is given
     fn get_target_file_name(
@@ -174,95 +368,57 @@ impl UBootManager {
         }
     }
 
-    fn copy_and_check<P: AsRef<Path>>(source: &FileInfo, dest: P) -> Result<(), MigError> {
-        let dest = dest.as_ref();
-        std::fs::copy(&source.path, dest).context(MigErrCtx::from_remark(
-            MigErrorKind::Upstream,
-            &format!(
-                "failed to copy kernel file '{}' to '{}'",
-                source.path.display(),
-                dest.display()
-            ),
-        ))?;
-
-        if !check_digest(dest, &source.hash_info)? {
-            return Err(MigError::from_remark(
-                MigErrorKind::Upstream,
-                &format!(
-                    "Failed to check digest on copied kernel file '{}' to {:?}",
-                    dest.display(),
-                    source.hash_info
-                ),
-            ));
-        }
-
-        Ok(())
-    }
-
     // check the potential bootmanager path for space
     fn check_boot_req_space(
         &self,
-        path: &PathInfo,
-        mig_info: &MigrateInfo,
+        work_path: &Path,
+        boot_path: &PathInfo,
     ) -> Result<bool, MigError> {
         debug!(
             "check_bootmgr_path: called with path: {}",
-            path.path.display()
+            boot_path.path.display()
         );
+
         let mut boot_req_space: u64 = 8 * 1024; // one 8KiB extra space just in case and for uEnv.txt)
 
-        boot_req_space += if !file_exists(UBootManager::get_target_file_name(
-            BootFileType::KernelFile,
-            &path.path.as_path(),
-            None,
-        )) {
-            mig_info.kernel_file.size
-        } else {
-            0
-        };
+        boot_req_space += BootManager::get_file_required_space(
+            path_append(work_path, MIG_KERNEL_NAME).as_path(),
+            &UBootManager::get_target_file_name(
+                BootFileType::KernelFile,
+                boot_path.path.as_path(),
+                None,
+            )
+            .as_path(),
+        )?;
 
-        boot_req_space += if !file_exists(UBootManager::get_target_file_name(
-            BootFileType::Initramfs,
-            &path.path.as_path(),
-            None,
-        )) {
-            mig_info.initrd_file.size
-        } else {
-            0
-        };
+        boot_req_space += BootManager::get_file_required_space(
+            path_append(work_path, MIG_INITRD_NAME).as_path(),
+            &UBootManager::get_target_file_name(
+                BootFileType::Initramfs,
+                boot_path.path.as_path(),
+                None,
+            )
+            .as_path(),
+        )?;
 
         // TODO: support multiple dtb files ?
         for dtb_name in &self.dtb_names {
-            let cfg_dtb_name = path_append(&mig_info.work_path.path, &dtb_name);
-            if cfg_dtb_name.exists() {
-                boot_req_space += if !file_exists(UBootManager::get_target_file_name(
+            boot_req_space += BootManager::get_file_required_space(
+                &path_append(work_path, &dtb_name).as_path(),
+                &UBootManager::get_target_file_name(
                     BootFileType::DtbFile,
-                    &path.path.as_path(),
+                    boot_path.path.as_path(),
                     Some(dtb_name.as_str()),
-                )) {
-                    fs::metadata(&cfg_dtb_name)
-                        .context(MigErrCtx::from_remark(
-                            MigErrorKind::Upstream,
-                            &format!(
-                                "unable to retrieve size for file '{}'",
-                                cfg_dtb_name.display()
-                            ),
-                        ))?
-                        .len()
-                } else {
-                    0
-                };
-            } else {
-                error!("The device tree blob file required for u-boot could not be found.");
-                return Err(MigError::displayed());
-            }
+                )
+                .as_path(),
+            )?;
         }
 
         debug!(
             "check_bootmgr_path: required: {}, available: {}",
-            boot_req_space, path.device_info.fs_free
+            boot_req_space, boot_path.device_info.fs_free
         );
-        Ok(boot_req_space < path.device_info.fs_free)
+        Ok(boot_req_space < boot_path.device_info.fs_free)
     }
 
     fn backup_uenv(
@@ -339,26 +495,43 @@ impl UBootManager {
             ));
         };
 
+        let kernel_src = path_append(&mig_info.work_path.path, MIG_KERNEL_NAME);
         let kernel_dest =
             UBootManager::get_target_file_name(BootFileType::KernelFile, &install_path.path, None);
 
-        UBootManager::copy_and_check(&mig_info.kernel_file, &kernel_dest)?;
+        fs::copy(&kernel_src, &kernel_dest).context(MigErrCtx::from_remark(
+            MigErrorKind::Upstream,
+            &format!(
+                "Failed to copy '{}' to '{}'",
+                kernel_src.display(),
+                kernel_dest.display()
+            ),
+        ))?;
 
         info!(
             "copied kernel: '{}' -> '{}'",
-            mig_info.kernel_file.path.display(),
+            kernel_src.display(),
             kernel_dest.display()
         );
 
         call(CHMOD_CMD, &["+x", &kernel_dest.to_string_lossy()], false)?;
 
+        let initrd_src = path_append(&mig_info.work_path.path, MIG_INITRD_NAME);
         let initrd_dest =
             UBootManager::get_target_file_name(BootFileType::Initramfs, &install_path.path, None);
-        UBootManager::copy_and_check(&mig_info.initrd_file, &initrd_dest)?;
+
+        fs::copy(&initrd_src, &initrd_dest).context(MigErrCtx::from_remark(
+            MigErrorKind::Upstream,
+            &format!(
+                "Failed to copy '{}' to '{}'",
+                initrd_src.display(),
+                initrd_dest.display()
+            ),
+        ))?;
 
         info!(
-            "initramfs file: '{}' -> '{}'",
-            mig_info.initrd_file.path.display(),
+            "copied initrd: '{}' -> '{}'",
+            initrd_src.display(),
             initrd_dest.display()
         );
 
@@ -481,30 +654,49 @@ impl UBootManager {
         // ** copy new kernel & iniramfs
 
         let mut copied_files: Vec<PathBuf> = Vec::new();
+
+        let kernel_src = path_append(&mig_info.work_path.path, MIG_KERNEL_NAME);
         let kernel_dest =
             UBootManager::get_target_file_name(BootFileType::KernelFile, &install_path.path, None);
-        UBootManager::copy_and_check(&mig_info.kernel_file, &kernel_dest)?;
+
+        fs::copy(&kernel_src, &kernel_dest).context(MigErrCtx::from_remark(
+            MigErrorKind::Upstream,
+            &format!(
+                "Failed to copy '{}' to '{}'",
+                kernel_src.display(),
+                kernel_dest.display()
+            ),
+        ))?;
 
         info!(
             "copied kernel: '{}' -> '{}'",
-            mig_info.kernel_file.path.display(),
+            kernel_src.display(),
             kernel_dest.display()
         );
 
         call(CHMOD_CMD, &["+x", &kernel_dest.to_string_lossy()], false)?;
+
         copied_files.push(kernel_dest);
 
-        let initrd_dest = UBootManager::get_target_file_name(
-            BootFileType::Initramfs,
-            install_path.path.as_path(),
-            None,
-        );
-        UBootManager::copy_and_check(&mig_info.initrd_file, &initrd_dest)?;
+        let initrd_src = path_append(&mig_info.work_path.path, MIG_INITRD_NAME);
+        let initrd_dest =
+            UBootManager::get_target_file_name(BootFileType::Initramfs, &install_path.path, None);
+
+        fs::copy(&initrd_src, &initrd_dest).context(MigErrCtx::from_remark(
+            MigErrorKind::Upstream,
+            &format!(
+                "Failed to copy '{}' to '{}'",
+                initrd_src.display(),
+                initrd_dest.display()
+            ),
+        ))?;
+
         info!(
-            "initramfs file: '{}' -> '{}'",
-            mig_info.initrd_file.path.display(),
+            "copied initrd: '{}' -> '{}'",
+            initrd_src.display(),
             initrd_dest.display()
         );
+
         copied_files.push(initrd_dest);
 
         let dtb_tgt_dir = UBootManager::get_target_file_name(
@@ -723,7 +915,8 @@ impl BootManager for UBootManager {
                     )?;
 
                     if uboot_info.install_path.is_none()
-                        && self.check_boot_req_space(&path_info, mig_info)?
+                        && self
+                            .check_boot_req_space(mig_info.work_path.path.as_path(), &path_info)?
                     {
                         // enough space to install hereget_
                         uboot_info.install_path = Some(path_info.clone());

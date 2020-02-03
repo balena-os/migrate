@@ -1,6 +1,8 @@
 use log::{debug, error, info, trace};
 use regex::Regex;
 
+use crate::common::path_append;
+use crate::defs::{MIG_INITRD_NAME, MIG_KERNEL_NAME};
 use crate::{
     common::{
         boot_manager::BootManager,
@@ -168,7 +170,15 @@ impl BeagleboneGreen {
     ) -> Result<BeagleboneGreen, MigError> {
         let os_name = &mig_info.os_name;
 
-        expect_type(&mig_info.kernel_file.path, &FileType::KernelARMHF)?;
+        expect_type(
+            &path_append(&mig_info.work_path.path, MIG_KERNEL_NAME),
+            &FileType::KernelARMHF,
+        )?;
+
+        expect_type(
+            &path_append(&mig_info.work_path.path, MIG_INITRD_NAME),
+            &FileType::InitRD,
+        )?;
 
         if let Some(_idx) = SUPPORTED_OSSES.iter().position(|&r| r == os_name) {
             // TODO: make this configurable
@@ -376,7 +386,14 @@ impl BeagleboardXM {
     ) -> Result<BeagleboardXM, MigError> {
         let os_name = &mig_info.os_name;
 
-        expect_type(&mig_info.kernel_file.path, &FileType::KernelARMHF)?;
+        expect_type(
+            &path_append(&mig_info.work_path.path, MIG_KERNEL_NAME),
+            &FileType::KernelARMHF,
+        )?;
+        expect_type(
+            &path_append(&mig_info.work_path.path, MIG_INITRD_NAME),
+            &FileType::InitRD,
+        )?;
 
         if let Some(_idx) = SUPPORTED_OSSES.iter().position(|&r| r == os_name) {
             let (mmc_index, strategy) = get_uboot_cfg(config, DeviceType::BeagleboardXM);

@@ -702,47 +702,54 @@ pub(crate) fn expect_type<P: AsRef<Path>>(file: P, ftype: &FileType) -> Result<(
 }
 
 pub(crate) fn is_file_type<P: AsRef<Path>>(file: P, ftype: &FileType) -> Result<bool, MigError> {
-    let path_str = file.as_ref().to_string_lossy();
-    let args: Vec<&str> = vec!["-bz", &path_str];
+    if file.as_ref().exists() {
+        let path_str = file.as_ref().to_string_lossy();
+        let args: Vec<&str> = vec!["-bz", &path_str];
 
-    let cmd_res = call(FILE_CMD, &args, true)?;
-    if !cmd_res.status.success() || cmd_res.stdout.is_empty() {
-        return Err(MigError::from_remark(
-            MigErrorKind::InvParam,
-            &format!("new: failed determine type for file {}", path_str),
-        ));
-    }
+        let cmd_res = call(FILE_CMD, &args, true)?;
+        if !cmd_res.status.success() || cmd_res.stdout.is_empty() {
+            return Err(MigError::from_remark(
+                MigErrorKind::InvParam,
+                &format!("new: failed determine type for file {}", path_str),
+            ));
+        }
 
-    lazy_static! {
-        static ref OS_IMG_FTYPE_RE: Regex = Regex::new(OS_IMG_FTYPE_REGEX).unwrap();
-        static ref GZIP_OS_IMG_FTYPE_RE: Regex = Regex::new(GZIP_OS_IMG_FTYPE_REGEX).unwrap();
-        static ref INITRD_FTYPE_RE: Regex = Regex::new(INITRD_FTYPE_REGEX).unwrap();
-        static ref OS_CFG_FTYPE_RE: Regex = Regex::new(OS_CFG_FTYPE_REGEX).unwrap();
-        static ref TEXT_FTYPE_RE: Regex = Regex::new(TEXT_FTYPE_REGEX).unwrap();
-        static ref KERNEL_AMD64_FTYPE_RE: Regex = Regex::new(KERNEL_AMD64_FTYPE_REGEX).unwrap();
-        static ref KERNEL_ARMHF_FTYPE_RE: Regex = Regex::new(KERNEL_ARMHF_FTYPE_REGEX).unwrap();
-        static ref KERNEL_AARCH64_FTYPE_RE: Regex = Regex::new(KERNEL_AARCH64_FTYPE_REGEX).unwrap();
-        //static ref KERNEL_I386_FTYPE_RE: Regex = Regex::new(KERNEL_I386_FTYPE_REGEX).unwrap();
-        static ref DTB_FTYPE_RE: Regex = Regex::new(DTB_FTYPE_REGEX).unwrap();
-        static ref GZIP_TAR_FTYPE_RE: Regex = Regex::new(GZIP_TAR_FTYPE_REGEX).unwrap();
-    }
+        lazy_static! {
+            static ref OS_IMG_FTYPE_RE: Regex = Regex::new(OS_IMG_FTYPE_REGEX).unwrap();
+            static ref GZIP_OS_IMG_FTYPE_RE: Regex = Regex::new(GZIP_OS_IMG_FTYPE_REGEX).unwrap();
+            static ref INITRD_FTYPE_RE: Regex = Regex::new(INITRD_FTYPE_REGEX).unwrap();
+            static ref OS_CFG_FTYPE_RE: Regex = Regex::new(OS_CFG_FTYPE_REGEX).unwrap();
+            static ref TEXT_FTYPE_RE: Regex = Regex::new(TEXT_FTYPE_REGEX).unwrap();
+            static ref KERNEL_AMD64_FTYPE_RE: Regex = Regex::new(KERNEL_AMD64_FTYPE_REGEX).unwrap();
+            static ref KERNEL_ARMHF_FTYPE_RE: Regex = Regex::new(KERNEL_ARMHF_FTYPE_REGEX).unwrap();
+            static ref KERNEL_AARCH64_FTYPE_RE: Regex = Regex::new(KERNEL_AARCH64_FTYPE_REGEX).unwrap();
+            //static ref KERNEL_I386_FTYPE_RE: Regex = Regex::new(KERNEL_I386_FTYPE_REGEX).unwrap();
+            static ref DTB_FTYPE_RE: Regex = Regex::new(DTB_FTYPE_REGEX).unwrap();
+            static ref GZIP_TAR_FTYPE_RE: Regex = Regex::new(GZIP_TAR_FTYPE_REGEX).unwrap();
+        }
 
-    debug!(
-        "FileInfo::is_type: looking for: {}, found {}",
-        ftype.get_descr(),
-        cmd_res.stdout
-    );
-    match ftype {
-        FileType::GZipOSImage => Ok(GZIP_OS_IMG_FTYPE_RE.is_match(&cmd_res.stdout)),
-        FileType::OSImage => Ok(OS_IMG_FTYPE_RE.is_match(&cmd_res.stdout)),
-        FileType::InitRD => Ok(INITRD_FTYPE_RE.is_match(&cmd_res.stdout)),
-        FileType::KernelARMHF => Ok(KERNEL_ARMHF_FTYPE_RE.is_match(&cmd_res.stdout)),
-        FileType::KernelAMD64 => Ok(KERNEL_AMD64_FTYPE_RE.is_match(&cmd_res.stdout)),
-        //FileType::KernelI386 => Ok(KERNEL_I386_FTYPE_RE.is_match(&cmd_res.stdout)),
-        FileType::KernelAARCH64 => Ok(KERNEL_AARCH64_FTYPE_RE.is_match(&cmd_res.stdout)),
-        FileType::Json => Ok(OS_CFG_FTYPE_RE.is_match(&cmd_res.stdout)),
-        FileType::Text => Ok(TEXT_FTYPE_RE.is_match(&cmd_res.stdout)),
-        // FileType::DTB => Ok(DTB_FTYPE_RE.is_match(&cmd_res.stdout)),
-        FileType::GZipTar => Ok(GZIP_TAR_FTYPE_RE.is_match(&cmd_res.stdout)),
+        debug!(
+            "FileInfo::is_type: looking for: {}, found {}",
+            ftype.get_descr(),
+            cmd_res.stdout
+        );
+        match ftype {
+            FileType::GZipOSImage => Ok(GZIP_OS_IMG_FTYPE_RE.is_match(&cmd_res.stdout)),
+            FileType::OSImage => Ok(OS_IMG_FTYPE_RE.is_match(&cmd_res.stdout)),
+            FileType::InitRD => Ok(INITRD_FTYPE_RE.is_match(&cmd_res.stdout)),
+            FileType::KernelARMHF => Ok(KERNEL_ARMHF_FTYPE_RE.is_match(&cmd_res.stdout)),
+            FileType::KernelAMD64 => Ok(KERNEL_AMD64_FTYPE_RE.is_match(&cmd_res.stdout)),
+            //FileType::KernelI386 => Ok(KERNEL_I386_FTYPE_RE.is_match(&cmd_res.stdout)),
+            FileType::KernelAARCH64 => Ok(KERNEL_AARCH64_FTYPE_RE.is_match(&cmd_res.stdout)),
+            FileType::Json => Ok(OS_CFG_FTYPE_RE.is_match(&cmd_res.stdout)),
+            FileType::Text => Ok(TEXT_FTYPE_RE.is_match(&cmd_res.stdout)),
+            // FileType::DTB => Ok(DTB_FTYPE_RE.is_match(&cmd_res.stdout)),
+            FileType::GZipTar => Ok(GZIP_TAR_FTYPE_RE.is_match(&cmd_res.stdout)),
+        }
+    } else {
+        Err(MigError::from_remark(
+            MigErrorKind::NotFound,
+            &format!("File could not be found: '{}'", file.as_ref().display()),
+        ))
     }
 }

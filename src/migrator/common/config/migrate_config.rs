@@ -6,7 +6,6 @@ use crate::{
     defs::FailMode,
 };
 
-use crate::common::config::balena_config::FileRef;
 use serde::{Deserialize, Serialize};
 
 const NO_NMGR_FILES: &[PathBuf] = &[];
@@ -117,8 +116,6 @@ pub(crate) struct MigrateConfig {
     all_wifis: Option<bool>,
     wifis: Option<Vec<String>>,
     log: Option<LogConfig>,
-    kernel: Option<FileRef>,
-    initrd: Option<FileRef>,
     // device_tree: Option<Vec<FileRef>>,
     // TODO: check fail mode processing
     fail_mode: Option<FailMode>,
@@ -133,6 +130,7 @@ pub(crate) struct MigrateConfig {
     kernel_opts: Option<String>,
     force_flash_device: Option<PathBuf>,
     uboot: Option<UBootCfg>,
+    md5_sums: Option<PathBuf>,
 }
 
 impl<'a> MigrateConfig {
@@ -144,8 +142,6 @@ impl<'a> MigrateConfig {
             all_wifis: None,
             wifis: None,
             log: None,
-            kernel: None,
-            initrd: None,
             // device_tree: None,
             fail_mode: None,
             backup: None,
@@ -158,6 +154,7 @@ impl<'a> MigrateConfig {
             kernel_opts: None,
             force_flash_device: None,
             uboot: None,
+            md5_sums: None,
         }
     }
 
@@ -176,16 +173,6 @@ impl<'a> MigrateConfig {
             _ => {
                 if self.work_dir.is_none() {
                     error!("A required parameter was not found: 'work_dir'");
-                    return Err(MigError::displayed());
-                }
-
-                if self.kernel.is_none() {
-                    error!("A required parameter was not found: 'kernel_path'");
-                    return Err(MigError::displayed());
-                }
-
-                if self.initrd.is_none() {
-                    error!("A required parameter was not found: 'initrd_path'");
                     return Err(MigError::displayed());
                 }
 
@@ -370,19 +357,11 @@ impl<'a> MigrateConfig {
         }
     }
 
-    pub fn get_kernel_path(&'a self) -> &'a FileRef {
-        if let Some(ref path) = self.kernel {
-            path
+    pub fn get_md5_sums(&'a self) -> Option<PathBuf> {
+        if let Some(ref dir) = self.md5_sums {
+            Some(dir.clone())
         } else {
-            panic!("kernel path is not set");
-        }
-    }
-
-    pub fn get_initrd_path(&'a self) -> &'a FileRef {
-        if let Some(ref path) = self.initrd {
-            path
-        } else {
-            panic!("initramfs path is not set");
+            None
         }
     }
 }

@@ -183,6 +183,9 @@ pub(crate) struct Stage2Config {
     migrate_delay: Option<u64>,
     // watchdogs to kick
     watchdogs: Option<Vec<WatchdogCfg>>,
+    // mlo & uboot backup - files extracted from MBR to be restored n stage2
+    mlo_backup: Option<PathBuf>,
+    uboot_backup: Option<PathBuf>,
 }
 
 impl<'a> Stage2Config {
@@ -327,6 +330,14 @@ impl<'a> Stage2Config {
     pub fn get_fail_mode(&'a self) -> &'a FailMode {
         &self.fail_mode
     }
+
+    pub fn get_mlo_backup(&'a self) -> &Option<PathBuf> {
+        &self.mlo_backup
+    }
+
+    pub fn get_uboot_backup(&'a self) -> &Option<PathBuf> {
+        &self.uboot_backup
+    }
 }
 
 pub(crate) struct Required<T> {
@@ -411,6 +422,8 @@ pub(crate) struct Stage2ConfigBuilder {
     migrate_delay: Optional<u64>,
     watchdogs: Optional<Vec<WatchdogCfg>>,
     hacks: Optional<Vec<String>>,
+    mlo_backup: Optional<PathBuf>,
+    uboot_backup: Optional<PathBuf>,
 }
 
 impl<'a> Stage2ConfigBuilder {
@@ -433,6 +446,8 @@ impl<'a> Stage2ConfigBuilder {
             migrate_delay: Optional::new(None),
             watchdogs: Optional::new(None),
             hacks: Optional::new(None),
+            mlo_backup: Optional::new(None),
+            uboot_backup: Optional::new(None),
         }
     }
 
@@ -455,6 +470,8 @@ impl<'a> Stage2ConfigBuilder {
             migrate_delay: *self.migrate_delay.get(),
             watchdogs: self.watchdogs.get().clone(),
             hacks: self.hacks.get().clone(),
+            mlo_backup: self.mlo_backup.get().clone(),
+            uboot_backup: self.uboot_backup.get().clone(),
         };
 
         Ok(result)
@@ -566,6 +583,14 @@ impl<'a> Stage2ConfigBuilder {
 
     pub fn set_migrate_delay(&mut self, val: u64) {
         self.migrate_delay.set_ref(&val);
+    }
+
+    pub fn set_mlo_backup(&mut self, val: PathBuf) {
+        self.mlo_backup.set_ref(&val);
+    }
+
+    pub fn set_uboot_backup(&mut self, val: PathBuf) {
+        self.uboot_backup.set_ref(&val);
     }
 
     #[allow(clippy::ptr_arg)] //TODO refactor this function to fix the clippy warning

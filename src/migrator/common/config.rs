@@ -274,24 +274,6 @@ mod tests {
             }
         }
         assert_eq!(config.migrate.get_log_level(), "debug");
-        assert_eq!(
-            config.migrate.get_kernel_path(),
-            &FileRef {
-                path: PathBuf::from("balena.zImage"),
-                hash: Some(HashInfo::Md5(String::from(
-                    "f1b3e346889e190279f43e984c7b693a"
-                )))
-            }
-        );
-        assert_eq!(
-            config.migrate.get_initrd_path(),
-            &FileRef {
-                path: PathBuf::from("balena.initrd.cpio.gz"),
-                hash: Some(HashInfo::Md5(String::from(
-                    "f1b3e346889e190279f43e984c7b693a"
-                )))
-            }
-        );
 
         // TODO: more checks on backup
         let bckup_vols = config.migrate.get_backup_volumes();

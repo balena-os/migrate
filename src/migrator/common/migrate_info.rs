@@ -38,11 +38,6 @@ pub(crate) struct MigrateInfo {
 
     pub image_file: CheckedImageType,
     pub config_file: BalenaCfgJson,
-
-    pub kernel_file: FileInfo,
-
-    pub initrd_file: FileInfo,
-    //pub dtb_file: Vec<FileInfo>,
 }
 
 // TODO: sort out error reporting with Displayed
@@ -165,34 +160,6 @@ impl MigrateInfo {
             return Err(MigError::displayed());
         };
 
-        let kernel_info = config.migrate.get_kernel_path();
-
-        let kernel_file = if let Some(file_info) = FileInfo::new(&kernel_info, work_dir)? {
-            // TODO: check later, when target arch is known
-            info!(
-                "The balena migrate kernel looks ok: '{}'",
-                file_info.path.display()
-            );
-            file_info
-        } else {
-            error!("The migrate kernel has not been specified or cannot be accessed. Automatic download is not yet implemented, so you need to specify and supply all required files");
-            return Err(MigError::displayed());
-        };
-
-        let initrd_file = if let Some(file_info) =
-            FileInfo::new(config.migrate.get_initrd_path(), work_dir)?
-        {
-            os_api.expect_type(&file_info.path, &FileType::InitRD)?;
-            info!(
-                "The balena migrate initramfs looks ok: '{}'",
-                file_info.path.display()
-            );
-            file_info
-        } else {
-            error!("The migrate initramfs has not been specified or cannot be accessed. Automatic download is not yet implemented, so you need to specify and supply all required files");
-            return Err(MigError::displayed());
-        };
-
         let mut nwmgr_files: Vec<FileInfo> = Vec::new();
 
         for file in config.migrate.get_nwmgr_files() {
@@ -260,8 +227,6 @@ impl MigrateInfo {
             work_path,
             log_path,
             image_file: os_image,
-            kernel_file,
-            initrd_file,
             nwmgr_files,
             config_file,
             wifis,
