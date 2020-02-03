@@ -160,7 +160,7 @@ impl<'a> LsblkInfo {
         path: P,
     ) -> Result<(&'a LsblkDevice, &'a LsblkPartition), MigError> {
         let path = path.as_ref();
-        trace!("get_path_info: '{}", path.display());
+        debug!("get_path_devs: '{}", path.display());
         let abs_path = path.canonicalize().context(MigErrCtx::from_remark(
             MigErrorKind::Upstream,
             &format!("failed to canonicalize path: '{}'", path.display()),
@@ -170,35 +170,59 @@ impl<'a> LsblkInfo {
 
         for device in &self.blockdevices {
             trace!(
-                "get_path_info: looking at device '{}",
+                "get_path_devs: looking at device '{}",
                 device.get_path().display()
             );
             if let Some(ref children) = device.children {
                 for part in children {
                     trace!(
-                        "get_path_info: looking at partition '{}",
+                        "get_path_devs: looking at partition '{}",
                         part.get_path().display()
                     );
                     if let Some(ref mountpoint) = part.mountpoint {
+                        trace!(
+                            "Comparing search path '{}' to mountpoint '{}'",
+                            abs_path.display(),
+                            mountpoint.display()
+                        );
                         if abs_path == PathBuf::from(mountpoint) {
-                            debug!(
-                                "get_path_info: looking at partition found equal at '{}'",
+                            trace!(
+                                "get_path_devs: partition mountpoint is search path '{}'",
                                 mountpoint.display()
                             );
                             return Ok((&device, part));
                         } else if abs_path.starts_with(mountpoint) {
+                            trace!(
+                                "get_path_devs: partition mountpoint starts with search path '{}'",
+                                mountpoint.display()
+                            );
+
                             if let Some((_last_dev, last_part)) = mp_match {
-                                if last_part
-                                    .mountpoint
-                                    .as_ref()
-                                    .unwrap()
-                                    .to_string_lossy()
-                                    .len()
-                                    > mountpoint.to_string_lossy().len()
-                                {
+                                if let Some(ref last_mp) = last_part.mountpoint {
+                                    if last_mp.to_string_lossy().len()
+                                        < mountpoint.to_string_lossy().len()
+                                    {
+                                        trace!(
+                                            "get_path_devs: new best match for '{}' -> '{}'",
+                                            abs_path.display(),
+                                            mountpoint.display()
+                                        );
+                                        mp_match = Some((&device, part))
+                                    }
+                                } else {
+                                    trace!(
+                                        "get_path_devs: new best match for '{}' -> '{}'",
+                                        abs_path.display(),
+                                        mountpoint.display()
+                                    );
                                     mp_match = Some((&device, part))
                                 }
                             } else {
+                                trace!(
+                                    "get_path_devs: first match for '{}' -> '{}'",
+                                    abs_path.display(),
+                                    mountpoint.display()
+                                );
                                 mp_match = Some((&device, part))
                             }
                         }
