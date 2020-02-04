@@ -52,8 +52,9 @@ impl MigrateInfo {
         let work_dir = &work_path.path;
 
         info!(
-            "Working directory is '{}' on '{}'",
+            "Working directory is '{}' on drive '{}', partition: '{}'",
             work_dir.display(),
+            work_path.device_info.drive,
             work_path.device_info.device
         );
 

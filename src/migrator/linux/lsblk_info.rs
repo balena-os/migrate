@@ -406,36 +406,60 @@ impl<'a> LsblkInfo {
         let mut mp_match: Option<(&BlockDevice, &Partition)> = None;
 
         for device in &self.blockdevices {
-            debug!(
-                "get_path_info: looking at device '{}",
+            trace!(
+                "get_devices_for_path: looking at device '{}",
                 device.get_path().display()
             );
             if let Some(ref children) = device.children {
                 for part in children {
-                    debug!(
-                        "get_path_info: looking at partition '{}",
+                    trace!(
+                        "get_devices_for_path: looking at partition '{}",
                         part.get_path().display()
                     );
                     if let Some(ref mountpoint) = part.mountpoint {
+                        trace!(
+                            "Comparing search path '{}' to mountpoint '{}'",
+                            abs_path.display(),
+                            mountpoint.display()
+                        );
                         if abs_path == PathBuf::from(mountpoint) {
-                            debug!(
-                                "get_path_info: looking at partition found equal at '{}'",
+                            trace!(
+                                "get_devices_for_path: partition mountpoint is search path '{}'",
                                 mountpoint.display()
                             );
                             return Ok((&device, part));
                         } else if abs_path.starts_with(mountpoint) {
+                            trace!(
+                                "get_devices_for_path: partition mountpoint starts with search path '{}'",
+                                mountpoint.display()
+                            );
+
                             if let Some((_last_dev, last_part)) = mp_match {
-                                if last_part
-                                    .mountpoint
-                                    .as_ref()
-                                    .unwrap()
-                                    .to_string_lossy()
-                                    .len()
-                                    > mountpoint.to_string_lossy().len()
-                                {
+                                if let Some(ref last_mp) = last_part.mountpoint {
+                                    if last_mp.to_string_lossy().len()
+                                        < mountpoint.to_string_lossy().len()
+                                    {
+                                        trace!(
+                                            "get_devices_for_path: new best match for '{}' -> '{}'",
+                                            abs_path.display(),
+                                            mountpoint.display()
+                                        );
+                                        mp_match = Some((&device, part))
+                                    }
+                                } else {
+                                    trace!(
+                                        "get_devices_for_path: new best match for '{}' -> '{}'",
+                                        abs_path.display(),
+                                        mountpoint.display()
+                                    );
                                     mp_match = Some((&device, part))
                                 }
                             } else {
+                                trace!(
+                                    "get_devices_for_path: first match for '{}' -> '{}'",
+                                    abs_path.display(),
+                                    mountpoint.display()
+                                );
                                 mp_match = Some((&device, part))
                             }
                         }
