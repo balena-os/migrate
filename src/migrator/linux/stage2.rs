@@ -39,9 +39,6 @@ mod fs_writer;
 
 mod flasher;
 
-mod watchdog;
-use watchdog::WatchdogHandler;
-
 pub(crate) mod mounts;
 use mounts::Mounts;
 
@@ -232,24 +229,6 @@ impl<'a> Stage2 {
 
         let device_type = *self.config.get_device_type();
         let boot_type = *self.config.get_boot_type();
-
-        // Recover device type and restore original boot configuration
-
-        let mut watchdog_handler = if let Some(watchdogs) = self.config.get_watchdogs() {
-            if !watchdogs.is_empty() {
-                match WatchdogHandler::new(watchdogs) {
-                    Ok(handler) => Some(handler),
-                    Err(why) => {
-                        warn!("failed to initialize watchdog handler, error: {:?}", why);
-                        None
-                    }
-                }
-            } else {
-                None
-            }
-        } else {
-            None
-        };
 
         // TODO: this will not work for grub, boot once
         let migrate_delay = self.config.get_migrate_delay();
@@ -730,12 +709,6 @@ impl<'a> Stage2 {
         );
 
         let _res = self.mounts.borrow_mut().unmount_log();
-
-        if let Some(ref mut wd_handler) = watchdog_handler {
-            debug!("sending term signal to watchdog handler");
-            wd_handler.stop();
-            debug!("watchdog handler has stopped");
-        }
 
         thread::sleep(Duration::new(REBOOT_DELAY, 0));
 

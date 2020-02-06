@@ -147,6 +147,12 @@ pub(crate) enum PathType {
     Mount(MountConfig),
 }
 
+#[derive(Debug, Deserialize, Serialize, Clone)]
+pub(crate) struct UbootMbrBackup {
+    pub mlo_backup: PathBuf,
+    pub uboot_backup: PathBuf,
+}
+
 #[derive(Debug, Deserialize, Serialize)]
 pub(crate) struct Stage2Config {
     // what to do on failure
@@ -184,8 +190,7 @@ pub(crate) struct Stage2Config {
     // watchdogs to kick
     watchdogs: Option<Vec<WatchdogCfg>>,
     // mlo & uboot backup - files extracted from MBR to be restored n stage2
-    mlo_backup: Option<PathBuf>,
-    uboot_backup: Option<PathBuf>,
+    uboot_mbr_backup: Option<UbootMbrBackup>,
 }
 
 impl<'a> Stage2Config {
@@ -331,12 +336,8 @@ impl<'a> Stage2Config {
         &self.fail_mode
     }
 
-    pub fn get_mlo_backup(&'a self) -> &Option<PathBuf> {
-        &self.mlo_backup
-    }
-
-    pub fn get_uboot_backup(&'a self) -> &Option<PathBuf> {
-        &self.uboot_backup
+    pub fn get_uboot_mbr_backup(&'a self) -> &Option<UbootMbrBackup> {
+        &self.uboot_mbr_backup
     }
 }
 
@@ -422,8 +423,7 @@ pub(crate) struct Stage2ConfigBuilder {
     migrate_delay: Optional<u64>,
     watchdogs: Optional<Vec<WatchdogCfg>>,
     hacks: Optional<Vec<String>>,
-    mlo_backup: Optional<PathBuf>,
-    uboot_backup: Optional<PathBuf>,
+    uboot_mbr_backup: Optional<UbootMbrBackup>,
 }
 
 impl<'a> Stage2ConfigBuilder {
@@ -446,8 +446,7 @@ impl<'a> Stage2ConfigBuilder {
             migrate_delay: Optional::new(None),
             watchdogs: Optional::new(None),
             hacks: Optional::new(None),
-            mlo_backup: Optional::new(None),
-            uboot_backup: Optional::new(None),
+            uboot_mbr_backup: Optional::new(None),
         }
     }
 
@@ -470,8 +469,7 @@ impl<'a> Stage2ConfigBuilder {
             migrate_delay: *self.migrate_delay.get(),
             watchdogs: self.watchdogs.get().clone(),
             hacks: self.hacks.get().clone(),
-            mlo_backup: self.mlo_backup.get().clone(),
-            uboot_backup: self.uboot_backup.get().clone(),
+            uboot_mbr_backup: self.uboot_mbr_backup.get().clone(),
         };
 
         Ok(result)
@@ -585,12 +583,8 @@ impl<'a> Stage2ConfigBuilder {
         self.migrate_delay.set_ref(&val);
     }
 
-    pub fn set_mlo_backup(&mut self, val: PathBuf) {
-        self.mlo_backup.set_ref(&val);
-    }
-
-    pub fn set_uboot_backup(&mut self, val: PathBuf) {
-        self.uboot_backup.set_ref(&val);
+    pub fn set_uboot_mbr_backup(&mut self, val: UbootMbrBackup) {
+        self.uboot_mbr_backup.set_ref(&val);
     }
 
     #[allow(clippy::ptr_arg)] //TODO refactor this function to fix the clippy warning

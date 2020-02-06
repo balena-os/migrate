@@ -7,8 +7,8 @@ use std::io::{Read, Seek, SeekFrom, Write};
 use std::path::{Path, PathBuf};
 
 use crate::common::dir_exists;
-use crate::common::stage2_config::BackupCfg;
-use crate::defs::{MIG_INITRD_NAME, MIG_KERNEL_NAME};
+use crate::common::stage2_config::{BackupCfg, UbootMbrBackup};
+use crate::defs::{DEF_BLOCK_SIZE, MIG_INITRD_NAME, MIG_KERNEL_NAME};
 use crate::linux::disk_util::{Disk, PartitionIterator};
 use crate::linux::lsblk_info::partition::Partition;
 use crate::linux::stage2::mounts::MOUNT_DIR;
@@ -41,8 +41,11 @@ use crate::{
 
 const UBOOT_MBR_OFFSET: u64 = 0x60000;
 const UBOOT_HDR_SIZE: usize = 0x40;
+const UBOOT_MAX_SIZE: usize = 0x60000;
 
 const MLO_MBR_OFFSET: u64 = 0x20000;
+const MLO_MAX_SIZE: usize = 0x20000;
+
 const UBOOT_DRIVE_REGEX: &str = r#"^/dev/mmcblk\d+p(\d+)$"#;
 #[derive(Debug, Clone)]
 enum BootFileType {
@@ -153,17 +156,154 @@ impl UBootManager {
         res
     }
 
+    // check MBR u-boot magic word and return uboot file size
+    fn check_mbr(boot_dev: &mut File) -> Result<usize, MigError> {
+        let mut buffer: [u8; UBOOT_HDR_SIZE] = [0; UBOOT_HDR_SIZE];
+        debug!("seek to u-boot pos");
+        let _pos =
+            boot_dev
+                .seek(SeekFrom::Start(UBOOT_MBR_OFFSET))
+                .context(MigErrCtx::from_remark(
+                    MigErrorKind::Upstream,
+                    "Failed to seek to u-boot position in MBR",
+                ))?;
+
+        boot_dev
+            .read_exact(&mut buffer)
+            .context(MigErrCtx::from_remark(
+                MigErrorKind::Upstream,
+                "Failed to read from UBOOT position in MBR",
+            ))?;
+
+        let magic = UBootManager::u32_from_big_endian(&buffer, 0);
+        if magic != UBOOT_MAGIC_WORD {
+            return Err(MigError::from_remark(
+                MigErrorKind::InvParam,
+                &format!(
+                    "Found invalid magic word at u-boot offset in MBR: 0x{:x}!=0x{:x}",
+                    magic, UBOOT_MAGIC_WORD
+                ),
+            ));
+        }
+
+        Ok(UBootManager::u32_from_big_endian(&buffer, 12) as usize + UBOOT_HDR_SIZE)
+    }
+
+    fn read_from_mbr(
+        boot_dev: &mut File,
+        offset: u64,
+        size: usize,
+        dest: &Path,
+    ) -> Result<(), MigError> {
+        const BUFFER_SIZE: usize = 0x20000;
+        let mut buffer: [u8; BUFFER_SIZE] = [0; BUFFER_SIZE];
+
+        let mut dest_file = OpenOptions::new()
+            .read(false)
+            .write(true)
+            .create(true)
+            .open(dest)
+            .context(MigErrCtx::from_remark(
+                MigErrorKind::Upstream,
+                &format!("Failed to open file for writing: '{}'", dest.display()),
+            ))?;
+
+        let _pos = boot_dev
+            .seek(SeekFrom::Start(offset))
+            .context(MigErrCtx::from_remark(
+                MigErrorKind::Upstream,
+                "Failed to seek to position 0x{:x} in MBR",
+            ))?;
+
+        let mut bytes_written: usize = 0;
+        loop {
+            let bytes_read = boot_dev
+                .read(&mut buffer[0..std::cmp::min(BUFFER_SIZE, size - bytes_written)])
+                .context(MigErrCtx::from_remark(
+                    MigErrorKind::Upstream,
+                    "Failed to read data from MBR",
+                ))?;
+
+            if bytes_read > 0 {
+                bytes_written +=
+                    dest_file
+                        .write(&buffer[0..bytes_read])
+                        .context(MigErrCtx::from_remark(
+                            MigErrorKind::Upstream,
+                            &format!("Failed to write MBR to file: '{}'", dest.display()),
+                        ))?;
+            } else {
+                break;
+            }
+
+            if bytes_written >= size {
+                break;
+            }
+        }
+
+        Ok(())
+    }
+
+    fn write_to_mbr(
+        boot_dev: &mut File,
+        offset: u64,
+        size: usize,
+        source: &Path,
+    ) -> Result<(), MigError> {
+        const BUFFER_SIZE: usize = 0x20000;
+        let mut buffer: [u8; BUFFER_SIZE] = [0; BUFFER_SIZE];
+
+        let mut source_file = OpenOptions::new()
+            .read(true)
+            .write(false)
+            .create(true)
+            .open(source)
+            .context(MigErrCtx::from_remark(
+                MigErrorKind::Upstream,
+                &format!("Failed to open file for reading: '{}'", source.display()),
+            ))?;
+
+        let _pos = boot_dev
+            .seek(SeekFrom::Start(offset))
+            .context(MigErrCtx::from_remark(
+                MigErrorKind::Upstream,
+                "Failed to seek to position 0x{:x} in MBR",
+            ))?;
+
+        let mut tot_read = 0;
+        while tot_read < size {
+            let bytes_read = source_file
+                .read(&mut buffer)
+                .context(MigErrCtx::from_remark(
+                    MigErrorKind::Upstream,
+                    &format!("Failed to read from file: '{}'", source.display()),
+                ))?;
+            if bytes_read > 0 {
+                tot_read += bytes_read;
+                boot_dev
+                    .write(&buffer[0..std::cmp::min(bytes_read, size - tot_read)])
+                    .context(MigErrCtx::from_remark(
+                        MigErrorKind::Upstream,
+                        "Failed to write to mbr",
+                    ))?;
+            } else {
+                break;
+            }
+        }
+        Ok(())
+    }
+
     // TODO: modify to allow setup / restore
     // - setup: backup old uboot boot-manager, write new boot-manager to MBR
     // - restore: restore backed boot-manager
     fn uboot_to_mbr(
         boot_device: &Path,
-        work_dir: &Path,
-        delete: bool,
-        s2_cfg: &mut Stage2ConfigBuilder,
+        mlo_src: &Path,
+        uboot_src: &Path,
+        mlo_dest: Option<PathBuf>,
+        uboot_dest: Option<PathBuf>,
     ) -> Result<(), MigError> {
-        const BUFFER_SIZE: usize = 0x20000;
-        info!("extract_uboot_from_mbr: backup & delete u-boot in MBR");
+        info!("uboot_to_mbr: backup & delete u-boot in MBR");
         match OpenOptions::new()
             .read(true)
             .write(true)
@@ -171,164 +311,64 @@ impl UBootManager {
             .open(boot_device)
         {
             Ok(ref mut boot_dev) => {
-                let mut buffer: [u8; BUFFER_SIZE] = [0; BUFFER_SIZE];
-                debug!("seek to u-boot pos");
-                let _pos = boot_dev.seek(SeekFrom::Start(UBOOT_MBR_OFFSET)).context(
-                    MigErrCtx::from_remark(
-                        MigErrorKind::Upstream,
-                        "Failed to seek to u-boot position in MBR",
-                    ),
-                )?;
+                let data_size = UBootManager::check_mbr(boot_dev)?;
+                debug!("uboot_to_mbr: u-boot size: {}", data_size);
 
-                boot_dev
-                    .read_exact(&mut buffer)
+                if let Some(uboot_dest) = uboot_dest {
+                    UBootManager::read_from_mbr(
+                        boot_dev,
+                        UBOOT_MBR_OFFSET,
+                        data_size,
+                        uboot_dest.as_path(),
+                    )?;
+                    debug!(
+                        "uboot_to_mbr: u-boot MBR backup written to '{}'",
+                        uboot_dest.display()
+                    );
+                }
+
+                let file_size = std::fs::metadata(uboot_src)
                     .context(MigErrCtx::from_remark(
                         MigErrorKind::Upstream,
-                        "Failed to read from UBOOT position in MBR",
-                    ))?;
+                        &format!("Failed to get metadata for file: '{}'", uboot_src.display()),
+                    ))?
+                    .len();
 
-                let magic = UBootManager::u32_from_big_endian(&buffer, 0);
-                if magic != UBOOT_MAGIC_WORD {
+                if file_size > UBOOT_MAX_SIZE as u64 {
                     return Err(MigError::from_remark(
                         MigErrorKind::InvParam,
                         &format!(
-                            "Found invalid magic word at u-boot offset in MBR: 0x{:x}!=0x{:x}",
-                            magic, UBOOT_MAGIC_WORD
+                            "Uboot file size is too big for mbr placement: '{}'",
+                            uboot_src.display()
                         ),
                     ));
                 }
 
-                let data_size: usize =
-                    UBootManager::u32_from_big_endian(&buffer, 12) as usize + UBOOT_HDR_SIZE;
-                debug!("u-boot size: {}", data_size);
-                let mut bytes_written: usize = 0;
-                let mut bytes_read = buffer.len();
-
-                let uboot_backup_name = format!("u-boot.img-{}", Local::now().format("%s"));
-                let uboot_backup_path = path_append(work_dir, uboot_backup_name.as_str());
-                let mut uboot_backup = OpenOptions::new()
-                    .read(false)
-                    .write(true)
-                    .create(true)
-                    .open(&uboot_backup_path)
-                    .context(MigErrCtx::from_remark(
-                        MigErrorKind::Upstream,
-                        &format!(
-                            "Failed to open MBR u-boot backup file: '{}'",
-                            uboot_backup_path.display()
-                        ),
-                    ))?;
-
-                while bytes_read > 0 {
-                    bytes_written += uboot_backup
-                        .write(&buffer[0..std::cmp::min(data_size, bytes_read) - 1])
-                        .context(MigErrCtx::from_remark(
-                            MigErrorKind::Upstream,
-                            &format!(
-                                "Failed to write MBR to u-boot backup file: '{}'",
-                                uboot_backup_path.display()
-                            ),
-                        ))?;
-
-                    if bytes_written >= data_size {
-                        break;
-                    }
-
-                    bytes_read = boot_dev
-                        .read(&mut buffer[0..std::cmp::min(BUFFER_SIZE, data_size - bytes_written)])
-                        .context(MigErrCtx::from_remark(
-                            MigErrorKind::Upstream,
-                            "Failed to read data  from MBR",
-                        ))?;
-                }
-
-                debug!("Uboot backup written to '{}'", uboot_backup_path.display());
-                s2_cfg.set_uboot_backup(PathBuf::from(uboot_backup_name));
-                if delete {
-                    debug!("Overwriting u-boot");
-                    // buffer to zero
-                    for i in buffer.iter_mut() {
-                        *i = 0
-                    }
-                    let _pos = boot_dev.seek(SeekFrom::Start(UBOOT_MBR_OFFSET)).context(
-                        MigErrCtx::from_remark(
-                            MigErrorKind::Upstream,
-                            "Failed to seek to u-boot position in MBR",
-                        ),
-                    )?;
-                    let mut bytes_written = 0;
-                    while bytes_written < data_size {
-                        bytes_written += boot_dev
-                            .write(
-                                &buffer[0..std::cmp::min(buffer.len(), data_size - bytes_written)],
-                            )
-                            .context(MigErrCtx::from_remark(
-                                MigErrorKind::Upstream,
-                                "Failed to zero fill u-boot position in MBR",
-                            ))?;
-                    }
-                }
-
-                debug!("seek to MLO pos");
-                let _pos = boot_dev.seek(SeekFrom::Start(MLO_MBR_OFFSET)).context(
-                    MigErrCtx::from_remark(
-                        MigErrorKind::Upstream,
-                        "Failed to seek to MLO position in MBR",
-                    ),
+                UBootManager::write_to_mbr(
+                    boot_dev,
+                    UBOOT_MBR_OFFSET,
+                    file_size as usize,
+                    uboot_src,
                 )?;
 
-                boot_dev
-                    .read_exact(&mut buffer)
-                    .context(MigErrCtx::from_remark(
-                        MigErrorKind::Upstream,
-                        "Failed to read from MLO position in MBR",
-                    ))?;
+                debug!("uboot_to_mbr: done processing uboot");
 
-                let mlo_backup_name = format!("MLO-{}", Local::now().format("%s"));
-                let mlo_backup_path = path_append(work_dir, mlo_backup_name.as_str());
-                let mut mlo_backup = OpenOptions::new()
-                    .read(false)
-                    .write(true)
-                    .create(true)
-                    .open(&mlo_backup_path)
-                    .context(MigErrCtx::from_remark(
-                        MigErrorKind::Upstream,
-                        &format!(
-                            "Failed to open MBR MLO backup file: '{}'",
-                            mlo_backup_path.display()
-                        ),
-                    ))?;
-
-                mlo_backup.write(&buffer).context(MigErrCtx::from_remark(
-                    MigErrorKind::Upstream,
-                    &format!(
-                        "Failed to write MBR MLO to backup file: '{}'",
-                        mlo_backup_path.display()
-                    ),
-                ))?;
-                debug!(
-                    "MLO written to '{}', overwriting MLO",
-                    mlo_backup_path.display()
-                );
-                s2_cfg.set_mlo_backup(PathBuf::from(mlo_backup_name.as_str()));
-
-                if delete {
-                    debug!("overwriting MLO");
-                    // zerofill buffer and delete MLO in MBR
-                    for i in buffer.iter_mut() {
-                        *i = 0
-                    }
-                    let _pos = boot_dev.seek(SeekFrom::Start(MLO_MBR_OFFSET)).context(
-                        MigErrCtx::from_remark(
-                            MigErrorKind::Upstream,
-                            "Failed to seek to MLO position in MBR (second time)",
-                        ),
+                if let Some(mlo_dest) = mlo_dest {
+                    UBootManager::read_from_mbr(
+                        boot_dev,
+                        MLO_MBR_OFFSET,
+                        MLO_MAX_SIZE,
+                        mlo_dest.as_path(),
                     )?;
-                    boot_dev.write(&buffer).context(MigErrCtx::from_remark(
-                        MigErrorKind::Upstream,
-                        "Failed to zero fill MLO position in MBR",
-                    ))?;
+                    debug!(
+                        "uboot_to_mbr: MLO MBR backup written to '{}'",
+                        mlo_dest.display()
+                    );
                 }
+
+                UBootManager::write_to_mbr(boot_dev, MLO_MBR_OFFSET, MLO_MAX_SIZE, mlo_src)?;
+
+                debug!("uboot_to_mbr: done processing MLO");
 
                 Ok(())
             }
@@ -875,7 +915,17 @@ impl BootManager for UBootManager {
                     );
 
                     let lsblk_part = if let Some(lsblk_part) = lsblk_parts.get(index) {
-                        lsblk_part
+                        if lsblk_part.size == partition.num_sectors * DEF_BLOCK_SIZE as u64 {
+                            lsblk_part
+                        } else {
+                            return Err(MigError::from_remark(
+                                MigErrorKind::InvState,
+                                &format!(
+                                    "Sanity check failed on lsblk_info for partition index {}",
+                                    index
+                                ),
+                            ));
+                        }
                     } else {
                         return Err(MigError::from_remark(
                             MigErrorKind::InvState,
@@ -1021,6 +1071,7 @@ impl BootManager for UBootManager {
             let mut boot_cfg_bckup: Vec<BackupCfg> = Vec::new();
 
             // copy u-boot boot manager
+
             if let Some(ref mlo_path) = uboot_info.mlo_path {
                 let mlo_src = path_append(&mlo_path.path, MLO_FILE_NAME);
                 let mlo_dest = path_append(
@@ -1083,6 +1134,7 @@ impl BootManager for UBootManager {
 
                 let uboot_dest = uboot_src;
                 let uboot_src = path_append(&mig_info.work_path.path, UBOOT_FILE_NAME);
+
                 fs::copy(&uboot_src, &uboot_dest).context(MigErrCtx::from_remark(
                     MigErrorKind::Upstream,
                     &format!(
@@ -1092,7 +1144,30 @@ impl BootManager for UBootManager {
                     ),
                 ))?;
             } else {
-                if uboot_info.in_mbr {}
+                if uboot_info.in_mbr {
+                    let mlo_path = path_append(&mig_info.work_path.path, MLO_FILE_NAME);
+                    let uboot_path = path_append(&mig_info.work_path.path, UBOOT_FILE_NAME);
+                    let mlo_backup = format!("{}-{}", MLO_FILE_NAME, Local::now().format("%s"));
+                    let uboot_backup = format!("{}-{}", UBOOT_FILE_NAME, Local::now().format("%s"));
+
+                    UBootManager::uboot_to_mbr(
+                        &uboot_info.flash_device.get_path(),
+                        mlo_path.as_path(),
+                        uboot_path.as_path(),
+                        Some(path_append(&mig_info.work_path.path, &mlo_backup)),
+                        Some(path_append(&mig_info.work_path.path, &uboot_backup)),
+                    )?;
+
+                    s2_cfg.set_uboot_mbr_backup(UbootMbrBackup {
+                        uboot_backup: PathBuf::from(uboot_backup),
+                        mlo_backup: PathBuf::from(mlo_backup),
+                    });
+                } else {
+                    return Err(MigError::from_remark(
+                        MigErrorKind::InvState,
+                        "Migrate setup is incomplete, no MLO destination is specified",
+                    ));
+                }
             }
 
             let res = match self.strategy {
@@ -1153,6 +1228,19 @@ impl BootManager for UBootManager {
                 &uenv_file.display()
             );
             res = false;
+        }
+
+        if let Some(uboot_mbr_backup) = config.get_uboot_mbr_backup() {
+            if let Err(why) = UBootManager::uboot_to_mbr(
+                mounts.get_flash_device(),
+                &uboot_mbr_backup.mlo_backup,
+                &uboot_mbr_backup.uboot_backup,
+                None,
+                None,
+            ) {
+                error!("Failed to restore uboot mbr backups: {:?}", why);
+                res = false;
+            }
         }
 
         if !restore_backups(config.get_boot_backups(), Some(PathBuf::from(MOUNT_DIR))) {

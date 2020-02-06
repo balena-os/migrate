@@ -1,7 +1,6 @@
 // main file of library - exports top level functions and aggregates modules
 
 #[cfg(target_os = "linux")]
-#[macro_use]
 extern crate nix;
 
 pub mod common;
