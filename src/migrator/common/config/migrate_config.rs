@@ -250,14 +250,6 @@ impl<'a> MigrateConfig {
         }
     }
 
-    pub fn get_watchdogs(&'a self) -> Option<&'a Vec<WatchdogCfg>> {
-        if let Some(ref val) = self.watchdogs {
-            Some(val)
-        } else {
-            None
-        }
-    }
-
     pub fn get_kernel_opts(&self) -> Option<String> {
         if let Some(ref val) = self.kernel_opts {
             Some(val.clone())

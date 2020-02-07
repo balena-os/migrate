@@ -16,8 +16,7 @@ use std::path::{Path, PathBuf};
 
 use crate::common::os_api::{OSApi, OSApiImpl};
 use crate::common::{
-    config::balena_config::FileRef,
-    file_digest::{check_digest, get_default_digest, HashInfo},
+    file_digest::{get_default_digest, HashInfo},
     //file_digest::check_digest
     file_exists,
     MigErrCtx,
@@ -45,11 +44,11 @@ pub(crate) struct RelFileInfo {
 // TODO: make this detect file formats used by migrate, eg: kernel, initramfs, json file, disk image
 
 impl FileInfo {
-    pub fn new<P: AsRef<Path>>(
-        file_ref: &FileRef,
-        work_dir: P,
+    pub fn new<P1: AsRef<Path>, P2: AsRef<Path>>(
+        file: P1,
+        work_dir: P2,
     ) -> Result<Option<FileInfo>, MigError> {
-        let file_path = &file_ref.path;
+        let file_path = file.as_ref();
         let work_path = work_dir.as_ref();
         trace!(
             "FileInfo::new: entered with file: '{}', work_dir: '{}'",
@@ -104,23 +103,8 @@ impl FileInfo {
             rel_path.as_ref().unwrap().display()
         );
 
-        let hash_info = if let Some(ref hash_info) = file_ref.hash {
-            if !check_digest(&abs_path, hash_info)? {
-                error!(
-                    "Failed to check file digest for file '{}': {:?}",
-                    abs_path.display(),
-                    hash_info
-                );
-                return Err(MigError::displayed());
-            } else {
-                hash_info.clone()
-            }
-        } else {
-            debug!("Created digest for file: '{}'", file_ref.path.display());
-            get_default_digest(&abs_path)?
-        };
-
-        debug!("done creating FileInfo for '{}'", file_ref.path.display());
+        debug!("done creating FileInfo for '{}'", file_path.display());
+        let hash_info = get_default_digest(&abs_path)?;
         Ok(Some(FileInfo {
             path: abs_path,
             rel_path,

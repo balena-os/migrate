@@ -395,10 +395,6 @@ impl<'a> LinuxMigrator {
         self.stage2_config
             .set_migrate_delay(self.config.migrate.get_delay());
 
-        if let Some(watchdogs) = self.config.migrate.get_watchdogs() {
-            self.stage2_config.set_watchdogs(watchdogs);
-        }
-
         if let Some(hacks) = self.config.debug.get_hacks() {
             self.stage2_config.set_hacks(hacks)
         }

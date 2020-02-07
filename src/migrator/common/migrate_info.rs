@@ -1,9 +1,11 @@
+use lazy_static::lazy_static;
 use log::{debug, error, info, warn};
+use std::path::Path;
 
 use crate::{
     common::{
         config::{
-            balena_config::{FileRef, ImageType, PartDump},
+            balena_config::{ImageType, PartDump},
             migrate_config::MigrateWifis,
         },
         file_info::RelFileInfo,
@@ -22,7 +24,12 @@ use crate::{
 // *************************************************************************************************
 
 pub(crate) mod balena_cfg_json;
+use crate::common::file_digest::{check_digest, HashInfo};
+use crate::common::{path_append, MigErrCtx};
 pub(crate) use balena_cfg_json::BalenaCfgJson;
+use failure::ResultExt;
+use regex::Regex;
+use std::fs::read_to_string;
 use std::path::PathBuf;
 
 #[derive(Debug)]
@@ -38,11 +45,47 @@ pub(crate) struct MigrateInfo {
 
     pub image_file: CheckedImageType,
     pub config_file: BalenaCfgJson,
+    // pub digests: HashMap<PathBuf, HashInfo>,
 }
 
 // TODO: sort out error reporting with Displayed
 
 impl MigrateInfo {
+    fn check_md5(base_path: &Path, md5_digests: &Path) -> Result<(), MigError> {
+        lazy_static! {
+            static ref LINE_SPIT_RE: Regex = Regex::new(r##"^(\S+)\s+(.*)$"##).unwrap();
+        }
+
+        let md5_path = path_append(base_path, md5_digests);
+
+        for md5_line in read_to_string(&md5_path)
+            .context(MigErrCtx::from_remark(
+                MigErrorKind::Upstream,
+                &format!("Failed to read file '{}'", md5_path.display()),
+            ))?
+            .lines()
+        {
+            if let Some(captures) = LINE_SPIT_RE.captures(md5_line) {
+                let md5_sum = String::from(captures.get(1).unwrap().as_str());
+                let path = path_append(base_path, captures.get(2).unwrap().as_str());
+                let hash_info = HashInfo::Md5(md5_sum);
+                if !check_digest(path.as_path(), &hash_info)? {
+                    return Err(MigError::from_remark(
+                        MigErrorKind::InvParam,
+                        &format!("Failed to check digest on file: '{}'", path.display()),
+                    ));
+                }
+            } else {
+                return Err(MigError::from_remark(
+                    MigErrorKind::InvParam,
+                    &format!("Encountered invalid line in md5 sums: '{}'", md5_line),
+                ));
+            }
+        }
+
+        Ok(())
+    }
+
     #[allow(clippy::cognitive_complexity)] //TODO refactor this function to fix the clippy warning
     pub(crate) fn new(config: &Config) -> Result<MigrateInfo, MigError> {
         debug!("new: entered");
@@ -57,6 +100,10 @@ impl MigrateInfo {
             work_path.device_info.drive,
             work_path.device_info.device
         );
+
+        if let Some(md5_sums) = config.migrate.get_md5_sums() {
+            MigrateInfo::check_md5(&work_path.path, &md5_sums)?
+        }
 
         let log_path = if let Some(log_dev) = config.migrate.get_log_device() {
             debug!("Checking log device: '{:?}'", log_dev);
@@ -164,13 +211,7 @@ impl MigrateInfo {
         let mut nwmgr_files: Vec<FileInfo> = Vec::new();
 
         for file in config.migrate.get_nwmgr_files() {
-            if let Some(file_info) = FileInfo::new(
-                &FileRef {
-                    path: file.clone(),
-                    hash: None,
-                },
-                &work_dir,
-            )? {
+            if let Some(file_info) = FileInfo::new(file.clone(), &work_dir)? {
                 os_api.expect_type(&file_info.path, &FileType::Text)?;
                 info!(
                     "Adding network manager config: '{}'",
@@ -247,23 +288,23 @@ impl MigrateInfo {
     }
 
     fn check_file(
-        file_ref: &FileRef,
+        file: &Path,
         expected_type: &FileType,
         work_path: &PathInfo,
     ) -> Result<RelFileInfo, MigError> {
-        if let Some(file_info) = FileInfo::new(&file_ref, &work_path.path)? {
+        if let Some(file_info) = FileInfo::new(&file, &work_path.path)? {
             // make sure files are present and in /workdir, generate total size and partitioning config in miginfo
             let rel_path = if let Some(ref rel_path) = file_info.rel_path {
                 rel_path.clone()
             } else {
-                error!("The file '{}' was found outside of the working directory. This setup is not supported", file_ref.path.display());
+                error!("The file '{}' was found outside of the working directory. This setup is not supported", file.display());
                 return Err(MigError::displayed());
             };
 
             let os_api = OSApiImpl::new()?;
             let file_path_info = os_api.path_info_from_path(&file_info.path)?;
             if file_path_info.device_info.mountpoint != work_path.device_info.mountpoint {
-                error!("The file '{}' appears to reside on a different partition from the working directory. This setup is not supported", file_ref.path.display());
+                error!("The file '{}' appears to reside on a different partition from the working directory. This setup is not supported", file.display());
                 return Err(MigError::displayed());
             }
 
@@ -276,7 +317,7 @@ impl MigrateInfo {
                     // TODO: try gzip non compressed OS image
                     error!(
                         "The file '{}' does not match the expected type: '{:?}'",
-                        file_ref.path.display(),
+                        file.display(),
                         expected_type
                     );
                     return Err(MigError::displayed());
@@ -289,10 +330,7 @@ impl MigrateInfo {
                 hash_info: file_info.hash_info,
             })
         } else {
-            error!(
-                "The balena file: '{}' can not be accessed.",
-                file_ref.path.display()
-            );
+            error!("The balena file: '{}' can not be accessed.", file.display());
             Err(MigError::displayed())
         }
     }

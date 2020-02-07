@@ -9,7 +9,7 @@ use std::path::PathBuf;
 #[derive(Debug, Serialize, Deserialize, Clone)]
 pub(crate) struct PartDump {
     pub blocks: u64,
-    pub archive: FileRef,
+    pub archive: PathBuf,
 }
 
 #[derive(Debug, Serialize, Deserialize, Clone)]
@@ -46,7 +46,7 @@ pub(crate) struct FileRef {
 #[derive(Debug, Serialize, Deserialize, Clone)]
 pub(crate) enum ImageType {
     #[serde(rename = "dd")]
-    Flasher(FileRef),
+    Flasher(PathBuf),
     #[serde(rename = "fs")]
     FileSystems(FSDump),
 }
@@ -54,7 +54,7 @@ pub(crate) enum ImageType {
 #[derive(Debug, Deserialize)]
 pub(crate) struct BalenaConfig {
     image: Option<ImageType>,
-    config: Option<FileRef>,
+    config: Option<PathBuf>,
     app_name: Option<String>,
     check_api: Option<bool>,
     check_vpn: Option<bool>,
@@ -119,10 +119,7 @@ impl<'a> BalenaConfig {
     }
 
     pub fn set_image_path(&mut self, image_path: &str) {
-        self.image = Some(ImageType::Flasher(FileRef {
-            path: PathBuf::from(image_path),
-            hash: None,
-        }));
+        self.image = Some(ImageType::Flasher(PathBuf::from(image_path)));
     }
 
     // The following functions can only be safely called after check has succeeded
@@ -135,7 +132,7 @@ impl<'a> BalenaConfig {
         }
     }
 
-    pub fn get_config_path(&'a self) -> &'a FileRef {
+    pub fn get_config_path(&'a self) -> &'a PathBuf {
         if let Some(ref path) = self.config {
             path
         } else {

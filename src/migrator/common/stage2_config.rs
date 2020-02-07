@@ -16,9 +16,7 @@ use crate::linux::lsblk_info::partition::Partition;
 use crate::common::device_info::DeviceInfo;
 use crate::{
     common::{
-        config::{balena_config::PartCheck, migrate_config::WatchdogCfg},
-        file_info::RelFileInfo,
-        MigErrCtx, MigError, MigErrorKind,
+        config::balena_config::PartCheck, file_info::RelFileInfo, MigErrCtx, MigError, MigErrorKind,
     },
     defs::{BootType, DeviceType, FailMode},
 };
@@ -187,8 +185,6 @@ pub(crate) struct Stage2Config {
     boot_type: BootType,
     // delay migration in stage 2
     migrate_delay: Option<u64>,
-    // watchdogs to kick
-    watchdogs: Option<Vec<WatchdogCfg>>,
     // mlo & uboot backup - files extracted from MBR to be restored n stage2
     uboot_mbr_backup: Option<UbootMbrBackup>,
 }
@@ -286,15 +282,6 @@ impl<'a> Stage2Config {
             val
         } else {
             0
-        }
-    }
-
-    #[allow(dead_code)]
-    pub fn get_watchdogs(&self) -> Option<&Vec<WatchdogCfg>> {
-        if let Some(ref val) = self.watchdogs {
-            Some(val)
-        } else {
-            None
         }
     }
 
@@ -421,7 +408,6 @@ pub(crate) struct Stage2ConfigBuilder {
     device_type: Required<DeviceType>,
     boot_type: Required<BootType>,
     migrate_delay: Optional<u64>,
-    watchdogs: Optional<Vec<WatchdogCfg>>,
     hacks: Optional<Vec<String>>,
     uboot_mbr_backup: Optional<UbootMbrBackup>,
 }
@@ -444,7 +430,6 @@ impl<'a> Stage2ConfigBuilder {
             device_type: Required::new("device_type", None),
             boot_type: Required::new("boot_type", None),
             migrate_delay: Optional::new(None),
-            watchdogs: Optional::new(None),
             hacks: Optional::new(None),
             uboot_mbr_backup: Optional::new(None),
         }
@@ -467,7 +452,6 @@ impl<'a> Stage2ConfigBuilder {
             device_type: *self.device_type.get()?,
             boot_type: *self.boot_type.get()?,
             migrate_delay: *self.migrate_delay.get(),
-            watchdogs: self.watchdogs.get().clone(),
             hacks: self.hacks.get().clone(),
             uboot_mbr_backup: self.uboot_mbr_backup.get().clone(),
         };
@@ -585,11 +569,6 @@ impl<'a> Stage2ConfigBuilder {
 
     pub fn set_uboot_mbr_backup(&mut self, val: UbootMbrBackup) {
         self.uboot_mbr_backup.set_ref(&val);
-    }
-
-    #[allow(clippy::ptr_arg)] //TODO refactor this function to fix the clippy warning
-    pub fn set_watchdogs(&mut self, val: &Vec<WatchdogCfg>) {
-        self.watchdogs.set_ref(val);
     }
 }
 

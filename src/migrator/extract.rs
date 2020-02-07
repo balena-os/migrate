@@ -3,7 +3,7 @@
 
 use clap::{App, Arg};
 use failure::ResultExt;
-use log::{debug, error, info, trace, warn};
+use log::{debug, error, info, trace};
 use mod_logger::{Level, LogDestination, Logger, NO_STREAM};
 use nix::{
     mount::{mount, umount, MsFlags},
@@ -20,8 +20,7 @@ use serde_yaml;
 use crate::{
     common::{
         call,
-        config::balena_config::{FSDump, FileRef, ImageType, PartDump},
-        file_digest::get_default_digest,
+        config::balena_config::{FSDump, ImageType, PartDump},
         path_append, MigErrCtx, MigError, MigErrorKind,
     },
     defs::FileType,
@@ -47,7 +46,7 @@ pub(crate) struct Partition {
     pub status: u8,
     pub start_lba: u64,
     pub num_sectors: u64,
-    pub archive: Option<FileRef>,
+    pub archive: Option<PathBuf>,
 }
 
 pub(crate) struct Extractor {
@@ -310,7 +309,7 @@ impl Extractor {
                     info!(
                         "extracted partition: {}: to '{}'",
                         partition.name,
-                        partition.archive.as_ref().unwrap().path.display()
+                        partition.archive.as_ref().unwrap().display()
                     );
                 }
                 Err(why) => {
@@ -340,19 +339,20 @@ impl Extractor {
         }
 
         for partition in &mut partitions {
-            if let Some(ref mut file_ref) = partition.archive {
-                file_ref.path = file_ref
-                    .path
-                    .strip_prefix(&self.work_dir)
-                    .context(MigErrCtx::from_remark(
-                        MigErrorKind::Upstream,
-                        &format!(
-                            "Failed to strip workdir '{}' off path '{}'",
-                            self.work_dir.display(),
-                            file_ref.path.display()
-                        ),
-                    ))?
-                    .to_path_buf();
+            if let Some(ref abs_path) = partition.archive {
+                partition.archive = Some(
+                    abs_path
+                        .strip_prefix(&self.work_dir)
+                        .context(MigErrCtx::from_remark(
+                            MigErrorKind::Upstream,
+                            &format!(
+                                "Failed to strip workdir '{}' off path '{}'",
+                                self.work_dir.display(),
+                                abs_path.display()
+                            ),
+                        ))?
+                        .to_path_buf(),
+                );
             } else {
                 return Err(MigError::from_remark(
                     MigErrorKind::NotFound,
@@ -655,25 +655,10 @@ impl Extractor {
             arch_name.display()
         );
 
-        let digest = match get_default_digest(&arch_name) {
-            Ok(digest) => Some(digest),
-            Err(why) => {
-                warn!(
-                    "Failed to create digest for file: '{}', error: {:?}",
-                    arch_name.display(),
-                    why
-                );
-                None
-            }
-        };
-
-        partition.archive = Some(FileRef {
-            path: arch_name.canonicalize().context(MigErrCtx::from_remark(
-                MigErrorKind::Upstream,
-                &format!("Failed to canonicalize path: '{}'", arch_name.display()),
-            ))?,
-            hash: digest,
-        });
+        partition.archive = Some(arch_name.canonicalize().context(MigErrCtx::from_remark(
+            MigErrorKind::Upstream,
+            &format!("Failed to canonicalize path: '{}'", arch_name.display()),
+        ))?);
 
         Ok(())
     }

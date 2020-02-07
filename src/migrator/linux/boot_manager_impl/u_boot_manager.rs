@@ -1143,31 +1143,29 @@ impl BootManager for UBootManager {
                         uboot_dest.display()
                     ),
                 ))?;
+            } else if uboot_info.in_mbr {
+                let mlo_path = path_append(&mig_info.work_path.path, MLO_FILE_NAME);
+                let uboot_path = path_append(&mig_info.work_path.path, UBOOT_FILE_NAME);
+                let mlo_backup = format!("{}-{}", MLO_FILE_NAME, Local::now().format("%s"));
+                let uboot_backup = format!("{}-{}", UBOOT_FILE_NAME, Local::now().format("%s"));
+
+                UBootManager::uboot_to_mbr(
+                    &uboot_info.flash_device.get_path(),
+                    mlo_path.as_path(),
+                    uboot_path.as_path(),
+                    Some(path_append(&mig_info.work_path.path, &mlo_backup)),
+                    Some(path_append(&mig_info.work_path.path, &uboot_backup)),
+                )?;
+
+                s2_cfg.set_uboot_mbr_backup(UbootMbrBackup {
+                    uboot_backup: PathBuf::from(uboot_backup),
+                    mlo_backup: PathBuf::from(mlo_backup),
+                });
             } else {
-                if uboot_info.in_mbr {
-                    let mlo_path = path_append(&mig_info.work_path.path, MLO_FILE_NAME);
-                    let uboot_path = path_append(&mig_info.work_path.path, UBOOT_FILE_NAME);
-                    let mlo_backup = format!("{}-{}", MLO_FILE_NAME, Local::now().format("%s"));
-                    let uboot_backup = format!("{}-{}", UBOOT_FILE_NAME, Local::now().format("%s"));
-
-                    UBootManager::uboot_to_mbr(
-                        &uboot_info.flash_device.get_path(),
-                        mlo_path.as_path(),
-                        uboot_path.as_path(),
-                        Some(path_append(&mig_info.work_path.path, &mlo_backup)),
-                        Some(path_append(&mig_info.work_path.path, &uboot_backup)),
-                    )?;
-
-                    s2_cfg.set_uboot_mbr_backup(UbootMbrBackup {
-                        uboot_backup: PathBuf::from(uboot_backup),
-                        mlo_backup: PathBuf::from(mlo_backup),
-                    });
-                } else {
-                    return Err(MigError::from_remark(
-                        MigErrorKind::InvState,
-                        "Migrate setup is incomplete, no MLO destination is specified",
-                    ));
-                }
+                return Err(MigError::from_remark(
+                    MigErrorKind::InvState,
+                    "Migrate setup is incomplete, no MLO destination is specified",
+                ));
             }
 
             let res = match self.strategy {

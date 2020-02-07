@@ -242,13 +242,9 @@ impl<'a> Config {
 mod tests {
     use super::*;
     use crate::{
-        common::{
-            config::{
-                balena_config::FileRef,
-                balena_config::ImageType,
-                migrate_config::{DeviceSpec, MigrateWifis},
-            },
-            file_digest::HashInfo,
+        common::config::{
+            balena_config::ImageType,
+            migrate_config::{DeviceSpec, MigrateWifis},
         },
         defs::FailMode,
     };
@@ -289,26 +285,11 @@ mod tests {
         );
         assert_eq!(config.migrate.get_delay(), 60);
         assert_eq!(config.migrate.require_nwmgr_configs(), false);
-        if let Some(watchdogs) = config.migrate.get_watchdogs() {
-            assert_eq!(watchdogs.len(), 1_);
-            assert_eq!(watchdogs[0].path, PathBuf::from("/dev/watchdog1"));
-            assert_eq!(watchdogs[0].close, Some(false));
-            assert_eq!(watchdogs[0].interval, Some(10));
-        } else {
-            panic!("No Watchdogs found");
-        }
 
         if let ImageType::Flasher(comp) = config.balena.get_image_path() {
             assert_eq!(
                 comp,
-                &FileRef {
-                    path: PathBuf::from(
-                        "balena-cloud-bobdev-intel-nuc-2.39.0+rev3-dev-v10.0.3.img.gz"
-                    ),
-                    hash: Some(HashInfo::Md5(String::from(
-                        "4834c4ffb3ee0cf0be850242a693c9b6",
-                    )))
-                }
+                &PathBuf::from("balena-cloud-bobdev-intel-nuc-2.39.0+rev3-dev-v10.0.3.img.gz")
             );
         } else {
             panic!("Invalid image type");
@@ -316,12 +297,7 @@ mod tests {
 
         assert_eq!(
             config.balena.get_config_path(),
-            &FileRef {
-                path: PathBuf::from("config.json"),
-                hash: Some(HashInfo::Md5(String::from(
-                    "4834c4ffb3ee0cf0be850242a693c9b6"
-                )))
-            }
+            &PathBuf::from("config.json")
         );
 
         assert_eq!(config.balena.is_check_vpn(), true);
@@ -448,10 +424,6 @@ migrate:
   gzip_internal: true
   kernel_opts: "panic=20"
   delay: 60
-  watchdogs:
-    - path: /dev/watchdog1
-      interval: 10
-      close: false
   require_nwmgr_config: false
 balena:
   image:
@@ -521,10 +493,6 @@ migrate:
   gzip_internal: true
   kernel_opts: "panic=20"
   delay: 60
-  watchdogs:
-    - path: /dev/watchdog1
-      interval: 10
-      close: false
   require_nwmgr_config: false
 balena:
   image:
