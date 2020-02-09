@@ -253,6 +253,14 @@ impl BootManager for GrubBootManager {
             }
         };
 
+        let root_dev = if let Some(ref uuid) = boot_path.device_info.uuid {
+            format!("UUID={}", uuid)
+        } else if let Some(ref partuuid) = boot_path.device_info.part_uuid {
+            format!("PARTUUID={}", partuuid)
+        } else {
+            String::from(&*boot_path.device_info.device.to_string_lossy())
+        };
+
         let mut linux = String::from(path_append(&grub_boot, MIG_KERNEL_NAME).to_string_lossy());
 
         // filter some bullshit out of commandline, else leave it as is
@@ -268,6 +276,10 @@ impl BootManager for GrubBootManager {
             .split_whitespace()
         {
             let word_lc = word.to_lowercase();
+
+            if word_lc.starts_with("root=") {
+                continue;
+            }
 
             if word_lc.starts_with("console=") {
                 continue;
@@ -289,8 +301,8 @@ impl BootManager for GrubBootManager {
         }
 
         linux.push_str(&format!(
-            " rootfstype={} console=tty0 debug",
-            boot_path.device_info.fs_type
+            " root={} rootfstype={} console=tty0 debug ",
+            root_dev, boot_path.device_info.fs_type,
         ));
 
         if !kernel_opts.is_empty() {
