@@ -15,6 +15,7 @@ use crate::{
     linux::lsblk_info::{block_device::BlockDevice, partition::Partition, LsblkInfo},
 };
 
+use crate::linux::linux_common::get_fs_space;
 #[cfg(target_os = "windows")]
 use crate::mswin::drive_info::VolumeInfo;
 
@@ -30,8 +31,12 @@ pub(crate) struct PathInfo {
     pub device_info: DeviceInfo,
     // the absolute path
     pub path: PathBuf,
-    // the partition read only flag
-    // pub mount_ro: bool,
+    // the devices mountpoint
+    pub mountpoint: PathBuf,
+    // The file system size
+    pub fs_size: u64,
+    // the fs free space
+    pub fs_free: u64,
 }
 
 impl PathInfo {
@@ -58,9 +63,25 @@ impl PathInfo {
 
         let device_info = DeviceInfo::from_lsblkinfo(drive, partition)?;
 
+        let (mountpoint, fs_size, fs_free) = if let Some(ref mountpoint) = partition.mountpoint {
+            let (fs_size, fs_free) = get_fs_space(mountpoint)?;
+            (mountpoint.clone(), fs_size, fs_free)
+        } else {
+            return Err(MigError::from_remark(
+                MigErrorKind::NotFound,
+                &format!(
+                    "The required parameter mountpoint could not be found for '{}'",
+                    partition.get_path().display()
+                ),
+            ));
+        };
+
         Ok(PathInfo {
             device_info,
             path: abs_path,
+            mountpoint,
+            fs_size,
+            fs_free,
         })
     }
 
@@ -69,11 +90,35 @@ impl PathInfo {
         path: P,
         lsblk_info: &LsblkInfo,
     ) -> Result<PathInfo, MigError> {
-        let (drive, partition) = lsblk_info.get_devices_for_path(path.as_ref())?;
+        let abs_path = path
+            .as_ref()
+            .canonicalize()
+            .context(MigErrCtx::from_remark(
+                MigErrorKind::Upstream,
+                &format!("Failed to canonicalize path: '{}'", path.as_ref().display()),
+            ))?;
+
+        let (drive, partition) = lsblk_info.get_devices_for_path(&abs_path)?;
+
+        let (mountpoint, fs_size, fs_free) = if let Some(ref mountpoint) = partition.mountpoint {
+            let (fs_size, fs_free) = get_fs_space(mountpoint)?;
+            (mountpoint.clone(), fs_size, fs_free)
+        } else {
+            return Err(MigError::from_remark(
+                MigErrorKind::NotFound,
+                &format!(
+                    "The required parameter mountpoint could not be found for '{}'",
+                    partition.get_path().display()
+                ),
+            ));
+        };
 
         Ok(PathInfo {
             device_info: DeviceInfo::from_lsblkinfo(drive, partition)?,
-            path: PathBuf::from(path.as_ref()),
+            path: abs_path,
+            mountpoint,
+            fs_size,
+            fs_free,
         })
     }
 

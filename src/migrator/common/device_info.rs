@@ -4,15 +4,12 @@ use log::error;
 use std::path::PathBuf;
 
 use crate::{
-    common::{path_append, MigError, MigErrorKind},
+    common::{path_append, MigError},
     defs::{DISK_BY_LABEL_PATH, DISK_BY_PARTUUID_PATH, DISK_BY_UUID_PATH},
 };
 
 #[cfg(target_os = "linux")]
-use crate::linux::{
-    linux_common::get_fs_space,
-    lsblk_info::{block_device::BlockDevice, partition::Partition},
-};
+use crate::linux::lsblk_info::{block_device::BlockDevice, partition::Partition};
 
 #[cfg(target_os = "windows")]
 use crate::{
@@ -24,8 +21,6 @@ use crate::{
 pub(crate) struct DeviceInfo {
     // the drive device path
     pub drive: String,
-    // the devices mountpoint
-    pub mountpoint: PathBuf,
     // the drive size
     pub drive_size: u64,
     // the partition device path
@@ -43,10 +38,6 @@ pub(crate) struct DeviceInfo {
     pub part_label: Option<String>,
     // the partition size
     pub part_size: u64,
-    // The file system size
-    pub fs_size: u64,
-    // the fs free space
-    pub fs_free: u64,
 }
 
 impl DeviceInfo {
@@ -55,22 +46,8 @@ impl DeviceInfo {
         drive: &BlockDevice,
         partition: &Partition,
     ) -> Result<DeviceInfo, MigError> {
-        let (mountpoint, fs_size, fs_free) = if let Some(ref mountpoint) = partition.mountpoint {
-            let (fs_size, fs_free) = get_fs_space(mountpoint)?;
-            (mountpoint.clone(), fs_size, fs_free)
-        } else {
-            return Err(MigError::from_remark(
-                MigErrorKind::NotFound,
-                &format!(
-                    "The required parameter mountpoint could not be found for '{}'",
-                    partition.get_path().display()
-                ),
-            ));
-        };
-
         Ok(DeviceInfo {
             drive: String::from(drive.get_path().to_string_lossy()),
-            mountpoint,
             drive_size: drive.size,
             device: String::from(partition.get_path().to_string_lossy()),
             index: partition.index,
@@ -87,8 +64,6 @@ impl DeviceInfo {
             part_uuid: partition.partuuid.clone(),
             part_label: partition.label.clone(),
             part_size: partition.size,
-            fs_size,
-            fs_free,
         })
     }
 
@@ -173,10 +148,10 @@ impl DeviceInfo {
     }
 
     pub fn get_alt_path(&self) -> PathBuf {
-        if let Some(ref partuuid) = self.part_uuid {
-            path_append(DISK_BY_PARTUUID_PATH, partuuid)
-        } else if let Some(ref uuid) = self.uuid {
+        if let Some(ref uuid) = self.uuid {
             path_append(DISK_BY_UUID_PATH, uuid)
+        } else if let Some(ref partuuid) = self.part_uuid {
+            path_append(DISK_BY_PARTUUID_PATH, partuuid)
         } else if let Some(ref label) = self.part_label {
             path_append(DISK_BY_LABEL_PATH, label)
         } else {

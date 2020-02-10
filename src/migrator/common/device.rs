@@ -1,7 +1,7 @@
 use crate::{
     common::{
-        device_info::DeviceInfo, migrate_info::MigrateInfo, stage2_config::Stage2ConfigBuilder,
-        Config, MigError,
+        migrate_info::MigrateInfo, path_info::PathInfo, stage2_config::Stage2ConfigBuilder, Config,
+        MigError,
     },
     defs::{BootType, DeviceType},
 };
@@ -15,7 +15,7 @@ pub(crate) trait Device {
     fn get_boot_type(&self) -> BootType;
     // TODO: make return reference
     // TODO: return device_info instead of path_info
-    fn get_boot_device(&self) -> DeviceInfo;
+    fn get_boot_device(&self) -> PathInfo;
 
     fn setup(
         &mut self,

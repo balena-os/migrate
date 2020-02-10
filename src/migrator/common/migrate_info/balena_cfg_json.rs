@@ -10,6 +10,8 @@ use std::fs::File;
 use std::io::BufReader;
 use std::path::PathBuf;
 
+use url::Url;
+
 use crate::{
     common::{
         check_tcp_connect, file_info::RelFileInfo, Config, FileInfo, MigErrCtx, MigError,
@@ -177,19 +179,37 @@ impl BalenaCfgJson {
         }
 
         if config.balena.is_check_api() {
-            if let Ok(_v) = check_tcp_connect(
-                &self.config.api_endpoint,
-                BALENA_API_PORT,
-                config.balena.get_check_timeout(),
-            ) {
-                info!(
-                    "connection to api: {}:{} is ok",
-                    self.config.api_endpoint, BALENA_API_PORT
-                );
+            let api_url = Url::parse(&self.config.api_endpoint).context(MigErrCtx::from_remark(
+                MigErrorKind::Upstream,
+                &format!(
+                    "Failed to parse balena api url '{}'",
+                    self.config.api_endpoint
+                ),
+            ))?;
+
+            if let Some(api_host) = api_url.host() {
+                let api_host = api_host.to_string();
+                let api_port = if let Some(api_port) = api_url.port() {
+                    api_port
+                } else {
+                    BALENA_API_PORT
+                };
+
+                if let Ok(_v) =
+                    check_tcp_connect(&api_host, api_port, config.balena.get_check_timeout())
+                {
+                    info!("connection to api: {}:{} is ok", api_host, api_port);
+                } else {
+                    error!(
+                        "failed to connect to api server @ {}:{} your device might not come online",
+                        self.config.api_endpoint, api_port
+                    );
+                    return Err(MigError::displayed());
+                }
             } else {
                 error!(
-                    "failed to connect to vpn server @ {}:{} your device might not come online",
-                    self.config.vpn_endpoint, self.config.vpn_port
+                    "failed to parse api server url from config.json: {}",
+                    self.config.api_endpoint
                 );
                 return Err(MigError::displayed());
             }

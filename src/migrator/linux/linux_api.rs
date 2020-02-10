@@ -52,8 +52,8 @@ impl OSApi for LinuxAPI {
         expect_type(file.as_ref(), ftype)
     }
 
-    fn device_path_from_partition(&self, device: &DeviceSpec) -> Result<PathBuf, MigError> {
-        let (_drive, partition) = match device {
+    fn device_info_from_devspec(&self, device: &DeviceSpec) -> Result<DeviceInfo, MigError> {
+        let (drive, partition) = match device {
             DeviceSpec::DevicePath(dev_path) => self
                 .lsblk_info
                 .get_devices_for_partition(dev_path.as_path())?,
@@ -63,7 +63,7 @@ impl OSApi for LinuxAPI {
             DeviceSpec::Label(label) => self.lsblk_info.get_devices_for_label(label)?,
         };
 
-        Ok(partition.get_linux_path()?)
+        Ok(DeviceInfo::from_lsblkinfo(&drive, &partition)?)
     }
 
     fn get_mem_info(&self) -> Result<(u64, u64), MigError> {

@@ -1,11 +1,10 @@
-use std::path::{Path, PathBuf};
-
 use crate::linux::lsblk_info::ResultParams;
 use crate::{
-    common::{file_exists, path_append, MigError, MigErrorKind},
-    defs::{DISK_BY_LABEL_PATH, DISK_BY_PARTUUID_PATH, DISK_BY_UUID_PATH},
+    common::{path_append, MigError, MigErrorKind},
     linux::lsblk_info::{call_lsblk_for, call_udevadm},
 };
+use log::trace;
+use std::path::{Path, PathBuf};
 
 #[derive(Debug, Clone)]
 pub(crate) struct Partition {
@@ -40,16 +39,18 @@ impl Partition {
             ro: lsblk_result.get_str("RO")? == "1",
             part_table_type: String::from(udev_result.get_str("ID_PART_TABLE_TYPE")?),
             part_entry_type: String::from(udev_result.get_str("ID_PART_ENTRY_TYPE")?),
-            partuuid: udev_result.get_opt_str("ID_FS_UUID"),
+            partuuid: udev_result.get_opt_str("ID_PART_ENTRY_UUID"),
             index: udev_result.get_u16("ID_PART_ENTRY_NUMBER")?,
         })
     }
 
     pub fn from_path<P: AsRef<Path>>(partition: P) -> Result<Partition, MigError> {
-        let lsblk_results = call_lsblk_for(&partition)?;
+        let lsblk_results = call_lsblk_for(partition.as_ref())?;
+        trace!("from_path: lsblk_results ok");
         // expect just one result of type partition
         if lsblk_results.len() == 1 {
-            let udev_result = call_udevadm(&partition)?;
+            let udev_result = call_udevadm(partition.as_ref())?;
+            trace!("from_path: udev_result ok");
             match udev_result.get_str("DEVTYPE")? {
                 "partition" => Ok(Partition::new(&lsblk_results[0])?),
                 _ => Err(MigError::from_remark(
@@ -73,28 +74,5 @@ impl Partition {
 
     pub fn get_path(&self) -> PathBuf {
         path_append("/dev", &self.name)
-    }
-
-    pub fn get_linux_path(&self) -> Result<PathBuf, MigError> {
-        let dev_path = if let Some(ref uuid) = self.uuid {
-            path_append(DISK_BY_UUID_PATH, uuid)
-        } else if let Some(ref partuuid) = self.partuuid {
-            path_append(DISK_BY_PARTUUID_PATH, partuuid)
-        } else if let Some(ref label) = self.label {
-            path_append(DISK_BY_LABEL_PATH, label)
-        } else {
-            return Err(MigError::from_remark(
-                MigErrorKind::NotFound,
-                &format!("No unique device path found for device: '{}'", self.name),
-            ));
-        };
-        if file_exists(&dev_path) {
-            Ok(dev_path)
-        } else {
-            Err(MigError::from_remark(
-                MigErrorKind::NotFound,
-                &format!("Could not locate device path: '{}'", dev_path.display()),
-            ))
-        }
     }
 }

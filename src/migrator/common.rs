@@ -1,7 +1,6 @@
 //pub mod mig_error;
 use failure::ResultExt;
-use log::debug;
-use log::trace;
+use log::{debug, error, trace};
 use regex::Regex;
 use std::fs::{metadata, read_to_string, File};
 use std::io::{copy, BufRead, BufReader, Read};
@@ -226,25 +225,32 @@ where
 pub(crate) fn call(cmd: &str, args: &[&str], trim_stdout: bool) -> Result<CmdRes, MigError> {
     trace!("call: '{}' called with {:?}, {}", cmd, args, trim_stdout);
 
-    let output = Command::new(cmd)
+    match Command::new(cmd)
         .args(args)
         .stdout(Stdio::piped())
         .stderr(Stdio::piped())
         .output()
-        .context(MigErrCtx::from_remark(
-            MigErrorKind::Upstream,
-            &format!("call: failed to execute: command {} '{:?}'", cmd, args),
-        ))?;
-
-    Ok(CmdRes {
-        stdout: if trim_stdout {
-            String::from(String::from_utf8_lossy(&output.stdout).trim())
-        } else {
-            String::from(String::from_utf8_lossy(&output.stdout))
-        },
-        stderr: String::from(String::from_utf8_lossy(&output.stderr)),
-        status: output.status,
-    })
+    {
+        Ok(output) => {
+            debug!("call: output: {:?}", output);
+            Ok(CmdRes {
+                stdout: if trim_stdout {
+                    String::from(String::from_utf8_lossy(&output.stdout).trim())
+                } else {
+                    String::from(String::from_utf8_lossy(&output.stdout))
+                },
+                stderr: String::from(String::from_utf8_lossy(&output.stderr)),
+                status: output.status,
+            })
+        }
+        Err(why) => {
+            error!("call: output failed: {:?}", why);
+            Err(MigError::from_remark(
+                MigErrorKind::Upstream,
+                &format!("call: failed to execute: command {} '{:?}'", cmd, args),
+            ))
+        }
+    }
 }
 
 pub fn check_tcp_connect(host: &str, port: u16, timeout: u64) -> Result<(), MigError> {

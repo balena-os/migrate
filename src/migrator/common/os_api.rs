@@ -19,7 +19,7 @@ pub(crate) trait OSApi {
     fn get_os_arch(&self) -> Result<OSArch, MigError>;
     fn get_os_name(&self) -> Result<String, MigError>;
     fn path_info_from_path<P: AsRef<Path>>(&self, path: P) -> Result<PathInfo, MigError>;
-    fn device_path_from_partition(&self, device: &DeviceSpec) -> Result<PathBuf, MigError>;
+    fn device_info_from_devspec(&self, device: &DeviceSpec) -> Result<DeviceInfo, MigError>;
     fn expect_type<P: AsRef<Path>>(&self, file: P, ftype: &FileType) -> Result<(), MigError>;
     fn canonicalize<P: AsRef<Path>>(&self, path: P) -> Result<PathBuf, MigError>;
     fn get_mem_info(&self) -> Result<(u64, u64), MigError>;
@@ -121,12 +121,12 @@ impl OSApi for OSApiImpl {
             .path_info_from_path(path)
     }
 
-    fn device_path_from_partition(&self, device: &DeviceSpec) -> Result<PathBuf, MigError> {
+    fn device_info_from_devspec(&self, device: &DeviceSpec) -> Result<DeviceInfo, MigError> {
         self.init()?
             .api_impl
             .as_ref()
             .unwrap()
-            .device_path_from_partition(device)
+            .device_info_from_devspec(device)
     }
 
     fn expect_type<P: AsRef<Path>>(&self, file: P, ftype: &FileType) -> Result<(), MigError> {

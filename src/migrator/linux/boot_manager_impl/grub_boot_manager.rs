@@ -164,7 +164,7 @@ impl BootManager for GrubBootManager {
             path_append(&boot_path.path, MIG_INITRD_NAME).as_path(),
         )?;
 
-        if boot_path.device_info.fs_free < boot_req_space {
+        if boot_path.fs_free < boot_req_space {
             error!("The boot directory '{}' does not have enough space to store the migrate kernel and initramfs. Required space is {}",
                    boot_path.path.display(), format_size_with_unit(boot_req_space));
             return Ok(false);
@@ -193,7 +193,7 @@ impl BootManager for GrubBootManager {
 
         // path to kernel & initramfs at boot time depends on how /boot is mounted
         // either / (for a /boot mount or /boot for a directory of /root file system)
-        let grub_boot: &Path = if boot_path.path == boot_path.device_info.mountpoint {
+        let grub_boot: &Path = if boot_path.path == boot_path.mountpoint {
             // /boot is a mounted filesystem
             &Path::new(ROOT_PATH)
         } else {
@@ -258,7 +258,7 @@ impl BootManager for GrubBootManager {
         } else if let Some(ref partuuid) = boot_path.device_info.part_uuid {
             format!("PARTUUID={}", partuuid)
         } else {
-            String::from(&*boot_path.device_info.device.to_string_lossy())
+            String::from(&boot_path.device_info.device)
         };
 
         let mut linux = String::from(path_append(&grub_boot, MIG_KERNEL_NAME).to_string_lossy());

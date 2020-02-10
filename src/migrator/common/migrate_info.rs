@@ -24,13 +24,13 @@ use crate::{
 // *************************************************************************************************
 
 pub(crate) mod balena_cfg_json;
+use crate::common::device_info::DeviceInfo;
 use crate::common::file_digest::{check_digest, HashInfo};
 use crate::common::{path_append, MigErrCtx};
 pub(crate) use balena_cfg_json::BalenaCfgJson;
 use failure::ResultExt;
 use regex::Regex;
 use std::fs::read_to_string;
-use std::path::PathBuf;
 
 #[derive(Debug)]
 pub(crate) struct MigrateInfo {
@@ -38,7 +38,7 @@ pub(crate) struct MigrateInfo {
     pub os_arch: OSArch,
 
     pub work_path: PathInfo,
-    pub log_path: Option<PathBuf>,
+    pub log_path: Option<DeviceInfo>,
 
     pub nwmgr_files: Vec<FileInfo>,
     pub wifis: Vec<WifiConfig>,
@@ -105,11 +105,11 @@ impl MigrateInfo {
             MigrateInfo::check_md5(&work_path.path, &md5_sums)?
         }
 
-        let log_path = if let Some(log_dev) = config.migrate.get_log_device() {
+        let log_info = if let Some(log_dev) = config.migrate.get_log_device() {
             debug!("Checking log device: '{:?}'", log_dev);
-            match os_api.device_path_from_partition(log_dev) {
+            match os_api.device_info_from_devspec(log_dev) {
                 Ok(dev_info) => {
-                    info!("Using log path: '{}'", dev_info.display());
+                    info!("Using log path: '{}'", dev_info.get_alt_path().display());
                     Some(dev_info)
                 }
                 Err(why) => {
@@ -178,7 +178,7 @@ impl MigrateInfo {
             }
 
             let cfg_path_info = os_api.path_info_from_path(&file_info.path)?;
-            if cfg_path_info.device_info.mountpoint != work_path.device_info.mountpoint {
+            if cfg_path_info.mountpoint != work_path.mountpoint {
                 error!("The balena OS config appears to reside on a different partition from the working directory. This setup is not supported");
                 return Err(MigError::displayed());
             }
@@ -267,7 +267,7 @@ impl MigrateInfo {
             os_name: os_api.get_os_name()?,
             os_arch,
             work_path,
-            log_path,
+            log_path: log_info,
             image_file: os_image,
             nwmgr_files,
             config_file,
@@ -303,7 +303,7 @@ impl MigrateInfo {
 
             let os_api = OSApiImpl::new()?;
             let file_path_info = os_api.path_info_from_path(&file_info.path)?;
-            if file_path_info.device_info.mountpoint != work_path.device_info.mountpoint {
+            if file_path_info.mountpoint != work_path.mountpoint {
                 error!("The file '{}' appears to reside on a different partition from the working directory. This setup is not supported", file.display());
                 return Err(MigError::displayed());
             }

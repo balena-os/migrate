@@ -48,8 +48,10 @@ impl FileInfo {
         file: P1,
         work_dir: P2,
     ) -> Result<Option<FileInfo>, MigError> {
+        let os_api = OSApiImpl::new()?;
         let file_path = file.as_ref();
-        let work_path = work_dir.as_ref();
+        let work_path = os_api.canonicalize(work_dir.as_ref())?;
+
         trace!(
             "FileInfo::new: entered with file: '{}', work_dir: '{}'",
             file_path.display(),
@@ -98,9 +100,9 @@ impl FileInfo {
         };
 
         trace!(
-            "got relative path for: '{}': '{}'",
+            "got relative path for: '{}': '{:?}'",
             abs_path.display(),
-            rel_path.as_ref().unwrap().display()
+            rel_path.as_ref()
         );
 
         debug!("done creating FileInfo for '{}'", file_path.display());

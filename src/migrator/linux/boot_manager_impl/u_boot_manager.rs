@@ -456,9 +456,9 @@ impl UBootManager {
 
         debug!(
             "check_bootmgr_path: required: {}, available: {}",
-            boot_req_space, boot_path.device_info.fs_free
+            boot_req_space, boot_path.fs_free
         );
-        Ok(boot_req_space < boot_path.device_info.fs_free)
+        Ok(boot_req_space < boot_path.fs_free)
     }
 
     fn backup_uenv(
@@ -773,10 +773,10 @@ impl UBootManager {
         let mut dev_paths: Vec<PathBuf> = Vec::new();
         let result = copied_files.iter().all(|path| {
             let mut done = false;
-            if (install_path.device_info.mountpoint != PathBuf::from(ROOT_PATH))
-                && path.starts_with(&install_path.device_info.mountpoint)
+            if (install_path.mountpoint != PathBuf::from(ROOT_PATH))
+                && path.starts_with(&install_path.mountpoint)
             {
-                match path.strip_prefix(&install_path.device_info.mountpoint) {
+                match path.strip_prefix(&install_path.mountpoint) {
                     Ok(path) => {
                         dev_paths.push(path.to_path_buf());
                         done = true
@@ -784,7 +784,7 @@ impl UBootManager {
                     Err(why) => error!(
                         "cannot remove prefix '{}' from '{}', error: {:?}",
                         path.display(),
-                        install_path.device_info.mountpoint.display(),
+                        install_path.mountpoint.display(),
                         why
                     ),
                 }

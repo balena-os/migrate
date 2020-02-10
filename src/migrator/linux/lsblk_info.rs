@@ -130,7 +130,7 @@ fn call_lsblk_all() -> Result<Vec<ResultParams>, MigError> {
     call_lsblk(vec!["-b", "-P", "-o", LSBLK_COLS])
 }
 
-fn call_lsblk_for<P: AsRef<Path>>(device: &P) -> Result<Vec<ResultParams>, MigError> {
+fn call_lsblk_for<P: AsRef<Path>>(device: P) -> Result<Vec<ResultParams>, MigError> {
     call_lsblk(vec![
         "-b",
         "-P",
@@ -143,6 +143,10 @@ fn call_lsblk_for<P: AsRef<Path>>(device: &P) -> Result<Vec<ResultParams>, MigEr
 fn call_lsblk(args: Vec<&str>) -> Result<Vec<ResultParams>, MigError> {
     debug!("call_lsblk: with args {:?}", args);
     let lsblk_cmd_res = call(LSBLK_CMD, &args, true)?;
+    trace!(
+        "call_lsblk: call success {}",
+        lsblk_cmd_res.status.success()
+    );
     if lsblk_cmd_res.status.success() {
         let mut lsblk_results: Vec<ResultParams> = Vec::new();
         for line in lsblk_cmd_res.stdout.lines() {
@@ -173,6 +177,12 @@ fn call_udevadm<P: AsRef<Path>>(device: P) -> Result<ResultParams, MigError> {
         ],
         true,
     )?;
+
+    trace!(
+        "call_udevadm: call success {}",
+        udev_cmd_res.status.success()
+    );
+
     if udev_cmd_res.status.success() {
         lazy_static! {
             static ref UDEV_PARAM_RE: Regex = Regex::new(r##"^([^=]+)=(.*)$"##).unwrap();

@@ -25,7 +25,7 @@ use crate::{
         },
         linux_defs::NIX_NONE,
         linux_defs::{FAT_CHK_CMD, UDEVADM_CMD},
-        lsblk_info::{partition::Partition, LsblkInfo},
+        lsblk_info::LsblkInfo,
         stage2::{
             BALENA_BOOT_FSTYPE, BALENA_BOOT_PART, BALENA_DATA_FSTYPE, BALENA_DATA_PART,
             BALENA_ROOTA_FSTYPE, BALENA_ROOTA_PART, BALENA_ROOTB_FSTYPE, BALENA_ROOTB_PART,
@@ -376,45 +376,22 @@ impl<'a> Mounts {
 
         if let Some(log_dev) = stage2_config.get_log_device() {
             // TODO: establish fs_type ?
-            if file_exists(log_dev) {
-                let fs_type = match Partition::from_path(log_dev) {
-                    Ok(partition) => {
-                        if let Some(fs_type) = partition.fstype {
-                            Some(fs_type)
-                        } else {
-                            warn!(
-                                "Could not determine fs type for log partition: '{}' not mounting log device",
-                                log_dev.display(),
-                            );
-                            None
-                        }
-                    }
-                    Err(why) => {
-                        warn!(
-                            "Could not query device for log partition: '{}', error: {:?} not mounting log device",
-                            log_dev.display(),
-                            why
-                        );
-                        None
-                    }
-                };
-
-                if let Some(fstype) = fs_type {
-                    self.log_path = match Mounts::mount(LOGFS_DIR, log_dev, fstype.as_str()) {
+            if file_exists(&log_dev.device) {
+                self.log_path =
+                    match Mounts::mount(LOGFS_DIR, &log_dev.device, log_dev.fs_type.as_str()) {
                         Ok(mountpoint) => Some(mountpoint),
                         Err(why) => {
                             warn!(
                                 "Failed to mount log device: '{}': error: {:?}",
-                                log_dev.display(),
+                                log_dev.device.display(),
                                 why
                             );
                             None
                         }
                     };
-                }
             } else {
                 // TODO: wait loop ?
-                warn!("Could not find log device: '{}'", log_dev.display());
+                warn!("Could not find log device: '{}'", log_dev.device.display());
             }
         }
 

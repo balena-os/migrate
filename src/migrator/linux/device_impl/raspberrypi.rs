@@ -2,11 +2,11 @@ use log::{debug, error, info};
 use regex::Regex;
 
 use crate::common::path_append;
+use crate::common::path_info::PathInfo;
 use crate::defs::{MIG_INITRD_NAME, MIG_KERNEL_NAME};
 use crate::{
     common::{
         boot_manager::BootManager,
-        device_info::DeviceInfo,
         migrate_info::MigrateInfo,
         stage2_config::{Stage2Config, Stage2ConfigBuilder},
         Config, MigError, MigErrorKind,
@@ -167,8 +167,8 @@ impl Device for RaspberryPi2 {
         restore_backups(config.get_boot_backups(), Some(PathBuf::from(MOUNT_DIR)))
     }
 
-    fn get_boot_device(&self) -> DeviceInfo {
-        self.boot_manager.get_bootmgr_path().device_info
+    fn get_boot_device(&self) -> PathInfo {
+        self.boot_manager.get_bootmgr_path()
     }
 }
 
@@ -262,8 +262,8 @@ impl Device for RaspberryPi3 {
         restore_backups(config.get_boot_backups(), Some(PathBuf::from(MOUNT_DIR)))
     }
 
-    fn get_boot_device(&self) -> DeviceInfo {
-        self.boot_manager.get_bootmgr_path().device_info
+    fn get_boot_device(&self) -> PathInfo {
+        self.boot_manager.get_bootmgr_path()
     }
 }
 
@@ -357,7 +357,7 @@ impl Device for RaspberryPi4_64 {
         restore_backups(config.get_boot_backups(), Some(PathBuf::from(MOUNT_DIR)))
     }
 
-    fn get_boot_device(&self) -> DeviceInfo {
-        self.boot_manager.get_bootmgr_path().device_info
+    fn get_boot_device(&self) -> PathInfo {
+        self.boot_manager.get_bootmgr_path()
     }
 }

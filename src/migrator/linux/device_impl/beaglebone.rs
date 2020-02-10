@@ -2,12 +2,12 @@ use log::{debug, error, info, trace};
 use regex::Regex;
 
 use crate::common::path_append;
+use crate::common::path_info::PathInfo;
 use crate::defs::{MIG_INITRD_NAME, MIG_KERNEL_NAME};
 use crate::{
     common::{
         boot_manager::BootManager,
         config::migrate_config::UEnvStrategy,
-        device_info::DeviceInfo,
         migrate_info::MigrateInfo,
         stage2_config::{Stage2Config, Stage2ConfigBuilder},
         Config, MigError, MigErrorKind,
@@ -268,8 +268,8 @@ impl Device for BeagleboneGreen {
         self.boot_manager.restore(mounts, config)
     }
 
-    fn get_boot_device(&self) -> DeviceInfo {
-        self.boot_manager.get_bootmgr_path().device_info
+    fn get_boot_device(&self) -> PathInfo {
+        self.boot_manager.get_bootmgr_path()
     }
 }
 
@@ -472,7 +472,7 @@ impl<'a> Device for BeagleboardXM {
             .setup(mig_info, config, s2_cfg, &kernel_opts)
     }
 
-    fn get_boot_device(&self) -> DeviceInfo {
-        self.boot_manager.get_bootmgr_path().device_info
+    fn get_boot_device(&self) -> PathInfo {
+        self.boot_manager.get_bootmgr_path()
     }
 }
