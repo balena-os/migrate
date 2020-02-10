@@ -106,39 +106,39 @@ done
 case ${DEVICE_TYPE} in
   raspberrypi3)
     BOOT_DIR="${PROJECT_ROOT}/balena-boot/raspberrypi3"
-    COPY_FILES="balena.zImage bcm2710-rpi-3-b.dtb bcm2710-rpi-3-b-plus.dtb"
+    COPY_FILES="balena-migrate.zImage bcm2710-rpi-3-b.dtb bcm2710-rpi-3-b-plus.dtb"
     RELEASE_DIR_MIGRATE="${PROJECT_ROOT}/target/armv7-unknown-linux-musleabihf/release"
     RELEASE_DIR_STAGE2="${PROJECT_ROOT}/target/armv7-unknown-linux-musleabihf/release"
     ;;
   raspberrypi2)
     # TODO: these are the RPI3 files, exchange
     BOOT_DIR="${PROJECT_ROOT}/balena-boot/raspberrypi2"
-    COPY_FILES="balena.zImage bcm2710-rpi-3-b.dtb bcm2710-rpi-3-b-plus.dtb"
+    COPY_FILES="balena-migrate.zImage bcm2710-rpi-3-b.dtb bcm2710-rpi-3-b-plus.dtb"
     RELEASE_DIR_MIGRATE="${PROJECT_ROOT}/target/armv7-unknown-linux-musleabihf/release"
     RELEASE_DIR_STAGE2="${PROJECT_ROOT}/target/armv7-unknown-linux-musleabihf/release"
     ;;
   raspberrypi4-64)
     BOOT_DIR="${PROJECT_ROOT}/balena-boot/raspberrypi4-64"
-    COPY_FILES="balena.zImage bcm2711-rpi-4-b.dtb"
+    COPY_FILES="balena-migrate.zImage bcm2711-rpi-4-b.dtb"
     RELEASE_DIR_MIGRATE="${PROJECT_ROOT}/target/armv7-unknown-linux-musleabihf/release"
     RELEASE_DIR_STAGE2="${PROJECT_ROOT}/target/aarch64-unknown-linux-musl/release"
     ;;
   intel-nuc)
     BOOT_DIR="${PROJECT_ROOT}/balena-boot/intel-nuc"
-    COPY_FILES="balena.zImage"
+    COPY_FILES="balena-migrate.zImage"
     RELEASE_DIR_MIGRATE="${PROJECT_ROOT}/target/x86_64-unknown-linux-musl/release"
     RELEASE_DIR_STAGE2="${PROJECT_ROOT}/target/x86_64-unknown-linux-musl/release"
     ;;
   beaglebone-green)
     BOOT_DIR="${PROJECT_ROOT}/balena-boot/beaglebone-green"
-    COPY_FILES="balena.zImage \
+    COPY_FILES="balena-migrate.zImage \
     balena.dtb"
     RELEASE_DIR_MIGRATE="${PROJECT_ROOT}/target/armv7-unknown-linux-musleabihf/release"
     RELEASE_DIR_STAGE2="${PROJECT_ROOT}/target/armv7-unknown-linux-musleabihf/release"
     ;;
   beagleboard-xm)
     BOOT_DIR="${PROJECT_ROOT}/balena-boot/beagleboard-xm"
-    COPY_FILES="balena.zImage \
+    COPY_FILES="balena-migrate.zImage \
     balena.dtb"
     RELEASE_DIR_MIGRATE="${PROJECT_ROOT}/target/armv7-unknown-linux-musleabihf/release"
     RELEASE_DIR_STAGE2="${PROJECT_ROOT}/target/armv7-unknown-linux-musleabihf/release"
@@ -162,7 +162,7 @@ TARGET_DIR="$(pwd)"
 cd "${CURR_DIR}"
 
 SOURCE_INITRD="${BOOT_DIR}/balena.initrd.cpio.gz"
-TARGET_INITRD="${TARGET_DIR}/balena.initrd.cpio.gz"
+TARGET_INITRD="${TARGET_DIR}/balena-migrate.initrd"
 
 verbose "project root:               ${PROJECT_ROOT}"
 verbose "target dir:                 ${TARGET_DIR}"
