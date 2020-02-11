@@ -10,7 +10,6 @@ use crate::common::dir_exists;
 use crate::common::stage2_config::{BackupCfg, UbootMbrBackup};
 use crate::defs::{DEF_BLOCK_SIZE, MIG_INITRD_NAME, MIG_KERNEL_NAME};
 use crate::linux::disk_util::{Disk, PartitionIterator};
-use crate::linux::lsblk_info::partition::Partition;
 use crate::linux::stage2::mounts::MOUNT_DIR;
 use crate::{
     common::{
@@ -40,8 +39,9 @@ use crate::{
 // TODO: enable hash checking for dtb's & u-boot boot manager files or disable config for all boot files
 
 const UBOOT_MBR_OFFSET: u64 = 0x60000;
+
 const UBOOT_HDR_SIZE: usize = 0x40;
-const UBOOT_MAX_SIZE: usize = 0x60000;
+const UBOOT_MAX_SIZE: usize = 0x80000;
 
 const MLO_MBR_OFFSET: u64 = 0x20000;
 const MLO_MAX_SIZE: usize = 0x20000;
@@ -54,7 +54,6 @@ enum BootFileType {
     DtbFile,
 }
 
-const UBOOT_DEV_OFFSET: u64 = 0x60000;
 const UBOOT_MAGIC_WORD: u32 = 0x2705_1956;
 
 const BALENA_UBOOT_UNAME: &str = "balena-migrate";
@@ -151,13 +150,13 @@ impl UBootManager {
     fn u32_from_big_endian(buffer: &[u8], offset: usize) -> u32 {
         let mut res: u32 = 0;
         for i in buffer.iter().skip(offset).take(4) {
-            res = res * 0x100 + (buffer[*i as usize] as u32);
+            res = res * 0x100 + *i as u32;
         }
         res
     }
 
     // check MBR u-boot magic word and return uboot file size
-    fn check_mbr(boot_dev: &mut File) -> Result<usize, MigError> {
+    fn check_mbr(boot_dev: &mut File) -> Result<Option<usize>, MigError> {
         let mut buffer: [u8; UBOOT_HDR_SIZE] = [0; UBOOT_HDR_SIZE];
         debug!("seek to u-boot pos");
         let _pos =
@@ -176,17 +175,13 @@ impl UBootManager {
             ))?;
 
         let magic = UBootManager::u32_from_big_endian(&buffer, 0);
-        if magic != UBOOT_MAGIC_WORD {
-            return Err(MigError::from_remark(
-                MigErrorKind::InvParam,
-                &format!(
-                    "Found invalid magic word at u-boot offset in MBR: 0x{:x}!=0x{:x}",
-                    magic, UBOOT_MAGIC_WORD
-                ),
-            ));
+        if magic == UBOOT_MAGIC_WORD {
+            Ok(Some(
+                UBootManager::u32_from_big_endian(&buffer, 12) as usize + UBOOT_HDR_SIZE,
+            ))
+        } else {
+            Ok(None)
         }
-
-        Ok(UBootManager::u32_from_big_endian(&buffer, 12) as usize + UBOOT_HDR_SIZE)
     }
 
     fn read_from_mbr(
@@ -250,13 +245,19 @@ impl UBootManager {
         size: usize,
         source: &Path,
     ) -> Result<(), MigError> {
+        debug!(
+            "write_to_mbr: called with offset: {}, size: {}, source: {}",
+            offset,
+            size,
+            source.display()
+        );
         const BUFFER_SIZE: usize = 0x20000;
         let mut buffer: [u8; BUFFER_SIZE] = [0; BUFFER_SIZE];
 
         let mut source_file = OpenOptions::new()
             .read(true)
             .write(false)
-            .create(true)
+            .create(false)
             .open(source)
             .context(MigErrCtx::from_remark(
                 MigErrorKind::Upstream,
@@ -311,7 +312,15 @@ impl UBootManager {
             .open(boot_device)
         {
             Ok(ref mut boot_dev) => {
-                let data_size = UBootManager::check_mbr(boot_dev)?;
+                let data_size = if let Some(data_size) = UBootManager::check_mbr(boot_dev)? {
+                    data_size
+                } else {
+                    return Err(MigError::from_remark(
+                        MigErrorKind::InvParam,
+                        "No u-boot found in MBR",
+                    ));
+                };
+
                 debug!("uboot_to_mbr: u-boot size: {}", data_size);
 
                 if let Some(uboot_dest) = uboot_dest {
@@ -476,6 +485,13 @@ impl UBootManager {
                     Local::now().format("%s")
                 );
 
+                let path_info = PathInfo::from_path(&uenv_path)?;
+                backup_cfg.push(BackupCfg::from_device_info(
+                    &path_info.device_info,
+                    uenv_path.as_path(),
+                    backup_uenv.as_ref(),
+                ));
+
                 std::fs::rename(&uenv_path, &backup_uenv).context(MigErrCtx::from_remark(
                     MigErrorKind::Upstream,
                     &format!(
@@ -484,17 +500,12 @@ impl UBootManager {
                         &backup_uenv
                     ),
                 ))?;
+
                 info!(
                     "renamed old uEnv.txt '{}' to '{}'",
                     uenv_path.display(),
                     backup_uenv
                 );
-
-                backup_cfg.push(BackupCfg::from_partition(
-                    Partition::from_path(&uenv_path)?,
-                    uenv_path.as_path(),
-                    backup_uenv.as_ref(),
-                ));
             } else {
                 // TODO: is this really safe ?
                 fs::remove_file(uenv_path).context(MigErrCtx::from_remark(
@@ -998,45 +1009,35 @@ impl BootManager for UBootManager {
             }
 
             // check for uboot boot manager in MBR
-            let mut dev_file = OpenOptions::new()
-                .read(true)
-                .write(false)
-                .create(false)
-                .open(&uboot_info.flash_device.get_path())
-                .context(MigErrCtx::from_remark(
-                    MigErrorKind::Upstream,
-                    &format!(
-                        "Failed to open device for reading '{}'",
-                        uboot_info.flash_device.get_path().display()
-                    ),
-                ))?;
+            {
+                let mut dev_file = OpenOptions::new()
+                    .read(true)
+                    .write(false)
+                    .create(false)
+                    .open(&uboot_info.flash_device.get_path())
+                    .context(MigErrCtx::from_remark(
+                        MigErrorKind::Upstream,
+                        &format!(
+                            "Failed to open device for reading '{}'",
+                            uboot_info.flash_device.get_path().display()
+                        ),
+                    ))?;
 
-            dev_file
-                .seek(SeekFrom::Start(UBOOT_DEV_OFFSET))
-                .context(MigErrCtx::from_remark(
-                    MigErrorKind::Upstream,
-                    &format!(
-                        "Failed seek operation on device '{}'",
-                        uboot_info.flash_device.get_path().display()
-                    ),
-                ))?;
-
-            let mut buffer: [u8; 4] = [0; 4];
-            dev_file
-                .read_exact(&mut buffer)
-                .context(MigErrCtx::from_remark(
-                    MigErrorKind::Upstream,
-                    &format!(
-                        "Failed read operation on device '{}'",
-                        uboot_info.flash_device.get_path().display()
-                    ),
-                ))?;
-
-            uboot_info.in_mbr = UBootManager::u32_from_big_endian(&buffer, 0) == UBOOT_MAGIC_WORD;
+                if let Some(uboot_size) = UBootManager::check_mbr(&mut dev_file)? {
+                    if uboot_size > UBOOT_MAX_SIZE {
+                        return Err(MigError::from_remark(
+                            MigErrorKind::InvState,
+                            &format!("Found invalid u-boot MBR size: {}", uboot_size),
+                        ));
+                    }
+                    uboot_info.in_mbr = true;
+                }
+            }
 
             if (uboot_info.in_mbr || uboot_info.mlo_path.is_some())
                 && uboot_info.install_path.is_some()
             {
+                self.uboot_info = Some(uboot_info);
                 Ok(true)
             } else {
                 Err(MigError::from_remark(
@@ -1250,6 +1251,11 @@ impl BootManager for UBootManager {
     }
 
     fn get_bootmgr_path(&self) -> PathInfo {
-        unimplemented!()
+        if let Some(ref uboot_info) = self.uboot_info {
+            if let Some(ref install_path) = uboot_info.install_path {
+                return install_path.clone();
+            }
+        }
+        panic!("Uboot boot manager is not initialized");
     }
 }

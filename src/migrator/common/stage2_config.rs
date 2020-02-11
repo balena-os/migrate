@@ -11,7 +11,6 @@ use serde_yaml;
 const EMPTY_BACKUPS: &[BackupCfg] = &[];
 
 use crate::defs::DeviceSpec;
-use crate::linux::lsblk_info::partition::Partition;
 
 use crate::common::device_info::DeviceInfo;
 use crate::{
@@ -112,22 +111,6 @@ pub(crate) struct BackupCfg {
 }
 
 impl BackupCfg {
-    pub fn from_partition(device: Partition, source: &Path, backup: &Path) -> BackupCfg {
-        BackupCfg {
-            device: if let Some(uuid) = device.uuid {
-                DeviceSpec::Uuid(uuid)
-            } else if let Some(partuuid) = device.partuuid {
-                DeviceSpec::PartUuid(partuuid)
-            } else if let Some(label) = device.label {
-                DeviceSpec::Label(label)
-            } else {
-                DeviceSpec::DevicePath(device.get_path())
-            },
-            source: source.to_path_buf(),
-            backup: backup.to_path_buf(),
-        }
-    }
-
     pub fn from_device_info(device: &DeviceInfo, source: &Path, backup: &Path) -> BackupCfg {
         BackupCfg {
             device: if let Some(ref uuid) = device.uuid {

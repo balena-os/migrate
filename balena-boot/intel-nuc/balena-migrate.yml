@@ -12,19 +12,11 @@ migrate:
   reboot: 5
   log:
     ## use this drive for stage2 persistent logging
-    #drive: '/dev/sda1'
+    drive: 
+    #  uuid: 'F191-95DB'
+    #  dev_path: '/dev/sdb1'
     ## stage2 log level (trace, debug, info, warn, error)
     level: debug
-  # path to stage2 kernel - must be a balena os kernel matching the device type
-  kernel: 
-    path: balena.zImage
-    hash: 
-      md5: 39f6184a273f65c466b172f26c808b8d
-  ## path to stage2 initramfs
-  initrd: 
-    path: balena.initrd.cpio.gz
-  # hash:
-  #   md5: <md5sum of balena.initrd.cpio.gz>
   backup:
   ## network manager configuration files
   nwmgr_files:
@@ -37,30 +29,16 @@ migrate:
   # force_flash_device: /dev/sda
   ## delay migration by n seconds - workaround for watchdog not disabling
   # delay: 60
-  ## kick / close configured watchdogs
-  # watchdogs:
-    # path to watchdog device
-    # - path: /dev/watchdog1
-      ## optional interval in seconds - overrides interval read from watchdog device
-      # interval: ~
-      ## optional close, false disables MAGICCLOSE flag read from device
-      ## watchdog will be kicked instead
-      # close: false
   ## by default migration requires some network manager config to be present (eg from wlan or supplied)
   ## set this to false to not require connection files
   require_nwmgr_config: true
+  # md5_sums: md5sums.txt
 balena:
   image:
     ## use dd / flash balena image
-    dd:
-      path: <insert image to flash> 
-    # hash:
-    #   md5: <insert md5 of image to flash>
+    # dd: balena-cloud-intel-nuc-2.46.0+rev1-v10.6.27.img.gz
   ## config.json file to inject
-  config: 
-    path: config.json
-    # hash:
-    #   md5: <insert md5 of config>    
+  config: config.json
   ## application name
   app_name: <insert application name>
   ## check for api connection

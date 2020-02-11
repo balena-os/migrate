@@ -169,6 +169,7 @@ impl BalenaCfgJson {
     }
 
     pub fn check(&self, config: &Config, xpctd_dev_type: &str) -> Result<(), MigError> {
+        // TODO: app_name is not checked
         info!("Configured for application: {}", self.config.app_name);
 
         if self.config.device_type == xpctd_dev_type {

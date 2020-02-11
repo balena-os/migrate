@@ -1,10 +1,9 @@
 use crate::linux::lsblk_info::ResultParams;
 use crate::{
-    common::{path_append, MigError, MigErrorKind},
-    linux::lsblk_info::{call_lsblk_for, call_udevadm},
+    common::{path_append, MigError},
+    linux::lsblk_info::call_udevadm,
 };
-use log::trace;
-use std::path::{Path, PathBuf};
+use std::path::PathBuf;
 
 #[derive(Debug, Clone)]
 pub(crate) struct Partition {
@@ -43,35 +42,35 @@ impl Partition {
             index: udev_result.get_u16("ID_PART_ENTRY_NUMBER")?,
         })
     }
-
-    pub fn from_path<P: AsRef<Path>>(partition: P) -> Result<Partition, MigError> {
-        let lsblk_results = call_lsblk_for(partition.as_ref())?;
-        trace!("from_path: lsblk_results ok");
-        // expect just one result of type partition
-        if lsblk_results.len() == 1 {
-            let udev_result = call_udevadm(partition.as_ref())?;
-            trace!("from_path: udev_result ok");
-            match udev_result.get_str("DEVTYPE")? {
-                "partition" => Ok(Partition::new(&lsblk_results[0])?),
-                _ => Err(MigError::from_remark(
+    /*
+        pub fn from_path<P: AsRef<Path>>(partition: P) -> Result<Partition, MigError> {
+            let lsblk_results = call_lsblk_for(partition.as_ref())?;
+            trace!("from_path: lsblk_results ok");
+            // expect just one result of type partition
+            if lsblk_results.len() == 1 {
+                let udev_result = call_udevadm(partition.as_ref())?;
+                trace!("from_path: udev_result ok");
+                match udev_result.get_str("DEVTYPE")? {
+                    "partition" => Ok(Partition::new(&lsblk_results[0])?),
+                    _ => Err(MigError::from_remark(
+                        MigErrorKind::InvParam,
+                        &format!(
+                            "call_lsblk_for_part: invalid device type, expected partition, got: '{}'",
+                            udev_result.get_str("DEVTYPE")?
+                        ),
+                    )),
+                }
+            } else {
+                Err(MigError::from_remark(
                     MigErrorKind::InvParam,
                     &format!(
-                        "call_lsblk_for_part: invalid device type, expected partition, got: '{}'",
-                        udev_result.get_str("DEVTYPE")?
+                        "call_lsblk_for_part: Invalid number of lsblk results encountered: {}",
+                        lsblk_results.len()
                     ),
-                )),
+                ))
             }
-        } else {
-            Err(MigError::from_remark(
-                MigErrorKind::InvParam,
-                &format!(
-                    "call_lsblk_for_part: Invalid number of lsblk results encountered: {}",
-                    lsblk_results.len()
-                ),
-            ))
         }
-    }
-
+    */
     pub fn get_path(&self) -> PathBuf {
         path_append("/dev", &self.name)
     }
