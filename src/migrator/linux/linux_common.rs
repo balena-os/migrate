@@ -14,8 +14,8 @@ use crate::{
     defs::FileType,
     defs::{OSArch, DISK_BY_LABEL_PATH, DISK_BY_PARTUUID_PATH, DISK_BY_UUID_PATH},
     linux::linux_defs::{
-        DF_CMD, FILE_CMD, FINDMNT_CMD, KERNEL_CMDLINE_PATH, MKTEMP_CMD, MOKUTIL_CMD, NIX_NONE,
-        SYS_UEFI_DIR, UNAME_CMD, WHEREIS_CMD,
+        DF_CMD, FILE_CMD, KERNEL_CMDLINE_PATH, MKTEMP_CMD, MOKUTIL_CMD, NIX_NONE, SYS_UEFI_DIR,
+        UNAME_CMD, WHEREIS_CMD,
     },
 };
 
@@ -331,7 +331,7 @@ fn device_spec_to_path(
     dev_spec: DeviceSpec,
     mount: bool,
     mount_dir: &Option<PathBuf>,
-) -> Result<PathBuf, MigError> {
+) -> Result<Option<PathBuf>, MigError> {
     let dev_path = match dev_spec {
         DeviceSpec::DevicePath(ref path) => String::from(&*path.to_string_lossy()),
         DeviceSpec::Uuid(ref uuid) => format!("{}/{}", DISK_BY_UUID_PATH, uuid),
@@ -345,25 +345,38 @@ fn device_spec_to_path(
         }
     };
 
-    let cmd_res = call(FINDMNT_CMD, &["-o", "TARGET", dev_path.as_str()], true)?;
-    if cmd_res.status.success() {
+    let cmd_res = call(DF_CMD, &["--output", "TARGET", dev_path.as_str()], true)?;
+    let mounted_on = if cmd_res.status.success() {
         if let Some(line) = cmd_res.stdout.lines().nth(1) {
-            Ok(PathBuf::from(line))
-        } else if mount {
-            Ok(tmp_mount(dev_path, &None, mount_dir)?)
+            if let Some(mountpoint) = line.split_whitespace().collect::<Vec<&str>>().get(5) {
+                Some(PathBuf::from(mountpoint))
+            } else {
+                return Err(MigError::from_remark(
+                    MigErrorKind::InvState,
+                    &format!(
+                        "Invalid output from df, cannot parse for mountpoint: '{}'",
+                        cmd_res.stdout
+                    ),
+                ));
+            }
         } else {
-            Err(MigError::from_remark(
-                MigErrorKind::InvState,
-                &format!("device is not mounted '{:?}'", dev_spec),
-            ))
+            None
         }
-    } else if mount {
-        Ok(tmp_mount(dev_path, &None, mount_dir)?)
     } else {
-        Err(MigError::from_remark(
+        return Err(MigError::from_remark(
             MigErrorKind::InvState,
-            &format!("device is not mounted '{:?}'", dev_spec),
-        ))
+            &format!("Error from df: '{}'", cmd_res.stderr),
+        ));
+    };
+
+    if let Some(_) = mounted_on {
+        Ok(mounted_on)
+    } else {
+        if mount {
+            Ok(Some(tmp_mount(dev_path, &None, mount_dir)?))
+        } else {
+            Ok(None)
+        }
     }
 }
 
@@ -371,10 +384,10 @@ pub(crate) fn restore_backups(backups: &[BackupCfg], mount_dir: Option<PathBuf>)
     // restore boot config backups
     let mut res = true;
     for backup in backups {
-        match device_spec_to_path(backup.device.clone(), true, &mount_dir) {
-            Ok(dev_root) => {
-                let src = path_append(&dev_root, &backup.source);
-                let tgt = path_append(&dev_root, &backup.backup);
+        if let Ok(mountpoint) = device_spec_to_path(backup.device.clone(), true, &mount_dir) {
+            if let Some(mountpoint) = mountpoint {
+                let src = path_append(&mountpoint, &backup.source);
+                let tgt = path_append(&mountpoint, &backup.backup);
                 if let Err(why) = copy(&src, &tgt) {
                     error!(
                         "Failed to restore '{}' to '{}', error: {:?}",
@@ -386,15 +399,17 @@ pub(crate) fn restore_backups(backups: &[BackupCfg], mount_dir: Option<PathBuf>)
                 } else {
                     info!("Restored '{}' to '{}'", src.display(), tgt.display())
                 }
-            }
-            Err(why) => {
-                error!(
-                    "Failed to find/mount '{:?}', error: {:?}",
-                    backup.device, why
-                );
+            } else {
+                error!("Failed to mount '{:?}'", backup.device,);
                 res = false;
             }
-        };
+        } else {
+            error!(
+                "Failed to retrieve mountpoint for backup: {:?}",
+                backup.device
+            );
+            res = false;
+        }
     }
     res
 }

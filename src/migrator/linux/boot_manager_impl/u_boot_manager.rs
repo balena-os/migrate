@@ -279,6 +279,7 @@ impl UBootManager {
                     MigErrorKind::Upstream,
                     &format!("Failed to read from file: '{}'", source.display()),
                 ))?;
+
             if bytes_read > 0 {
                 tot_read += bytes_read;
                 boot_dev
@@ -636,7 +637,7 @@ impl UBootManager {
 
         uenv_text = uenv_text.replace(
             "__ROOT_DEV_ID__",
-            &install_path.device_info.get_uboot_kernel_cmd(),
+            &install_path.device_info.get_kernel_cmd(),
         );
         uenv_text = uenv_text.replace("__KERNEL_CMDLINE__", kernel_opts);
 

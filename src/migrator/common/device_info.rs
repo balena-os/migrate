@@ -119,29 +119,18 @@ impl DeviceInfo {
         })
     }
 
-    pub fn get_uboot_kernel_cmd(&self) -> String {
-        if let Some(ref uuid) = self.part_uuid {
-            format!("uuid={}", uuid)
-        } else if let Some(ref partuuid) = self.part_uuid {
-            format!("partuuid={}", partuuid)
-        } else {
-            format!("root={}", self.device.as_str())
-        }
-    }
-
     #[cfg(target_os = "windows")]
     pub fn for_efi() -> Result<DeviceInfo, MigError> {
         OSApi::new()?.device_info_for_efi()
     }
 
     #[allow(dead_code)]
+    // TODO: used by RPI
     pub fn get_kernel_cmd(&self) -> String {
-        if let Some(ref partuuid) = self.part_uuid {
+        if let Some(ref uuid) = self.uuid {
+            format!("UUID={}", uuid)
+        } else if let Some(ref partuuid) = self.part_uuid {
             format!("PARTUUID={}", partuuid)
-        } else if let Some(ref uuid) = self.uuid {
-            format!("UUID={}", uuid)
-        } else if let Some(ref uuid) = self.uuid {
-            format!("UUID={}", uuid)
         } else {
             self.device.clone()
         }
