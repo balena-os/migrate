@@ -51,13 +51,6 @@ pub(crate) struct UBootCfg {
     pub mmc_index: Option<u8>,
 }
 
-#[derive(Debug, Deserialize, Serialize, Clone)]
-pub(crate) struct WatchdogCfg {
-    pub path: PathBuf,
-    pub interval: Option<u64>,
-    pub close: Option<bool>,
-}
-
 /*
 #[derive(Debug, Deserialize, Clone)]
 pub(crate) struct UBootEnv {
@@ -125,7 +118,6 @@ pub(crate) struct MigrateConfig {
     require_nwmgr_config: Option<bool>,
     gzip_internal: Option<bool>,
     tar_internal: Option<bool>,
-    watchdogs: Option<Vec<WatchdogCfg>>,
     delay: Option<u64>,
     kernel_opts: Option<String>,
     force_flash_device: Option<PathBuf>,
@@ -149,7 +141,6 @@ impl<'a> MigrateConfig {
             require_nwmgr_config: None,
             gzip_internal: None,
             tar_internal: None,
-            watchdogs: None,
             delay: None,
             kernel_opts: None,
             force_flash_device: None,

@@ -10,13 +10,12 @@ use serde_yaml;
 
 const EMPTY_BACKUPS: &[BackupCfg] = &[];
 
-use crate::defs::DeviceSpec;
-
-use crate::common::device_info::DeviceInfo;
 use crate::{
     common::{
-        config::balena_config::PartCheck, file_info::RelFileInfo, MigErrCtx, MigError, MigErrorKind,
+        config::balena_config::PartCheck, file_info::RelFileInfo, path_info::PathInfo, MigErrCtx,
+        MigError, MigErrorKind,
     },
+    defs::DeviceSpec,
     defs::{BootType, DeviceType, FailMode},
 };
 
@@ -106,24 +105,52 @@ pub(crate) struct LogDevice {
 #[derive(Debug, Deserialize, Serialize, Clone)]
 pub(crate) struct BackupCfg {
     pub device: DeviceSpec,
+    pub fstype: String,
     pub source: PathBuf,
     pub backup: PathBuf,
 }
 
 impl BackupCfg {
-    pub fn from_device_info(device: &DeviceInfo, source: &Path, backup: &Path) -> BackupCfg {
-        BackupCfg {
-            device: if let Some(ref uuid) = device.uuid {
-                DeviceSpec::Uuid(uuid.clone())
-            } else if let Some(ref partuuid) = device.part_uuid {
-                DeviceSpec::PartUuid(partuuid.clone())
-            } else if let Some(ref label) = device.part_label {
-                DeviceSpec::Label(label.clone())
-            } else {
-                DeviceSpec::DevicePath(PathBuf::from(&device.device))
-            },
-            source: source.to_path_buf(),
-            backup: backup.to_path_buf(),
+    pub fn new(source: &Path, backup: &Path) -> Result<BackupCfg, MigError> {
+        let src_info = PathInfo::from_path(source)?;
+        if backup.starts_with(&src_info.mountpoint) {
+            Ok(BackupCfg {
+                device: if let Some(ref uuid) = src_info.device_info.uuid {
+                    DeviceSpec::Uuid(uuid.clone())
+                } else if let Some(ref partuuid) = src_info.device_info.part_uuid {
+                    DeviceSpec::PartUuid(partuuid.clone())
+                } else if let Some(ref label) = src_info.device_info.part_label {
+                    DeviceSpec::Label(label.clone())
+                } else {
+                    DeviceSpec::DevicePath(PathBuf::from(&src_info.device_info.device))
+                },
+                fstype: src_info.device_info.fs_type.clone(),
+                source: source
+                    .strip_prefix(&src_info.mountpoint)
+                    .context(MigErrCtx::from_remark(
+                        MigErrorKind::Upstream,
+                        &format!(
+                            "Failed to create device relative path from path: '{}'",
+                            source.display(),
+                        ),
+                    ))?
+                    .to_path_buf(),
+                backup: backup
+                    .strip_prefix(&src_info.mountpoint)
+                    .context(MigErrCtx::from_remark(
+                        MigErrorKind::Upstream,
+                        &format!(
+                            "Failed to create device relative path from path: '{}'",
+                            backup.display(),
+                        ),
+                    ))?
+                    .to_path_buf(),
+            })
+        } else {
+            Err(MigError::from_remark(
+                MigErrorKind::InvState,
+                &format!("BackupCFg::new source & backup   must be on same device"),
+            ))
         }
     }
 }

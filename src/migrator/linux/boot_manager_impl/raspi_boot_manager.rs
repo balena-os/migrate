@@ -203,11 +203,7 @@ impl BootManager for RaspiBootManager {
                         backup_path.display()
                     ),
                 ))?;
-                boot_cfg_bckup.push(BackupCfg::from_device_info(
-                    &boot_path.device_info,
-                    &src_path,
-                    &backup_path,
-                ));
+                boot_cfg_bckup.push(BackupCfg::new(&src_path, &backup_path)?);
             }
 
             copy(&src_path, &tgt_path).context(MigErrCtx::from_remark(
@@ -245,11 +241,7 @@ impl BootManager for RaspiBootManager {
                 ),
             ))?;
 
-            boot_cfg_bckup.push(BackupCfg::from_device_info(
-                &boot_path.device_info,
-                &config_path,
-                &backup_path,
-            ));
+            boot_cfg_bckup.push(BackupCfg::new(&config_path, &backup_path)?);
 
             info!(
                 "Created backup of '{}' in '{}'",
@@ -338,11 +330,7 @@ impl BootManager for RaspiBootManager {
                 ),
             ))?;
 
-            boot_cfg_bckup.push(BackupCfg::from_device_info(
-                &boot_path.device_info,
-                &config_path,
-                &backup_path,
-            ));
+            boot_cfg_bckup.push(BackupCfg::new(&config_path, &backup_path)?);
         }
 
         let cmdline_str = match read_to_string(&cmdline_path) {

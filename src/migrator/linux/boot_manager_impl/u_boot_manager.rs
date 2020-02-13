@@ -2,7 +2,7 @@ use chrono::Local;
 use failure::ResultExt;
 use log::{debug, error, info, warn};
 use regex::Regex;
-use std::fs::{self, create_dir_all, remove_file, File, OpenOptions};
+use std::fs::{self, create_dir_all, File, OpenOptions};
 use std::io::{Read, Seek, SeekFrom, Write};
 use std::path::{Path, PathBuf};
 
@@ -16,7 +16,7 @@ use crate::{
         boot_manager::BootManager,
         call,
         config::migrate_config::UEnvStrategy,
-        file_exists, is_balena_file,
+        is_balena_file,
         migrate_info::MigrateInfo,
         path_append,
         path_info::PathInfo,
@@ -251,6 +251,8 @@ impl UBootManager {
             size,
             source.display()
         );
+
+        // TODO: check MBR magic number & DOS partition table
         const BUFFER_SIZE: usize = 0x20000;
         let mut buffer: [u8; BUFFER_SIZE] = [0; BUFFER_SIZE];
 
@@ -305,7 +307,7 @@ impl UBootManager {
         mlo_dest: Option<PathBuf>,
         uboot_dest: Option<PathBuf>,
     ) -> Result<(), MigError> {
-        info!("uboot_to_mbr: backup & delete u-boot in MBR");
+        info!("uboot_to_mbr: backup & overwrite u-boot in MBR");
         match OpenOptions::new()
             .read(true)
             .write(true)
@@ -486,12 +488,7 @@ impl UBootManager {
                     Local::now().format("%s")
                 );
 
-                let path_info = PathInfo::from_path(&uenv_path)?;
-                backup_cfg.push(BackupCfg::from_device_info(
-                    &path_info.device_info,
-                    uenv_path.as_path(),
-                    backup_uenv.as_ref(),
-                ));
+                backup_cfg.push(BackupCfg::new(uenv_path.as_path(), backup_uenv.as_ref())?);
 
                 std::fs::rename(&uenv_path, &backup_uenv).context(MigErrCtx::from_remark(
                     MigErrorKind::Upstream,
@@ -1093,11 +1090,7 @@ impl BootManager for UBootManager {
                     ),
                 ))?;
 
-                boot_cfg_bckup.push(BackupCfg::from_device_info(
-                    &mlo_path.device_info,
-                    mlo_src.as_path(),
-                    mlo_dest.as_path(),
-                ));
+                boot_cfg_bckup.push(BackupCfg::new(mlo_src.as_path(), mlo_dest.as_path())?);
 
                 let mlo_dest = mlo_src;
                 let mlo_src = path_append(&mig_info.work_path.path, MLO_FILE_NAME);
@@ -1128,11 +1121,7 @@ impl BootManager for UBootManager {
                     ),
                 ))?;
 
-                boot_cfg_bckup.push(BackupCfg::from_device_info(
-                    &mlo_path.device_info,
-                    uboot_src.as_path(),
-                    uboot_dest.as_path(),
-                ));
+                boot_cfg_bckup.push(BackupCfg::new(uboot_src.as_path(), uboot_dest.as_path())?);
 
                 let uboot_dest = uboot_src;
                 let uboot_src = path_append(&mig_info.work_path.path, UBOOT_FILE_NAME);
@@ -1197,38 +1186,6 @@ impl BootManager for UBootManager {
 
         // TODO: restore on bootmgr device
         let mut res = true;
-
-        let uenv_file = path_append(mounts.get_boot_mountpoint(), UENV_FILE_NAME);
-
-        let balena_file = match is_balena_file(&uenv_file) {
-            Ok(res) => res,
-            Err(why) => {
-                warn!(
-                    "Failed to get file status for '{}', error: {:?}",
-                    uenv_file.display(),
-                    why
-                );
-                false
-            }
-        };
-
-        if file_exists(&uenv_file) && balena_file {
-            if let Err(why) = remove_file(&uenv_file) {
-                error!(
-                    "failed to remove migrate boot config file '{}' error: {:?}",
-                    uenv_file.display(),
-                    why
-                )
-            } else {
-                info!("Removed balena boot config file '{}'", &uenv_file.display());
-            }
-        } else {
-            warn!(
-                "balena boot config file not found in '{}'",
-                &uenv_file.display()
-            );
-            res = false;
-        }
 
         if let Some(uboot_mbr_backup) = config.get_uboot_mbr_backup() {
             if let Err(why) = UBootManager::uboot_to_mbr(

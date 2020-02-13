@@ -329,6 +329,7 @@ pub(crate) fn is_secure_boot() -> Result<bool, MigError> {
 
 fn device_spec_to_path(
     dev_spec: DeviceSpec,
+    fstype: &str,
     mount: bool,
     mount_dir: &Option<PathBuf>,
 ) -> Result<Option<PathBuf>, MigError> {
@@ -345,7 +346,7 @@ fn device_spec_to_path(
         }
     };
 
-    let cmd_res = call(DF_CMD, &["--output", "TARGET", dev_path.as_str()], true)?;
+    let cmd_res = call(DF_CMD, &[dev_path.as_str()], true)?;
     let mounted_on = if cmd_res.status.success() {
         if let Some(line) = cmd_res.stdout.lines().nth(1) {
             if let Some(mountpoint) = line.split_whitespace().collect::<Vec<&str>>().get(5) {
@@ -373,7 +374,11 @@ fn device_spec_to_path(
         Ok(mounted_on)
     } else {
         if mount {
-            Ok(Some(tmp_mount(dev_path, &None, mount_dir)?))
+            Ok(Some(tmp_mount(
+                dev_path,
+                &Some(String::from(fstype)),
+                mount_dir,
+            )?))
         } else {
             Ok(None)
         }
@@ -382,12 +387,21 @@ fn device_spec_to_path(
 
 pub(crate) fn restore_backups(backups: &[BackupCfg], mount_dir: Option<PathBuf>) -> bool {
     // restore boot config backups
+    debug!("restore_backups");
     let mut res = true;
     for backup in backups {
-        if let Ok(mountpoint) = device_spec_to_path(backup.device.clone(), true, &mount_dir) {
+        if let Ok(mountpoint) =
+            device_spec_to_path(backup.device.clone(), &backup.fstype, true, &mount_dir)
+        {
             if let Some(mountpoint) = mountpoint {
-                let src = path_append(&mountpoint, &backup.source);
-                let tgt = path_append(&mountpoint, &backup.backup);
+                debug!(
+                    "restore_backups: backup: '{}', mountpoint for '{:?}' is '{}'",
+                    backup.backup.display(),
+                    backup.device,
+                    mountpoint.display()
+                );
+                let src = path_append(&mountpoint, &backup.backup);
+                let tgt = path_append(&mountpoint, &backup.source);
                 if let Err(why) = copy(&src, &tgt) {
                     error!(
                         "Failed to restore '{}' to '{}', error: {:?}",

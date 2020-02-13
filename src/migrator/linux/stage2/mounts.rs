@@ -333,10 +333,10 @@ impl<'a> Mounts {
         }
     }
 
-    pub fn get_boot_mountpoint(&'a self) -> &'a Path {
-        &self.boot_mountpoint
-    }
-
+    /*    pub fn get_boot_mountpoint(&'a self) -> &'a Path {
+            &self.boot_mountpoint
+        }
+    */
     pub fn get_stage2_config(&'a self) -> &'a Path {
         &self.stage2_config
     }
