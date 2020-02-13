@@ -9,13 +9,17 @@ use crate::{
 };
 
 #[cfg(target_os = "linux")]
-use crate::linux::lsblk_info::{block_device::BlockDevice, partition::Partition};
+use crate::{
+    common::MigErrorKind,
+    linux::lsblk_info::{block_device::BlockDevice, partition::Partition}
+};
 
 #[cfg(target_os = "windows")]
 use crate::{
-    common::os_api::{OSApi, OSApiImpl},
+    common::os_api::{OSApi},
     mswin::drive_info::VolumeInfo,
 };
+use crate::common::os_api::OSApiImpl;
 
 #[derive(Debug, Clone)]
 pub(crate) struct DeviceInfo {
@@ -72,8 +76,6 @@ impl DeviceInfo {
         Ok(DeviceInfo {
             // the drive device path
             drive: String::from(vol_info.physical_drive.get_device_id()),
-            // the devices mountpoint
-            mountpoint: PathBuf::from(vol_info.logical_drive.get_name()),
             // the drive size
             drive_size: vol_info.physical_drive.get_size(),
             // the partition device path
@@ -94,34 +96,12 @@ impl DeviceInfo {
             },
             // the partition size
             part_size: vol_info.partition.get_size(),
-            fs_size: if let Some(size) = vol_info.volume.get_capacity() {
-                size
-            } else {
-                return Err(MigError::from_remark(
-                    MigErrorKind::NotFound,
-                    &format!(
-                        "Required parameter size was not found for '{}'",
-                        vol_info.volume.get_device_id()
-                    ),
-                ));
-            },
-            fs_free: if let Some(free) = vol_info.volume.get_free_space() {
-                free
-            } else {
-                return Err(MigError::from_remark(
-                    MigErrorKind::NotFound,
-                    &format!(
-                        "Required parameter size was not found for '{}'",
-                        vol_info.volume.get_device_id()
-                    ),
-                ));
-            },
         })
     }
 
     #[cfg(target_os = "windows")]
     pub fn for_efi() -> Result<DeviceInfo, MigError> {
-        OSApi::new()?.device_info_for_efi()
+        OSApiImpl::new()?.device_info_for_efi()
     }
 
     #[allow(dead_code)]

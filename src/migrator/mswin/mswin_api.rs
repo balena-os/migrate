@@ -75,7 +75,8 @@ impl OSApi for MSWinApi {
         )?)
     }
 
-    fn device_path_from_partition(&self, device: &DeviceSpec) -> Result<PathBuf, MigError> {
+
+    fn device_info_from_devspec(&self, device: &DeviceSpec) -> Result<DeviceInfo, MigError> {
         // TODO: this does not work very well
         // partuuid
         let volume_info = match device {
@@ -98,7 +99,7 @@ impl OSApi for MSWinApi {
             }
         };
 
-        Ok(volume_info.get_linux_path())
+        Ok(DeviceInfo::from_volume_info(volume_info)?)
     }
 
     fn expect_type<P: AsRef<Path>>(&self, _file: P, _ftype: &FileType) -> Result<(), MigError> {

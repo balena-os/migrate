@@ -2,8 +2,9 @@ use log::{debug, error, info};
 
 use crate::{
     common::{
-        boot_manager::BootManager, config::Config, device::Device, device_info::DeviceInfo,
+        boot_manager::BootManager, config::Config, device::Device,
         migrate_info::MigrateInfo, stage2_config::Stage2ConfigBuilder, MigError, MigErrorKind,
+        path_info::PathInfo,
     },
     defs::{BootType, DeviceType},
     mswin::{
@@ -102,12 +103,12 @@ impl Device for IntelNuc {
     fn get_boot_type(&self) -> BootType {
         self.boot_manager.get_boot_type()
     }
-    fn get_boot_device(&self) -> DeviceInfo {
+    fn get_boot_device(&self) -> PathInfo {
         self.boot_manager.get_bootmgr_path()
     }
 
     fn setup(
-        &self,
+        &mut self,
         mig_info: &mut MigrateInfo,
         config: &Config,
         s2_cfg: &mut Stage2ConfigBuilder,

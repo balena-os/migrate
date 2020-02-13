@@ -1,9 +1,10 @@
 use std::path::{Path, PathBuf};
 
 use crate::common::{
+    MigErrorKind,
     device_info::DeviceInfo,
-    os_api::{OSApi, OSApiImpl},
     MigError,
+    os_api::{OSApi, OSApiImpl},
 };
 
 #[cfg(target_os = "linux")]
@@ -11,11 +12,11 @@ use failure::ResultExt;
 
 #[cfg(target_os = "linux")]
 use crate::{
-    common::{MigErrCtx, MigErrorKind},
+    common::MigErrCtx,
     linux::lsblk_info::{block_device::BlockDevice, partition::Partition, LsblkInfo},
+    linux::linux_common::get_fs_space,
 };
 
-use crate::linux::linux_common::get_fs_space;
 #[cfg(target_os = "windows")]
 use crate::mswin::drive_info::VolumeInfo;
 
@@ -40,7 +41,7 @@ pub(crate) struct PathInfo {
 }
 
 impl PathInfo {
-    #[cfg(target_os = "linux")]
+    //#[cfg(target_os = "linux")]
     pub fn from_path<P: AsRef<Path>>(path: P) -> Result<PathInfo, MigError> {
         let os_api = OSApiImpl::new()?;
         os_api.path_info_from_path(&os_api.canonicalize(path)?)
@@ -129,6 +130,30 @@ impl PathInfo {
             device_info: DeviceInfo::from_volume_info(vol_info)?,
             // the absolute path
             path: path.to_path_buf(),
+            mountpoint: PathBuf::from(vol_info.logical_drive.get_name()),
+            fs_size: if let Some(size) = vol_info.volume.get_capacity() {
+                size
+            } else {
+                return Err(MigError::from_remark(
+                    MigErrorKind::NotFound,
+                    &format!(
+                        "Required parameter size was not found for '{}'",
+                        vol_info.volume.get_device_id()
+                    ),
+                ));
+            },
+            fs_free: if let Some(free) = vol_info.volume.get_free_space() {
+                free
+            } else {
+                return Err(MigError::from_remark(
+                    MigErrorKind::NotFound,
+                    &format!(
+                        "Required parameter size was not found for '{}'",
+                        vol_info.volume.get_device_id()
+                    ),
+                ));
+            },
         })
     }
+
 }

@@ -123,8 +123,8 @@ impl<'a> MSWMigrator {
                 let boot_type = device.get_boot_type();
                 info!("Device Type is {:?}", device.get_device_type());
                 info!("Boot mode is {:?}", boot_type);
-                stage2_config.set_device_type(&dev_type);
-                stage2_config.set_boot_type(&boot_type);
+                stage2_config.set_device_type(dev_type);
+                stage2_config.set_boot_type(boot_type);
                 device
             }
             Err(why) => {
@@ -167,12 +167,12 @@ impl<'a> MSWMigrator {
         // Pick the current root device as flash device
 
         let boot_info = device.get_boot_device();
-        let flash_device = &boot_info.drive;
-        let flash_dev_size = boot_info.drive_size;
+        let flash_device = &boot_info.device_info.drive;
+        let flash_dev_size = boot_info.device_info.drive_size;
 
         info!(
             "The install drive is {}, size: {}",
-            boot_info.drive,
+            boot_info.device_info.drive,
             format_size_with_unit(flash_dev_size)
         );
 
@@ -220,7 +220,7 @@ impl<'a> MSWMigrator {
         let work_dir = &self.mig_info.work_path.path;
         let boot_device = self.device.get_boot_device();
 
-        if &self.mig_info.work_path.device_info.device == &boot_device.device {
+        if &self.mig_info.work_path.device_info.device == &boot_device.device_info.device {
             self.stage2_config
                 .set_work_path(&PathType::Path(OSApiImpl::new()?.to_linux_path(work_dir)?));
         } else {
@@ -229,7 +229,7 @@ impl<'a> MSWMigrator {
             let work_device = &self.mig_info.work_path.device_info;
             let stripped_path = OSApiImpl::new()?.to_linux_path(
                 work_dir
-                    .strip_prefix(&work_device.mountpoint)
+                    .strip_prefix(&self.mig_info.work_path.mountpoint)
                     .context(MigErrCtx::from_remark(
                         MigErrorKind::Upstream,
                         "failed to create relative work path",
@@ -370,9 +370,6 @@ impl<'a> MSWMigrator {
         self.stage2_config
             .set_migrate_delay(self.config.migrate.get_delay());
 
-        if let Some(watchdogs) = self.config.migrate.get_watchdogs() {
-            self.stage2_config.set_watchdogs(watchdogs);
-        }
 
         if let Some(hacks) = self.config.debug.get_hacks() {
             self.stage2_config.set_hacks(hacks)
@@ -396,7 +393,7 @@ impl<'a> MSWMigrator {
             .set_log_level(String::from(self.config.migrate.get_log_level()));
 
         if let Some(ref log_path) = self.mig_info.log_path {
-            if log_path != &boot_device.get_alt_path() {
+            if log_path != &boot_device.device_info.get_alt_path() {
                 info!("Set up log device as '{}'", log_path.display(),);
 
                 self.stage2_config.set_log_to(log_path.clone());

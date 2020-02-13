@@ -33,6 +33,7 @@ use crate::{
         MIG_SYSLINUX_EFI_NAME,
     },
 };
+use crate::common::path_info::PathInfo;
 
 #[allow(dead_code)]
 pub(crate) struct EfiBootManager {
@@ -183,7 +184,7 @@ impl BootManager for EfiBootManager {
     }
 
     fn setup(
-        &self,
+        &mut self,
         mig_info: &MigrateInfo,
         config: &Config,
         _s2_cfg: &mut Stage2ConfigBuilder,
@@ -422,7 +423,8 @@ impl BootManager for EfiBootManager {
         Ok(())
     }
 
-    fn get_bootmgr_path(&self) -> DeviceInfo {
+    fn get_bootmgr_path(&self) -> PathInfo {
+
         self.boot_device.as_ref().unwrap().clone()
     }
 }
