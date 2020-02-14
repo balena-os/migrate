@@ -9,17 +9,16 @@ use crate::{
 };
 
 #[cfg(target_os = "linux")]
-use crate::{
-    common::MigErrorKind,
-    linux::lsblk_info::{block_device::BlockDevice, partition::Partition}
-};
+use crate::linux::lsblk_info::{block_device::BlockDevice, partition::Partition};
 
 #[cfg(target_os = "windows")]
 use crate::{
-    common::os_api::{OSApi},
+    common::{
+        os_api::{OSApi, OSApiImpl},
+        MigErrorKind,
+    },
     mswin::drive_info::VolumeInfo,
 };
-use crate::common::os_api::OSApiImpl;
 
 #[derive(Debug, Clone)]
 pub(crate) struct DeviceInfo {
