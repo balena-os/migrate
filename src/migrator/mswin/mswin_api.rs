@@ -111,9 +111,11 @@ impl OSApi for MSWinApi {
         Ok((self.os_info.mem_tot, self.os_info.mem_avail))
     }
 
-    fn device_info_for_efi(&self) -> Result<DeviceInfo, MigError> {
-        Ok(DeviceInfo::from_volume_info(
-            &self.drive_info.for_efi_drive()?,
+    fn path_info_for_efi(&self) -> Result<PathInfo, MigError> {
+        let vol_info = self.drive_info.for_efi_drive()?;
+        Ok(PathInfo::from_volume_info(
+            &PathBuf::from(vol_info.logical_drive.get_name()),
+            &vol_info
         )?)
     }
 

@@ -52,6 +52,7 @@ pub(crate) mod wmi_utils;
 
 mod boot_manager_impl;
 use crate::common::os_api::OSApiImpl;
+use crate::common::stage2_config::LogDevice;
 
 pub struct MSWMigrator {
     config: Config,
@@ -393,12 +394,12 @@ impl<'a> MSWMigrator {
             .set_log_level(String::from(self.config.migrate.get_log_level()));
 
         if let Some(ref log_path) = self.mig_info.log_path {
-            if log_path != &boot_device.device_info.get_alt_path() {
-                info!("Set up log device as '{}'", log_path.display(),);
+            if log_path.drive != boot_device.device_info.drive {
+                info!("Set up log device as '{}'", log_path.get_alt_path().display());
 
-                self.stage2_config.set_log_to(log_path.clone());
+                self.stage2_config.set_log_to(LogDevice{ device: log_path.get_alt_path(), fs_type: log_path.fs_type.clone() });
             } else {
-                warn!("Log partition '{}' is not on a distinct drive from flash drive: '{}' - ignoring", log_path.display(), boot_device.drive);
+                warn!("Log partition '{}' is not on a distinct drive from flash drive: '{}' - ignoring", log_path.drive, boot_device.device_info.drive);
             }
         }
 

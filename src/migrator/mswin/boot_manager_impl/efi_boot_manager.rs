@@ -6,7 +6,7 @@ use log::{info, trace, warn};
 use regex::Regex;
 #[cfg(target_os = "linux")]
 use std::fs::rename;
-use std::fs::{copy, create_dir_all, File};
+use std::fs::{ copy, create_dir_all, File, metadata};
 use std::io::Write;
 
 const SYSLINUX_CFG_TEMPLATE: &str = r#"
@@ -20,7 +20,6 @@ use crate::defs::{EFI_SYSLINUX_CONFIG_FILE_X64, MIG_SYSLINUX_LOADER_NAME_X64};
 use crate::{
     common::{
         boot_manager::BootManager,
-        device_info::DeviceInfo,
         dir_exists, file_exists, format_size_with_unit,
         migrate_info::MigrateInfo,
         os_api::{OSApi, OSApiImpl},
@@ -38,7 +37,7 @@ use crate::common::path_info::PathInfo;
 #[allow(dead_code)]
 pub(crate) struct EfiBootManager {
     msw_device: bool,
-    boot_device: Option<DeviceInfo>,
+    boot_device: Option<PathInfo>,
 }
 
 impl EfiBootManager {
@@ -107,7 +106,8 @@ impl BootManager for EfiBootManager {
         _s2_cfg: &mut Stage2ConfigBuilder,
     ) -> Result<bool, MigError> {
         // find / mount the efi drive
-        let efi_drive = match DeviceInfo::for_efi() {
+
+        let efi_drive = match PathInfo::for_efi() {
             Ok(efi_drive) => efi_drive,
             Err(why) => {
                 error!("The EFI drive could not be found, error: {:?}", why);
@@ -116,7 +116,7 @@ impl BootManager for EfiBootManager {
         };
 
         // make sure efi drive can be mapped to linux drive
-        if let None = efi_drive.part_uuid {
+        if let None = efi_drive.device_info.part_uuid {
             // TODO: add option to override this
             error!("Cowardly refusing to migrate EFI partition without partuuid. Windows to linux drive name mapping is insecure");
             return Ok(false);
@@ -134,11 +134,19 @@ impl BootManager for EfiBootManager {
         {
             0
         } else {
-            mig_info.kernel_file.size
+            let kernel_path = path_append(&mig_info.work_path.path, MIG_KERNEL_NAME);
+            metadata(&kernel_path)
+                .context(MigErrCtx::from_remark(MigErrorKind::Upstream,
+                                                &format!("Failed to retrieve file size for '{}'", kernel_path.display())))?
+                .len()
         };
 
         if !file_exists(path_append(&balena_efi_path, MIG_INITRD_NAME)) {
-            required_space += mig_info.initrd_file.size;
+            let initrd_path = path_append(&mig_info.work_path.path, MIG_INITRD_NAME);
+            required_space += metadata(&initrd_path)
+                .context(MigErrCtx::from_remark(MigErrorKind::Upstream,
+                                                &format!("Failed to retrieve file size for '{}'", initrd_path.display())))?
+                .len()
         }
 
         let syslinux = path_append(&mig_info.work_path.path, MIG_SYSLINUX_EFI_NAME);
@@ -213,7 +221,7 @@ impl BootManager for EfiBootManager {
 
         debug!(
             "efi drive found, setting boot manager to '{}'",
-            efi_device.get_alt_path().display()
+            efi_device.device_info.get_alt_path().display()
         );
 
         let balena_efi_dir = path_append(&efi_device.mountpoint, BALENA_EFI_DIR);
@@ -229,32 +237,36 @@ impl BootManager for EfiBootManager {
 
         // TODO: check digest after file copies
 
-        let kernel_path = path_append(&balena_efi_dir, MIG_KERNEL_NAME);
+
+        let kernel_src = path_append(&mig_info.work_path.path, MIG_KERNEL_NAME);
+        let kernel_dest = path_append(&balena_efi_dir, MIG_KERNEL_NAME);
         debug!(
             "copy '{}' to '{}'",
-            &mig_info.kernel_file.path.display(),
-            &kernel_path.display()
+            &kernel_src.display(),
+            &kernel_dest.display()
         );
         // TODO: check digest after copy ?
-        copy(&mig_info.kernel_file.path, &kernel_path).context(MigErrCtx::from_remark(
+        copy(&kernel_src, &kernel_dest).context(MigErrCtx::from_remark(
             MigErrorKind::Upstream,
             &format!(
                 "failed to copy migrate kernel to EFI directory '{}'",
-                kernel_path.display()
+                kernel_dest.display()
             ),
         ))?;
 
-        let initrd_path = path_append(&balena_efi_dir, MIG_INITRD_NAME);
+        let initrd_src = path_append(&mig_info.work_path.path, MIG_INITRD_NAME);
+        let initrd_dest = path_append(&balena_efi_dir, MIG_INITRD_NAME);
         debug!(
             "copy '{}' to '{}'",
-            &mig_info.initrd_file.path.display(),
-            &initrd_path.display()
+            &initrd_src.display(),
+            &initrd_dest.display()
         );
-        copy(&mig_info.initrd_file.path, &initrd_path).context(MigErrCtx::from_remark(
+
+        copy(&initrd_src, &initrd_dest).context(MigErrCtx::from_remark(
             MigErrorKind::Upstream,
             &format!(
                 "failed to copy migrate initramfs to EFI directory '{}'",
-                initrd_path.display()
+                initrd_dest.display()
             ),
         ))?;
 
@@ -305,18 +317,18 @@ impl BootManager for EfiBootManager {
 
         debug!("writing '{}'", &syslinux_cfg_path.display());
 
-        let kernel_path = os_api.to_linux_path(kernel_path)?;
-        let initrd_path = os_api.to_linux_path(initrd_path)?;
+        let kernel_path = os_api.to_linux_path(kernel_dest)?;
+        let initrd_path = os_api.to_linux_path(initrd_dest)?;
 
         // TODO: prefer PARTUUID to guessed device name
 
-        let syslinux_cfg_content = if let Some(ref partuuid) = efi_device.part_uuid {
+        let syslinux_cfg_content = if let Some(ref partuuid) = efi_device.device_info.part_uuid {
             format!(
                 "{} KERNEL {}\n APPEND ro root=PARTUUID={} rootfstype={} initrd={} rootwait {}\n",
                 SYSLINUX_CFG_TEMPLATE,
                 kernel_path.display(),
                 partuuid,
-                efi_device.fs_type,
+                efi_device.device_info.fs_type,
                 initrd_path.display(),
                 kernel_opts
             )
@@ -325,7 +337,7 @@ impl BootManager for EfiBootManager {
                 MigErrorKind::InvParam,
                 &format!(
                     "No partuuid found for root device '{}'- cannot create root command",
-                    efi_device.device
+                    efi_device.device_info.device
                 ),
             ));
         };

@@ -47,6 +47,11 @@ impl PathInfo {
         os_api.path_info_from_path(&os_api.canonicalize(path)?)
     }
 
+    #[cfg(target_os = "windows")]
+    pub fn for_efi() -> Result<PathInfo, MigError> {
+        OSApiImpl::new()?.path_info_for_efi()
+    }
+
     #[cfg(target_os = "linux")]
     pub fn from_mounted<P1: AsRef<Path>, P2: AsRef<Path>>(
         path: P1,

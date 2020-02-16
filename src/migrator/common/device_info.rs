@@ -13,10 +13,6 @@ use crate::linux::lsblk_info::{block_device::BlockDevice, partition::Partition};
 
 #[cfg(target_os = "windows")]
 use crate::{
-    common::{
-        os_api::{OSApi, OSApiImpl},
-        MigErrorKind,
-    },
     mswin::drive_info::VolumeInfo,
 };
 
@@ -96,11 +92,6 @@ impl DeviceInfo {
             // the partition size
             part_size: vol_info.partition.get_size(),
         })
-    }
-
-    #[cfg(target_os = "windows")]
-    pub fn for_efi() -> Result<DeviceInfo, MigError> {
-        OSApiImpl::new()?.device_info_for_efi()
     }
 
     #[allow(dead_code)]
