@@ -4,6 +4,7 @@ use log::{debug, error, trace};
 use regex::Regex;
 use std::fs::{metadata, read_to_string, File};
 use std::io::{copy, BufRead, BufReader, Read};
+
 use std::path::{Path, PathBuf};
 use std::process::{Command, ExitStatus, Stdio};
 
@@ -158,6 +159,7 @@ pub fn file_exists<P: AsRef<Path>>(file: P) -> bool {
     file.as_ref().exists()
 }
 
+#[cfg(target_os = "linux")]
 pub(crate) fn call_with_stdin<R>(
     cmd: &str,
     args: &[&str],

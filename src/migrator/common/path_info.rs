@@ -41,7 +41,7 @@ pub(crate) struct PathInfo {
 }
 
 impl PathInfo {
-    //#[cfg(target_os = "linux")]
+    #[cfg(target_os = "linux")]
     pub fn from_path<P: AsRef<Path>>(path: P) -> Result<PathInfo, MigError> {
         let os_api = OSApiImpl::new()?;
         os_api.path_info_from_path(&os_api.canonicalize(path)?)

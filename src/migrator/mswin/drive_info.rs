@@ -31,6 +31,7 @@ pub(crate) struct VolumeInfo {
 }
 
 impl VolumeInfo {
+/*
     pub fn get_linux_path(&self) -> PathBuf {
         if self.partition.is_gpt_partition() {
             PathBuf::from(&format!("{}/{}", DISK_BY_PARTUUID_PATH, &self.part_uuid))
@@ -42,6 +43,7 @@ impl VolumeInfo {
             }
         }
     }
+*/
 }
 
 #[derive(Clone)]

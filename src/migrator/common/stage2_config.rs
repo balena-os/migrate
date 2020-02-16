@@ -8,6 +8,7 @@ use std::str::FromStr;
 use serde::{Deserialize, Serialize};
 use serde_yaml;
 
+#[cfg(target_os = "linux")]
 const EMPTY_BACKUPS: &[BackupCfg] = &[];
 
 use crate::{
@@ -111,6 +112,7 @@ pub(crate) struct BackupCfg {
 }
 
 impl BackupCfg {
+    #[cfg(target_os = "linux")]
     pub fn new(source: &Path, backup: &Path) -> Result<BackupCfg, MigError> {
         let src_info = PathInfo::from_path(source)?;
         if backup.starts_with(&src_info.mountpoint) {
@@ -321,6 +323,7 @@ impl<'a> Stage2Config {
         self.balena_config.as_path()
     }
 
+    #[cfg(target_os = "linux")]
     pub fn get_boot_backups(&'a self) -> &'a [BackupCfg] {
         if let Some(ref boot_bckup) = self.boot_bckup {
             boot_bckup.as_slice()
@@ -339,6 +342,7 @@ impl<'a> Stage2Config {
         &self.fail_mode
     }
 
+    #[cfg(target_os = "linux")]
     pub fn get_uboot_mbr_backup(&'a self) -> &Option<UbootMbrBackup> {
         &self.uboot_mbr_backup
     }
@@ -583,6 +587,7 @@ impl<'a> Stage2ConfigBuilder {
         self.migrate_delay.set_ref(&val);
     }
 
+    #[cfg(target_os = "linux")]
     pub fn set_uboot_mbr_backup(&mut self, val: UbootMbrBackup) {
         self.uboot_mbr_backup.set_ref(&val);
     }

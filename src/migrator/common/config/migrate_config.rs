@@ -233,6 +233,7 @@ impl<'a> MigrateConfig {
         }
     }
 
+    #[allow(dead_code)]
     pub fn get_uboot_cfg(&'a self) -> Option<&'a UBootCfg> {
         if let Some(ref val) = self.uboot {
             Some(val)
@@ -249,6 +250,7 @@ impl<'a> MigrateConfig {
         }
     }
 
+    #[cfg(target_os = "linux")]
     pub fn get_force_flash_device(&self) -> Option<PathBuf> {
         if let Some(ref val) = self.force_flash_device {
             Some(val.clone())

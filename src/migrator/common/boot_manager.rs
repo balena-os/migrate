@@ -4,14 +4,17 @@ use std::path::Path;
 
 use crate::{
     common::{
+        MigError,
         migrate_info::MigrateInfo, path_info::PathInfo, stage2_config::Stage2ConfigBuilder, Config,
-        MigErrCtx, MigError, MigErrorKind,
     },
     defs::BootType,
 };
 
 #[cfg(target_os = "linux")]
-use crate::{common::stage2_config::Stage2Config, linux::stage2::mounts::Mounts};
+use crate::{common::{
+    MigErrCtx, MigErrorKind,
+    stage2_config::Stage2Config
+}, linux::stage2::mounts::Mounts};
 
 pub(crate) trait BootManager {
     fn get_boot_type(&self) -> BootType;
@@ -41,6 +44,7 @@ impl dyn BootManager {
     // helper function for implementations
 
     // get required space for replacing src file with dest file
+    #[cfg(target_os = "linux")]
     pub fn get_file_required_space(src: &Path, dest: &Path) -> Result<u64, MigError> {
         if src.exists() {
             let required_space = fs::metadata(src)
