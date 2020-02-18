@@ -6,7 +6,7 @@ use log::{info, trace, warn};
 use regex::Regex;
 #[cfg(target_os = "linux")]
 use std::fs::rename;
-use std::fs::{ copy, create_dir_all, File, metadata};
+use std::fs::{copy, create_dir_all, metadata, File};
 use std::io::Write;
 
 const SYSLINUX_CFG_TEMPLATE: &str = r#"
@@ -16,6 +16,7 @@ LABEL balena-migrate
 "#;
 
 use crate::common::call;
+use crate::common::path_info::PathInfo;
 use crate::defs::{EFI_SYSLINUX_CONFIG_FILE_X64, MIG_SYSLINUX_LOADER_NAME_X64};
 use crate::{
     common::{
@@ -32,7 +33,6 @@ use crate::{
         MIG_SYSLINUX_EFI_NAME,
     },
 };
-use crate::common::path_info::PathInfo;
 
 #[allow(dead_code)]
 pub(crate) struct EfiBootManager {
@@ -136,16 +136,26 @@ impl BootManager for EfiBootManager {
         } else {
             let kernel_path = path_append(&mig_info.work_path.path, MIG_KERNEL_NAME);
             metadata(&kernel_path)
-                .context(MigErrCtx::from_remark(MigErrorKind::Upstream,
-                                                &format!("Failed to retrieve file size for '{}'", kernel_path.display())))?
+                .context(MigErrCtx::from_remark(
+                    MigErrorKind::Upstream,
+                    &format!(
+                        "Failed to retrieve file size for '{}'",
+                        kernel_path.display()
+                    ),
+                ))?
                 .len()
         };
 
         if !file_exists(path_append(&balena_efi_path, MIG_INITRD_NAME)) {
             let initrd_path = path_append(&mig_info.work_path.path, MIG_INITRD_NAME);
             required_space += metadata(&initrd_path)
-                .context(MigErrCtx::from_remark(MigErrorKind::Upstream,
-                                                &format!("Failed to retrieve file size for '{}'", initrd_path.display())))?
+                .context(MigErrCtx::from_remark(
+                    MigErrorKind::Upstream,
+                    &format!(
+                        "Failed to retrieve file size for '{}'",
+                        initrd_path.display()
+                    ),
+                ))?
                 .len()
         }
 
@@ -237,7 +247,6 @@ impl BootManager for EfiBootManager {
 
         // TODO: check digest after file copies
 
-
         let kernel_src = path_append(&mig_info.work_path.path, MIG_KERNEL_NAME);
         let kernel_dest = path_append(&balena_efi_dir, MIG_KERNEL_NAME);
         debug!(
@@ -326,10 +335,10 @@ impl BootManager for EfiBootManager {
             format!(
                 "{} KERNEL {}\n APPEND ro root=PARTUUID={} rootfstype={} initrd={} rootwait {}\n",
                 SYSLINUX_CFG_TEMPLATE,
-                kernel_path.display(),
+                &*kernel_path.to_string_lossy(),
                 partuuid,
                 efi_device.device_info.fs_type,
-                initrd_path.display(),
+                &*initrd_path.to_string_lossy(),
                 kernel_opts
             )
         } else {
@@ -436,7 +445,6 @@ impl BootManager for EfiBootManager {
     }
 
     fn get_bootmgr_path(&self) -> PathInfo {
-
         self.boot_device.as_ref().unwrap().clone()
     }
 }
