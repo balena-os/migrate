@@ -16,6 +16,7 @@ use crate::{
         wmi_utils::{WMIOSInfo, WmiUtils},
     },
 };
+use std::fs::canonicalize;
 
 const UNC_RE: &str = r#"^\\\\(\?|\.)\\([A-Z]:.*)$"#;
 const DRIVE_LETTER_RE: &str = r#"^[A-Z]:(.*)$"#;
@@ -69,9 +70,10 @@ impl OSApi for MSWinApi {
     }
 
     fn path_info_from_path<P: AsRef<Path>>(&self, path: P) -> Result<PathInfo, MigError> {
+        let abs_path = self.canonicalize(path.as_ref())?;
         Ok(PathInfo::from_volume_info(
-            path.as_ref(),
-            self.drive_info.from_path(path.as_ref())?,
+            abs_path.as_path(),
+            self.drive_info.from_path(abs_path.as_path())?,
         )?)
     }
 
