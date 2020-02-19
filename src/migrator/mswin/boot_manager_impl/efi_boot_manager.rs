@@ -34,6 +34,9 @@ use crate::{
 };
 use crate::common::path_info::PathInfo;
 
+//const BCDEDIT_CMD: &str = "bcdedit.exe";
+const BCDEDIT_CMD: &str = r##"'\\?\C:\Windows\System32\bcdedit.exe"##;
+
 #[allow(dead_code)]
 pub(crate) struct EfiBootManager {
     msw_device: bool,
@@ -57,7 +60,7 @@ impl EfiBootManager {
         }
 
         debug!("calling bcdedit with {:?}", params);
-        let cmdres = call("BCDEdit", params, true).context(MigErrCtx::from_remark(
+        let cmdres = call(BCDEDIT_CMD, params, true).context(MigErrCtx::from_remark(
             MigErrorKind::Upstream,
             "Failed to execute bcdedit",
         ))?;
