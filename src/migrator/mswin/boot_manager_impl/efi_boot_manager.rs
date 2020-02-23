@@ -34,8 +34,8 @@ use crate::{
     },
 };
 
-//const BCDEDIT_CMD: &str = "bcdedit.exe";
-const BCDEDIT_CMD: &str = r##"'\\?\C:\Windows\System32\bcdedit.exe"##;
+const BCDEDIT_CMD: &str = "bcdedit.exe";
+// const BCDEDIT_CMD: &str = r##"'C:\Windows\System32\bcdedit.exe"##;
 
 #[allow(dead_code)]
 pub(crate) struct EfiBootManager {
