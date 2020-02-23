@@ -415,6 +415,9 @@ impl<'a> MSWMigrator {
                 "Migration stage 1 was successfull, rebooting the system in {} seconds",
                 *delay
             );
+
+            Logger::flush();
+
             let delay = Duration::new(*delay, 0);
             thread::sleep(delay);
             println!("Rebooting now..");
@@ -427,6 +430,8 @@ impl<'a> MSWMigrator {
             println!(
                 "Migration stage 1 was successful, please reboot the system to finalize migration"
             );
+            Logger::flush();
+
         }
 
         Ok(())
