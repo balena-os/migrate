@@ -436,12 +436,87 @@ impl BootManager for EfiBootManager {
 
             debug!("One-Time-Activated new BCD entry {}", bcd_id);
         } else {
-            // TODO: try enabling syslinux bootmanager manually instead of this radical solution
-            EfiBootManager::bcd_edit(&["/set", "{bootmgr}", "path", &syslinux_path], false)
-                .context(MigErrCtx::from_remark(
+            let bcd_id =
+                EfiBootManager::bcd_edit(&["/copy", "{bootmgr}", "/d", "balena-migrate"], true)
+                    .context(MigErrCtx::from_remark(
+                        MigErrorKind::Upstream,
+                        "Failed to copy {bootmgr} BCD entry",
+                    ))?;
+
+            debug!(
+                "Created copy of \\{bootmgr\\} BCD entry with ID: {}",
+                bcd_id
+            );
+
+            let efi_drive_letter = &*efi_device.mountpoint.to_string_lossy();
+
+            EfiBootManager::bcd_edit(
+                &[
+                    "/set",
+                    &bcd_id,
+                    "device",
+                    &format!("partition={}", efi_drive_letter),
+                ],
+                false,
+            )
+            .context(MigErrCtx::from_remark(
+                MigErrorKind::Upstream,
+                &format!(
+                    "Failed to set device to partition={} for BCD entry {}",
+                    efi_drive_letter, bcd_id
+                ),
+            ))?;
+
+            debug!(
+                "Set device to partition={} for BCD entry {}",
+                efi_drive_letter, bcd_id
+            );
+
+            EfiBootManager::bcd_edit(&["/set", &bcd_id, "path", &syslinux_path], false).context(
+                MigErrCtx::from_remark(
                     MigErrorKind::Upstream,
-                    "Failed to activate BCD entry",
-                ))?;
+                    &format!(
+                        "Failed to set path to '{}' for  BCD entry {}",
+                        syslinux_path, bcd_id
+                    ),
+                ),
+            )?;
+
+            debug!("Set path to '{}' for  BCD entry {}", syslinux_path, bcd_id);
+
+            for del_param in [
+                "locale",
+                "inherit",
+                "default",
+                "resumeobject",
+                "displayorder",
+                "toolsdisplayorder",
+                "timeout",
+            ] {
+                EfiBootManager::bcd_edit(&["/deletevalue", &bcd_id, &del_param], false).context(
+                    MigErrCtx::from_remark(
+                        MigErrorKind::Upstream,
+                        &format!(
+                            "Failed to delete value '{}' for BCD entry {}",
+                            del_param, bcd_id
+                        ),
+                    ),
+                )?;
+                debug!("Deleted value '{}' for BCD entry {}", del_param, bcd_id);
+            }
+
+            // bcdedit /set {fwbootmgr} displayorder {34e8383d-73a7-11e9-9cb0-94de8078a7b5} /addfirst
+            EfiBootManager::bcd_edit(
+                &["/set", "{fwbootmgr}", "displayorder", &bcd_id, "/addfirst"],
+                false,
+            )
+            .context(MigErrCtx::from_remark(
+                MigErrorKind::Upstream,
+                "Failed to set displayorder for {fwbootmgr}",
+            ))?;
+
+            debug!("Set displayorder for \\{fwbootmgr\\}");
+            // TODO: try one time activation
         }
 
         Ok(())
