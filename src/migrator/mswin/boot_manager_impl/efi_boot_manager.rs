@@ -390,15 +390,19 @@ impl BootManager for EfiBootManager {
             // create a new BCD entry and retrieve BCD ID
             // bcdedit /create /d "balena-migrate" /application startup
             //TODO: try to check if entry exists first
-            let bcd_id = EfiBootManager::bcd_edit(
+            let bcd_id = if let Some(bcd_id) = EfiBootManager::bcd_edit(
                 &["/create", "/d", "balena-migrate", "/application", "startup"],
                 true,
             )
             .context(MigErrCtx::from_remark(
                 MigErrorKind::Upstream,
                 "Failed to create new BCD entry",
-            ))?
-            .unwrap();
+            ))? {
+                bcd_id
+            } else {
+              return Err(MigError::from_remark(MigErrorKind::InvState, "Received empty bcd_ifd from bcd_edit"))
+            };
+
 
             debug!("Created new BCD entry with ID: {}", bcd_id);
 
@@ -436,15 +440,19 @@ impl BootManager for EfiBootManager {
 
             debug!("One-Time-Activated new BCD entry {}", bcd_id);
         } else {
-            let bcd_id =
+            let bcd_id = if let Some(bcd_id) =
                 EfiBootManager::bcd_edit(&["/copy", "{bootmgr}", "/d", "balena-migrate"], true)
                     .context(MigErrCtx::from_remark(
                         MigErrorKind::Upstream,
                         "Failed to copy {bootmgr} BCD entry",
-                    ))?;
+                    ))? {
+                bcd_id
+            } else {
+                return Err(MigError::from_remark(MigErrorKind::InvState, "Received empty bcd_ifd from bcd_edit"))
+            };
 
-            debug!(
-                "Created copy of \\{bootmgr\\} BCD entry with ID: {}",
+        debug!(
+                "Created copy of {{bootmgr}} BCD entry with ID: {}",
                 bcd_id
             );
 
@@ -484,7 +492,7 @@ impl BootManager for EfiBootManager {
 
             debug!("Set path to '{}' for  BCD entry {}", syslinux_path, bcd_id);
 
-            for del_param in [
+            for del_param in &[
                 "locale",
                 "inherit",
                 "default",
@@ -515,7 +523,7 @@ impl BootManager for EfiBootManager {
                 "Failed to set displayorder for {fwbootmgr}",
             ))?;
 
-            debug!("Set displayorder for \\{fwbootmgr\\}");
+            debug!("Set displayorder for {{fwbootmgr}}");
             // TODO: try one time activation
         }
 
