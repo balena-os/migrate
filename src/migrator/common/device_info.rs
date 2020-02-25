@@ -106,6 +106,8 @@ impl DeviceInfo {
         }
     }
 
+    // TODO: move this to OSApi
+    #[cfg(target_os = "linux")]
     pub fn get_alt_path(&self) -> PathBuf {
         if let Some(ref uuid) = self.uuid {
             path_append(DISK_BY_UUID_PATH, uuid)
@@ -117,4 +119,17 @@ impl DeviceInfo {
             path_append("/dev", &self.device)
         }
     }
+    #[cfg(target_os = "windows")]
+    pub fn get_alt_path(&self) -> PathBuf {
+        if let Some(ref uuid) = self.uuid {
+            PathBuf::from(&format!("{}/{}",DISK_BY_UUID_PATH, uuid))
+        } else if let Some(ref partuuid) = self.part_uuid {
+            PathBuf::from(&format!("{}/{}",DISK_BY_PARTUUID_PATH, partuuid))
+        } else if let Some(ref label) = self.part_label {
+            PathBuf::from(&format!("{}/{}",DISK_BY_LABEL_PATH, label))
+        } else {
+            PathBuf::from(&format!("/dev/{}",self.device))
+        }
+    }
+
 }

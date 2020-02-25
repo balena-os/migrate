@@ -55,7 +55,7 @@ impl EfiBootManager {
 impl EfiBootManager {
     fn bcd_edit(params: &[&str], parse_id: bool) -> Result<Option<String>, MigError> {
         lazy_static! {
-            static ref BCD_ID_RE: Regex = Regex::new(r#"^The entry (\{[a-z,0-9]{8}-[a-z,0-9]{4}-[a-z,0-9]{4}-[a-z,0-9]{4}-[a-z,0-9]{12}\}) was successfully created.$"#).unwrap();
+            static ref BCD_ID_RE: Regex = Regex::new(r#"^The entry [^\{]*(\{[a-z,0-9]{8}-[a-z,0-9]{4}-[a-z,0-9]{4}-[a-z,0-9]{4}-[a-z,0-9]{12}\}).*\.$"#).unwrap();
             static ref BCD_OK_RE: Regex = Regex::new(r#"The operation completed successfully."#).unwrap();
         }
 
