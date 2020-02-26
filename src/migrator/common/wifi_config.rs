@@ -35,6 +35,7 @@ const WPA_NET_END_REGEX: &str = r#"^\s*\}\s*$"#;
 
 #[cfg(target_os = "windows")]
 const NETSH_USER_PROFILE_REGEX: &str = r#"^[^:]+:\s*((\S.*\S)|("[^"]+"))\s*$"#;
+const NETSH_USER_SECRET_REGEX: &str = r#"^\s+Key\s+Content\s+:\s*((\S.*\S)|("[^"]+"))\s*$"#;
 
 const CONNMGR_PARAM_REGEX: &str = r#"^\s*(\S+)\s*=\s*(\S+)\s*$"#;
 
@@ -106,15 +107,16 @@ impl<'a> WifiConfig {
 
     #[cfg(target_os = "windows")]
     pub fn from_netsh(
-        &mut list: Vec<WifiConfig>,
+        list: &mut Vec<WifiConfig>,
         ssid_filter: &[String],
-    ) -> Result<Vec<WifiConfig>, MigError> {
-        let cmd_res = call("netsh", &["wlan", "show", "profiles"], true).context(
-            MigErrorKind::Upstream,
-            MigErrCtx::from_remark("Failed to call netsh"),
+    ) -> Result<(), MigError> {
+        let args: [&str;3] = ["wlan", "show", "profiles"];
+        let cmd_res = call("netsh", &args, true).context(
+            MigErrCtx::from_remark(MigErrorKind::Upstream, "Failed to execute netsh"),
         )?;
         if cmd_res.status.success() {
-            user_profile_re: Regex = Regex::new(NETSH_USER_PROFILE_REGEX).unwrap();
+            let user_profile_re = Regex::new(NETSH_USER_PROFILE_REGEX).unwrap();
+            let user_secret_re = Regex::new(NETSH_USER_SECRET_REGEX).unwrap();
 
             /* sample output
             Profiles on interface Wi-Fi:
@@ -131,26 +133,73 @@ impl<'a> WifiConfig {
             let mut user_profile = false;
             for line in cmd_res.stdout.lines() {
                 if user_profile {
-                    if let Some(captions) = user_profile_re.captions(line) {
-                        let ssid = captions.get(1).unpack().as_str();
-                        let valid = if let Some(_pos) = ssid_filter
+                    if let Some(captures) = user_profile_re.captures(line) {
+                        let ssid = String::from(captures.get(1).unwrap().as_str());
+                        debug!("Processing line '{}' as ssid '{}'", line, ssid);
+                        if let Some(_pos) = list.iter().position(|w| {
+                            w.get_ssid() == ssid
+                        }) {
+                            warn!("Ignoring duplicate ssid '{}'", ssid);
+                            continue
+                        }
+
+                        if let Some(_pos) = ssid_filter
                             .iter()
-                            .position(|r| r.as_str() == wifi.get_ssid())
+                            .position(|r| r.as_str() == ssid)
                         {
-                            true
-                        } else {
-                            false
+                            warn!("Ignoring filtered ssid '{}'", ssid);
+                            continue
                         };
 
-                        if valid {}
+                        //netsh wlan show profile name=”Profile-Name” key=clear
+                        let args: [&str;5] = ["wlan", "show", "profiles", &format!("name=\"{}\"", ssid), "key=clear"];
+                        let cmd_res = call("netsh", &args, true).context(
+                            MigErrCtx::from_remark(MigErrorKind::Upstream, "Failed to execute netsh"),
+                        )?;
+                        if cmd_res.status.success() {
+                            let mut sec_settings = false;
+                            let mut psk: Option<String> = None;
+                            for line in cmd_res.stdout.lines() {
+                                if sec_settings {
+                                    if let Some(captures) = user_secret_re.captures(line) {
+                                        psk = Some(String::from(captures.get(1).unwrap().as_str()));
+                                        break;
+                                    } else {
+                                        debug!("Not processing line '{}' in state user_profile", line);
+                                    }
+                                } else {
+                                    if (line.trim() == "Security settings") {
+                                        debug!("Switching to state sec_settings");
+                                        sec_settings = true;
+                                    } else {
+                                        debug!("Ignoring line '{}'", line);
+                                    }
+                                }
+                            }
+                            info!("Adding SSID '{}' with psk: {}", ssid, psk.is_some());
+                            list.push(WifiConfig::Params(Params { ssid , psk }));
+                        } else {
+                            return Err(MigError::from_remark(MigErrorKind::Upstream, &format!("Failure from netsh command, args: {:?} , stderr: '{}'", args, cmd_res.stderr)))
+                        }
+
+                    } else {
+                        debug!("Not processing line '{}' in state user_profile", line);
                     }
+
                 } else {
                     if (line.trim() == "User profiles") {
+                        debug!("Switching to state user_profile");
                         user_profile = true;
+                    } else {
+                        debug!("Ignoring line '{}'", line);
                     }
                 }
             }
+        } else {
+            return Err(MigError::from_remark(MigErrorKind::Upstream, &format!("Failure from netsh command, args: {:?} , stderr: '{}'", args, cmd_res.stderr)))
         }
+
+        Ok(())
     }
 
     #[cfg(target_os = "linux")]
