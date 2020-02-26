@@ -6,6 +6,9 @@ use std::fs::{read_dir, read_to_string, File};
 use std::io::{BufRead, BufReader, Write};
 use std::path::{Path, PathBuf};
 
+#[cfg(target_os = "windows")]
+use crate::common::call;
+
 use crate::{
     common::{
         dir_exists, file_exists, is_balena_file, path_append, MigErrCtx, MigError, MigErrorKind,
@@ -29,6 +32,9 @@ const WPA_NET_START_REGEX: &str = r#"^\s*network\s*=\s*\{\s*$"#;
 const WPA_NET_PARAM1_REGEX: &str = r#"^\s*(\S+)\s*=\s*"([^"]+)"\s*$"#;
 const WPA_NET_PARAM2_REGEX: &str = r#"^\s*(\S+)\s*=\s*(\S+)\s*$"#;
 const WPA_NET_END_REGEX: &str = r#"^\s*\}\s*$"#;
+
+#[cfg(target_os = "windows")]
+const NETSH_USER_PROFILE_REGEX: &str = r#"^[^:]+:\s*((\S.*\S)|("[^"]+"))\s*$"#;
 
 const CONNMGR_PARAM_REGEX: &str = r#"^\s*(\S+)\s*=\s*(\S+)\s*$"#;
 
@@ -90,6 +96,64 @@ pub(crate) enum WifiConfig {
 }
 
 impl<'a> WifiConfig {
+    #[cfg(target_os = "windows")]
+    pub fn scan(ssid_filter: &[String]) -> Result<Vec<WifiConfig>, MigError> {
+        trace!("WifiConfig::scan: entered with {:?}", ssid_filter);
+        let mut list: Vec<WifiConfig> = Vec::new();
+        WifiConfig::from_netsh(&mut list, ssid_filter)?;
+        Ok(list)
+    }
+
+    #[cfg(target_os = "windows")]
+    pub fn from_netsh(
+        &mut list: Vec<WifiConfig>,
+        ssid_filter: &[String],
+    ) -> Result<Vec<WifiConfig>, MigError> {
+        let cmd_res = call("netsh", &["wlan", "show", "profiles"], true).context(
+            MigErrorKind::Upstream,
+            MigErrCtx::from_remark("Failed to call netsh"),
+        )?;
+        if cmd_res.status.success() {
+            user_profile_re: Regex = Regex::new(NETSH_USER_PROFILE_REGEX).unwrap();
+
+            /* sample output
+            Profiles on interface Wi-Fi:
+
+            Group policy profiles (read only)
+            ---------------------------------
+                <None>
+
+            User profiles
+            -------------
+                All User Profile     : QIFI
+            */
+
+            let mut user_profile = false;
+            for line in cmd_res.stdout.lines() {
+                if user_profile {
+                    if let Some(captions) = user_profile_re.captions(line) {
+                        let ssid = captions.get(1).unpack().as_str();
+                        let valid = if let Some(_pos) = ssid_filter
+                            .iter()
+                            .position(|r| r.as_str() == wifi.get_ssid())
+                        {
+                            true
+                        } else {
+                            false
+                        };
+
+                        if valid {}
+                    }
+                } else {
+                    if (line.trim() == "User profiles") {
+                        user_profile = true;
+                    }
+                }
+            }
+        }
+    }
+
+    #[cfg(target_os = "linux")]
     pub fn scan(ssid_filter: &[String]) -> Result<Vec<WifiConfig>, MigError> {
         trace!("WifiConfig::scan: entered with {:?}", ssid_filter);
         let mut list: Vec<WifiConfig> = Vec::new();
@@ -106,6 +170,7 @@ impl<'a> WifiConfig {
         }
     }
 
+    #[cfg(target_os = "linux")]
     fn parse_conmgr_file(file_path: &Path) -> Result<Option<WifiConfig>, MigError> {
         let mut ssid = String::from("");
         let mut psk: Option<String> = None;
@@ -161,6 +226,7 @@ impl<'a> WifiConfig {
         }
     }
 
+    #[cfg(target_os = "linux")]
     fn from_connman(wifis: &mut Vec<WifiConfig>, ssid_filter: &[String]) -> Result<(), MigError> {
         if dir_exists(CONNMGR_CONFIG_DIR)? {
             let paths = read_dir(CONNMGR_CONFIG_DIR).context(MigErrCtx::from_remark(
@@ -238,6 +304,7 @@ impl<'a> WifiConfig {
         Ok(())
     }
 
+    #[cfg(target_os = "linux")]
     #[allow(clippy::cognitive_complexity)] //TODO refactor this function to fix the clippy warning
     fn from_wpa(wifis: &mut Vec<WifiConfig>, ssid_filter: &[String]) -> Result<(), MigError> {
         trace!("WifiConfig::from_wpa: entered with {:?}", ssid_filter);
@@ -389,6 +456,7 @@ impl<'a> WifiConfig {
         Ok(())
     }
 
+    #[cfg(target_os = "linux")]
     #[allow(clippy::cognitive_complexity)] //TODO refactor this function to fix the clippy warning
     fn from_nwmgr(wifis: &mut Vec<WifiConfig>, ssid_filter: &[String]) -> Result<(), MigError> {
         trace!("WifiConfig::from_nwmgr: entered with {:?}", ssid_filter);
