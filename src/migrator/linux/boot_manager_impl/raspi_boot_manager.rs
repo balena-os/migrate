@@ -229,7 +229,7 @@ impl BootManager for RaspiBootManager {
         // TODO: try to make sure valid configs, are saved independently from migrator tag
         if !balena_config {
             // backup config.txt
-            let backup_file = format!("{}.{}", RPI_CONFIG_TXT, system_time.as_secs());
+            let backup_file = format!("{}-{}", RPI_CONFIG_TXT, system_time.as_secs());
             let backup_path = path_append(&boot_path.path, &backup_file);
 
             copy(&config_path, &backup_path).context(MigErrCtx::from_remark(
@@ -330,7 +330,7 @@ impl BootManager for RaspiBootManager {
                 ),
             ))?;
 
-            boot_cfg_bckup.push(BackupCfg::new(&config_path, &backup_path)?);
+            boot_cfg_bckup.push(BackupCfg::new(&cmdline_path, &backup_path)?);
         }
 
         let cmdline_str = match read_to_string(&cmdline_path) {
