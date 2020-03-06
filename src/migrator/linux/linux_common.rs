@@ -679,7 +679,7 @@ pub(crate) fn get_kernel_root_info() -> Result<(PathBuf, Option<String>), MigErr
             None
         } {
             debug!("trying device path: '{}'", uuid_part.display());
-            to_std_device_path(&uuid_part)?
+            uuid_part
         } else {
             debug!("Got plain root device '{}'", root_dev);
             PathBuf::from(root_dev)

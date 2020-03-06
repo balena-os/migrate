@@ -24,6 +24,7 @@ pub const STAGE2_MEM_THRESHOLD: u64 = 32 * 1024 * 1024; // 64 MiB
 pub const PRE_PARTPROBE_WAIT_SECS: u64 = 5;
 pub const POST_PARTPROBE_WAIT_SECS: u64 = 5;
 
+pub const LS_CMD: &str = "ls";
 pub const WHEREIS_CMD: &str = "whereis";
 pub const CHMOD_CMD: &str = "chmod";
 pub const DD_CMD: &str = "dd";

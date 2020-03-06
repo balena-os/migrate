@@ -4,17 +4,17 @@ use std::path::Path;
 
 use crate::{
     common::{
-        MigError,
         migrate_info::MigrateInfo, path_info::PathInfo, stage2_config::Stage2ConfigBuilder, Config,
+        MigError,
     },
     defs::BootType,
 };
 
 #[cfg(target_os = "linux")]
-use crate::{common::{
-    MigErrCtx, MigErrorKind,
-    stage2_config::Stage2Config
-}, linux::stage2::mounts::Mounts};
+use crate::{
+    common::{stage2_config::Stage2Config, MigErrCtx, MigErrorKind},
+    linux::stage2::mounts::Mounts,
+};
 
 pub(crate) trait BootManager {
     fn get_boot_type(&self) -> BootType;
@@ -54,16 +54,17 @@ impl dyn BootManager {
                 ))?
                 .len();
             if dest.exists() {
-                Ok(std::cmp::max(
-                    0,
-                    required_space
-                        - fs::metadata(dest)
-                            .context(MigErrCtx::from_remark(
-                                MigErrorKind::Upstream,
-                                &format!("unable to retrieve size for file '{}'", dest.display()),
-                            ))?
-                            .len(),
-                ))
+                let dst_size = fs::metadata(dest)
+                    .context(MigErrCtx::from_remark(
+                        MigErrorKind::Upstream,
+                        &format!("unable to retrieve size for file '{}'", dest.display()),
+                    ))?
+                    .len();
+                if required_space > dst_size {
+                    Ok(required_space - dst_size)
+                } else {
+                    Ok(0)
+                }
             } else {
                 Ok(required_space)
             }
