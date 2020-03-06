@@ -4,7 +4,7 @@ use log::{debug, trace, warn};
 use regex::Regex;
 use std::path::{Path, PathBuf};
 
-use crate::linux::linux_common::to_std_device_path;
+//use crate::linux::linux_common::to_std_device_path;
 use crate::linux::linux_defs::UDEVADM_CMD;
 use crate::{
     common::{call, MigErrCtx, MigError, MigErrorKind},
@@ -325,9 +325,9 @@ impl<'a> LsblkInfo {
         Ok(lsblk_info)
     }
 
-    pub fn get_blk_devices(&'a self) -> &'a Vec<BlockDevice> {
+    /*pub fn get_blk_devices(&'a self) -> &'a Vec<BlockDevice> {
         &self.blockdevices
-    }
+    }*/
 
     pub fn get_devices_for_partuuid(
         &'a self,
@@ -496,7 +496,7 @@ impl<'a> LsblkInfo {
         &'a self,
         part_path: P,
     ) -> Result<(&'a BlockDevice, &'a Partition), MigError> {
-        let part_path = to_std_device_path(part_path.as_ref())?;
+        let part_path = part_path.as_ref();
         debug!("get_devices_for_partition: '{}", part_path.display());
 
         // let part_path = to_std_device_path(part_path)?;

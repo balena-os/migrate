@@ -165,7 +165,7 @@ pub(crate) enum FailMode {
 
 impl FailMode {
     pub(crate) fn get_default() -> &'static FailMode {
-        &FailMode::Reboot
+        &FailMode::RescueShell
     }
 }
 #[derive(Debug, Clone)]
