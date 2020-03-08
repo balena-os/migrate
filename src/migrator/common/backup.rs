@@ -17,8 +17,8 @@ use crate::common::backup::archiver::Archiver;
 mod rust_tar_archiver;
 use crate::common::backup::rust_tar_archiver::RustTarArchiver;
 
-mod ext_tar_archiver;
-use crate::common::backup::ext_tar_archiver::ExtTarArchiver;
+// mod ext_tar_archiver;
+// use crate::common::backup::ext_tar_archiver::ExtTarArchiver;
 
 fn archive_dir<'a>(
     dir_path: &Path,
@@ -117,6 +117,7 @@ fn archive_dir<'a>(
     Ok(written)
 }
 
+/*
 #[cfg(target_os = "linux")]
 pub(crate) fn create_ext(file: &Path, config: &[VolumeConfig]) -> Result<bool, MigError> {
     if !config.is_empty() {
@@ -127,7 +128,7 @@ pub(crate) fn create_ext(file: &Path, config: &[VolumeConfig]) -> Result<bool, M
         info!("The backup configuration was empty - nothing backed up");
         Ok(false)
     }
-}
+} */
 
 pub(crate) fn create(file: &Path, config: &[VolumeConfig]) -> Result<bool, MigError> {
     if !config.is_empty() {

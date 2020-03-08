@@ -868,7 +868,7 @@ impl BootManager for UBootManager {
         debug!("can_migrate: entered");
 
         // determine flash device - either from config or root device
-        let flash_device = if let Some(dev_path) = config.migrate.get_force_flash_device() {
+        let flash_device = if let Some(dev_path) = config.debug.get_force_flash_device() {
             warn!("Config forces use of flash device '{}'", dev_path.display());
             BlockDevice::from_device_path(dev_path)?
         } else {

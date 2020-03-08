@@ -159,13 +159,16 @@ impl Display for OSArch {
 
 #[derive(Debug, Clone, Deserialize, Serialize, PartialEq)]
 pub(crate) enum FailMode {
+    #[serde(rename = "reboot")]
     Reboot,
+    #[serde(rename = "shell")]
     RescueShell,
 }
 
 impl FailMode {
     pub(crate) fn get_default() -> &'static FailMode {
         &FailMode::RescueShell
+        // &FailMode::Reboot
     }
 }
 #[derive(Debug, Clone)]

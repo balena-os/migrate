@@ -268,15 +268,14 @@ pub fn check_tcp_connect(host: &str, port: u16, timeout: u64) -> Result<(), MigE
     ))?;
 
     if let Some(ref sock_addr) = addrs_iter.next() {
-        let tcp_stream = TcpStream::connect_timeout(sock_addr, Duration::new(timeout, 0)).context(
-            MigErrCtx::from_remark(
+        let tcp_stream = TcpStream::connect_timeout(sock_addr, Duration::from_secs(timeout))
+            .context(MigErrCtx::from_remark(
                 MigErrorKind::Upstream,
                 &format!(
                     "check_tcp_connect: failed to connect to: '{}' with timeout: {}",
                     url, timeout
                 ),
-            ),
-        )?;
+            ))?;
 
         let _res = tcp_stream.shutdown(Shutdown::Both);
         Ok(())

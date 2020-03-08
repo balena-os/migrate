@@ -13,6 +13,8 @@ pub(crate) struct DebugConfig {
     no_flash: Option<bool>,
     // free form debug parameters, eg. dump-efi
     hacks: Option<Vec<String>>,
+
+    gzip_internal: Option<bool>,
 }
 
 impl<'a> DebugConfig {
@@ -21,6 +23,7 @@ impl<'a> DebugConfig {
             force_flash_device: None,
             no_flash: None,
             hacks: None,
+            gzip_internal: None,
         }
     }
 
@@ -30,6 +33,14 @@ impl<'a> DebugConfig {
         } else {
             // TODO: change to false when mature
             false
+        }
+    }
+
+    pub fn is_gzip_internal(&self) -> bool {
+        if let Some(val) = self.gzip_internal {
+            val
+        } else {
+            true
         }
     }
 
