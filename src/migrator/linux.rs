@@ -276,13 +276,10 @@ impl<'a> LinuxMigrator {
 
         let backup_path = path_append(work_dir, BACKUP_FILE);
 
-        let has_backup =
-            self.stage2_config
-                .set_has_backup(if self.config.migrate.is_tar_internal() {
-                    backup::create(&backup_path, self.config.migrate.get_backup_volumes())?
-                } else {
-                    backup::create_ext(&backup_path, self.config.migrate.get_backup_volumes())?
-                });
+        let has_backup = self.stage2_config.set_has_backup(backup::create(
+            &backup_path,
+            self.config.migrate.get_backup_volumes(),
+        )?);
 
         // TODO: this might not be a smart place to put things, everything in system-connections
         // will end up in /mnt/boot/system-connections
@@ -414,7 +411,7 @@ impl<'a> LinuxMigrator {
         // TODO: setpath if on / mount else set mount
 
         self.stage2_config
-            .set_gzip_internal(self.config.migrate.is_gzip_internal());
+            .set_gzip_internal(self.config.debug.is_gzip_internal());
 
         self.stage2_config
             .set_log_console(self.config.migrate.get_log_console());
@@ -438,9 +435,6 @@ impl<'a> LinuxMigrator {
                 warn!("Log partition '{}' is not on a distinct drive from flash drive: '{}' - ignoring", log_path.device, boot_device.device_info.drive);
             }
         }
-
-        self.stage2_config
-            .set_gzip_internal(self.config.migrate.is_gzip_internal());
 
         trace!("write stage 2 config");
         let s2_path = path_append(&boot_device.mountpoint, STAGE2_CFG_FILE);

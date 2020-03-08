@@ -116,11 +116,8 @@ pub(crate) struct MigrateConfig {
     // TODO: find a good way to do digests on NetworkManager files
     nwmgr_files: Option<Vec<PathBuf>>,
     require_nwmgr_config: Option<bool>,
-    gzip_internal: Option<bool>,
-    tar_internal: Option<bool>,
     delay: Option<u64>,
     kernel_opts: Option<String>,
-    force_flash_device: Option<PathBuf>,
     uboot: Option<UBootCfg>,
     md5_sums: Option<PathBuf>,
 }
@@ -139,11 +136,8 @@ impl<'a> MigrateConfig {
             backup: None,
             nwmgr_files: None,
             require_nwmgr_config: None,
-            gzip_internal: None,
-            tar_internal: None,
             delay: None,
             kernel_opts: None,
-            force_flash_device: None,
             uboot: None,
             md5_sums: None,
         }
@@ -173,23 +167,6 @@ impl<'a> MigrateConfig {
     }
 
     // defaults are implemented in getter functions
-
-    pub fn is_gzip_internal(&self) -> bool {
-        if let Some(val) = self.gzip_internal {
-            val
-        } else {
-            true
-        }
-    }
-
-    #[cfg(target_os = "linux")]
-    pub fn is_tar_internal(&self) -> bool {
-        if let Some(val) = self.tar_internal {
-            val
-        } else {
-            true
-        }
-    }
 
     pub fn get_backup_volumes(&'a self) -> &'a [VolumeConfig] {
         if let Some(ref val) = self.backup {
@@ -244,15 +221,6 @@ impl<'a> MigrateConfig {
 
     pub fn get_kernel_opts(&self) -> Option<String> {
         if let Some(ref val) = self.kernel_opts {
-            Some(val.clone())
-        } else {
-            None
-        }
-    }
-
-    #[cfg(target_os = "linux")]
-    pub fn get_force_flash_device(&self) -> Option<PathBuf> {
-        if let Some(ref val) = self.force_flash_device {
             Some(val.clone())
         } else {
             None

@@ -55,7 +55,7 @@ pub(crate) enum ImageType {
 pub(crate) struct BalenaConfig {
     image: Option<ImageType>,
     config: Option<PathBuf>,
-    app_name: Option<String>,
+    // app_name: Option<String>,
     check_api: Option<bool>,
     check_vpn: Option<bool>,
     check_timeout: Option<u64>,
@@ -66,7 +66,7 @@ impl<'a> BalenaConfig {
         BalenaConfig {
             image: None,
             config: None,
-            app_name: None,
+            // app_name: None,
             check_api: None,
             check_vpn: None,
             check_timeout: None,

@@ -278,7 +278,7 @@ mod tests {
 
         assert_eq!(config.migrate.get_fail_mode(), &FailMode::Reboot);
         assert_eq!(config.migrate.get_nwmgr_files().len(), 1);
-        assert_eq!(config.migrate.is_gzip_internal(), true);
+        assert_eq!(config.debug.is_gzip_internal(), true);
         assert_eq!(
             config.migrate.get_kernel_opts(),
             Some(String::from("panic=20"))
