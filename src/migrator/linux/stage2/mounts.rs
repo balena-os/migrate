@@ -12,6 +12,7 @@ use nix::{
     unistd::sync,
 };
 
+use crate::linux::linux_common::to_std_device_path;
 use crate::{
     common::{
         call, dir_exists, file_exists, path_append,
@@ -308,23 +309,18 @@ impl<'a> Mounts {
 
         if let Some(log_dev) = stage2_config.get_log_device() {
             // TODO: establish fs_type ?
-            if file_exists(&log_dev.device) {
-                self.log_path =
-                    match Mounts::mount(LOGFS_DIR, &log_dev.device, log_dev.fs_type.as_str()) {
-                        Ok(mountpoint) => Some(mountpoint),
-                        Err(why) => {
-                            warn!(
-                                "Failed to mount log device: '{}': error: {:?}",
-                                log_dev.device.display(),
-                                why
-                            );
-                            None
-                        }
-                    };
-            } else {
-                // TODO: wait loop ?
-                warn!("Could not find log device: '{}'", log_dev.device.display());
-            }
+            let log_device = to_std_device_path(&log_dev.device)?;
+            self.log_path = match Mounts::mount(LOGFS_DIR, &log_device, log_dev.fs_type.as_str()) {
+                Ok(mountpoint) => Some(mountpoint),
+                Err(why) => {
+                    warn!(
+                        "Failed to mount log device: '{}': error: {:?}",
+                        log_device.display(),
+                        why
+                    );
+                    None
+                }
+            };
         }
 
         debug!("log mountpoint is {:?}", self.log_path);
@@ -337,7 +333,7 @@ impl<'a> Mounts {
                 debug!("work_no_copy set to {}", self.work_no_copy);
             }
             PathType::Mount(mount_cfg) => {
-                let device = mount_cfg.get_device().to_path_buf();
+                let device = to_std_device_path(mount_cfg.get_device())?;
                 debug!("Work mountpoint is a mount: '{}'", device.display());
                 // TODO: make all mounts retry with timeout
                 if self.boot_part != device {
@@ -647,6 +643,7 @@ impl<'a> Mounts {
         let device = device.as_ref().to_path_buf();
 
         let mountpoint = path_append(MOUNT_DIR, dir.as_ref());
+
         debug!(
             "Attempting to mount '{}' on '{}' with fstype {}",
             device.display(),
