@@ -53,6 +53,8 @@ const DTB_FTYPE_REGEX: &str = r#"^(Device Tree Blob|data).*$"#;
 
 const GZIP_TAR_FTYPE_REGEX: &str = r#"^(POSIX tar archive \(GNU\)).*\(gzip compressed data.*\)$"#;
 
+//const MTAB_PATH: &str = "/etc/mtab";
+
 pub(crate) fn is_admin() -> Result<bool, MigError> {
     trace!("LinuxMigrator::is_admin: entered");
     let admin = Some(unsafe { getuid() } == 0);
@@ -333,22 +335,33 @@ fn device_spec_to_path(
     mount: bool,
     mount_dir: &Option<PathBuf>,
 ) -> Result<Option<PathBuf>, MigError> {
-    let dev_path = match dev_spec {
-        DeviceSpec::DevicePath(ref path) => String::from(&*path.to_string_lossy()),
-        DeviceSpec::Uuid(ref uuid) => format!("{}/{}", DISK_BY_UUID_PATH, uuid),
-        DeviceSpec::Label(ref label) => format!("{}/{}", DISK_BY_LABEL_PATH, label),
-        DeviceSpec::PartUuid(ref partuuid) => format!("{}/{}", DISK_BY_PARTUUID_PATH, partuuid),
-        _ => {
-            return Err(MigError::from_remark(
-                MigErrorKind::NotImpl,
-                &format!("device_spec_to_path is not implemented for {:?}", dev_spec),
-            ));
-        }
-    };
+    trace!("device_spec_to_path: entered with {:?}", dev_spec);
 
-    let cmd_res = call(DF_CMD, &[dev_path.as_str()], true)?;
+    let dev_path = to_std_device_path(
+        PathBuf::from(match dev_spec {
+            DeviceSpec::DevicePath(ref path) => String::from(&*path.to_string_lossy()),
+            DeviceSpec::Uuid(ref uuid) => format!("{}/{}", DISK_BY_UUID_PATH, uuid),
+            DeviceSpec::Label(ref label) => format!("{}/{}", DISK_BY_LABEL_PATH, label),
+            DeviceSpec::PartUuid(ref partuuid) => format!("{}/{}", DISK_BY_PARTUUID_PATH, partuuid),
+            _ => {
+                return Err(MigError::from_remark(
+                    MigErrorKind::NotImpl,
+                    &format!("device_spec_to_path is not implemented for {:?}", dev_spec),
+                ));
+            }
+        })
+        .as_path(),
+    )?;
+
+    trace!(
+        "device_spec_to_path: looking for mountpoint for: '{}'",
+        dev_path.display()
+    );
+
+    let cmd_res = call(DF_CMD, &[&*dev_path.to_string_lossy()], true)?;
     let mounted_on = if cmd_res.status.success() {
         if let Some(line) = cmd_res.stdout.lines().nth(1) {
+            trace!("device_spec_to_path: line 1: '{}'", line);
             if let Some(mountpoint) = line.split_whitespace().collect::<Vec<&str>>().get(5) {
                 Some(PathBuf::from(mountpoint))
             } else {
@@ -697,6 +710,8 @@ pub(crate) fn get_kernel_root_info() -> Result<(PathBuf, Option<String>), MigErr
             ),
         ));
     };
+
+    let root_device = to_std_device_path(&root_device)?;
 
     debug!("Using root device: '{}'", root_device.display());
 

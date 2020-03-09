@@ -203,7 +203,7 @@ impl BootManager for RaspiBootManager {
                         backup_path.display()
                     ),
                 ))?;
-                boot_cfg_bckup.push(BackupCfg::new(&src_path, &backup_path)?);
+                boot_cfg_bckup.push(BackupCfg::new(&tgt_path, &backup_path)?);
             }
 
             copy(&src_path, &tgt_path).context(MigErrCtx::from_remark(
@@ -318,7 +318,7 @@ impl BootManager for RaspiBootManager {
         // Assume we have to backup cmdline.txt if we had to backup config.txt
         if !balena_config {
             // backup cmdline.txt
-            let backup_file = format!("{}.{}", RPI_CMDLINE_TXT, system_time.as_secs());
+            let backup_file = format!("{}-{}", RPI_CMDLINE_TXT, system_time.as_secs());
             let backup_path = path_append(&boot_path.path, &backup_file);
 
             copy(&cmdline_path, &backup_path).context(MigErrCtx::from_remark(
