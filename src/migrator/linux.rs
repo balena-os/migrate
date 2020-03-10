@@ -276,10 +276,13 @@ impl<'a> LinuxMigrator {
 
         let backup_path = path_append(work_dir, BACKUP_FILE);
 
-        let has_backup = self.stage2_config.set_has_backup(backup::create(
-            &backup_path,
-            self.config.migrate.get_backup_volumes(),
-        )?);
+        let has_backup =
+            self.stage2_config
+                .set_has_backup(if self.config.migrate.is_tar_internal() {
+                    backup::create(&backup_path, self.config.migrate.get_backup_volumes())?
+                } else {
+                    backup::create_ext(&backup_path, self.config.migrate.get_backup_volumes())?
+                });
 
         // TODO: this might not be a smart place to put things, everything in system-connections
         // will end up in /mnt/boot/system-connections
