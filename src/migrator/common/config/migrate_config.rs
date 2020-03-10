@@ -120,6 +120,7 @@ pub(crate) struct MigrateConfig {
     kernel_opts: Option<String>,
     uboot: Option<UBootCfg>,
     md5_sums: Option<PathBuf>,
+    tar_internal: Option<bool>,
 }
 
 impl<'a> MigrateConfig {
@@ -140,6 +141,7 @@ impl<'a> MigrateConfig {
             kernel_opts: None,
             uboot: None,
             md5_sums: None,
+            tar_internal: None,
         }
     }
 
@@ -167,6 +169,14 @@ impl<'a> MigrateConfig {
     }
 
     // defaults are implemented in getter functions
+
+    pub fn is_tar_internal(&self) -> bool {
+        if let Some(val) = self.tar_internal {
+            val
+        } else {
+            true
+        }
+    }
 
     pub fn get_backup_volumes(&'a self) -> &'a [VolumeConfig] {
         if let Some(ref val) = self.backup {
