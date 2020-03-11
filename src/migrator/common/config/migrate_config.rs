@@ -174,7 +174,7 @@ impl<'a> MigrateConfig {
         if let Some(val) = self.tar_internal {
             val
         } else {
-            true
+            false
         }
     }
 

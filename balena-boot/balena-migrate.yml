@@ -12,70 +12,61 @@ migrate:
   reboot: 5
   log:
     ## use this drive for stage2 persistent logging
-    # drive: '/dev/sda1'
+    # drive:
+    #   devpath: '/dev/sda1'
+    ## or
+    #   uuid: 42D3-AAB8
+    ## or
+    #   partuuid: ea85e980-ee1a-464a-928a-dde13eec7e83
+
     ## stage2 log level (trace, debug, info, warn, error)
     level: debug
   # path to stage2 kernel - must be a balena os kernel matching the device type
-  kernel: 
-    path: balena.zImage
-    hash: 
-      md5: c1a090825ca99a6a3e42f2cad158e0c0
-  ## path to stage2 initramfs
-  initrd: 
-    path: balena.initramfs.cpio.gz
-  #  hash:
-  #    md5: f7fac19120fa11c88ea7e03ac466b294
-  ## path to stage2 device tree blob - better be a balena dtb matching the device type
-  device_tree:
-    path: bcm2711-rpi-4-b.dtb
-    hash:
-      md5: e3171dcf3803baf4b0b7806e27f1c23b
   ## backup configuration, configured files are copied to balena and mounted as volumes
   backup:
   ## network manager configuration files
   nwmgr_files:
     # - eth0_static
-  ## use internal gzip with dd true | false
-  gzip_internal: ~
+
   ## Extra kernel commandline options
   # kernel_opts: "panic=20"
-  ## Use the given device instead of the boot device to flash to
-  # force_flash_device: /dev/sda
+
   ## delay migration by n seconds - workaround for watchdog not disabling
   # delay: 60
-  ## kick / close configured watchdogs
-  # watchdogs:
-    # path to watchdog device
-    # - path: /dev/watchdog1
-      ## optional interval in seconds - overrides interval read from watchdog device
-      # interval: ~
-      ## optional close, false disables MAGICCLOSE flag read from device
-      ## watchdog will be kicked instead
-      # close: false
+
+  ## Use internal (rust module) or external (system provided tar executable) tar archiver
+  # tar_internal: false
+
+  ## Provide md5 sums to check input file consistency
+  # md5_sums: md5sums.txt
+
+  ## Determine what to do on stage2 failure
+  ##  either reboot  - reboot device
+  ##  or rescueshell - start a shell
+  # fail_mode: reboot
+
   ## by default migration requires some network manager config to be present (eg from wlan or supplied)
   ## set this to false to not require connection files
   require_nwmgr_config: false
 balena:
   image:
     ## use dd / flash balena image
-    dd:
-      path: <insert image to flash> 
-      hash:
-        md5: <insert md5 of image to flash>
+    dd: <insert image to flash>
   ## config.json file to inject
-  config: 
-    path: config.json
+  config: config.json
   ## application name
-  app_name: <insert application name>
+  # app_name: <insert application name>
   ## api checks
-  api:
-    host: api.balena-cloud.com
-    port: 443
-    check: true
   ## check for vpn connection
-  check_vpn: true
+  # check_api: true
+  ## check for vpn connection
+  # check_vpn: true
   ## timeout for checks
-  check_timeout: 20
+  # check_timeout: 20
 debug:
   ## don't flash device - terminate stage2 and reboot before flashing
   no_flash: true
+  ## use internal gzip with dd true | false
+  # gzip_internal: true
+  ## Use the given device instead of the boot device to flash to
+  # force_flash_device: /dev/sda
