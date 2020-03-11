@@ -20,6 +20,7 @@ Balena migrate currently works on a small set of devices and linux flavors. Test
   - Ubuntu 14.04.2 LTS
   - Ubuntu 14.04.5 LTS
   - Ubuntu 14.04.6 LTS
+  - Windows 10 professional with UEFI bootmanager 
 - Raspberry PI 3 using Raspian flavors:
   - Raspbian GNU/Linux 8 (jessie)
   - Raspbian GNU/Linux 9 (stretch)
@@ -42,7 +43,7 @@ is usually trivial, adding a new device might require more effort.
 
 ### Stage 1 - balena-migrate
 
-Balena migrate is a binary executable file, that needs to be executed with root privileges on the device 
+```balena-migrate``` is a binary executable file, that needs to be executed with root privileges on the device 
 that will be migrated. There are several command line parameters that can be set and the program will be looking 
 for a YAML configuration file - by default in ```./balena-migrate.yml```.
 
@@ -120,6 +121,11 @@ For intel-nuc build:
  
 ```cross build --target=x86_64-unknown-linux-musl --release```
 
+For migrating Windows on intel-nuc type devices:
+
+The Stage1 executable (balena-migrate.exe) needs to be compile in windows and linked to msvc lib. The Stage2 executable 
+can be compiled as above. 
+
 For beaglebone / beagleboard build:
  
 ```cross build --target=armv7-unknown-linux-gnueabihf --release```
@@ -128,6 +134,7 @@ For raspberrypi3 build
 
 ``` cross build --target=armv7-unknown-linux-musleabihf --release```
     
+
 Once libgcc is integrated in the migration initramfs the musl builds will be obsolete.   
 
 #### Configuring the migration Initramfs
@@ -360,135 +367,92 @@ migrate:
   ## migrate mode
   ## 'immediate' migrate
   ## 'pretend' : just run stage 1 without modifying anything
-  ## 'extract' : do not migrate extract image instead
   mode: immediate
+  
   ## where required files are expected
   work_dir: .
+  
   ## migrate all found wifi configurations
   all_wifis: true
+  
   ## A list of Wifi SSID's to migrate
   # wifis:
   #   - my-ssid
+
   ## automatically reboot into stage 2 after n seconds
   reboot: 5
+
   ## stage2 log configuration
   log:
     ## use this drive for stage2 persistent logging
-    drive: /dev/sda1
+    # drive: 
+    #   devpath: /dev/sda1
+    ## or 
+    #   uuid: 42D3-AAB8
+    ## or
+    #   partuuid: ea85e980-ee1a-464a-928a-dde13eec7e83
     ## stage2 log level (trace, debug, info, warn, error)
     level: info
-  ## path to stage2 kernel - must be a balena os kernel matching the device type
-  kernel: 
-    path: balena.zImage
-    # hash: 
-    #   md5: <MD5 Hash>
-  ## path to stage2 initramfs
-  initrd: 
-    path: balena.initramfs.cpio.gz
-    # hash:
-    #   md5: <MD5 Hash>
-  ## path to stage2 device tree blob - better be a balena dtb matching the device type
-  # device_tree: 
-  # - path: balena.dtb
-  #   hash:
-  #     md5: <MD5 Hash>
+
   ## backup configuration, configured files are copied to balena and mounted as volumes
   backup:
+
   ## network manager configuration files
   nwmgr_files:
     # - eth0_static
-  ## use internal gzip with dd true | false
-  gzip_internal: ~
+  
   ## Extra kernel commandline options
   # kernel_opts: "panic=20"
-  ## Use the given device instead of the boot device to flash to
-  # force_flash_device: /dev/sda
+
   ## delay migration by n seconds - workaround for watchdog not disabling
   # delay: 60
-  ## kick / close configured watchdogs
-  # watchdogs:
-  ## path to watchdog device
-  # - path: /dev/watchdog1
-  ## optional interval in seconds - overrides interval read from watchdog device
-  #   interval: ~
-  ## optional close, false disables MAGICCLOSE flag read from device
-  ## watchdog will be kicked instead
-  #   close: false
+
   ## by default migration requires some network manager config to be present (eg from wlan or supplied)
   ## set this to false to not require connection files
-  require_nwmgr_config: ~
+  # require_nwmgr_config: true
+  
+  ## Use internal (rust module) or external (system provided tar executable) tar archiver
+  # tar_internal: false
+
+  ## Provide md5 sums to check input file consistency
+  # md5_sums: md5sums.txt
+  
+  ## Determine what to do on stage2 failure
+  ##  either reboot  - reboot device 
+  ##  or rescueshell - start a shell   
+  # fail_mode: reboot
+
 balena:
   image:
   ## use dd / flash balena image
-    dd:
-      path: balena-cloud-beagleboard-xm-2.38.0+rev1-v9.15.7.img.gz
-  #   hash:
-  #     md5: <MD5 Hash>
+    dd: balena-cloud-beagleboard-xm-2.38.0+rev1-v9.15.7.img.gz
   ## or
-  ## use filesystem writes instead of Flasher (dd)
-  # fs:
-  ## needed for filesystem writes, beagleboard-xm masquerades as beaglebone-black
-  #   device_slug: beaglebone-black
-  ## make mkfs.ext4 check for bad blocks, either
-  ## empty / None, -> No test
-  ## Read -> Read test
-  ## ReadWrite -> ReadWrite test (slow)
-  #   check: Read
-  ## maximise resin-data partition, true / false
-  ## empty / true -> maximise
-  ## false -> do not maximise
-  ## Max out data partition if true
-  #   max_data: true
-  ## use direct io for mkfs.ext (-D see manpage)
-  ## true -> use direct io (slow)
-  ## empty / false -> do not use
-  #   mkfs_direct: ~
-  ## extended partition blocks
-  #   extended_blocks: 2162688
-  ## boot partition blocks & tar file
-  #   boot:
-  #     blocks: 81920
-  #     archive:
-  #       path: resin-boot.tgz
-  #       hash:
-  #         md5: <MD5 Hash>
-  ## rootA partition blocks & tar file
-      root_a:
-        blocks: 638976
-        archive:
-          path: resin-rootA.tgz
-      # rootB partition blocks & tar file
-      root_b:
-        blocks: 638976
-        archive: resin-rootB.tgz
-      # state partition blocks & tar file
-      state:
-        blocks: 40960
-        archive: resin-state.tgz
-      # data partition blocks & tar file
-      data:
-        blocks: 2105344
-        archive: resin-data.tgz
+  ## use filesystem writes instead of Flasher (dd), see above in section 'Flashing a device on File System Level'
+  
   # config.json file to inject
-  config:
-    path: config.json
-  #   hash:
-  #     md5: <MD5 Hash>
-
-  ## application name
-  app_name: 'bbtest'
-  ## api checks
-  api:
-    host: "api.balena-cloud.com"
-    port: 443
-    check: true
+  config: config.json
+  
+  ## application name - currently not used
+  # app_name: 'bbtest'
+  
+  ## check for api connection
+  # check_vpn: true
+  
   ## check for vpn connection
-  check_vpn: true
+  # check_vpn: true
+  
   ## timeout for checks
-  check_timeout: 20
+  # check_timeout: 20
 debug:
+  
   ## don't flash device - terminate stage2 and reboot before flashing
   no_flash: false
+  
+  ## Use the given device instead of the boot device to flash to
+  # force_flash_device: /dev/sda
+  
+  ## use internal gzip with dd true | false
+  # gzip_internal: true
 ```
 
         

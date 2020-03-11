@@ -178,7 +178,7 @@ done
 
 if [ ! -f "${TARGET_DIR}/balena-migrate.yml" ] ; then
   echo "copying default balena-migrate.yml"
-  cp "${BOOT_DIR}/balena-migrate.yml" "${TARGET_DIR}/"
+  cp "${PROJECT_ROOT}/balena-boot/balena-migrate.yml" "${TARGET_DIR}/"
 fi
 
 
