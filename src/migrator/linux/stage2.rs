@@ -211,7 +211,7 @@ impl<'a> Stage2 {
             }
         } else {
             // stop logging to memory buffer
-            let _res = Logger::set_log_dest(&LogDestination::Stderr, NO_STREAM);
+            let _res = Logger::set_log_dest(&LogDestination::BufferStderr, NO_STREAM);
         }
 
         Ok(Stage2 {

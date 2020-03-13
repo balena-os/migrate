@@ -256,45 +256,30 @@ sudo balena-extract \
      -d beaglebone-green \
      bbg/balena-cloud-bbtest-beaglebone-green-2.29.2+rev3-dev-v9.0.1.os.img.gz 
 
-image config:
-    ---
+  image config:
     fs:
-      extended_blocks: 2162688
+      extended_blocks: 458752
       device_slug: beaglebone-green
       check: ~
       max_data: ~
       mkfs_direct: ~
       boot:
         blocks: 81920
-        archive:
-          path: resin-boot.tgz
-          hash:
-            md5: 9111b8be2903683638c850c9fff047cc
+        archive: resin-boot.tgz
       root_a:
         blocks: 638976
-        archive:
-          path: resin-rootA.tgz
-          hash:
-            md5: df0e67f5c3479ddd17f3dca9abcd74a0
+        archive: resin-rootA.tgz
       root_b:
         blocks: 638976
-        archive:
-          path: resin-rootB.tgz
-          hash:
-            md5: e03534953b5f8d867bcebf3178e44906
+        archive: resin-rootB.tgz
       state:
         blocks: 40960
-        archive:
-          path: resin-state.tgz
-          hash:
-            md5: 4cbb7304932ef21212483096a167293a
+        archive: resin-state.tgz
       data:
-        blocks: 2105344
-        archive:
-          path: resin-data.tgz
-          hash:
-            md5: 57d78c6cfe8a6b13b283804822e0c518
-``` 
+        blocks: 401408
+        archive: resin-data.tgz
+`` 
+
 The above config snippet must be added to ```balena-migrate.yml``` and the partition archives 
 (```resin-xxx.tgz```) need to be present in the working directory. 
       
