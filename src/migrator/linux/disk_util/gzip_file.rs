@@ -85,20 +85,24 @@ impl GZipFile {
             offset - self.bytes_read
         };
 
-        trace!("to_read: {}", to_read);
+        trace!("seek: to_read: {}", to_read);
 
         if to_read == 0 {
             Ok(())
         } else {
             let mut buffer: [u8; DEF_READ_BUFFER] = [0; DEF_READ_BUFFER];
-            if to_read > (DEF_READ_BUFFER as u64) {
+            if to_read >= (DEF_READ_BUFFER as u64) {
                 loop {
                     match self.decoder.read(&mut buffer) {
                         Ok(bytes_read) => {
                             to_read -= bytes_read as u64;
                             // debug!("bytes_read: {}, to_read:{}", bytes_read, to_read);
                             if to_read < DEF_READ_BUFFER as u64 {
-                                debug!("done with DEF_BUFFER, to_read: {}", to_read);
+                                trace!(
+                                    "seek: done with DEF_BUFFER, to_read: {}, bytes_read: {}",
+                                    to_read,
+                                    bytes_read
+                                );
                                 break;
                             }
                         }
@@ -106,7 +110,7 @@ impl GZipFile {
                             return Err(MigError::from_remark(
                                 MigErrorKind::Upstream,
                                 &format!(
-                                    "failed to reopen file for reading: '{}', error {:?}",
+                                    "seek: failed to reopen file for reading: '{}', error {:?}",
                                     self.path.display(),
                                     why
                                 ),
@@ -117,22 +121,24 @@ impl GZipFile {
             }
 
             if to_read > 0 {
-                debug!("last buffer, to_read: {}", to_read);
+                trace!("seek: last buffer, to_read: {}", to_read);
                 match self.decoder.read_exact(&mut buffer[0..to_read as usize]) {
                     Ok(_) => {
+                        trace!("seek: read, got {} bytes", to_read);
                         self.bytes_read = offset;
                         Ok(())
                     }
                     Err(why) => Err(MigError::from_remark(
                         MigErrorKind::Upstream,
                         &format!(
-                            "failed to reopen file for reading: '{}', error {:?}",
+                            "seek: failed to read from file  file '{}', error {:?}",
                             self.path.display(),
                             why
                         ),
                     )),
                 }
             } else {
+                debug!("seek: nothing more to_read: {}", to_read);
                 self.bytes_read = offset;
                 Ok(())
             }
