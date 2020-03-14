@@ -1,0 +1,12 @@
+#/bin/sh
+# Copyright (C) 2019 Balena Ltd.
+# Licensed on MIT
+
+migrate_enabled() {
+	return 0
+}
+
+migrate_run() {
+  /bin/balena-stage2
+  sh
+}

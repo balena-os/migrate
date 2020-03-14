@@ -1,2 +1,7 @@
 /target
 **/*.rs.bk
+/work
+/.idea
+migrate-rs.iml
+migrate.iml
+screenlog.0

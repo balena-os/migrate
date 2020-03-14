@@ -1,0 +1,148 @@
+       Fresh autocfg v0.1.4
+       Fresh unicode-xid v0.1.0
+       Fresh cc v1.0.37
+       Fresh approx v0.1.1
+       Fresh cfg-if v0.1.9
+       Fresh smallvec v0.6.9
+       Fresh rgb v0.8.13
+       Fresh lazy_static v1.3.0
+       Fresh rustc-demangle v0.1.15
+       Fresh ucd-util v0.1.3
+       Fresh linked-hash-map v0.5.2
+       Fresh matches v0.1.8
+       Fresh byte-tools v0.3.1
+       Fresh termcolor v0.3.6
+       Fresh dtoa v0.4.4
+       Fresh unicode-width v0.1.5
+       Fresh utf8-ranges v1.0.2
+       Fresh vec_map v0.8.1
+       Fresh opaque-debug v0.2.3
+       Fresh itoa v0.4.4
+       Fresh void v1.0.2
+       Fresh fake-simd v0.1.2
+       Fresh percent-encoding v1.0.1
+       Fresh strsim v0.8.0
+       Fresh bitflags v1.0.4
+       Fresh ansi_term v0.11.0
+       Fresh log v0.4.6
+       Fresh unicode-normalization v0.1.8
+       Fresh thread_local v0.3.6
+       Fresh regex-syntax v0.6.6
+       Fresh yaml-rust v0.4.3
+       Fresh unicode-bidi v0.3.4
+       Fresh block-padding v0.1.4
+       Fresh textwrap v0.11.0
+       Fresh proc-macro2 v0.4.30
+       Fresh libc v0.2.58
+       Fresh typenum v1.10.0
+       Fresh winapi v0.3.7
+       Fresh byteorder v1.3.2
+       Fresh ryu v0.2.8
+       Fresh crc32fast v1.2.0
+       Fresh idna v0.1.5
+       Fresh quote v0.6.12
+       Fresh num-traits v0.2.8
+       Fresh rand v0.4.6
+       Fresh time v0.1.42
+       Fresh memchr v2.2.0
+       Fresh backtrace-sys v0.1.28
+       Fresh filetime v0.2.6
+       Fresh atty v0.2.11
+       Fresh xattr v0.2.2
+       Fresh libc v0.2.58 (https://github.com/rust-lang/libc#ce7e3a7e)
+       Fresh nix v0.14.0
+       Fresh generic-array v0.12.3
+       Fresh miniz-sys v0.1.12
+       Fresh num-traits v0.1.43
+       Fresh syn v0.15.34
+       Fresh num-integer v0.1.41
+       Fresh aho-corasick v0.7.3
+       Fresh backtrace v0.3.30
+       Fresh csv-core v0.1.5
+       Fresh url v1.7.2
+       Fresh serde_derive v1.0.92
+       Fresh cgmath v0.16.1
+       Fresh synstructure v0.10.2
+       Fresh block-buffer v0.7.3
+       Fresh digest v0.8.1
+       Fresh clap v2.33.0
+       Fresh tar v0.4.26
+       Fresh flate2 v1.0.7
+       Fresh failure_derive v0.1.5
+       Fresh serde v1.0.92
+       Fresh chrono v0.4.6
+       Fresh winconsole v0.10.0
+       Fresh regex v1.1.6
+       Fresh failure v0.1.5
+       Fresh serde_yaml v0.8.9
+       Fresh stderrlog v0.4.1
+       Fresh csv v1.0.7
+       Fresh sha-1 v0.8.1
+       Fresh serde_json v1.0.39
+       Fresh md-5 v0.8.0
+       Fresh colored v1.8.0
+       Fresh mod_logger v0.5.1 (https://github.com/samothx/ModuleLogger.git#9bd117d2)
+   Compiling balena_migrate v0.1.0 (/home/thomas/develop/balena.io/migrate)
+     Running `rustc --edition=2018 --crate-name balena_migrate src/migrator/lib.rs --color never --emit=dep-info,metadata,link -C debuginfo=2 --test -C metadata=1acf31d86788fbbf -C extra-filename=-1acf31d86788fbbf --out-dir /home/thomas/develop/balena.io/migrate/target/debug/deps -C incremental=/home/thomas/develop/balena.io/migrate/target/debug/incremental -L dependency=/home/thomas/develop/balena.io/migrate/target/debug/deps --extern chrono=/home/thomas/develop/balena.io/migrate/target/debug/deps/libchrono-9c57b29475b75662.rlib --extern clap=/home/thomas/develop/balena.io/migrate/target/debug/deps/libclap-f6b08db3ba85d749.rlib --extern csv=/home/thomas/develop/balena.io/migrate/target/debug/deps/libcsv-555e4f538a35603f.rlib --extern digest=/home/thomas/develop/balena.io/migrate/target/debug/deps/libdigest-20ed05aa4816dd6b.rlib --extern failure=/home/thomas/develop/balena.io/migrate/target/debug/deps/libfailure-09c3101db1e07d46.rlib --extern flate2=/home/thomas/develop/balena.io/migrate/target/debug/deps/libflate2-3203d32f10aa5f59.rlib --extern lazy_static=/home/thomas/develop/balena.io/migrate/target/debug/deps/liblazy_static-a483656c2f7d8f9e.rlib --extern libc=/home/thomas/develop/balena.io/migrate/target/debug/deps/liblibc-dca9a600c74c5a2e.rlib --extern log=/home/thomas/develop/balena.io/migrate/target/debug/deps/liblog-51688bf500108dd2.rlib --extern md5=/home/thomas/develop/balena.io/migrate/target/debug/deps/libmd5-4f86c235441b1d9f.rlib --extern mod_logger=/home/thomas/develop/balena.io/migrate/target/debug/deps/libmod_logger-428952475a2ad4b0.rlib --extern nix=/home/thomas/develop/balena.io/migrate/target/debug/deps/libnix-247c61af24a7d66a.rlib --extern regex=/home/thomas/develop/balena.io/migrate/target/debug/deps/libregex-ef12ab25301526bb.rlib --extern serde=/home/thomas/develop/balena.io/migrate/target/debug/deps/libserde-bbb0047496582c6f.rlib --extern serde_json=/home/thomas/develop/balena.io/migrate/target/debug/deps/libserde_json-28a4b6d55f50e25c.rlib --extern serde_yaml=/home/thomas/develop/balena.io/migrate/target/debug/deps/libserde_yaml-bbf5db015f8919c9.rlib --extern sha1=/home/thomas/develop/balena.io/migrate/target/debug/deps/libsha1-a7d20a3038bead3f.rlib --extern tar=/home/thomas/develop/balena.io/migrate/target/debug/deps/libtar-333b0fd630f363ca.rlib --extern url=/home/thomas/develop/balena.io/migrate/target/debug/deps/liburl-e95282f8da173531.rlib --extern yaml_rust=/home/thomas/develop/balena.io/migrate/target/debug/deps/libyaml_rust-f593497cee39b2da.rlib -L native=/home/thomas/develop/balena.io/migrate/target/debug/build/backtrace-sys-28150273984c771a/out -L native=/home/thomas/develop/balena.io/migrate/target/debug/build/miniz-sys-af57b9a7019592f8/out`
+     Running `rustc --edition=2018 --crate-name balena_stage2 src/balena_stage2.rs --color never --emit=dep-info,link -C debuginfo=2 --test -C metadata=dddf6dcf2d4c1775 -C extra-filename=-dddf6dcf2d4c1775 --out-dir /home/thomas/develop/balena.io/migrate/target/debug/deps -C incremental=/home/thomas/develop/balena.io/migrate/target/debug/incremental -L dependency=/home/thomas/develop/balena.io/migrate/target/debug/deps --extern balena_migrate=/home/thomas/develop/balena.io/migrate/target/debug/deps/libbalena_migrate-3277f8d8300e0872.rlib --extern chrono=/home/thomas/develop/balena.io/migrate/target/debug/deps/libchrono-9c57b29475b75662.rlib --extern clap=/home/thomas/develop/balena.io/migrate/target/debug/deps/libclap-f6b08db3ba85d749.rlib --extern csv=/home/thomas/develop/balena.io/migrate/target/debug/deps/libcsv-555e4f538a35603f.rlib --extern digest=/home/thomas/develop/balena.io/migrate/target/debug/deps/libdigest-20ed05aa4816dd6b.rlib --extern failure=/home/thomas/develop/balena.io/migrate/target/debug/deps/libfailure-09c3101db1e07d46.rlib --extern flate2=/home/thomas/develop/balena.io/migrate/target/debug/deps/libflate2-3203d32f10aa5f59.rlib --extern lazy_static=/home/thomas/develop/balena.io/migrate/target/debug/deps/liblazy_static-a483656c2f7d8f9e.rlib --extern libc=/home/thomas/develop/balena.io/migrate/target/debug/deps/liblibc-dca9a600c74c5a2e.rlib --extern log=/home/thomas/develop/balena.io/migrate/target/debug/deps/liblog-51688bf500108dd2.rlib --extern md5=/home/thomas/develop/balena.io/migrate/target/debug/deps/libmd5-4f86c235441b1d9f.rlib --extern mod_logger=/home/thomas/develop/balena.io/migrate/target/debug/deps/libmod_logger-428952475a2ad4b0.rlib --extern nix=/home/thomas/develop/balena.io/migrate/target/debug/deps/libnix-247c61af24a7d66a.rlib --extern regex=/home/thomas/develop/balena.io/migrate/target/debug/deps/libregex-ef12ab25301526bb.rlib --extern serde=/home/thomas/develop/balena.io/migrate/target/debug/deps/libserde-bbb0047496582c6f.rlib --extern serde_json=/home/thomas/develop/balena.io/migrate/target/debug/deps/libserde_json-28a4b6d55f50e25c.rlib --extern serde_yaml=/home/thomas/develop/balena.io/migrate/target/debug/deps/libserde_yaml-bbf5db015f8919c9.rlib --extern sha1=/home/thomas/develop/balena.io/migrate/target/debug/deps/libsha1-a7d20a3038bead3f.rlib --extern tar=/home/thomas/develop/balena.io/migrate/target/debug/deps/libtar-333b0fd630f363ca.rlib --extern url=/home/thomas/develop/balena.io/migrate/target/debug/deps/liburl-e95282f8da173531.rlib --extern yaml_rust=/home/thomas/develop/balena.io/migrate/target/debug/deps/libyaml_rust-f593497cee39b2da.rlib -L native=/home/thomas/develop/balena.io/migrate/target/debug/build/backtrace-sys-28150273984c771a/out -L native=/home/thomas/develop/balena.io/migrate/target/debug/build/miniz-sys-af57b9a7019592f8/out`
+     Running `rustc --edition=2018 --crate-name balena_migrate src/balena_migrate.rs --color never --emit=dep-info,link -C debuginfo=2 --test -C metadata=33d65598a21de7f9 -C extra-filename=-33d65598a21de7f9 --out-dir /home/thomas/develop/balena.io/migrate/target/debug/deps -C incremental=/home/thomas/develop/balena.io/migrate/target/debug/incremental -L dependency=/home/thomas/develop/balena.io/migrate/target/debug/deps --extern balena_migrate=/home/thomas/develop/balena.io/migrate/target/debug/deps/libbalena_migrate-3277f8d8300e0872.rlib --extern chrono=/home/thomas/develop/balena.io/migrate/target/debug/deps/libchrono-9c57b29475b75662.rlib --extern clap=/home/thomas/develop/balena.io/migrate/target/debug/deps/libclap-f6b08db3ba85d749.rlib --extern csv=/home/thomas/develop/balena.io/migrate/target/debug/deps/libcsv-555e4f538a35603f.rlib --extern digest=/home/thomas/develop/balena.io/migrate/target/debug/deps/libdigest-20ed05aa4816dd6b.rlib --extern failure=/home/thomas/develop/balena.io/migrate/target/debug/deps/libfailure-09c3101db1e07d46.rlib --extern flate2=/home/thomas/develop/balena.io/migrate/target/debug/deps/libflate2-3203d32f10aa5f59.rlib --extern lazy_static=/home/thomas/develop/balena.io/migrate/target/debug/deps/liblazy_static-a483656c2f7d8f9e.rlib --extern libc=/home/thomas/develop/balena.io/migrate/target/debug/deps/liblibc-dca9a600c74c5a2e.rlib --extern log=/home/thomas/develop/balena.io/migrate/target/debug/deps/liblog-51688bf500108dd2.rlib --extern md5=/home/thomas/develop/balena.io/migrate/target/debug/deps/libmd5-4f86c235441b1d9f.rlib --extern mod_logger=/home/thomas/develop/balena.io/migrate/target/debug/deps/libmod_logger-428952475a2ad4b0.rlib --extern nix=/home/thomas/develop/balena.io/migrate/target/debug/deps/libnix-247c61af24a7d66a.rlib --extern regex=/home/thomas/develop/balena.io/migrate/target/debug/deps/libregex-ef12ab25301526bb.rlib --extern serde=/home/thomas/develop/balena.io/migrate/target/debug/deps/libserde-bbb0047496582c6f.rlib --extern serde_json=/home/thomas/develop/balena.io/migrate/target/debug/deps/libserde_json-28a4b6d55f50e25c.rlib --extern serde_yaml=/home/thomas/develop/balena.io/migrate/target/debug/deps/libserde_yaml-bbf5db015f8919c9.rlib --extern sha1=/home/thomas/develop/balena.io/migrate/target/debug/deps/libsha1-a7d20a3038bead3f.rlib --extern tar=/home/thomas/develop/balena.io/migrate/target/debug/deps/libtar-333b0fd630f363ca.rlib --extern url=/home/thomas/develop/balena.io/migrate/target/debug/deps/liburl-e95282f8da173531.rlib --extern yaml_rust=/home/thomas/develop/balena.io/migrate/target/debug/deps/libyaml_rust-f593497cee39b2da.rlib -L native=/home/thomas/develop/balena.io/migrate/target/debug/build/backtrace-sys-28150273984c771a/out -L native=/home/thomas/develop/balena.io/migrate/target/debug/build/miniz-sys-af57b9a7019592f8/out`
+warning: unused import: `MigError`
+   --> src/migrator/common/disk_util.rs:533:9
+    |
+533 |         MigError,
+    |         ^^^^^^^^
+    |
+    = note: #[warn(unused_imports)] on by default
+
+warning: unused imports: `common::config::migrate_config::MigrateWifis`, `defs::FailMode`
+   --> src/migrator/common/balena_cfg_json.rs:221:17
+    |
+221 |     use crate::{common::config::migrate_config::MigrateWifis, defs::FailMode};
+    |                 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^  ^^^^^^^^^^^^^^
+
+warning: unused variable: `config`
+   --> src/migrator/common/config.rs:383:13
+    |
+383 |         let config = Config::from_string(TEST_FS_CONFIG_OK).unwrap();
+    |             ^^^^^^ help: consider prefixing with an underscore: `_config`
+    |
+    = note: #[warn(unused_variables)] on by default
+
+warning: unused variable: `lsblk_info`
+   --> src/migrator/linux/migrate_info/lsblk_info.rs:470:13
+    |
+470 |         let lsblk_info = LsblkInfo::from_list(LSBLK_OUTPUT1).unwrap();
+    |             ^^^^^^^^^^ help: consider prefixing with an underscore: `_lsblk_info`
+
+    Finished dev [unoptimized + debuginfo] target(s) in 2.90s
+     Running `/home/thomas/develop/balena.io/migrate/target/debug/deps/balena_migrate-1acf31d86788fbbf`
+2019-08-29 13:47:06 DEBUG [balena_migrate::common::disk_util] PartitionIterator::next: offset: 0, index: 0, part_idx: 0, mbr: present
+2019-08-29 13:47:06 DEBUG [balena_migrate::common::disk_util] PartitionIterator::next Res: some
+2019-08-29 13:47:06 DEBUG [balena_migrate::common::disk_util] PartitionIterator::next leave mbr
+2019-08-29 13:47:06 DEBUG [balena_migrate::common::disk_util] PartitionIterator::next: offset: 0, index: 1, part_idx: 1, mbr: present
+2019-08-29 13:47:06 DEBUG [balena_migrate::common::disk_util] PartitionIterator::next Res: some
+2019-08-29 13:47:06 DEBUG [balena_migrate::common::disk_util] PartitionIterator::next leave mbr
+2019-08-29 13:47:06 DEBUG [balena_migrate::common::disk_util] PartitionIterator::next: offset: 0, index: 2, part_idx: 2, mbr: present
+2019-08-29 13:47:06 DEBUG [balena_migrate::common::disk_util] PartitionIterator::next Res: some
+2019-08-29 13:47:06 DEBUG [balena_migrate::common::disk_util] PartitionIterator::next leave mbr
+2019-08-29 13:47:06 DEBUG [balena_migrate::common::disk_util] PartitionIterator::next: offset: 0, index: 3, part_idx: 3, mbr: present
+2019-08-29 13:47:06 DEBUG [balena_migrate::common::disk_util] PartitionIterator::next Res: some
+2019-08-29 13:47:06 DEBUG [balena_migrate::linux::migrate_info::lsblk_info] from_list: processing line: ''
+2019-08-29 13:47:06 DEBUG [balena_migrate::common::disk_util] PartitionIterator::next reset mbr
+2019-08-29 13:47:06 INFO  [balena_migrate::linux::migrate_info::lsblk_info] looking at ''
+2019-08-29 13:47:06 DEBUG [balena_migrate::common::disk_util] PartitionIterator::next: offset: 8192, index: 3, part_idx: 4, mbr: absent
+2019-08-29 13:47:06 WARN  [balena_migrate::linux::migrate_info::lsblk_info] Failed to parse ''
+2019-08-29 13:47:06 DEBUG [balena_migrate::common::disk_util::gzip_file] done with DEF_BUFFER, to_read: 1015808
+2019-08-29 13:47:06 DEBUG [balena_migrate::common::disk_util::gzip_file] last buffer, to_read: 1015808
+2019-08-29 13:47:06 DEBUG [balena_migrate::common::disk_util] PartitionIterator::next: got mbr
+2019-08-29 13:47:06 DEBUG [balena_migrate::common::disk_util] PartitionIterator::next: got partition type: Linux
+2019-08-29 13:47:06 DEBUG [balena_migrate::common::disk_util] PartitionIterator::next: got partition data partition
+2019-08-29 13:47:06 DEBUG [balena_migrate::common::disk_util] PartitionIterator::next Res: some
+2019-08-29 13:47:06 DEBUG [balena_migrate::common::disk_util] PartitionIterator::next set mbr
+2019-08-29 13:47:06 DEBUG [balena_migrate::common::disk_util::gzip_file] done with DEF_BUFFER, to_read: 1015808
+2019-08-29 13:47:06 DEBUG [balena_migrate::common::disk_util::gzip_file] last buffer, to_read: 1015808
+2019-08-29 13:47:06 DEBUG [balena_migrate::common::disk_util] PartitionIterator::next Res: some
+2019-08-29 13:47:06 DEBUG [balena_migrate::common::disk_util] PartitionIterator::next set mbr
+2019-08-29 13:47:06 DEBUG [balena_migrate::common::disk_util] PartitionIterator::next Res: none
+2019-08-29 13:47:06 DEBUG [balena_migrate::common::disk_util] PartitionIterator::next leave mbr
+error: test failed, to rerun pass '--lib'

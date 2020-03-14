@@ -1,0 +1,63 @@
+#/bin/sh
+# Copyright (C) 2019 Balena Ltd.
+# Licensed on MIT
+
+DEVICE=/dev/sda
+# add a 'p' for mmcblk0 type partitions
+PARTITION=${DEVICE}
+MKFSEXT4=/sbin/mkfs.ext4
+MKFSVFAT=/usr/sbin/mkfs.vfat
+SFDISK=/usr/sbin/sfdisk
+EXT4_OPTS="-O ^64bit -E lazy_itable_init=0,lazy_journal_init=0 -i 8192 -v -F -F -e remount-ro -D"
+TMP_MOUNT=/migrate_tmp/mount
+
+scripted_enabled() {
+	return 1
+}
+
+scripted_run() {
+  # wait for ${DEVICE} to show up
+
+  while [ ! -b ${DEVICE} ]
+  do
+    echo "Waiting for '${DEVICE}' to show up"
+    sleep 2
+  done
+
+  ${SFDISK} --wipe always ${DEVICE} << EOI
+label: dos
+start=8192,size=81920,bootable,type=c
+start=90112,size=638976,type=83
+start=729088,size=638976,type=83
+start=1368064,type=f
+start=1376256,size=40960,type=83
+start=1425408,size=2105344,type=83
+EOI
+
+  # wait for partitions on ${DEVICE} to show up
+  while [ ! -b ${PARTITION}1 ]
+  do
+    echo "Waiting for '${PARTITION}1' to show up"
+    sleep 2
+  done
+
+  ${MKFSVFAT} -n resin-boot ${PARTITION}1
+
+  ${MKFSEXT4} ${EXT4_OPTS} -L resin-rootA ${PARTITION}2
+  ${MKFSEXT4} ${EXT4_OPTS} -L resin-rootB ${PARTITION}3
+  ${MKFSEXT4} ${EXT4_OPTS} -L resin-state ${PARTITION}5
+  ${MKFSEXT4} ${EXT4_OPTS} -L resin-data ${PARTITION}6
+
+  echo "done partitioning"
+
+
+  mkdir -p ${TMP_MOUNT}/resin-boot
+  mount -t vfat ${PARTITION}1 ${TMP_MOUNT}/resin-boot
+
+  mkdir ${TMP_MOUNT}/resin-rootA
+  mount -t vfat ${PARTITION}2 ${TMP_MOUNT}/resin-rootA
+
+  echo "done mounting"
+
+  sh
+}

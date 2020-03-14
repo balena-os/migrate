@@ -18,5 +18,13 @@
     # [System.Threading.Thread]::CurrentThread.CurrentCulture = 'en-US';Get-WmiObject -Query $query;
     # Get-WmiObject -Class Win32_DiskDrive  | Select-Object -Property *;
     
-    $query="SELECT DeviceID FROM (ASSOCIATORS OF {Win32_DiskDrive.DeviceID='\\.\PHYSICALDRIVE0'} WHERE AssocClass = Win32_DiskDriveToDiskPartition)";
-    [System.Threading.Thread]::CurrentThread.CurrentCulture = 'en-US';Get-WmiObject -Query $query;
+    # $query="SELECT DeviceID FROM (ASSOCIATORS OF {Win32_DiskDrive.DeviceID='\\.\PHYSICALDRIVE0'} WHERE AssocClass = Win32_DiskDriveToDiskPartition)";
+    
+
+    # $query = "SELECT Caption, Index, DeviceID, Bootable, Size, NumberOfBlocks, Type, BootPartition, StartingOffset FROM Win32_DiskPartition WHERE BootPartition=true"
+    
+    # $query = "ASSOCIATORS OF {Win32_DiskPartition.DeviceID='Disk #0, Partition #0'} WHERE AssocClass = Win32_DiskDriveToDiskPartition"
+    
+    $query = "select * from Win32_Volume"
+    # [System.Threading.Thread]::CurrentThread.CurrentCulture = 'en-US';Get-WmiObject -Query $query;
+    Get-WmiObject -class Win32_Volume
