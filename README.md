@@ -282,6 +282,14 @@ sudo balena-extract \
 
 The above config snippet must be added to ```balena-migrate.yml``` and the partition archives 
 (```resin-xxx.tgz```) need to be present in the working directory. 
+
+```check``` can be set to ```ro``` or ```rw``` to perform a read-only or read-write check while formatting 
+the device. This is achieved by adding the ```-c``` option to the invocation of mkfs in case of 
+read-only or ```-cc```  in case of read-write.
+
+```mkfs_direct``` can be set to true use direct io. This will add the ```-D``` option to the invocation of mkfs.
+
+```max_data``` can be set to true to use all available data for the resin-data partition.  
       
 #### Choosing the installation device
 
