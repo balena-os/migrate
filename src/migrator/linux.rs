@@ -9,6 +9,7 @@ use std::time::Duration;
 
 use crate::{
     common::{
+        assets::Assets,
         backup, call,
         config::balena_config::ImageType,
         device::Device,
@@ -61,7 +62,7 @@ pub(crate) struct LinuxMigrator {
 }
 
 impl<'a> LinuxMigrator {
-    pub fn migrate() -> Result<(), MigError> {
+    pub fn migrate(assets: &Assets) -> Result<(), MigError> {
         // **********************************************************************
         // We need to be root to do this
         let config = Config::new()?;
@@ -72,7 +73,7 @@ impl<'a> LinuxMigrator {
             return Err(MigError::from(MigErrorKind::Displayed));
         }
 
-        let mut migrator = LinuxMigrator::try_init(config)?;
+        let mut migrator = LinuxMigrator::try_init(config, assets)?;
 
         match migrator.config.migrate.get_mig_mode() {
             MigMode::Immediate => migrator.do_migrate(),
@@ -88,7 +89,7 @@ impl<'a> LinuxMigrator {
     // ** Initialise migrator
     // **********************************************************************
 
-    pub fn try_init(config: Config) -> Result<LinuxMigrator, MigError> {
+    pub fn try_init(config: Config, assets: &Assets) -> Result<LinuxMigrator, MigError> {
         trace!("LinuxMigrator::try_init: entered");
 
         info!("migrate mode: {:?}", config.migrate.get_mig_mode());
@@ -101,6 +102,8 @@ impl<'a> LinuxMigrator {
                 &format!("Failed to set logging to '{}'", log_file.display()),
             ),
         )?;
+
+        assets.write_to(config.migrate.get_work_dir())?;
 
         // A simple replacement for ensured commands
         for command in REQUIRED_CMDS {

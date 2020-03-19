@@ -17,6 +17,9 @@ pub(crate) mod os_release;
 
 pub(crate) mod os_api;
 
+pub mod assets;
+pub use assets::Assets;
+
 pub(crate) mod boot_manager;
 pub(crate) mod device;
 

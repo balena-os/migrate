@@ -4,6 +4,7 @@
 extern crate nix;
 
 pub mod common;
+use common::assets::Assets;
 
 #[cfg(target_os = "windows")]
 mod mswin;
@@ -26,8 +27,8 @@ pub fn migrate() -> Result<(), MigError> {
 }
 
 #[cfg(target_os = "linux")]
-pub fn migrate() -> Result<(), MigError> {
-    Ok(linux::LinuxMigrator::migrate()?)
+pub fn migrate(assets: &Assets) -> Result<(), MigError> {
+    Ok(linux::LinuxMigrator::migrate(assets)?)
 }
 
 #[cfg(target_os = "linux")]
