@@ -13,6 +13,8 @@ path = "src/migrator/lib.rs"
 
 [features]
 extract_builtin_tar = []
+raspberrypi3 = []
+raspberrypi4-64 = []
 
 [dependencies]
 log = { version = "^0.4.5", features = ["std"] }
@@ -32,6 +34,7 @@ tar = "*"
 digest = "0.8"
 sha-1 = "0.8"
 md-5 = "0.8"
+
 
 [target.'cfg(unix)'.dependencies]
 libc = { git = "https://github.com/rust-lang/libc" }
