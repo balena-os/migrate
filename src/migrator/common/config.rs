@@ -52,6 +52,13 @@ impl<'a> Config {
                     .help("Select balena OS image"),
             )
             .arg(
+                Arg::with_name("balena-config")
+                    .short("b")
+                    .long("config-json")
+                    .value_name("FILE")
+                    .help("Select balena config.json"),
+            )
+            .arg(
                 Arg::with_name("config")
                     .short("c")
                     .long("config")
@@ -59,11 +66,22 @@ impl<'a> Config {
                     .help("Select balena-migrate config file"),
             )
             .arg(
-                Arg::with_name("work_dir")
+                Arg::with_name("work-dir")
                     .short("w")
-                    .long("work_dir")
+                    .long("work-dir")
                     .value_name("DIR")
                     .help("Select working directory"),
+            )
+            .arg(
+                Arg::with_name("no-nwmgr-cfg")
+                    .short("n")
+                    .long("no-nwmgr-cfg")
+                    .help("Allow migration without network config"),
+            )
+            .arg(
+                Arg::with_name("no-flash")
+                    .long("no-flash")
+                    .help("Debug mode - do not flash in stage 2"),
             )
             .arg(
                 Arg::with_name("verbose")
@@ -95,8 +113,8 @@ impl<'a> Config {
         // or work_dir/{DEFAULT_MIGRATE_CONFIG}
         // If none is found a default is created
 
-        let work_dir = if arg_matches.is_present("work_dir") {
-            if let Some(dir) = arg_matches.value_of("work_dir") {
+        let work_dir = if arg_matches.is_present("work-dir") {
+            if let Some(dir) = arg_matches.value_of("work-dir") {
                 Some(
                     PathBuf::from(dir)
                         .canonicalize()
@@ -182,6 +200,20 @@ impl<'a> Config {
             "Using work_dir '{}'",
             config.migrate.get_work_dir().display()
         );
+
+        if arg_matches.is_present("no-nwmgr-cfg") {
+            config.migrate.set_require_nwmgr_configs(false);
+        }
+
+        if arg_matches.is_present("no-flash") {
+            config.debug.set_no_flash(true);
+        }
+
+        if arg_matches.is_present("balena-config") {
+            if let Some(path_str) = arg_matches.value_of("balena-config") {
+                config.balena.set_config_path(&PathBuf::from(path_str));
+            }
+        }
 
         if arg_matches.is_present("mode") {
             if let Some(mode) = arg_matches.value_of("mode") {

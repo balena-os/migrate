@@ -103,8 +103,6 @@ impl<'a> LinuxMigrator {
             ),
         )?;
 
-        assets.write_to(config.migrate.get_work_dir())?;
-
         // A simple replacement for ensured commands
         for command in REQUIRED_CMDS {
             match whereis(command) {
@@ -118,6 +116,12 @@ impl<'a> LinuxMigrator {
                 }
             }
         }
+
+        let asset_ver = assets.get_version()?;
+        info!("balena-migrator for device type: {}", asset_ver.device);
+        info!("balena-migrator kernel version: {}", asset_ver.kernel);
+        info!("balena-migrator balena version: {}", asset_ver.balena);
+        assets.write_to(config.migrate.get_work_dir())?;
 
         // **********************************************************************
         // Get os architecture & name & disk properties, check required paths
@@ -172,6 +176,15 @@ impl<'a> LinuxMigrator {
                 };
             }
         };
+
+        if asset_ver.device != device.get_device_slug() {
+            error!(
+                "Asset device mismatch, assets for '{}', device type: '{}' ",
+                asset_ver.device,
+                device.get_device_slug()
+            );
+            return Err(MigError::displayed());
+        }
 
         match mig_info
             .config_file

@@ -186,6 +186,10 @@ impl<'a> MigrateConfig {
         }
     }
 
+    pub fn set_require_nwmgr_configs(&mut self, flag: bool) {
+        self.require_nwmgr_config = Some(flag);
+    }
+
     pub fn require_nwmgr_configs(&self) -> bool {
         if let Some(val) = self.require_nwmgr_config {
             return val;

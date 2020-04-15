@@ -92,6 +92,10 @@ while [[ $# -gt 0 ]]; do
           verbose "using target directory ${TARGET_DIR}"
           shift
       ;;
+      -n|--no-copy-migrator)
+          NO_COPY_MIGRATOR=1
+          verbose "not copying balena-migrate"
+      ;;
       -v|--verbose)
           VERBOSE=1
           verbose "Operating in verbose mode"
@@ -181,8 +185,14 @@ if [ ! -f "${TARGET_DIR}/balena-migrate.yml" ] ; then
   cp "${PROJECT_ROOT}/balena-boot/balena-migrate.yml" "${TARGET_DIR}/"
 fi
 
+echo "copying ${BOOT_DIR}/version.yml to ${TARGET_DIR}/version.yml"
+cp "${BOOT_DIR}/version.yml" "${TARGET_DIR}/"
 
-cp "${RELEASE_DIR_STAGE2}/balena-migrate" "${TARGET_DIR}/"
+
+if [ -z "$NO_COPY_MIGRATOR" ] ; then
+  echo "copying ${RELEASE_DIR_MIGRATE}/balena-migrate to ${TARGET_DIR}/balena-migrate"
+  cp "${RELEASE_DIR_MIGRATE}/balena-migrate" "${TARGET_DIR}/"
+fi
 
 # TODO: create and use abs path for target
 
@@ -210,8 +220,5 @@ find . | cpio --quiet -o -H newc | gzip -c > ${TARGET_INITRD}
 cd ${CURR_DIR}
 
 rm -rf ${UNPACK_DIR}
-
-echo "copying ${RELEASE_DIR_MIGRATE}/balena-migrate to ${TARGET_DIR}/balena-migrate"
-cp  ${RELEASE_DIR_MIGRATE}/balena-migrate ${TARGET_DIR}/
 
 # TODO: chown target dir to users recursively
