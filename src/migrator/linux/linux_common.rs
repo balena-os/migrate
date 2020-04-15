@@ -22,7 +22,10 @@ use crate::{
 use crate::common::dir_exists;
 use crate::common::stage2_config::BackupCfg;
 use crate::defs::DeviceSpec;
-use nix::mount::{mount, MsFlags};
+use nix::{
+    mount::{mount, MsFlags},
+    sys::statvfs::statvfs,
+};
 
 const MOKUTIL_ARGS_SB_STATE: [&str; 1] = ["--sb-state"];
 
@@ -553,88 +556,20 @@ pub(crate) fn get_os_release() -> Result<OSRelease, MigError> {
 
 pub(crate) fn get_fs_space<P: AsRef<Path>>(path: P) -> Result<(u64, u64), MigError> {
     let path = path.as_ref();
-    trace!("get_fs_space: entered with '{}'", path.display());
+    let res = statvfs(path).context(MigErrCtx::from_remark(
+        MigErrorKind::Upstream,
+        &format!("Failed to retrieve stats for path: '{}'", path.display()),
+    ))?;
 
-    let path_str = path.to_string_lossy();
-    let args: Vec<&str> = vec!["--block-size=K", &path_str];
+    let blk_size = res.block_size();
+    trace!(
+        "statvfs('{}') returned size: {}, free: {}",
+        path.display(),
+        res.blocks() * blk_size,
+        res.blocks_free() * blk_size
+    );
 
-    let cmd_res = call(DF_CMD, &args, true)?;
-
-    if !cmd_res.status.success() || cmd_res.stdout.is_empty() {
-        return Err(MigError::from_remark(
-            MigErrorKind::InvParam,
-            &format!(
-                "get_fs_space: failed to get drive space for path '{}'",
-                path.display()
-            ),
-        ));
-    }
-
-    let output: Vec<&str> = cmd_res.stdout.lines().collect();
-    if output.len() != 2 {
-        return Err(MigError::from_remark(
-            MigErrorKind::InvParam,
-            &format!(
-                "get_fs_space: failed to parse df output attributes for '{}'",
-                path.display()
-            ),
-        ));
-    }
-
-    // debug!("PathInfo::new: '{}' df result: {:?}", path, &output[1]);
-
-    let hdrs: Vec<&str> = output[0].split_whitespace().collect();
-    let values: Vec<&str> = output[1].split_whitespace().collect();
-    let mut fs_size: Option<u64> = None;
-    let mut fs_used: Option<u64> = None;
-
-    for (index, header) in hdrs.iter().enumerate() {
-        if *header == "1K-blocks" {
-            fs_size = Some(
-                String::from(values[index])
-                    .trim_end_matches('K')
-                    .parse::<u64>()
-                    .context(MigErrCtx::from_remark(
-                        MigErrorKind::Upstream,
-                        &format!("get_fs_space: failed to parse size from {} ", values[index]),
-                    ))?
-                    * 1024,
-            );
-            if let Some(_dummy) = fs_used {
-                break;
-            }
-        } else if *header == "Used" {
-            fs_used = Some(
-                String::from(values[index])
-                    .trim_end_matches('K')
-                    .parse::<u64>()
-                    .context(MigErrCtx::from_remark(
-                        MigErrorKind::Upstream,
-                        &format!("get_fs_space: failed to parse size from {} ", values[index]),
-                    ))?
-                    * 1024,
-            );
-            if let Some(_dummy) = fs_size {
-                break;
-            }
-        }
-    }
-
-    if let Some(fs_size) = fs_size {
-        if let Some(fs_used) = fs_used {
-            debug!(
-                "get_fs_space: fs_size: {}, fs_free: {}",
-                fs_size,
-                fs_size - fs_used
-            );
-            return Ok((fs_size, fs_size - fs_used));
-        }
-    }
-
-    Err(MigError::from_remark(
-        MigErrorKind::InvParam,
-        "get_fs_space: failed to parse sizes ",
-    ))
+    Ok((res.blocks() * blk_size, res.blocks_free() * blk_size))
 }
 
 /******************************************************************

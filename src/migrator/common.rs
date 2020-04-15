@@ -12,13 +12,13 @@ use crate::defs::BALENA_FILE_TAG_REGEX;
 
 pub(crate) mod mig_error;
 
+pub mod assets;
+pub use assets::Assets;
+
 #[cfg(target_os = "windows")]
 pub(crate) mod os_release;
 
 pub(crate) mod os_api;
-
-pub mod assets;
-pub use assets::Assets;
 
 pub(crate) mod boot_manager;
 pub(crate) mod device;
@@ -237,7 +237,7 @@ pub(crate) fn call(cmd: &str, args: &[&str], trim_stdout: bool) -> Result<CmdRes
         .output()
     {
         Ok(output) => {
-            debug!("call: output: {:?}", output);
+            trace!("call: output: {:?}", output);
             Ok(CmdRes {
                 stdout: if trim_stdout {
                     String::from(String::from_utf8_lossy(&output.stdout).trim())

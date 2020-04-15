@@ -3,7 +3,7 @@ use crate::common::{file_digest::HashInfo, MigError, MigErrorKind};
 use crate::defs::DEFAULT_API_CHECK_TIMEOUT;
 use log::debug;
 use serde::{Deserialize, Serialize};
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 
 // TODO: also store optional bootable flag, partition type and start offset ?
 #[derive(Debug, Serialize, Deserialize, Clone)]
@@ -130,6 +130,10 @@ impl<'a> BalenaConfig {
         } else {
             panic!("The image path is not set in config");
         }
+    }
+
+    pub fn set_config_path(&mut self, config_path: &Path) {
+        self.config = Some(config_path.to_path_buf());
     }
 
     pub fn get_config_path(&'a self) -> &'a PathBuf {

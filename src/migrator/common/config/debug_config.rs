@@ -27,6 +27,10 @@ impl<'a> DebugConfig {
         }
     }
 
+    pub fn set_no_flash(&mut self, no_flash: bool) {
+        self.no_flash = Some(no_flash);
+    }
+
     pub fn is_no_flash(&self) -> bool {
         if let Some(val) = self.no_flash {
             val

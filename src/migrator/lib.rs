@@ -4,7 +4,7 @@
 extern crate nix;
 
 pub mod common;
-use common::assets::Assets;
+pub use common::assets::Assets;
 
 #[cfg(target_os = "windows")]
 mod mswin;

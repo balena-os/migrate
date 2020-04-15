@@ -164,6 +164,11 @@ impl BootManager for GrubBootManager {
             path_append(&boot_path.path, MIG_INITRD_NAME).as_path(),
         )?;
 
+        debug!(
+            "Required space: {}, free space: {}",
+            boot_req_space, boot_path.fs_free
+        );
+
         if boot_path.fs_free < boot_req_space {
             error!("The boot directory '{}' does not have enough space to store the migrate kernel and initramfs. Required space is {}",
                    boot_path.path.display(), format_size_with_unit(boot_req_space));
