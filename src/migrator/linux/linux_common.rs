@@ -561,7 +561,7 @@ pub(crate) fn get_fs_space<P: AsRef<Path>>(path: P) -> Result<(u64, u64), MigErr
         &format!("Failed to retrieve stats for path: '{}'", path.display()),
     ))?;
 
-    let blk_size = res.block_size();
+    let blk_size = res.block_size() as u64;
     trace!(
         "statvfs('{}') returned size: {}, free: {}",
         path.display(),

@@ -58,14 +58,23 @@ while [[ $# -gt 0 ]]; do
   shift
 done
 
+cd "$PROJECT_ROOT"
+
+
+
+BUILD_DIR="$PROJECT_ROOT/build_assets"
+if [ -d "$BUILD_DIR" ] ; then
+  verbose "deleting $BUILD_DIR"
+  sudo rm -rf "$BUILD_DIR"
+fi
+
+mkdir -p "$BUILD_DIR"
+BUILD_TMP="$BUILD_DIR/tmp"
+
 case $DEVICE_TYPE in
   intel-nuc)
-    cd "$PROJECT_ROOT"
     verbose "calling 'cross build --target=x86_64-unknown-linux-musl --release --bin balena-stage2'"
     cross build --target=x86_64-unknown-linux-musl --release --bin balena-stage2
-    BUILD_DIR="$PROJECT_ROOT/build_assets"
-    BUILD_TMP="$BUILD_DIR/tmp"
-    mkdir -p "$BUILD_DIR"
     verbose "Creating initrd in $BUILD_DIR"
     sudo $SCRIPT_DIR/mk_mig_config --no-copy-migrator --device $DEVICE_TYPE --target-dir $BUILD_TMP
     tar --exclude='*.yml' -czf $BUILD_DIR/assets.tgz -C $BUILD_TMP .
@@ -73,9 +82,23 @@ case $DEVICE_TYPE in
       verbose "deleting $PROJECT_ROOT/target/x86_64-unknown-linux-musl/release/balena-migrate"
       rm "$PROJECT_ROOT/target/x86_64-unknown-linux-musl/release/balena-migrate"
     fi
-    verbose "calling 'cross build --target=x86_64-unknown-linux-musl --release --bin balena-migrate --features $DEVICE_TYPE'"
-    cross build --target=x86_64-unknown-linux-musl --release --bin balena-migrate --features $DEVICE_TYPE
-    # sudo rm -rf "$BUILD_DIR"
+    verbose "calling 'cross build --target=x86_64-unknown-linux-musl --release --bin balena-migrate'"
+    cross build --target=x86_64-unknown-linux-musl --release --bin balena-migrate
+    ;;
+  raspberrypi3)
+    verbose "calling 'cross build --target=armv7-unknown-linux-musleabihf --release --bin balena-stage2'"
+    cross build --target=armv7-unknown-linux-musleabihf --release --bin balena-stage2
+
+    verbose "Creating initrd in $BUILD_DIR"
+    sudo $SCRIPT_DIR/mk_mig_config --no-copy-migrator --device $DEVICE_TYPE --target-dir $BUILD_TMP
+    tar --exclude='*.yml' -czf $BUILD_DIR/assets.tgz -C $BUILD_TMP .
+    if [ -f "$PROJECT_ROOT/target/armv7-unknown-linux-musleabihf/release/balena-migrate" ] ; then
+      verbose "deleting $PROJECT_ROOT/target/x86_64-unknown-linux-musl/release/balena-migrate"
+      rm "$PROJECT_ROOT/target/x86_64-unknown-linux-musl/release/balena-migrate"
+    fi
+
+    verbose "calling 'cross build --target=armv7-unknown-linux-musleabihf --release --bin balena-migrate'"
+    cross build --target=armv7-unknown-linux-musleabihf --release --bin balena-migrate
     ;;
     *)
       fail "please specify a valid device type"
