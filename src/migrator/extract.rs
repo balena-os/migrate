@@ -20,7 +20,7 @@ use serde_yaml;
 use crate::{
     common::{
         call,
-        config::balena_config::{FSDump, ImageType, PartDump},
+        config::{FSDump, ImageType, PartDump},
         path_append, MigErrCtx, MigError, MigErrorKind,
     },
     defs::FileType,

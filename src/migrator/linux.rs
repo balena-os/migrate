@@ -11,7 +11,7 @@ use crate::{
     common::{
         assets::Assets,
         backup, call,
-        config::balena_config::ImageType,
+        config::ImageType,
         device::Device,
         dir_exists, file_size, format_size_with_unit,
         migrate_info::MigrateInfo,
@@ -75,7 +75,7 @@ impl<'a> LinuxMigrator {
 
         let mut migrator = LinuxMigrator::try_init(config, assets)?;
 
-        match migrator.config.migrate.get_mig_mode() {
+        match migrator.config.get_mig_mode() {
             MigMode::Immediate => migrator.do_migrate(),
             MigMode::Pretend => {
                 Logger::flush();
@@ -92,9 +92,9 @@ impl<'a> LinuxMigrator {
     pub fn try_init(config: Config, assets: &Assets) -> Result<LinuxMigrator, MigError> {
         trace!("LinuxMigrator::try_init: entered");
 
-        info!("migrate mode: {:?}", config.migrate.get_mig_mode());
+        info!("migrate mode: {:?}", config.get_mig_mode());
 
-        let log_file = path_append(config.migrate.get_work_dir(), "stage1.log");
+        let log_file = path_append(config.get_work_dir(), "stage1.log");
 
         Logger::set_log_file(&LogDestination::Stderr, &log_file, true).context(
             MigErrCtx::from_remark(
@@ -121,7 +121,7 @@ impl<'a> LinuxMigrator {
         info!("balena-migrator for device type: {}", asset_ver.device);
         info!("balena-migrator kernel version: {}", asset_ver.kernel);
         info!("balena-migrator balena version: {}", asset_ver.balena);
-        assets.write_to(config.migrate.get_work_dir())?;
+        assets.write_to(config.get_work_dir())?;
 
         // **********************************************************************
         // Get os architecture & name & disk properties, check required paths
@@ -222,7 +222,7 @@ impl<'a> LinuxMigrator {
             format_size_with_unit(flash_dev_size)
         );
 
-        if let ImageType::FileSystems(ref fs_dump) = config.balena.get_image_path() {
+        if let ImageType::FileSystems(ref fs_dump) = config.get_image_path() {
             if fs_dump.device_slug != device.get_device_slug() {
                 error!(
                     "The device-slug of the image dump configuration differs from the detect device slug '{}' != '{}'",
@@ -292,13 +292,13 @@ impl<'a> LinuxMigrator {
 
         let backup_path = path_append(work_dir, BACKUP_FILE);
 
-        let has_backup =
-            self.stage2_config
-                .set_has_backup(if self.config.migrate.is_tar_internal() {
-                    backup::create(&backup_path, self.config.migrate.get_backup_volumes())?
-                } else {
-                    backup::create_ext(&backup_path, self.config.migrate.get_backup_volumes())?
-                });
+        let has_backup = self
+            .stage2_config
+            .set_has_backup(if self.config.is_tar_internal() {
+                backup::create(&backup_path, self.config.get_backup_volumes())?
+            } else {
+                backup::create_ext(&backup_path, self.config.get_backup_volumes())?
+            });
 
         // TODO: this might not be a smart place to put things, everything in system-connections
         // will end up in /mnt/boot/system-connections
@@ -402,22 +402,20 @@ impl<'a> LinuxMigrator {
         // *****************************************************************************************
         // Finish Stage2ConfigBuilder & create stage2 config file
 
-        if let Some(device) = self.config.debug.get_force_flash_device() {
+        if let Some(device) = self.config.get_force_flash_device() {
             warn!("Forcing flash device to '{}'", device.display());
             self.stage2_config
                 .set_force_flash_device(device.to_path_buf());
         }
 
-        self.stage2_config
-            .set_failmode(self.config.migrate.get_fail_mode());
+        self.stage2_config.set_failmode(self.config.get_fail_mode());
+
+        self.stage2_config.set_no_flash(self.config.is_no_flash());
 
         self.stage2_config
-            .set_no_flash(self.config.debug.is_no_flash());
+            .set_migrate_delay(self.config.get_delay());
 
-        self.stage2_config
-            .set_migrate_delay(self.config.migrate.get_delay());
-
-        if let Some(hacks) = self.config.debug.get_hacks() {
+        if let Some(hacks) = self.config.get_hacks() {
             self.stage2_config.set_hacks(hacks)
         }
 
@@ -430,13 +428,13 @@ impl<'a> LinuxMigrator {
         // TODO: setpath if on / mount else set mount
 
         self.stage2_config
-            .set_gzip_internal(self.config.debug.is_gzip_internal());
+            .set_gzip_internal(self.config.is_gzip_internal());
 
         self.stage2_config
-            .set_log_console(self.config.migrate.get_log_console());
+            .set_log_console(self.config.get_log_console());
 
         self.stage2_config
-            .set_log_level(String::from(self.config.migrate.get_log_level()));
+            .set_log_level(String::from(self.config.get_log_level()));
 
         if let Some(ref log_path) = self.mig_info.log_path {
             if log_path.device != boot_device.device_info.device {
@@ -459,7 +457,7 @@ impl<'a> LinuxMigrator {
         let s2_path = path_append(&boot_device.mountpoint, STAGE2_CFG_FILE);
         self.stage2_config.write_stage2_cfg_to(&s2_path)?;
 
-        if let Some(delay) = self.config.migrate.get_reboot() {
+        if let Some(delay) = self.config.get_reboot() {
             println!(
                 "Migration stage 1 was successfull, rebooting system in {} seconds",
                 *delay

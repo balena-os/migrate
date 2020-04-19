@@ -4,9 +4,7 @@ use regex::Regex;
 use std::fs::read_dir;
 use std::path::{Path, PathBuf};
 
-use crate::common::{
-    config::migrate_config::VolumeConfig, path_append, MigErrCtx, MigError, MigErrorKind,
-};
+use crate::common::{config::VolumeConfig, path_append, MigErrCtx, MigError, MigErrorKind};
 
 use crate::common::os_api::{OSApi, OSApiImpl};
 

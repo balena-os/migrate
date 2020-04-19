@@ -93,8 +93,8 @@ case $DEVICE_TYPE in
     sudo $SCRIPT_DIR/mk_mig_config --no-copy-migrator --device $DEVICE_TYPE --target-dir $BUILD_TMP
     tar --exclude='*.yml' -czf $BUILD_DIR/assets.tgz -C $BUILD_TMP .
     if [ -f "$PROJECT_ROOT/target/armv7-unknown-linux-musleabihf/release/balena-migrate" ] ; then
-      verbose "deleting $PROJECT_ROOT/target/x86_64-unknown-linux-musl/release/balena-migrate"
-      rm "$PROJECT_ROOT/target/x86_64-unknown-linux-musl/release/balena-migrate"
+      verbose "deleting $PROJECT_ROOT/target/armv7-unknown-linux-musleabihf/release/balena-migrate"
+      rm "$PROJECT_ROOT/target/armv7-unknown-linux-musleabihf/release/balena-migrate"
     fi
 
     verbose "calling 'cross build --target=armv7-unknown-linux-musleabihf --release --bin balena-migrate'"

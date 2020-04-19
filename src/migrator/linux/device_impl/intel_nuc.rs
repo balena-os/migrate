@@ -131,7 +131,7 @@ impl<'a> Device for IntelNuc {
     ) -> Result<(), MigError> {
         trace!("setup: entered");
 
-        let kernel_opts = if let Some(ref kernel_opts) = config.migrate.get_kernel_opts() {
+        let kernel_opts = if let Some(ref kernel_opts) = config.get_kernel_opts() {
             kernel_opts.clone()
         } else {
             String::from("")

@@ -179,7 +179,7 @@ impl BalenaCfgJson {
             return Err(MigError::displayed());
         }
 
-        if config.balena.is_check_api() {
+        if config.is_check_api() {
             let api_url = Url::parse(&self.config.api_endpoint).context(MigErrCtx::from_remark(
                 MigErrorKind::Upstream,
                 &format!(
@@ -196,9 +196,7 @@ impl BalenaCfgJson {
                     BALENA_API_PORT
                 };
 
-                if let Ok(_v) =
-                    check_tcp_connect(&api_host, api_port, config.balena.get_check_timeout())
-                {
+                if let Ok(_v) = check_tcp_connect(&api_host, api_port, config.get_check_timeout()) {
                     info!("connection to api: {}:{} is ok", api_host, api_port);
                 } else {
                     error!(
@@ -216,11 +214,11 @@ impl BalenaCfgJson {
             }
         }
 
-        if config.balena.is_check_vpn() {
+        if config.is_check_vpn() {
             if let Ok(_v) = check_tcp_connect(
                 &self.config.vpn_endpoint,
                 self.config.vpn_port as u16,
-                config.balena.get_check_timeout(),
+                config.get_check_timeout(),
             ) {
                 // TODO: call a command on API instead of just connecting
                 info!(

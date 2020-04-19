@@ -3,8 +3,8 @@ use std::path::{Path, PathBuf};
 
 use crate::{
     common::{
-        config::migrate_config::DeviceSpec, device_info::DeviceInfo, os_api::OSApi,
-        path_info::PathInfo, MigErrCtx, MigError, MigErrorKind,
+        config::DeviceSpec, device_info::DeviceInfo, os_api::OSApi, path_info::PathInfo, MigErrCtx,
+        MigError, MigErrorKind,
     },
     defs::{FileType, OSArch},
     linux::{

@@ -152,7 +152,7 @@ impl Device for RaspberryPi2 {
         config: &Config,
         s2_cfg: &mut Stage2ConfigBuilder,
     ) -> Result<(), MigError> {
-        let kernel_opts = if let Some(ref kernel_opts) = config.migrate.get_kernel_opts() {
+        let kernel_opts = if let Some(ref kernel_opts) = config.get_kernel_opts() {
             kernel_opts.clone()
         } else {
             String::from("")
@@ -247,7 +247,7 @@ impl Device for RaspberryPi3 {
         config: &Config,
         s2_cfg: &mut Stage2ConfigBuilder,
     ) -> Result<(), MigError> {
-        let kernel_opts = if let Some(ref kernel_opts) = config.migrate.get_kernel_opts() {
+        let kernel_opts = if let Some(ref kernel_opts) = config.get_kernel_opts() {
             kernel_opts.clone()
         } else {
             String::from("")
@@ -342,7 +342,7 @@ impl Device for RaspberryPi4_64 {
         config: &Config,
         s2_cfg: &mut Stage2ConfigBuilder,
     ) -> Result<(), MigError> {
-        let kernel_opts = if let Some(ref kernel_opts) = config.migrate.get_kernel_opts() {
+        let kernel_opts = if let Some(ref kernel_opts) = config.get_kernel_opts() {
             kernel_opts.clone()
         } else {
             String::from("")

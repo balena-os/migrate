@@ -7,7 +7,7 @@ use crate::defs::{MIG_INITRD_NAME, MIG_KERNEL_NAME};
 use crate::{
     common::{
         boot_manager::BootManager,
-        config::migrate_config::UEnvStrategy,
+        config::UEnvStrategy,
         migrate_info::MigrateInfo,
         stage2_config::{Stage2Config, Stage2ConfigBuilder},
         Config, MigError, MigErrorKind,
@@ -135,7 +135,7 @@ pub(crate) fn is_bb(
 }
 
 fn get_uboot_cfg(config: &Config, dev_type: DeviceType) -> (u8, UEnvStrategy) {
-    if let Some(uboot_cfg) = config.migrate.get_uboot_cfg() {
+    if let Some(uboot_cfg) = config.get_uboot_cfg() {
         let mmc_index = if let Some(mmc_index) = uboot_cfg.mmc_index {
             mmc_index
         } else {
@@ -251,7 +251,7 @@ impl Device for BeagleboneGreen {
         config: &Config,
         s2_cfg: &mut Stage2ConfigBuilder,
     ) -> Result<(), MigError> {
-        let kernel_opts = if let Some(ref kopts) = config.migrate.get_kernel_opts() {
+        let kernel_opts = if let Some(ref kopts) = config.get_kernel_opts() {
             let mut new_opts: String = kopts.clone();
             new_opts.push(' ');
             new_opts.push_str(BBG_KOPTS);
@@ -459,7 +459,7 @@ impl<'a> Device for BeagleboardXM {
         config: &Config,
         s2_cfg: &mut Stage2ConfigBuilder,
     ) -> Result<(), MigError> {
-        let kernel_opts = if let Some(ref kopts) = config.migrate.get_kernel_opts() {
+        let kernel_opts = if let Some(ref kopts) = config.get_kernel_opts() {
             let mut new_opts: String = kopts.clone();
             new_opts.push(' ');
             new_opts.push_str(BBXM_KOPTS);
