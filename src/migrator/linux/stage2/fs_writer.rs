@@ -12,6 +12,7 @@ use std::thread;
 use std::time::{Duration, SystemTime};
 
 use crate::defs::PART_FSTYPE;
+use crate::linux::linux_common::ioc_part_reread;
 use crate::{
     common::{
         call, call_with_stdin,
@@ -23,7 +24,7 @@ use crate::{
     defs::{DEF_BLOCK_SIZE, PART_NAME},
     linux::{
         linux_common::whereis,
-        linux_defs::{EXT_FMT_CMD, FAT_FMT_CMD, LSBLK_CMD, PARTPROBE_CMD, SFDISK_CMD, TAR_CMD},
+        linux_defs::{EXT_FMT_CMD, FAT_FMT_CMD, LSBLK_CMD, SFDISK_CMD, TAR_CMD},
         lsblk_info::block_device::BlockDevice,
         stage2::{mounts::Mounts, FlashResult},
     },
@@ -66,17 +67,6 @@ pub(crate) fn write_balena_os(
         });
 
     // optional
-    match whereis(PARTPROBE_CMD) {
-        Ok(path) => {
-            cmd_path.insert(PARTPROBE_CMD, path);
-        }
-        Err(why) => {
-            error!(
-                "write_balena_os: Could not find {} executable: {:?}, tolerating it",
-                PARTPROBE_CMD, why
-            );
-        }
-    }
 
     if !result {
         return FlashResult::FailRecoverable;
@@ -699,7 +689,7 @@ fn part_reread(
     device: &Path,
     timeout: u64,
     num_partitions: usize,
-    cmd_path: &HashMap<&str, String>,
+    _cmd_path: &HashMap<&str, String>,
 ) -> Result<BlockDevice, MigError> {
     debug!(
         "part_reread: entered with: '{}', timeout: {}, num_partitions: {}",
@@ -711,26 +701,7 @@ fn part_reread(
     let start = SystemTime::now();
     thread::sleep(Duration::from_secs(1));
 
-    if let Some(cmd) = cmd_path.get(PARTPROBE_CMD) {
-        match call(&cmd, &[&device.to_string_lossy()], true) {
-            Ok(cmd_res) => {
-                if !cmd_res.status.success() {
-                    warn!(
-                        "part_reread: partprobe returned: stderr: '{}'",
-                        cmd_res.stderr
-                    );
-                } else {
-                    debug!(
-                        "part_reread: partprobe returned: stdout '{}'",
-                        cmd_res.stdout
-                    );
-                }
-            }
-            Err(why) => {
-                debug!("part_reread: partprobe failed to execute '{}'", why);
-            }
-        }
-    }
+    let _res = ioc_part_reread(&device);
 
     loop {
         thread::sleep(Duration::from_secs(1));
