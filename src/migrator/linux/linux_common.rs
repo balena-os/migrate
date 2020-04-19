@@ -3,11 +3,12 @@ use failure::ResultExt;
 use lazy_static::lazy_static;
 use log::{debug, error, info, trace, warn};
 use regex::{Regex, RegexBuilder};
-use std::fs::{copy, read_link, read_to_string};
+use std::fs::{copy, read_link, read_to_string, OpenOptions};
 use std::mem::MaybeUninit;
 use std::path::{Path, PathBuf};
 
 use libc::getuid;
+use std::os::unix::io::AsRawFd;
 
 use crate::{
     common::{call, file_exists, parse_file, path_append, MigErrCtx, MigError, MigErrorKind},
@@ -26,6 +27,13 @@ use nix::{
     mount::{mount, MsFlags},
     sys::statvfs::statvfs,
 };
+
+use nix::{ioc, ioctl_none};
+
+const BLK_IOC_MAGIC: u8 = 0x12;
+const BLK_RRPART: u8 = 95;
+
+ioctl_none!(blk_reread, BLK_IOC_MAGIC, BLK_RRPART);
 
 const MOKUTIL_ARGS_SB_STATE: [&str; 1] = ["--sb-state"];
 
@@ -730,5 +738,42 @@ pub(crate) fn is_file_type<P: AsRef<Path>>(file: P, ftype: &FileType) -> Result<
             MigErrorKind::NotFound,
             &format!("File could not be found: '{}'", file.as_ref().display()),
         ))
+    }
+}
+
+pub fn ioc_part_reread(device: &Path) -> Result<i32, MigError> {
+    // try ioctrl #define BLKRRPART  _IO(0x12,95)	/* re-read partition table */
+    match OpenOptions::new()
+        .read(true)
+        .write(true)
+        .create(false)
+        .open(device)
+    {
+        Ok(file) => match unsafe { blk_reread(file.as_raw_fd()) } {
+            Ok(res) => {
+                debug!(
+                    "Device BLKRRPART IOCTRL to '{}' returned {}",
+                    device.display(),
+                    res
+                );
+                Ok(res)
+            }
+            Err(why) => {
+                error!(
+                    "Device BLKRRPART IOCTRL to '{}' failed with error: {:?}",
+                    device.display(),
+                    why
+                );
+                Err(MigError::displayed())
+            }
+        },
+        Err(why) => {
+            error!(
+                "Failed to open device '{}', error: {:?}",
+                device.display(),
+                why
+            );
+            Err(MigError::displayed())
+        }
     }
 }

@@ -12,10 +12,11 @@ use std::str;
 use std::thread;
 use std::time::{Duration, Instant};
 
+use crate::linux::linux_common::ioc_part_reread;
 use crate::{
     common::{call, format_size_with_unit, stage2_config::Stage2Config},
     linux::{
-        linux_defs::{DD_CMD, GZIP_CMD, PARTPROBE_CMD, UDEVADM_CMD},
+        linux_defs::{DD_CMD, GZIP_CMD, UDEVADM_CMD},
         linux_defs::{POST_PARTPROBE_WAIT_SECS, PRE_PARTPROBE_WAIT_SECS},
         stage2::{mounts::Mounts, FlashResult},
     },
@@ -51,7 +52,8 @@ pub(crate) fn flash_balena_os(
 
     thread::sleep(Duration::from_secs(PRE_PARTPROBE_WAIT_SECS));
 
-    let _res = call(PARTPROBE_CMD, &[&target_path.to_string_lossy()], true);
+    let _res = ioc_part_reread(&target_path);
+    //let _res = call(PARTPROBE_CMD, &[&target_path.to_string_lossy()], true);
 
     thread::sleep(Duration::from_secs(POST_PARTPROBE_WAIT_SECS));
 
