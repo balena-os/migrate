@@ -15,7 +15,7 @@ use crate::defs::PART_FSTYPE;
 use crate::{
     common::{
         call, call_with_stdin,
-        config::balena_config::PartCheck,
+        config::PartCheck,
         file_exists, path_append,
         stage2_config::{CheckedFSDump, CheckedImageType, Stage2Config},
         MigErrCtx, MigError, MigErrorKind,

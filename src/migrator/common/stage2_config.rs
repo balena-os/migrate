@@ -13,8 +13,8 @@ const EMPTY_BACKUPS: &[BackupCfg] = &[];
 
 use crate::{
     common::{
-        config::balena_config::PartCheck, file_info::RelFileInfo, path_info::PathInfo, MigErrCtx,
-        MigError, MigErrorKind,
+        config::PartCheck, file_info::RelFileInfo, path_info::PathInfo, MigErrCtx, MigError,
+        MigErrorKind,
     },
     defs::DeviceSpec,
     defs::{BootType, DeviceType, FailMode},

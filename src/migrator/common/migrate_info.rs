@@ -4,10 +4,7 @@ use std::path::Path;
 
 use crate::{
     common::{
-        config::{
-            balena_config::{ImageType, PartDump},
-            migrate_config::MigrateWifis,
-        },
+        config::{ImageType, MigrateWifis, PartDump},
         file_info::RelFileInfo,
         os_api::{OSApi, OSApiImpl},
         path_info::PathInfo,
@@ -91,7 +88,7 @@ impl MigrateInfo {
         debug!("new: entered");
         let os_api = OSApiImpl::new()?;
         let os_arch = os_api.get_os_arch()?;
-        let work_path = os_api.path_info_from_path(config.migrate.get_work_dir())?;
+        let work_path = os_api.path_info_from_path(config.get_work_dir())?;
         let work_dir = &work_path.path;
 
         info!(
@@ -101,11 +98,11 @@ impl MigrateInfo {
             work_path.device_info.device
         );
 
-        if let Some(md5_sums) = config.migrate.get_md5_sums() {
+        if let Some(md5_sums) = config.get_md5_sums() {
             MigrateInfo::check_md5(&work_path.path, &md5_sums)?
         }
 
-        let log_info = if let Some(log_dev) = config.migrate.get_log_device() {
+        let log_info = if let Some(log_dev) = config.get_log_device() {
             debug!("Checking log device: '{:?}'", log_dev);
             match os_api.device_info_from_devspec(log_dev) {
                 Ok(dev_info) => {
@@ -124,9 +121,9 @@ impl MigrateInfo {
             None
         };
 
-        debug!("Checking image files: {:?}", config.balena.get_image_path());
+        debug!("Checking image files: {:?}", config.get_image_path());
 
-        let os_image = match config.balena.get_image_path() {
+        let os_image = match config.get_image_path() {
             ImageType::Flasher(ref flasher_img) => {
                 let checked_ref =
                     MigrateInfo::check_file(&flasher_img, &FileType::GZipOSImage, &work_path)?;
@@ -165,12 +162,9 @@ impl MigrateInfo {
             }
         };
 
-        debug!(
-            "Checking config.json: '{:?}'",
-            config.balena.get_config_path()
-        );
+        debug!("Checking config.json: '{:?}'", config.get_config_path());
         let config_file = if let Some(file_info) =
-            FileInfo::new(config.balena.get_config_path(), &work_dir)?
+            FileInfo::new(config.get_config_path(), &work_dir)?
         {
             if file_info.rel_path.is_none() {
                 error!("The balena OS config was found outside of the working directory. This setup is not supported");
@@ -210,7 +204,7 @@ impl MigrateInfo {
 
         let mut nwmgr_files: Vec<FileInfo> = Vec::new();
 
-        for file in config.migrate.get_nwmgr_files() {
+        for file in config.get_nwmgr_files() {
             if let Some(file_info) = FileInfo::new(file.clone(), &work_dir)? {
                 os_api.expect_type(&file_info.path, &FileType::Text)?;
                 info!(
@@ -227,7 +221,7 @@ impl MigrateInfo {
             }
         }
 
-        let wifi_cfg = config.migrate.get_wifis();
+        let wifi_cfg = config.get_wifis();
         let wifis: Vec<WifiConfig> = if MigrateWifis::None != wifi_cfg {
             // **********************************************************************
             // ** migrate wifi config
@@ -256,7 +250,7 @@ impl MigrateInfo {
             Vec::new()
         };
 
-        if nwmgr_files.is_empty() && wifis.is_empty() && config.migrate.require_nwmgr_configs() {
+        if nwmgr_files.is_empty() && wifis.is_empty() && config.require_nwmgr_configs() {
             error!(
                 "No Network manager files were found, the device might not be able to come online"
             );

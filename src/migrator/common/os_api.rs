@@ -3,9 +3,7 @@ use std::path::{Path, PathBuf};
 use std::sync::{Arc, Mutex, MutexGuard, Once};
 
 use crate::{
-    common::{
-        config::migrate_config::DeviceSpec, device_info::DeviceInfo, path_info::PathInfo, MigError,
-    },
+    common::{config::DeviceSpec, device_info::DeviceInfo, path_info::PathInfo, MigError},
     defs::{FileType, OSArch},
 };
 
@@ -141,11 +139,7 @@ impl OSApi for OSApiImpl {
     }
 
     fn path_info_for_efi(&self) -> Result<PathInfo, MigError> {
-        self.init()?
-            .api_impl
-            .as_ref()
-            .unwrap()
-            .path_info_for_efi()
+        self.init()?.api_impl.as_ref().unwrap().path_info_for_efi()
     }
 
     fn to_linux_path<P: AsRef<Path>>(&self, path: P) -> Result<PathBuf, MigError> {
