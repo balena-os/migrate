@@ -146,11 +146,19 @@ pub(crate) struct FileRef {
     pub hash: Option<HashInfo>,
 }
 
+#[derive(Debug, Serialize, Deserialize, Clone)]
+pub(crate) enum ImageSource {
+    #[serde(rename = "file")]
+    File(PathBuf),
+    #[serde(rename = "version")]
+    Version(String),
+}
+
 #[allow(clippy::large_enum_variant)] //TODO refactor to remove clippy warning
 #[derive(Debug, Serialize, Deserialize, Clone)]
 pub(crate) enum ImageType {
     #[serde(rename = "dd")]
-    Flasher(PathBuf),
+    Flasher(ImageSource),
     #[serde(rename = "fs")]
     FileSystems(FSDump),
 }
@@ -204,6 +212,12 @@ impl<'a> Config {
                     .long("mode")
                     .value_name("MODE")
                     .help("Mode of operation - extract, agent, immediate or pretend"),
+            )
+            .arg(
+                Arg::with_name("version")
+                    .long("version")
+                    .value_name("VERSION")
+                    .help("Select balena OS image version for download"),
             )
             .arg(
                 Arg::with_name("image")
@@ -386,7 +400,13 @@ impl<'a> Config {
 
         if arg_matches.is_present("image") {
             if let Some(image) = arg_matches.value_of("image") {
-                config.set_image_path(image);
+                config.set_image_path(ImageSource::File(PathBuf::from(image)));
+            }
+        }
+
+        if arg_matches.is_present("version") {
+            if let Some(version) = arg_matches.value_of("version") {
+                config.set_image_path(ImageSource::Version(version.to_string()));
             }
         }
 
@@ -471,13 +491,16 @@ impl<'a> Config {
         }
 
         if let MigMode::Immediate = mode {
-            if self.image.is_none() {
-                return Err(MigError::from_remark(
-                    MigErrorKind::InvParam,
-                    "check: no balena OS image was specified in mode: IMMEDIATE",
-                ));
-            }
+            /*            if self.image.is_none() {
+                            // TODO: download & possibly process image
 
+
+                            return Err(MigError::from_remark(
+                                MigErrorKind::InvParam,
+                                "check: no balena OS image was specified in mode: IMMEDIATE",
+                            ));
+                        }
+            */
             if self.config.is_none() {
                 return Err(MigError::from_remark(
                     MigErrorKind::InvParam,
@@ -683,17 +706,17 @@ impl<'a> Config {
         }
     }
 
-    pub fn set_image_path(&mut self, image_path: &str) {
-        self.image = Some(ImageType::Flasher(PathBuf::from(image_path)));
+    pub fn set_image_path(&mut self, image_path: ImageSource) {
+        self.image = Some(ImageType::Flasher(image_path));
     }
 
     // The following functions can only be safely called after check has succeeded
 
-    pub fn get_image_path(&'a self) -> &'a ImageType {
-        if let Some(ref path) = self.image {
-            path
+    pub fn get_image_path(&'a self) -> ImageType {
+        if let Some(ref image) = self.image {
+            image.clone()
         } else {
-            panic!("The image path is not set in config");
+            ImageType::Flasher(ImageSource::Version(String::from("latest")))
         }
     }
 
@@ -810,13 +833,17 @@ mod tests {
         assert_eq!(config.require_nwmgr_configs(), false);
 
         if let ImageType::Flasher(comp) = config.get_image_path() {
-            assert_eq!(
-                comp,
-                &PathBuf::from("balena-cloud-bobdev-intel-nuc-2.39.0+rev3-dev-v10.0.3.img.gz")
-            );
+            if let ImageSource::File(file) = comp {
+                assert_eq!(
+                    file,
+                    PathBuf::from("balena-cloud-bobdev-intel-nuc-2.39.0+rev3-dev-v10.0.3.img.gz")
+                );
+            } else {
+                panic!("Invalid image type");
+            }
         } else {
             panic!("Invalid image type");
-        };
+        }
 
         assert_eq!(config.get_config_path(), &PathBuf::from("config.json"));
 

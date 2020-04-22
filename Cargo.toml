@@ -32,7 +32,7 @@ tar = "*"
 digest = "0.8"
 sha-1 = "0.8"
 md-5 = "0.8"
-
+reqwest = { version = "0.10" , features = ["blocking", "json"] }
 
 [target.'cfg(unix)'.dependencies]
 libc = { git = "https://github.com/rust-lang/libc" }

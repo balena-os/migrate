@@ -244,6 +244,17 @@ impl BalenaCfgJson {
     pub fn get_rel_path(&self) -> &PathBuf {
         &self.file.rel_path
     }
+
+    pub fn get_api_key(&self) -> Option<String> {
+        if let Some(ref api_key) = self.config.api_key {
+            Some(api_key.clone())
+        } else {
+            None
+        }
+    }
+    pub fn get_api_endpoint(&self) -> String {
+        self.config.api_endpoint.clone()
+    }
 }
 
 #[cfg(test)]

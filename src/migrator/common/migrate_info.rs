@@ -4,7 +4,7 @@ use std::path::Path;
 
 use crate::{
     common::{
-        config::{ImageType, MigrateWifis, PartDump},
+        config::{ImageSource, ImageType, MigrateWifis, PartDump},
         file_info::RelFileInfo,
         os_api::{OSApi, OSApiImpl},
         path_info::PathInfo,
@@ -40,7 +40,7 @@ pub(crate) struct MigrateInfo {
     pub nwmgr_files: Vec<FileInfo>,
     pub wifis: Vec<WifiConfig>,
 
-    pub image_file: CheckedImageType,
+    image_file: Option<CheckedImageType>,
     pub config_file: BalenaCfgJson,
     // pub digests: HashMap<PathBuf, HashInfo>,
 }
@@ -119,47 +119,6 @@ impl MigrateInfo {
             }
         } else {
             None
-        };
-
-        debug!("Checking image files: {:?}", config.get_image_path());
-
-        let os_image = match config.get_image_path() {
-            ImageType::Flasher(ref flasher_img) => {
-                let checked_ref =
-                    MigrateInfo::check_file(&flasher_img, &FileType::GZipOSImage, &work_path)?;
-
-                CheckedImageType::Flasher(checked_ref)
-            }
-            ImageType::FileSystems(ref fs_dump) => {
-                // make sure all files are present and in workdir
-                CheckedImageType::FileSystems(CheckedFSDump {
-                    device_slug: fs_dump.device_slug.clone(),
-                    check: fs_dump.check.clone(),
-                    max_data: fs_dump.max_data,
-                    mkfs_direct: fs_dump.mkfs_direct,
-                    extended_blocks: fs_dump.extended_blocks,
-                    boot: CheckedPartDump {
-                        archive: MigrateInfo::check_dump(&fs_dump.boot, &work_path)?,
-                        blocks: fs_dump.boot.blocks,
-                    },
-                    root_a: CheckedPartDump {
-                        archive: MigrateInfo::check_dump(&fs_dump.root_a, &work_path)?,
-                        blocks: fs_dump.root_a.blocks,
-                    },
-                    root_b: CheckedPartDump {
-                        archive: MigrateInfo::check_dump(&fs_dump.root_b, &work_path)?,
-                        blocks: fs_dump.root_b.blocks,
-                    },
-                    state: CheckedPartDump {
-                        archive: MigrateInfo::check_dump(&fs_dump.state, &work_path)?,
-                        blocks: fs_dump.state.blocks,
-                    },
-                    data: CheckedPartDump {
-                        archive: MigrateInfo::check_dump(&fs_dump.data, &work_path)?,
-                        blocks: fs_dump.data.blocks,
-                    },
-                })
-            }
         };
 
         debug!("Checking config.json: '{:?}'", config.get_config_path());
@@ -262,7 +221,7 @@ impl MigrateInfo {
             os_arch,
             work_path,
             log_path: log_info,
-            image_file: os_image,
+            image_file: None,
             nwmgr_files,
             config_file,
             wifis,
@@ -271,6 +230,66 @@ impl MigrateInfo {
         debug!("MigrateInfo: {:?}", result);
 
         Ok(result)
+    }
+
+    pub fn set_os_image(&mut self, img_path: &ImageType) -> Result<(), MigError> {
+        debug!("Checking image files: {:?}", img_path);
+
+        self.image_file = Some(match img_path {
+            ImageType::Flasher(ref flasher_img) => {
+                if let ImageSource::File(ref flasher_img) = flasher_img {
+                    let checked_ref = MigrateInfo::check_file(
+                        &flasher_img,
+                        &FileType::GZipOSImage,
+                        &self.work_path,
+                    )?;
+
+                    CheckedImageType::Flasher(checked_ref)
+                } else {
+                    error!("Invalid image type '{:?}' for set_os_image", img_path);
+                    return Err(MigError::displayed());
+                }
+            }
+            ImageType::FileSystems(ref fs_dump) => {
+                // make sure all files are present and in workdir
+                CheckedImageType::FileSystems(CheckedFSDump {
+                    device_slug: fs_dump.device_slug.clone(),
+                    check: fs_dump.check.clone(),
+                    max_data: fs_dump.max_data,
+                    mkfs_direct: fs_dump.mkfs_direct,
+                    extended_blocks: fs_dump.extended_blocks,
+                    boot: CheckedPartDump {
+                        archive: MigrateInfo::check_dump(&fs_dump.boot, &self.work_path)?,
+                        blocks: fs_dump.boot.blocks,
+                    },
+                    root_a: CheckedPartDump {
+                        archive: MigrateInfo::check_dump(&fs_dump.root_a, &self.work_path)?,
+                        blocks: fs_dump.root_a.blocks,
+                    },
+                    root_b: CheckedPartDump {
+                        archive: MigrateInfo::check_dump(&fs_dump.root_b, &self.work_path)?,
+                        blocks: fs_dump.root_b.blocks,
+                    },
+                    state: CheckedPartDump {
+                        archive: MigrateInfo::check_dump(&fs_dump.state, &self.work_path)?,
+                        blocks: fs_dump.state.blocks,
+                    },
+                    data: CheckedPartDump {
+                        archive: MigrateInfo::check_dump(&fs_dump.data, &self.work_path)?,
+                        blocks: fs_dump.data.blocks,
+                    },
+                })
+            }
+        });
+        Ok(())
+    }
+
+    pub fn get_os_image(&self) -> CheckedImageType {
+        if let Some(ref os_image) = self.image_file {
+            os_image.clone()
+        } else {
+            panic!("OS Image was not set");
+        }
     }
 
     fn check_dump(dump: &PartDump, work_path: &PathInfo) -> Result<RelFileInfo, MigError> {
@@ -327,5 +346,13 @@ impl MigrateInfo {
             error!("The balena file: '{}' can not be accessed.", file.display());
             Err(MigError::displayed())
         }
+    }
+
+    pub fn get_api_key(&self) -> Option<String> {
+        self.config_file.get_api_key()
+    }
+
+    pub fn get_api_endpoint(&self) -> String {
+        self.config_file.get_api_endpoint()
     }
 }
