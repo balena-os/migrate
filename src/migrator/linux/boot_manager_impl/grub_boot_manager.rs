@@ -138,7 +138,15 @@ impl BootManager for GrubBootManager {
             grub_version.0, grub_version.1
         );
 
-        if grub_version.0 < GRUB_MIN_VERSION.parse().unwrap() {
+        if grub_version
+            .0
+            .parse::<u8>()
+            .context(MigErrCtx::from_remark(
+                MigErrorKind::Upstream,
+                &format!("Failed to parse grub version string: {}", grub_version.0),
+            ))?
+            < GRUB_MIN_VERSION
+        {
             error!("Your version of grub-install ({}.{}) is not supported. balena-migrate requires grub version 2 or higher.", grub_version.0, grub_version.1);
             return Ok(false);
         }

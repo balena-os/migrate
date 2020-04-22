@@ -11,9 +11,10 @@ use crate::{
     common::{
         assets::Assets,
         backup, call,
-        config::ImageType,
+        config::{ImageSource, ImageType},
         device::Device,
         dir_exists, file_size, format_size_with_unit,
+        image_retrieval::download_image,
         migrate_info::MigrateInfo,
         path_append,
         stage2_config::{MountConfig, PathType, Stage2ConfigBuilder},
@@ -127,7 +128,7 @@ impl<'a> LinuxMigrator {
         // Get os architecture & name & disk properties, check required paths
         // find wifis etc..
 
-        let mig_info = match MigrateInfo::new(&config) {
+        let mut mig_info = match MigrateInfo::new(&config) {
             Ok(mig_info) => {
                 info!(
                     "OS Architecture is {}, OS Name is '{}'",
@@ -186,6 +187,31 @@ impl<'a> LinuxMigrator {
             return Err(MigError::displayed());
         }
 
+        let os_image = config.get_image_path();
+        match &os_image {
+            ImageType::Flasher(flasher_img) => match flasher_img {
+                ImageSource::Version(img_ver) => {
+                    let img_file =
+                        download_image(&mut mig_info, device.get_device_slug(), &img_ver)?;
+                    mig_info.set_os_image(&ImageType::Flasher(ImageSource::File(img_file)))?;
+                }
+                ImageSource::File(_) => {
+                    mig_info.set_os_image(&os_image)?;
+                }
+            },
+            ImageType::FileSystems(fs_dump) => {
+                if fs_dump.device_slug != device.get_device_slug() {
+                    error!(
+                        "The device-slug of the image dump configuration differs from the detect device slug '{}' != '{}'",
+                        fs_dump.device_slug,
+                        device.get_device_slug()
+                    );
+                    return Err(MigError::from(MigErrorKind::Displayed));
+                }
+                mig_info.set_os_image(&os_image)?;
+            }
+        }
+
         match mig_info
             .config_file
             .check(&config, device.get_device_slug())
@@ -221,17 +247,6 @@ impl<'a> LinuxMigrator {
             flash_device,
             format_size_with_unit(flash_dev_size)
         );
-
-        if let ImageType::FileSystems(ref fs_dump) = config.get_image_path() {
-            if fs_dump.device_slug != device.get_device_slug() {
-                error!(
-                    "The device-slug of the image dump configuration differs from the detect device slug '{}' != '{}'",
-                    fs_dump.device_slug,
-                    device.get_device_slug()
-                );
-                return Err(MigError::from(MigErrorKind::Displayed));
-            }
-        }
 
         // TODO: check available space for work files here if work is not on a distinct partition
 
@@ -352,7 +367,7 @@ impl<'a> LinuxMigrator {
             format_size_with_unit(mem_tot),
         );
 
-        let mut required_size: u64 = self.mig_info.image_file.get_required_space();
+        let mut required_size: u64 = self.mig_info.get_os_image().get_required_space();
 
         required_size += self.mig_info.config_file.get_size();
 
@@ -420,7 +435,7 @@ impl<'a> LinuxMigrator {
         }
 
         self.stage2_config
-            .set_balena_image(self.mig_info.image_file.clone());
+            .set_balena_image(self.mig_info.get_os_image());
 
         self.stage2_config
             .set_balena_config(self.mig_info.config_file.get_rel_path().clone());
