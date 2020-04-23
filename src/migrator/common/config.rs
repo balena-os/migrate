@@ -716,7 +716,7 @@ impl<'a> Config {
         if let Some(ref image) = self.image {
             image.clone()
         } else {
-            ImageType::Flasher(ImageSource::Version(String::from("latest")))
+            ImageType::Flasher(ImageSource::Version(String::from("default")))
         }
     }
 

@@ -4,6 +4,7 @@ use std::path::{Path, PathBuf};
 
 use failure::ResultExt;
 use log::debug;
+
 use reqwest::{blocking::Client, header};
 use serde::{Deserialize, Serialize};
 
@@ -16,8 +17,9 @@ const OS_VERSION_URL_P2: &str = "/images";
 const OS_IMG_URL: &str = "/download";
 
 #[derive(Debug, Serialize, Deserialize)]
-struct Versions {
-    versions: Vec<String>,
+pub(crate) struct Versions {
+    pub versions: Vec<String>,
+    pub latest: String,
 }
 
 #[derive(Debug, Serialize, Deserialize)]
@@ -33,7 +35,7 @@ pub(crate) fn get_os_versions(
     api_endpoint: &str,
     api_key: &str,
     device: &str,
-) -> Result<Vec<String>, MigError> {
+) -> Result<Versions, MigError> {
     let mut headers = header::HeaderMap::new();
     headers.insert(
         header::AUTHORIZATION,
@@ -47,6 +49,8 @@ pub(crate) fn get_os_versions(
         "{}{}{}{}",
         api_endpoint, OS_VERSION_URL_P1, device, OS_VERSION_URL_P2
     );
+
+    debug!("get_os_versions: request_url: '{}'", request_url);
 
     let res = Client::builder()
         .default_headers(headers)
@@ -66,12 +70,10 @@ pub(crate) fn get_os_versions(
 
     let status = res.status();
     if status == 200 {
-        let versions = res.json::<Versions>().context(MigErrCtx::from_remark(
+        Ok(res.json::<Versions>().context(MigErrCtx::from_remark(
             MigErrorKind::Upstream,
             "Failed to parse request results",
-        ))?;
-
-        Ok(versions.versions)
+        ))?)
     } else {
         Err(MigError::from_remark(
             MigErrorKind::InvState,
@@ -104,6 +106,9 @@ pub(crate) fn get_os_image(
         file_type: String::from(".gz"),
     };
 
+    debug!("get_os_image: request_url: '{}'", request_url);
+    debug!("get_os_image: data: '{:?}'", post_data);
+
     let mut res = Client::builder()
         .default_headers(headers)
         .build()
@@ -121,14 +126,20 @@ pub(crate) fn get_os_image(
 
     debug!("Result = {:?}", res);
 
+    /* just results in filename "download"
     let file_name = res
         .url()
         .path_segments()
         .and_then(|segments| segments.last())
         .and_then(|name| if name.is_empty() { None } else { Some(name) })
         .unwrap_or("balen-os.img.gz");
+    */
 
-    let file_name = path_append(target_dir, file_name);
+    let file_name = path_append(
+        target_dir,
+        &format!("balena-cloud-{}-{}.img.gz", device, version),
+    );
+
     debug!("Downloading file '{}'", file_name.display());
     let mut file = File::create(&file_name).context(MigErrCtx::from_remark(
         MigErrorKind::Upstream,
