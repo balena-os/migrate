@@ -180,7 +180,14 @@ impl BeagleboneGreen {
             &FileType::InitRD,
         )?;
 
-        if let Some(_idx) = SUPPORTED_OSSES.iter().position(|&r| r == os_name) {
+        let os_supported = config.is_no_os_check()
+            || if let Some(_n) = SUPPORTED_OSSES.iter().position(|&r| r == os_name) {
+                true
+            } else {
+                false
+            };
+
+        if os_supported {
             // TODO: make this configurable
 
             let (mmc_index, strategy) = get_uboot_cfg(config, DeviceType::BeagleboneGreen);
@@ -395,7 +402,14 @@ impl BeagleboardXM {
             &FileType::InitRD,
         )?;
 
-        if let Some(_idx) = SUPPORTED_OSSES.iter().position(|&r| r == os_name) {
+        let os_supported = config.is_no_os_check()
+            || if let Some(_n) = SUPPORTED_OSSES.iter().position(|&r| r == os_name) {
+                true
+            } else {
+                false
+            };
+
+        if os_supported {
             let (mmc_index, strategy) = get_uboot_cfg(config, DeviceType::BeagleboardXM);
 
             let mut dtb_files: Vec<String> = Vec::new();
