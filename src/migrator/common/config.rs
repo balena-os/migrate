@@ -198,6 +198,7 @@ pub(crate) struct Config {
     hacks: Option<Vec<String>>,
 
     gzip_internal: Option<bool>,
+    no_os_check: Option<bool>,
 }
 
 impl<'a> Config {
@@ -263,6 +264,11 @@ impl<'a> Config {
                     .short("v")
                     .multiple(true)
                     .help("Set the level of verbosity"),
+            )
+            .arg(
+                Arg::with_name("no-os-check")
+                    .long("no-os-check")
+                    .help("Do not fail on un-tested OS version"),
             )
             .get_matches();
 
@@ -445,6 +451,7 @@ impl<'a> Config {
             no_flash: None,
             hacks: None,
             gzip_internal: None,
+            no_os_check: None,
         }
     }
 
@@ -754,6 +761,14 @@ impl<'a> Config {
             val
         } else {
             true
+        }
+    }
+
+    pub fn is_no_os_check(&self) -> bool {
+        if let Some(val) = self.no_os_check {
+            val
+        } else {
+            false
         }
     }
 

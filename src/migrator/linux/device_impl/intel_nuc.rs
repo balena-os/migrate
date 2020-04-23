@@ -51,7 +51,14 @@ impl IntelNuc {
             &FileType::InitRD,
         )?;
 
-        if SUPPORTED_OSSES.iter().position(|&r| r == os_name).is_none() {
+        let os_supported = config.is_no_os_check()
+            || if let Some(_n) = SUPPORTED_OSSES.iter().position(|&r| r == os_name) {
+                true
+            } else {
+                false
+            };
+
+        if !os_supported {
             let message = format!(
                 "The OS '{}' is not supported for device type IntelNuc",
                 os_name,

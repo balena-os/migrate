@@ -103,8 +103,14 @@ impl RaspberryPi2 {
             &path_append(&mig_info.work_path.path, MIG_INITRD_NAME),
             &FileType::InitRD,
         )?;
+        let os_supported = config.is_no_os_check()
+            || if let Some(_n) = SUPPORTED_OSSES.iter().position(|&r| r == os_name) {
+                true
+            } else {
+                false
+            };
 
-        if let Some(_n) = SUPPORTED_OSSES.iter().position(|&r| r == os_name) {
+        if os_supported {
             let mut dtb_files: Vec<String> = Vec::new();
             let _res = RPI2_DTB_FILES.iter().all(|f| {
                 dtb_files.push(String::from(*f));
@@ -199,7 +205,14 @@ impl RaspberryPi3 {
             &FileType::InitRD,
         )?;
 
-        if let Some(_n) = SUPPORTED_OSSES.iter().position(|&r| r == os_name) {
+        let os_supported = config.is_no_os_check()
+            || if let Some(_n) = SUPPORTED_OSSES.iter().position(|&r| r == os_name) {
+                true
+            } else {
+                false
+            };
+
+        if os_supported {
             let mut dtb_files: Vec<String> = Vec::new();
             let _res = RPI3_DTB_FILES.iter().all(|f| {
                 dtb_files.push(String::from(*f));
@@ -294,7 +307,14 @@ impl RaspberryPi4_64 {
             &FileType::InitRD,
         )?;
 
-        if let Some(_n) = SUPPORTED_OSSES.iter().position(|&r| r == os_name) {
+        let os_supported = config.is_no_os_check()
+            || if let Some(_n) = SUPPORTED_OSSES.iter().position(|&r| r == os_name) {
+                true
+            } else {
+                false
+            };
+
+        if os_supported {
             let mut dtb_files: Vec<String> = Vec::new();
             let _res = RPI4_64_DTB_FILES.iter().all(|f| {
                 dtb_files.push(String::from(*f));
