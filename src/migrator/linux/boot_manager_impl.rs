@@ -1,16 +1,3 @@
-/* <<<<<<< HEAD
-use crate::{
-    common::{
-        boot_manager::BootManager,
-        migrate_info::MigrateInfo,
-        path_info::PathInfo,
-        stage2_config::{Stage2Config, Stage2ConfigBuilder},
-        Config, MigError, MigErrorKind,
-    },
-    defs::BootType,
-    linux::stage2::mounts::Mounts,
-};
-======= */
 use crate::{common::boot_manager::BootManager, defs::BootType};
 
 pub(crate) mod u_boot_manager;
