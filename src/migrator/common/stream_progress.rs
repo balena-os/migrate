@@ -35,7 +35,7 @@ impl<T: Read> Read for StreamProgress<T> {
         if logs > self.last_log {
             self.last_log = logs;
             let printout = format!(
-                "{} read in {} seconds, @{}/sec ",
+                "{} read in {} seconds @{}/sec ",
                 format_size_with_unit(self.bytes_read),
                 Instant::now().duration_since(self.start_time).as_secs(),
                 format_size_with_unit(self.bytes_read / elapsed),
