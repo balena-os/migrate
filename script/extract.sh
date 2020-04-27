@@ -308,7 +308,7 @@ if [ -n "$IMG_FILE" ] ; then
   echo "mounting root-A"
   mount "$LOOP_DEV" "$MNT_DIR"
 
-  echo "attempting <ls \"${MNT_DIR}/opt/resin-image-*.resinos-img\">"
+  echo "attempting <ls \"${MNT_DIR}/res/optin-image-*.resinos-img\">"
   # shellcheck disable=SC2086
   RAW_IMG_FILE=$(ls ${MNT_DIR}/opt/resin-image-*.resinos-img)
 

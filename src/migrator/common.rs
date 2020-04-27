@@ -28,6 +28,7 @@ pub(crate) mod device;
 
 pub(crate) mod device_info;
 pub(crate) mod path_info;
+pub(crate) mod stream_progress;
 
 pub(crate) mod file_digest;
 

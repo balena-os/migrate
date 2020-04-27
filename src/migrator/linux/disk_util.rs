@@ -16,6 +16,11 @@ mod gzip_file;
 #[cfg(target_os = "linux")]
 pub(crate) use gzip_file::GZipFile;
 
+#[cfg(target_os = "linux")]
+mod gzip_stream;
+#[cfg(target_os = "linux")]
+pub(crate) use gzip_stream::GZipStream;
+
 mod plain_file;
 pub(crate) use plain_file::PlainFile;
 
@@ -130,6 +135,14 @@ pub(crate) struct Disk {
 }
 
 impl Disk {
+    pub fn from_gzip_stream<R: Read + 'static>(stream: R) -> Result<Disk, MigError> {
+        Ok(Disk {
+            disk: Box::new(GZipStream::new(stream)?),
+            // writable: false,
+            block_size: DEF_BLOCK_SIZE as u64,
+        })
+    }
+
     #[cfg(target_os = "linux")]
     pub fn from_gzip_img<P: AsRef<Path>>(image: P) -> Result<Disk, MigError> {
         Ok(Disk {

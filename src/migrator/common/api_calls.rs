@@ -1,6 +1,4 @@
-use std::fs::File;
-use std::io::copy;
-use std::path::{Path, PathBuf};
+use std::io::Read;
 
 use failure::ResultExt;
 use log::debug;
@@ -8,7 +6,7 @@ use log::debug;
 use reqwest::{blocking::Client, header};
 use serde::{Deserialize, Serialize};
 
-use crate::common::{path_append, MigErrCtx, MigErrorKind};
+use crate::common::{MigErrCtx, MigErrorKind};
 use crate::MigError;
 
 const OS_VERSION_URL_P1: &str = "/device-types/v1/";
@@ -87,8 +85,7 @@ pub(crate) fn get_os_image(
     api_key: &str,
     device: &str,
     version: &str,
-    target_dir: &Path,
-) -> Result<PathBuf, MigError> {
+) -> Result<Box<dyn Read>, MigError> {
     let mut headers = header::HeaderMap::new();
     headers.insert(
         header::AUTHORIZATION,
@@ -109,7 +106,7 @@ pub(crate) fn get_os_image(
     debug!("get_os_image: request_url: '{}'", request_url);
     debug!("get_os_image: data: '{:?}'", post_data);
 
-    let mut res = Client::builder()
+    let res = Client::builder()
         .default_headers(headers)
         .build()
         .context(MigErrCtx::from_remark(
@@ -126,30 +123,12 @@ pub(crate) fn get_os_image(
 
     debug!("Result = {:?}", res);
 
-    /* just results in filename "download"
-    let file_name = res
-        .url()
-        .path_segments()
-        .and_then(|segments| segments.last())
-        .and_then(|name| if name.is_empty() { None } else { Some(name) })
-        .unwrap_or("balen-os.img.gz");
-    */
-
-    let file_name = path_append(
-        target_dir,
-        &format!("balena-cloud-{}-{}.img.gz", device, version),
-    );
-
-    debug!("Downloading file '{}'", file_name.display());
-    let mut file = File::create(&file_name).context(MigErrCtx::from_remark(
-        MigErrorKind::Upstream,
-        &format!("Failed to create file: '{}'", file_name.display()),
-    ))?;
-
+    /*
     copy(&mut res, &mut file).context(MigErrCtx::from_remark(
         MigErrorKind::Upstream,
         &format!("Failed to download file: '{}'", file_name.display()),
     ))?;
+    */
 
-    Ok(file_name)
+    Ok(Box::new(res))
 }
