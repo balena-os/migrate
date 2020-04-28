@@ -169,7 +169,7 @@ pub(crate) fn download_image(
         );
 
         if FLASHER_DEVICES.contains(&device_type) {
-            let progress = StreamProgress::new(stream, 10, Level::Info);
+            let progress = StreamProgress::new(stream, 10, Level::Info, None);
             let mut disk = Disk::from_gzip_stream(progress)?;
             let mut part_iterator = PartitionIterator::new(&mut disk)?;
             if let Some(part_info) = part_iterator.nth(1) {
@@ -276,9 +276,16 @@ pub(crate) fn download_image(
                         ),
                     )?;
 
-                    info!("Recompressing OS image to {}", img_path.display());
+                    info!("Recompressing OS image to {}", img_file_name.display());
 
-                    let mut stream_progress = StreamProgress::new(img_reader, 10, Level::Info);
+                    let size = if let Ok(metadata) = img_reader.metadata() {
+                        Some(metadata.len())
+                    } else {
+                        None
+                    };
+
+                    let mut stream_progress =
+                        StreamProgress::new(img_reader, 10, Level::Info, size);
 
                     copy(&mut stream_progress, &mut gz_writer).context(MigErrCtx::from_remark(
                         MigErrorKind::Upstream,
@@ -347,7 +354,7 @@ pub(crate) fn download_image(
             ))?;
 
             // TODO: show progress
-            let mut progress = StreamProgress::new(stream, 10, Level::Info);
+            let mut progress = StreamProgress::new(stream, 10, Level::Info, None);
             copy(&mut progress, &mut file).context(MigErrCtx::from_remark(
                 MigErrorKind::Upstream,
                 &format!(
