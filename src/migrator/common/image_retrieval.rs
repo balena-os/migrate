@@ -88,10 +88,7 @@ pub(crate) fn download_image(
                 }
 
                 if let Some(found) = found {
-                    info!(
-                        "Selected default version ({}) for download",
-                        found.to_string()
-                    );
+                    info!("Selected default version ({}) for download", found);
                     found
                 } else {
                     error!("No version found for '{}'", version);
@@ -117,7 +114,7 @@ pub(crate) fn download_image(
                         }
                     }
                     if let Some(found) = found {
-                        info!("Selected version {} for download", versions.latest);
+                        info!("Selected version {} for download", found);
                         found
                     } else {
                         error!("No version found for '{}'", version);
@@ -143,7 +140,7 @@ pub(crate) fn download_image(
                         }
                     }
                     if let Some(found) = found {
-                        info!("Selected version {} for download", versions.latest);
+                        info!("Selected version {} for download", found);
                         found
                     } else {
                         error!("No version found for '{}'", version);
@@ -196,6 +193,10 @@ pub(crate) fn download_image(
                         extract_file_name.display()
                     ),
                 ))?;
+
+                info!(
+                    "Finished root_a partition extraction, now mounting to extract balena OS image"
+                );
 
                 let cmd_res = call(
                     LOSETUP_CMD,
@@ -265,7 +266,7 @@ pub(crate) fn download_image(
                         Compression::best(),
                     );
 
-                    let mut img_reader = OpenOptions::new().read(true).open(&img_path).context(
+                    let img_reader = OpenOptions::new().read(true).open(&img_path).context(
                         MigErrCtx::from_remark(
                             MigErrorKind::Upstream,
                             &format!(
@@ -275,7 +276,11 @@ pub(crate) fn download_image(
                         ),
                     )?;
 
-                    copy(&mut img_reader, &mut gz_writer).context(MigErrCtx::from_remark(
+                    info!("Recompressing OS image to {}", img_path.display());
+
+                    let mut stream_progress = StreamProgress::new(img_reader, 10, Level::Info);
+
+                    copy(&mut stream_progress, &mut gz_writer).context(MigErrCtx::from_remark(
                         MigErrorKind::Upstream,
                         &format!(
                             "Failed to compress image '{}' to '{}'",
@@ -285,8 +290,8 @@ pub(crate) fn download_image(
                     ))?;
                 }
 
-                debug!(
-                    "The balena OS image was successfully written to '{}'",
+                info!(
+                    "The balena OS image was successfully written to '{}', cleaning up",
                     img_file_name.display()
                 );
 
@@ -350,6 +355,10 @@ pub(crate) fn download_image(
                     img_file_name.display()
                 ),
             ))?;
+            info!(
+                "The balena OS image was successfully written to '{}'",
+                img_file_name.display()
+            );
         }
 
         Ok(img_file_name)
