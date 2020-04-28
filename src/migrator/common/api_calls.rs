@@ -123,12 +123,5 @@ pub(crate) fn get_os_image(
 
     debug!("Result = {:?}", res);
 
-    /*
-    copy(&mut res, &mut file).context(MigErrCtx::from_remark(
-        MigErrorKind::Upstream,
-        &format!("Failed to download file: '{}'", file_name.display()),
-    ))?;
-    */
-
     Ok(Box::new(res))
 }
