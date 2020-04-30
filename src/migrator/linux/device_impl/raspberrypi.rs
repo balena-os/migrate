@@ -22,9 +22,6 @@ use crate::{
 use std::path::PathBuf;
 
 const RPI_MODEL_REGEX: &str = r#"^Raspberry\s+Pi\s+(\S+)\s+Model\s+(.*)$"#;
-const RPI2_DTB_FILES: &[&str] = &["bcm2709-rpi-2-b.dtb"];
-const RPI3_DTB_FILES: &[&str] = &["bcm2710-rpi-3-b.dtb", "bcm2710-rpi-3-b-plus.dtb"];
-const RPI4_64_DTB_FILES: &[&str] = &["bcm2711-rpi-4-b.dtb"];
 
 pub(crate) fn is_rpi(
     mig_info: &MigrateInfo,
@@ -111,13 +108,7 @@ impl RaspberryPi2 {
             };
 
         if os_supported {
-            let mut dtb_files: Vec<String> = Vec::new();
-            let _res = RPI2_DTB_FILES.iter().all(|f| {
-                dtb_files.push(String::from(*f));
-                true
-            });
-
-            let mut boot_manager = RaspiBootManager::new(BootType::Raspi, dtb_files)?;
+            let mut boot_manager = RaspiBootManager::new(BootType::Raspi)?;
             if boot_manager.can_migrate(mig_info, config, s2_cfg)? {
                 Ok(RaspberryPi2 {
                     boot_manager: Box::new(boot_manager),
@@ -213,13 +204,7 @@ impl RaspberryPi3 {
             };
 
         if os_supported {
-            let mut dtb_files: Vec<String> = Vec::new();
-            let _res = RPI3_DTB_FILES.iter().all(|f| {
-                dtb_files.push(String::from(*f));
-                true
-            });
-
-            let mut boot_manager = RaspiBootManager::new(BootType::Raspi, dtb_files)?;
+            let mut boot_manager = RaspiBootManager::new(BootType::Raspi)?;
             if boot_manager.can_migrate(mig_info, config, s2_cfg)? {
                 Ok(RaspberryPi3 {
                     boot_manager: Box::new(boot_manager),
@@ -315,13 +300,7 @@ impl RaspberryPi4_64 {
             };
 
         if os_supported {
-            let mut dtb_files: Vec<String> = Vec::new();
-            let _res = RPI4_64_DTB_FILES.iter().all(|f| {
-                dtb_files.push(String::from(*f));
-                true
-            });
-
-            let mut boot_manager = RaspiBootManager::new(BootType::Raspi64, dtb_files)?;
+            let mut boot_manager = RaspiBootManager::new(BootType::Raspi64)?;
             if boot_manager.can_migrate(mig_info, config, s2_cfg)? {
                 Ok(RaspberryPi4_64 {
                     boot_manager: Box::new(boot_manager),

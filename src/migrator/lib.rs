@@ -27,7 +27,7 @@ pub fn migrate() -> Result<(), MigError> {
 }
 
 #[cfg(target_os = "linux")]
-pub fn migrate(assets: &Assets) -> Result<(), MigError> {
+pub fn migrate(assets: Assets) -> Result<(), MigError> {
     Ok(linux::LinuxMigrator::migrate(assets)?)
 }
 

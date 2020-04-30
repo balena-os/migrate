@@ -13,6 +13,7 @@ use crate::{
         Config, FileInfo, MigError, MigErrorKind,
     },
     defs::{FileType, OSArch},
+    Assets,
 };
 
 // *************************************************************************************************
@@ -42,6 +43,8 @@ pub(crate) struct MigrateInfo {
 
     image_file: Option<CheckedImageType>,
     pub config_file: BalenaCfgJson,
+
+    pub assets: Assets,
     // pub digests: HashMap<PathBuf, HashInfo>,
 }
 
@@ -84,7 +87,7 @@ impl MigrateInfo {
     }
 
     #[allow(clippy::cognitive_complexity)] //TODO refactor this function to fix the clippy warning
-    pub(crate) fn new(config: &Config) -> Result<MigrateInfo, MigError> {
+    pub(crate) fn new(config: &Config, assets: Assets) -> Result<MigrateInfo, MigError> {
         debug!("new: entered");
         let os_api = OSApiImpl::new()?;
         let os_arch = os_api.get_os_arch()?;
@@ -225,6 +228,7 @@ impl MigrateInfo {
             nwmgr_files,
             config_file,
             wifis,
+            assets,
         };
 
         debug!("MigrateInfo: {:?}", result);

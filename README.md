@@ -13,7 +13,7 @@ has been redesigned and re-implemented in rust to provide a more reliable and ro
 ## Requirements
 
 Balena migrate currently works on a small set of devices and linux flavors. Tested and working devices are:
-- x86_64 devices, tested mainly on VirtualBox using Ubuntu flavors:
+- intel-nuc x86_64 devices, using Ubuntu flavors:
   - Ubuntu 18.04.3 LTS
   - Ubuntu 18.04.2 LTS
   - Ubuntu 16.04.2 LTS
@@ -35,36 +35,122 @@ Balena migrate currently works on a small set of devices and linux flavors. Test
   - Debian GNU/Linux 9 (stretch)
     
 Further device-types and operating systems will be added as required. Adding a new OS 
-is usually trivial, adding a new device might require more effort.     
+is usually trivial, adding a new device might require more effort. 
 
+To migrate a device a minimum of 512MiB memory and 200MiB of free disk space for image download is required. 
+For device-types using flasher type images like x86 devices or beaglebones, the additional disk space required for 
+image download and extraction is ~2.7GiB. 
+
+The additional disk space requirements can be avoided by supplying the balena-OS image instead of downloading. 
+Please be aware that when providing the image for intel or beaglebone devices, the actual OS image has to be 
+extracted from the flasher image obtainable from the dashboard. This process is explained in section 
+```Providing the Balena Image``` below.     
+  
 
 ## How To
+
+**Warning** - Please be aware that migrating devices across operating systems is a complex task and a lot can go wrong 
+in the process. In the worst case the  device can get stuck in migration or fail to boot.  
+
+Before attempting to migrate a device or a fleet, please try your setup on one or more test devices that reflect the 
+state of your fleet and are easily accessible for manual reboot or reflash in case something goes wrong.      
+
+### Quickstart 
+
+
+As of version 0.2.0 the minimum requirements for migration are a version of ```balena-migrate``` compatible to your 
+device and a ```config.json```  file downloaded from the dashboard for the application you want the device to be migrated to.
+
+All other assets are included in ```balena-migrate``` or can be automatically downloaded. To avoid downloads during 
+migration the balena OS image can be supplied and configured at the command line (```-i``` or ```--image``` option) or using ```balea-migrate.yml```.  
+
+Optionally you can supply a configuration file, that allows you to specify several advanced options. 
+The configuration file is in YAML format and can either be provided as ```balena-migrate.yml``` in the current directory
+or specified using command line option ```--migrate-config```.
+
+```balena-migrate``` uses a working directory to access and save files. The working directory is where the program 
+expects all files you provide to be present. The disk space requirements for image downloads (200MiB for non flasher images, 
+2.7GiB for flasher images) apply to the drive the working directory resides on. 
+Files expected in the working directory include ```config.json``` and optionally ```balena-migrate.yml```, the balena OS image and possible network manager files you provide. 
+
+By default the working directory will be the current directory you call ```balena-migrate``` in. You can specify and alternate directory using the ```-w``` or 
+```--work-dir``` command line option.     
+
+The most simple way to start migration is to place your ```config.json``` in a directory with sufficient space ad call 
+```balena-migrate``` as follows: 
+
+```shell script
+sudo balena-migrate -c config.json  
+``` 
+
+**Automatic Reboot**
+
+To automatically boot <delay> seconds after setup is complete add the ```-r <delay>``` option: 
+
+```shell script
+sudo balena-migrate -c config.json -r 5  
+``` 
+
+**Selecting the Balena_OS Image**
+
+```balena-migrate``` will check requirements and - if all are met - download the default OS image for the 
+platform and set up migration. 
+If you would like to supply the Balena-OS image you can do so using the ```-i <image-file>``` option:
+
+```shell script
+sudo balena-migrate -c config.json -i balena-cloud-intel-nuc-2.48.0+rev3.prod.img.gz   
+``` 
+The supplied image needs to be gzip-compressed in contrast to zip-compressed (the download format of the balena dashboard).
+In case of intel-nuc, Generic X86_64, beagebone or ther flasher type devices the actual OS image needs to be extracted 
+from the flasher image. This process is explained in ```Providing the Balena Image``` below. 
+
+To select a specific version of Balena-OS for download you can use the ```--version <version-spec>``` option. 
+
+To select a certain version:
+```shell script
+sudo balena-migrate -c config.json --version 2.48.0+rev3.prod
+```
+The ```^``` and ```~``` syntax can be used to select a version greater in the same major or minor range:
+
+```shell script
+sudo balena-migrate -c config.json --version ~2.48
+```
+
+**Disable Network Configuration Checks**
+
+```balena-migrate``` will automatically scan your wifi configuration and attempt to try to derive a networks setup for 
+Balena-OS. If no network setup is created, migration will fail with an error. If you are sure that your device will 
+be able to come online without network setup (eg. if the device is connected using a wired network on the standard ports) 
+you can disable this check using the ```-n```  option.    
+
 
 
 ### Stage 1 - balena-migrate
 
 ```balena-migrate``` is a binary executable file, that needs to be executed with root privileges on the device 
-that will be migrated. There are several command line parameters that can be set and the program will be looking 
+that will be migrated. As of version 0.2.0 ```balena-migrate``` contains most of the required assets and is able to 
+automatically download and if necessarry extract the balena OS image. As the contained assets are device dependent you 
+have to make sure you are using the appropriate version for the device you are planing to migrate. 
+Interfaces to retrieve a device specific version of the migrator from the dashboard are not yet available but will be 
+added in the near future.
+
+There are several command line parameters that can be set and the program will be looking 
 for a YAML configuration file - by default in ```./balena-migrate.yml```.
 
 Depending on the configuration ```balena-migrate``` will do one of the following depending on the ```mode``` setting:
-- **pretend** - check requirements for migration but apply no changes to the system. All required settings and files need to 
-be present and configured. 
 - **immediate** - check requirements for migration and migrate the system immediately. All required settings and files need 
-to be present and configured. 
+to be present and configured. This is the default mode. 
+- **pretend** - check requirements for migration but apply no changes to the system. All required settings and files need to 
+be present and configured. This mode can be selected usng the ```-p```  command line option.
 
-The following modes are concepts that have been disccussed but are not implemented:
-- **connected** - check requirements for migration and try to retrieve missing files from the balena cloud. 
-Migrate immediately once all requirements are met. This mode is not implemented yet. 
-- **agent** - connect to balena cloud and install ```balena-migrate``` as a service. 
-Migration can be configured and triggered from the balena dashboard. This mode is not implemented yet.
 
 In stage 1 ```balena-migrate``` tries to determine the running OS, device architecture, boot manager and the exact device type. 
 Based on that information it decides if the device can be migrated.
 For a successful migration ```balena-migrate``` needs to be able to modify the boot setup and boot into a balena kernel 
 and initramfs. The files needed are device dependent - usualy a kernel image, an initramfs that contains stage2 executable 
-of ```balena-stage2``` and possibly one or more device tree blob files. These files currently have to be provided as part 
-of the configuration. 
+of ```balena-stage2``` and possibly one or more device tree blob files. 
+These files are contained in ```balena-migrate``` and are extracted during migration. 
+ 
 
 #### Providing the Stage 2 Boot Configuration
 
@@ -206,7 +292,7 @@ gzip balena-cloud-support1-raspberrypi3-2.31.5+rev1-v9.11.3.img
 
 #### Migrating Network Configuration
 
-If configured ```balena-migrate``` will scan the device for wifi configurations and attempt to migrate them to 
+by default ```balena-migrate``` will scan the device for wifi configurations and attempt to migrate them to 
 NetworkManager connection files. There is plenty of room for improvement here - currently scanning network configs 
 is very basic (only SSID & secret key) and supports only wifi configurations in wpa_supplicant, conmanager and 
 NetworkManager format. The SSID's that are migrated are determined by two flags in ```balena-migrate.yml```. The 

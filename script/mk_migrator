@@ -20,6 +20,7 @@ function fail {
   exit 1
 }
 
+function dir_size { ls -FGl "${@}" | grep -v ".*\.yml" | awk '{ total += $4 }; END { print total }'; }
 
 function printHelp {
   cat << EOI
@@ -77,6 +78,10 @@ case $DEVICE_TYPE in
     cross build --target=x86_64-unknown-linux-musl --release --bin balena-stage2
     verbose "Creating initrd in $BUILD_DIR"
     sudo $SCRIPT_DIR/mk_mig_config --no-copy-migrator --device $DEVICE_TYPE --target-dir $BUILD_TMP
+    OWNER="${USER}.$(id -gn)"
+    sudo chown "${OWNER}" $BUILD_TMP/*
+    ASSET_SIZE=$(dir_size "$BUILD_TMP")
+    echo "asset_size: $ASSET_SIZE" >> "$BUILD_TMP/version.yml"
     tar --exclude='*.yml' -czf $BUILD_DIR/assets.tgz -C $BUILD_TMP .
     if [ -f "$PROJECT_ROOT/target/x86_64-unknown-linux-musl/release/balena-migrate" ] ; then
       verbose "deleting $PROJECT_ROOT/target/x86_64-unknown-linux-musl/release/balena-migrate"
@@ -91,6 +96,11 @@ case $DEVICE_TYPE in
 
     verbose "Creating initrd in $BUILD_DIR"
     sudo $SCRIPT_DIR/mk_mig_config --no-copy-migrator --device $DEVICE_TYPE --target-dir $BUILD_TMP
+    OWNER="${USER}.$(id -gn)"
+    sudo chown "${OWNER}" $BUILD_TMP/*
+    ASSET_SIZE=$(dir_size "$BUILD_TMP")
+    echo "asset_size: $ASSET_SIZE" >> "$BUILD_TMP/version.yml"
+
     tar --exclude='*.yml' -czf $BUILD_DIR/assets.tgz -C $BUILD_TMP .
     if [ -f "$PROJECT_ROOT/target/armv7-unknown-linux-musleabihf/release/balena-migrate" ] ; then
       verbose "deleting $PROJECT_ROOT/target/armv7-unknown-linux-musleabihf/release/balena-migrate"
