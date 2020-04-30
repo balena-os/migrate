@@ -1,8 +1,7 @@
 use log::{error, info, trace};
 
-use crate::common::path_append;
 use crate::common::path_info::PathInfo;
-use crate::defs::{MIG_INITRD_NAME, MIG_KERNEL_NAME};
+
 use crate::{
     common::{
         boot_manager::BootManager,
@@ -11,10 +10,10 @@ use crate::{
         stage2_config::{Stage2Config, Stage2ConfigBuilder},
         Config, MigError, MigErrorKind,
     },
-    defs::{BootType, DeviceType, FileType},
+    defs::{BootType, DeviceType},
     linux::{
         boot_manager_impl::{from_boot_type, GrubBootManager},
-        linux_common::{expect_type, is_secure_boot},
+        linux_common::is_secure_boot,
         stage2::mounts::Mounts,
     },
 };
@@ -41,15 +40,6 @@ impl IntelNuc {
         ];
 
         let os_name = &mig_info.os_name;
-
-        expect_type(
-            &path_append(&mig_info.work_path.path, MIG_KERNEL_NAME),
-            &FileType::KernelAMD64,
-        )?;
-        expect_type(
-            &path_append(&mig_info.work_path.path, MIG_INITRD_NAME),
-            &FileType::InitRD,
-        )?;
 
         let os_supported = config.is_no_os_check()
             || if let Some(_n) = SUPPORTED_OSSES.iter().position(|&r| r == os_name) {

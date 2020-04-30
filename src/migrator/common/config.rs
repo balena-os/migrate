@@ -30,20 +30,6 @@ pub(crate) enum MigMode {
     Pretend,
 }
 
-impl MigMode {
-    pub fn from_str(mode: &str) -> Result<Self, MigError> {
-        match mode.to_lowercase().as_str() {
-            "immediate" => Ok(MigMode::Immediate),
-            //            "agent" => Ok(MigMode::Agent),
-            "pretend" => Ok(MigMode::Pretend),
-            _ => Err(MigError::from_remark(
-                MigErrorKind::InvParam,
-                &format!("new: invalid value for parameter mode: '{}'", mode),
-            )),
-        }
-    }
-}
-
 const DEFAULT_MIG_MODE: MigMode = MigMode::Pretend;
 
 #[derive(Debug, PartialEq, Serialize, Deserialize, Clone)]
@@ -206,13 +192,19 @@ impl<'a> Config {
         let arg_matches = App::new("balena-migrate")
             .version(VERSION)
             .author("Thomas Runte <thomasr@balena.io>")
-            .about("Migrates devices to BalenaOS")
+            .about("Migrate a device to BalenaOS")
             .arg(
-                Arg::with_name("mode")
-                    .short("m")
-                    .long("mode")
-                    .value_name("MODE")
-                    .help("Mode of operation - extract, agent, immediate or pretend"),
+                Arg::with_name("pretend")
+                    .short("p")
+                    .long("pretend")
+                    .help("Run in pretend mode - only check requirements, don't migrate"),
+            )
+            .arg(
+                Arg::with_name("reboot")
+                    .short("r")
+                    .long("reboot")
+                    .value_name("DELAY")
+                    .help("Reboot automatically after DELAY seconds after migrate setup has succeeded"),
             )
             .arg(
                 Arg::with_name("version")
@@ -228,18 +220,17 @@ impl<'a> Config {
                     .help("Select balena OS image"),
             )
             .arg(
-                Arg::with_name("balena-config")
-                    .short("b")
+                Arg::with_name("config-json")
+                    .short("c")
                     .long("config-json")
                     .value_name("FILE")
                     .help("Select balena config.json"),
             )
             .arg(
-                Arg::with_name("config")
-                    .short("c")
-                    .long("config")
+                Arg::with_name("migrate-config")
+                    .long("migrate-config")
                     .value_name("FILE")
-                    .help("Select balena-migrate config file"),
+                    .help("Select migrator config file"),
             )
             .arg(
                 Arg::with_name("work-dir")
@@ -273,9 +264,8 @@ impl<'a> Config {
             .get_matches();
 
         match arg_matches.occurrences_of("verbose") {
-            0 => Logger::create(),
-            1 => Logger::set_default_level(&Level::Info),
-            2 => Logger::set_default_level(&Level::Debug),
+            0 => Logger::set_default_level(&Level::Info),
+            1 => Logger::set_default_level(&Level::Debug),
             _ => Logger::set_default_level(&Level::Trace),
         }
 
@@ -325,8 +315,8 @@ impl<'a> Config {
 
         // establish a valid config path
         let config_path = {
-            let config_path = if arg_matches.is_present("config") {
-                if let Some(cfg) = arg_matches.value_of("config") {
+            let config_path = if arg_matches.is_present("migrate-config") {
+                if let Some(cfg) = arg_matches.value_of("migrate-config") {
                     PathBuf::from(cfg)
                 } else {
                     return Err(MigError::from_remark(
@@ -382,6 +372,15 @@ impl<'a> Config {
 
         debug!("Using work_dir '{}'", config.get_work_dir().display());
 
+        if arg_matches.is_present("reboot") {
+            if let Some(delay) = arg_matches.value_of("reboot") {
+                config.set_reboot(delay.parse::<u64>().context(MigErrCtx::from_remark(
+                    MigErrorKind::Upstream,
+                    &format!("Failed to parse reboot delay from '{}'", delay),
+                ))?);
+            }
+        }
+
         if arg_matches.is_present("no-nwmgr-cfg") {
             config.set_require_nwmgr_configs(false);
         }
@@ -390,16 +389,16 @@ impl<'a> Config {
             config.set_no_flash(true);
         }
 
-        if arg_matches.is_present("balena-config") {
-            if let Some(path_str) = arg_matches.value_of("balena-config") {
+        if arg_matches.is_present("config-json") {
+            if let Some(path_str) = arg_matches.value_of("config-json") {
                 config.set_config_path(&PathBuf::from(path_str));
             }
         }
 
-        if arg_matches.is_present("mode") {
-            if let Some(mode) = arg_matches.value_of("mode") {
-                config.set_mig_mode(&MigMode::from_str(mode)?);
-            }
+        if arg_matches.is_present("pretend") {
+            config.set_mig_mode(&MigMode::Pretend);
+        } else {
+            config.set_mig_mode(&MigMode::Immediate);
         }
 
         debug!("new: migrate mode: {:?}", config.get_mig_mode());
@@ -592,6 +591,10 @@ impl<'a> Config {
         } else {
             None
         }
+    }
+
+    pub fn set_reboot(&mut self, delay: u64) {
+        self.reboot = Some(delay)
     }
 
     pub fn get_reboot(&'a self) -> &'a Option<u64> {

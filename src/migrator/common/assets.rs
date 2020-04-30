@@ -1,7 +1,7 @@
-use std::path::Path;
-
 use serde::Deserialize;
 use serde_yaml;
+use std::fmt;
+use std::path::Path;
 
 use crate::common::{MigErrCtx, MigError, MigErrorKind};
 use failure::ResultExt;
@@ -13,6 +13,7 @@ pub struct AssetVersion {
     pub device: String,
     pub kernel: String,
     pub balena: String,
+    pub asset_size: u64,
 }
 
 pub struct Assets {
@@ -41,5 +42,14 @@ impl Assets {
             ))?;
 
         Ok(())
+    }
+}
+
+impl fmt::Debug for Assets {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.debug_struct("Point")
+            .field("device", &format!("size: {}", self.data.len()))
+            .field("version", &self.get_version())
+            .finish()
     }
 }

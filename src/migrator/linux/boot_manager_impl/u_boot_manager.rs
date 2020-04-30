@@ -420,59 +420,6 @@ impl UBootManager {
         }
     }
 
-    // check the potential bootmanager path for space
-    fn check_boot_req_space(
-        &self,
-        work_path: &Path,
-        boot_path: &PathInfo,
-    ) -> Result<bool, MigError> {
-        debug!(
-            "check_bootmgr_path: called with path: {}",
-            boot_path.path.display()
-        );
-
-        let mut boot_req_space: u64 = 8 * 1024; // one 8KiB extra space just in case and for uEnv.txt)
-
-        boot_req_space += BootManager::get_file_required_space(
-            path_append(work_path, MIG_KERNEL_NAME).as_path(),
-            &UBootManager::get_target_file_name(
-                BootFileType::KernelFile,
-                boot_path.path.as_path(),
-                None,
-            )
-            .as_path(),
-        )?;
-
-        boot_req_space += BootManager::get_file_required_space(
-            path_append(work_path, MIG_INITRD_NAME).as_path(),
-            &UBootManager::get_target_file_name(
-                BootFileType::Initramfs,
-                boot_path.path.as_path(),
-                None,
-            )
-            .as_path(),
-        )?;
-
-        // TODO: support multiple dtb files ?
-        for dtb_name in &self.dtb_names {
-            boot_req_space += BootManager::get_file_required_space(
-                &path_append(work_path, &dtb_name).as_path(),
-                &UBootManager::get_target_file_name(
-                    BootFileType::DtbFile,
-                    boot_path.path.as_path(),
-                    Some(dtb_name.as_str()),
-                )
-                .as_path(),
-            )?;
-        }
-
-        debug!(
-            "check_bootmgr_path: required: {}, available: {}",
-            boot_req_space, boot_path.fs_free
-        );
-        Ok(boot_req_space < boot_path.fs_free)
-    }
-
     fn backup_uenv(
         uboot_info: &UBootInfo,
         backup_cfg: &mut Vec<BackupCfg>,
@@ -534,6 +481,7 @@ impl UBootManager {
         // - dtbs/<uname_r>/*.dtb
         // __ROOT_DEV_UUID__ needs to be replaced with the root partition UUID
         // __KERNEL_CMDLINE__ needs to be replaced with additional kernel cmdline parameters
+        // TODO: adapt to new asset source
 
         let install_path = if let Some(ref install_path) = uboot_info.install_path {
             install_path.clone()
@@ -668,6 +616,7 @@ impl UBootManager {
         // sd-card appears to be always mmc 0 and internal emmc appears to always be mmc 1
         // so depending on if we want to migrate an SD card or the emmc we need to select 0 or1
         // TODO: distinguish what we are booting from SD-card or emmc
+        // TODO: adapt to new asset source
         // current workaround:
         // a) make it configurable, else
         // b) let device decide -
@@ -973,10 +922,9 @@ impl BootManager for UBootManager {
                         &lsblk_part,
                     )?;
 
-                    if uboot_info.install_path.is_none()
-                        && self
-                            .check_boot_req_space(mig_info.work_path.path.as_path(), &path_info)?
-                    {
+                    let asset_ver = mig_info.assets.get_version()?;
+                    let boot_req_space = asset_ver.asset_size + 8 * 1024;
+                    if uboot_info.install_path.is_none() && (boot_req_space < path_info.fs_free) {
                         // enough space to install hereget_
                         uboot_info.install_path = Some(path_info.clone());
                     }

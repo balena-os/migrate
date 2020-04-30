@@ -13,7 +13,7 @@ fn init_assets() -> Assets {
 }
 
 fn main() {
-    if let Err(error) = migrate(&init_assets()) {
+    if let Err(error) = migrate(init_assets()) {
         match error.kind() {
             MigErrorKind::Displayed => {
                 println!("balena-migrate failed with an error, see messages above");

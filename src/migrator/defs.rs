@@ -177,8 +177,8 @@ pub(crate) enum FileType {
     GZipOSImage,
     #[cfg(target_os = "linux")]
     OSImage,
-    #[cfg(target_os = "linux")]
-    KernelAMD64,
+    //    #[cfg(target_os = "linux")]
+    //    KernelAMD64,
     #[cfg(target_os = "linux")]
     KernelARMHF,
     //    KernelI386,
@@ -197,7 +197,7 @@ impl FileType {
         match self {
             FileType::GZipOSImage => "gzipped balena OS image",
             FileType::OSImage => "balena OS image",
-            FileType::KernelAMD64 => "balena migrate kernel image for AMD64",
+            // FileType::KernelAMD64 => "balena migrate kernel image for AMD64",
             FileType::KernelARMHF => "balena migrate kernel image for ARMHF",
             //           FileType::KernelI386 => "balena migrate kernel image for I386",
             FileType::KernelAARCH64 => "balena migrate kernel image for AARCH64",

@@ -162,15 +162,33 @@ impl BootManager for GrubBootManager {
         // TODO: this could be more reliable, taking into account the size of the existing files
         // vs the size of the files that will be copied
 
-        let mut boot_req_space = BootManager::get_file_required_space(
-            path_append(&mig_info.work_path.path, MIG_KERNEL_NAME).as_path(),
-            path_append(&boot_path.path, MIG_KERNEL_NAME).as_path(),
-        )?;
-
-        boot_req_space += BootManager::get_file_required_space(
-            path_append(&mig_info.work_path.path, MIG_INITRD_NAME).as_path(),
-            path_append(&boot_path.path, MIG_INITRD_NAME).as_path(),
-        )?;
+        let mut boot_req_space = mig_info.assets.get_version()?.asset_size;
+        let kernel_file = path_append(&boot_path.path, MIG_KERNEL_NAME);
+        if kernel_file.exists() {
+            boot_req_space -= kernel_file
+                .metadata()
+                .context(MigErrCtx::from_remark(
+                    MigErrorKind::Upstream,
+                    &format!(
+                        "unable to retrieve size for file '{}'",
+                        kernel_file.display()
+                    ),
+                ))?
+                .len();
+        }
+        let initrd_file = path_append(&boot_path.path, MIG_INITRD_NAME);
+        if initrd_file.exists() {
+            boot_req_space -= initrd_file
+                .metadata()
+                .context(MigErrCtx::from_remark(
+                    MigErrorKind::Upstream,
+                    &format!(
+                        "unable to retrieve size for file '{}'",
+                        initrd_file.display()
+                    ),
+                ))?
+                .len();
+        }
 
         debug!(
             "Required space: {}, free space: {}",
@@ -190,7 +208,7 @@ impl BootManager for GrubBootManager {
 
     fn setup(
         &mut self,
-        mig_info: &MigrateInfo,
+        _mig_info: &MigrateInfo,
         _config: &Config,
         _s2_cfg: &mut Stage2ConfigBuilder,
         kernel_opts: &str,
@@ -361,42 +379,8 @@ impl BootManager for GrubBootManager {
         // **********************************************************************
         // ** copy new kernel & iniramfs
 
-        let kernel_src = path_append(&mig_info.work_path.path, MIG_KERNEL_NAME);
-        let kernel_dest = path_append(&boot_path.path, MIG_KERNEL_NAME);
-
-        std::fs::copy(&kernel_src, &kernel_dest).context(MigErrCtx::from_remark(
-            MigErrorKind::Upstream,
-            &format!(
-                "failed to copy kernel file '{}' to '{}'",
-                kernel_src.display(),
-                kernel_dest.display()
-            ),
-        ))?;
-
-        info!(
-            "copied kernel: '{}' -> '{}'",
-            kernel_src.display(),
-            kernel_dest.display()
-        );
-
-        call(CHMOD_CMD, &["+x", &kernel_dest.to_string_lossy()], false)?;
-
-        let initrd_src = path_append(&mig_info.work_path.path, MIG_INITRD_NAME);
-        let initrd_dest = path_append(&boot_path.path, MIG_INITRD_NAME);
-        std::fs::copy(&initrd_src, &initrd_dest).context(MigErrCtx::from_remark(
-            MigErrorKind::Upstream,
-            &format!(
-                "failed to copy initrd file '{}' to '{}'",
-                initrd_src.display(),
-                initrd_dest.display()
-            ),
-        ))?;
-
-        info!(
-            "initramfs kernel: '{}' -> '{}'",
-            initrd_src.display(),
-            initrd_dest.display()
-        );
+        info!("Writing migrate kernel & initramfs to '{}'", BOOT_PATH);
+        _mig_info.assets.write_to(&boot_path.path)?;
 
         info!("calling '{}'", GRUB_UPDT_CMD);
 

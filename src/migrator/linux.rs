@@ -63,7 +63,7 @@ pub(crate) struct LinuxMigrator {
 }
 
 impl<'a> LinuxMigrator {
-    pub fn migrate(assets: &Assets) -> Result<(), MigError> {
+    pub fn migrate(assets: Assets) -> Result<(), MigError> {
         // **********************************************************************
         // We need to be root to do this
         let config = Config::new()?;
@@ -90,7 +90,7 @@ impl<'a> LinuxMigrator {
     // ** Initialise migrator
     // **********************************************************************
 
-    pub fn try_init(config: Config, assets: &Assets) -> Result<LinuxMigrator, MigError> {
+    pub fn try_init(config: Config, assets: Assets) -> Result<LinuxMigrator, MigError> {
         trace!("LinuxMigrator::try_init: entered");
 
         info!("migrate mode: {:?}", config.get_mig_mode());
@@ -122,13 +122,12 @@ impl<'a> LinuxMigrator {
         info!("balena-migrator for device type: {}", asset_ver.device);
         info!("balena-migrator kernel version: {}", asset_ver.kernel);
         info!("balena-migrator balena version: {}", asset_ver.balena);
-        assets.write_to(config.get_work_dir())?;
 
         // **********************************************************************
         // Get os architecture & name & disk properties, check required paths
         // find wifis etc..
 
-        let mut mig_info = match MigrateInfo::new(&config) {
+        let mut mig_info = match MigrateInfo::new(&config, assets) {
             Ok(mig_info) => {
                 info!(
                     "OS Architecture is {}, OS Name is '{}'",
