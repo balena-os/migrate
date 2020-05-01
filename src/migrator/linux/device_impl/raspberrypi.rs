@@ -1,9 +1,7 @@
 use log::{debug, error, info};
 use regex::Regex;
 
-use crate::common::path_append;
 use crate::common::path_info::PathInfo;
-use crate::defs::{MIG_INITRD_NAME, MIG_KERNEL_NAME};
 use crate::{
     common::{
         boot_manager::BootManager,
@@ -11,11 +9,11 @@ use crate::{
         stage2_config::{Stage2Config, Stage2ConfigBuilder},
         Config, MigError, MigErrorKind,
     },
-    defs::{BootType, DeviceType, FileType},
+    defs::{BootType, DeviceType},
     linux::{
         boot_manager_impl::{from_boot_type, RaspiBootManager},
         device_impl::Device,
-        linux_common::{expect_type, restore_backups},
+        linux_common::restore_backups,
         stage2::mounts::{Mounts, MOUNT_DIR},
     },
 };
@@ -92,14 +90,6 @@ impl RaspberryPi2 {
 
         let os_name = &mig_info.os_name;
 
-        expect_type(
-            &path_append(&mig_info.work_path.path, MIG_KERNEL_NAME),
-            &FileType::KernelARMHF,
-        )?;
-        expect_type(
-            &path_append(&mig_info.work_path.path, MIG_INITRD_NAME),
-            &FileType::InitRD,
-        )?;
         let os_supported = config.is_no_os_check()
             || if let Some(_n) = SUPPORTED_OSSES.iter().position(|&r| r == os_name) {
                 true
@@ -187,15 +177,6 @@ impl RaspberryPi3 {
 
         let os_name = &mig_info.os_name;
 
-        expect_type(
-            &path_append(&mig_info.work_path.path, MIG_KERNEL_NAME),
-            &FileType::KernelARMHF,
-        )?;
-        expect_type(
-            &path_append(&mig_info.work_path.path, MIG_INITRD_NAME),
-            &FileType::InitRD,
-        )?;
-
         let os_supported = config.is_no_os_check()
             || if let Some(_n) = SUPPORTED_OSSES.iter().position(|&r| r == os_name) {
                 true
@@ -282,15 +263,6 @@ impl RaspberryPi4_64 {
         ];
 
         let os_name = &mig_info.os_name;
-
-        expect_type(
-            &path_append(&mig_info.work_path.path, MIG_KERNEL_NAME),
-            &FileType::KernelAARCH64,
-        )?;
-        expect_type(
-            &path_append(&mig_info.work_path.path, MIG_INITRD_NAME),
-            &FileType::InitRD,
-        )?;
 
         let os_supported = config.is_no_os_check()
             || if let Some(_n) = SUPPORTED_OSSES.iter().position(|&r| r == os_name) {
