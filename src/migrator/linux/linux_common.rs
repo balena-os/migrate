@@ -727,7 +727,7 @@ pub(crate) fn is_file_type<P: AsRef<Path>>(file: P, ftype: &FileType) -> Result<
             FileType::KernelARMHF => Ok(KERNEL_ARMHF_FTYPE_RE.is_match(&cmd_res.stdout)),
             //FileType::KernelAMD64 => Ok(KERNEL_AMD64_FTYPE_RE.is_match(&cmd_res.stdout)),
             //FileType::KernelI386 => Ok(KERNEL_I386_FTYPE_RE.is_match(&cmd_res.stdout)),
-            FileType::KernelAARCH64 => Ok(KERNEL_AARCH64_FTYPE_RE.is_match(&cmd_res.stdout)),
+            //FileType::KernelAARCH64 => Ok(KERNEL_AARCH64_FTYPE_RE.is_match(&cmd_res.stdout)),
             FileType::Json => Ok(OS_CFG_FTYPE_RE.is_match(&cmd_res.stdout)),
             FileType::Text => Ok(TEXT_FTYPE_RE.is_match(&cmd_res.stdout)),
             // FileType::DTB => Ok(DTB_FTYPE_RE.is_match(&cmd_res.stdout)),

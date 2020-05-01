@@ -182,8 +182,8 @@ pub(crate) enum FileType {
     #[cfg(target_os = "linux")]
     KernelARMHF,
     //    KernelI386,
-    #[cfg(target_os = "linux")]
-    KernelAARCH64,
+    // #[cfg(target_os = "linux")]
+    // KernelAARCH64,
     InitRD,
     Json,
     Text,
@@ -200,7 +200,7 @@ impl FileType {
             // FileType::KernelAMD64 => "balena migrate kernel image for AMD64",
             FileType::KernelARMHF => "balena migrate kernel image for ARMHF",
             //           FileType::KernelI386 => "balena migrate kernel image for I386",
-            FileType::KernelAARCH64 => "balena migrate kernel image for AARCH64",
+            //FileType::KernelAARCH64 => "balena migrate kernel image for AARCH64",
             FileType::InitRD => "balena migrate initramfs",
             // FileType::DTB => "Device Tree Blob",
             FileType::Json => "balena config.json file",

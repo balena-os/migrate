@@ -22,6 +22,7 @@ use crate::{
     defs::{BootType, BALENA_FILE_TAG},
     linux::{linux_defs::BOOT_PATH, linux_defs::CHMOD_CMD, stage2::mounts::Mounts},
 };
+use std::path::PathBuf;
 
 // TODO: copy rpi dtb's , backup orig dtbs
 
@@ -90,7 +91,36 @@ impl BootManager for RaspiBootManager {
 
         let bootmgr_path = PathInfo::from_path(RPI_BOOT_PATH)?;
         let asset_ver = mig_info.assets.get_version()?;
-        let boot_req_space = asset_ver.asset_size + 8 * 1024;
+        let mut boot_req_space = asset_ver.asset_size + 8 * 1024;
+
+        let kernel_path = path_append(RPI_BOOT_PATH, MIG_KERNEL_NAME);
+        if kernel_path.exists() {
+            boot_req_space -= kernel_path
+                .metadata()
+                .context(MigErrCtx::from_remark(
+                    MigErrorKind::Upstream,
+                    &format!(
+                        "Failed to retrieve metadata for file '{}'",
+                        kernel_path.display()
+                    ),
+                ))?
+                .len()
+        }
+
+        let initrd_path = path_append(RPI_BOOT_PATH, MIG_INITRD_NAME);
+        if initrd_path.exists() {
+            boot_req_space -= initrd_path
+                .metadata()
+                .context(MigErrCtx::from_remark(
+                    MigErrorKind::Upstream,
+                    &format!(
+                        "Failed to retrieve metadata for file '{}'",
+                        initrd_path.display()
+                    ),
+                ))?
+                .len()
+        }
+
         if boot_req_space < bootmgr_path.fs_free {
             self.bootmgr_path = Some(bootmgr_path);
             Ok(true)
@@ -135,29 +165,25 @@ impl BootManager for RaspiBootManager {
             if let Ok(dir_entry) = dir_entry {
                 if let Some(extension) = dir_entry.path().extension() {
                     if &*extension.to_string_lossy().to_lowercase() == "dtb" {
-                        let src_path = path_append(RPI_BOOT_PATH, &dir_entry.path());
-                        let bckup_path = path_append(
-                            RPI_BOOT_PATH,
-                            &format!(
-                                "{}-{}",
-                                &*dir_entry.path().to_string_lossy(),
-                                system_time.as_secs()
-                            ),
-                        );
+                        let bckup_path = PathBuf::from(&format!(
+                            "{}-{}",
+                            &*dir_entry.path().to_string_lossy(),
+                            system_time.as_secs()
+                        ));
                         debug!(
                             "Creating backup of '{}' in '{}'",
-                            src_path.display(),
+                            dir_entry.path().display(),
                             bckup_path.display()
                         );
-                        copy(&src_path, &bckup_path).context(MigErrCtx::from_remark(
+                        copy(&dir_entry.path(), &bckup_path).context(MigErrCtx::from_remark(
                             MigErrorKind::Upstream,
                             &format!(
                                 "Failed to copy '{}' to '{}'",
-                                src_path.display(),
+                                dir_entry.path().display(),
                                 bckup_path.display()
                             ),
                         ))?;
-                        boot_cfg_bckup.push(BackupCfg::new(&src_path, &bckup_path)?);
+                        boot_cfg_bckup.push(BackupCfg::new(&dir_entry.path(), &bckup_path)?);
                     }
                 }
             }
