@@ -103,8 +103,8 @@ where
 
 #[derive(Debug, Deserialize, Clone)]
 struct BalenaConfig {
-    #[serde(rename = "applicationName")]
-    pub app_name: String,
+    // #[serde(rename = "applicationName")]
+    // pub app_name: String,
     #[serde(rename = "applicationId")]
     #[serde(deserialize_with = "deserialize_u64_or_string")]
     pub app_id: u64,
@@ -113,7 +113,7 @@ struct BalenaConfig {
     #[serde(rename = "userId")]
     #[serde(deserialize_with = "deserialize_u64_or_string")]
     pub user_id: u64,
-    pub username: String,
+    //pub username: String,
     #[serde(rename = "appUpdatePollInterval")]
     #[serde(deserialize_with = "deserialize_u64_or_string")]
     pub app_poll_interval: u64,
@@ -131,18 +131,12 @@ struct BalenaConfig {
     pub registry_endpoint: String,
     #[serde(rename = "deltaEndpoint")]
     pub delta_endpoint: String,
-    #[serde(rename = "pubnubSubscribeKey")]
-    pub pubnub_subscr_key: String,
-    #[serde(rename = "pubnubPublishKey")]
-    pub pubnub_publish_key: String,
     #[serde(rename = "mixpanelToken")]
     pub mixpanel_token: String,
     #[serde(rename = "apiKey")]
     pub api_key: Option<String>,
     // TODO: apiKey can not be safely left empty. Device will migrate successfully but not connect
     // to VPN once started. Greg claims optional apiKey required for preloaded images
-    #[serde(rename = "deviceApiKey")]
-    pub device_api_key: Option<String>,
 }
 
 #[derive(Debug, Clone)]
@@ -168,16 +162,9 @@ impl BalenaCfgJson {
         })
     }
 
-    pub fn check(&self, config: &Config, xpctd_dev_type: &str) -> Result<(), MigError> {
+    pub fn check(&self, config: &Config) -> Result<(), MigError> {
         // TODO: app_name is not checked
-        info!("Configured for application: {}", self.config.app_name);
-
-        if self.config.device_type == xpctd_dev_type {
-            info!("Configured for device type: {}", xpctd_dev_type);
-        } else {
-            error!("The device type configured in the config.json file supplied does not match the hardware device type found, expected {}, found {}", xpctd_dev_type, self.config.device_type);
-            return Err(MigError::displayed());
-        }
+        info!("Configured for application id: {}", self.config.app_id);
 
         if config.is_check_api() {
             let api_url = Url::parse(&self.config.api_endpoint).context(MigErrCtx::from_remark(
@@ -255,16 +242,18 @@ impl BalenaCfgJson {
     pub fn get_api_endpoint(&self) -> String {
         self.config.api_endpoint.clone()
     }
+
+    pub fn get_device_type(&self) -> String {
+        self.config.device_type.clone()
+    }
 }
 
 #[cfg(test)]
 mod tests {
     const CONFIG1: &str = r###"
-{ "applicationName":"TestDev",
-  "applicationId":1284711,
+{ "applicationId":1284711,
   "deviceType":"raspberrypi3",
   "userId":120815,
-  "username":"g_user",
   "appUpdatePollInterval":600000,
   "listenPort":48484,
   "vpnPort":443,
@@ -272,18 +261,14 @@ mod tests {
   "vpnEndpoint":"vpn.balena-cloud.com",
   "registryEndpoint":"registry2.balena-cloud.com",
   "deltaEndpoint":"https://delta.balena-cloud.com",
-  "pubnubSubscribeKey":"",
-  "pubnubPublishKey":"",
   "mixpanelToken":"9ef939ea64cb6cd9ef939ea64cb6cd",
   "apiKey":"1xf6r2oNmJJt4M1xf6r2oNmJJt4M"}
 "###;
 
     const CONFIG2: & str = r###"
-{"applicationName":"test",
- "applicationId":13454711,
+{"applicationId":13454711,
  "deviceType":"beaglebone-green",	
  "userId":44815,	
- "username":"thomasr",
  "appUpdatePollInterval":"600000",	
  "listenPort":"48484",	
  "vpnPort":443,	
@@ -291,8 +276,6 @@ mod tests {
  "vpnEndpoint":"vpn.balena-cloud.com",
  "registryEndpoint":"registry2.balena-cloud.com", 	
  "deltaEndpoint":"https://delta.balena-cloud.com",
- "pubnubSubscribeKey":"",	
- "pubnubPublishKey":"",	
  "mixpanelToken":"9ef939ea64cb6cd9ef939ea64cb6cd",
  "apiKey":"abcabcabcabcabcabcabcabcabca",
  "os": {    "sshKeys": [
@@ -302,11 +285,9 @@ mod tests {
 
     // Testing Device API Key case, such as when there's a pre-provisioned device
     const CONFIG3: &str = r###"
-{"applicationName":"abc",
- "applicationId":123,
+{"applicationId":123,
  "deviceType":"raspberrypi3",
  "userId":456,
- "username":"test",
  "appUpdatePollInterval":600000,
  "listenPort":48484,
  "vpnPort":443,
@@ -314,8 +295,6 @@ mod tests {
  "vpnEndpoint":"vpn.balena-cloud.com",
  "registryEndpoint":"registry2.balena-cloud.com",
  "deltaEndpoint":"https://delta.balena-cloud.com",
- "pubnubSubscribeKey":"",
- "pubnubPublishKey":"",
  "mixpanelToken":"xyzxyzxyz",
  "deviceApiKey":"aaaaaaaaaaaa",
  "registered_at":1573045985,
@@ -328,22 +307,18 @@ mod tests {
     #[test]
     fn read_conf_ok1() {
         let config: BalenaConfig = serde_json::from_str(CONFIG1).unwrap();
-        assert_eq!(config.app_name, "TestDev");
+        // assert_eq!(config.app_name, "TestDev");
         assert_eq!(config.app_id, 1_284_711);
         assert_eq!(config.vpn_port, 443);
         assert_eq!(config.device_type, "raspberrypi3");
         assert_eq!(config.api_key.unwrap(), "1xf6r2oNmJJt4M1xf6r2oNmJJt4M");
-        assert_eq!(config.device_api_key, None);
         assert_eq!(config.user_id, 120815);
-        assert_eq!(config.username, "g_user");
         assert_eq!(config.app_poll_interval, 600000);
         assert_eq!(config.listen_port, 48484);
         assert_eq!(config.api_endpoint, "https://api.balena-cloud.com");
         assert_eq!(config.vpn_endpoint, "vpn.balena-cloud.com");
         assert_eq!(config.registry_endpoint, "registry2.balena-cloud.com");
         assert_eq!(config.delta_endpoint, "https://delta.balena-cloud.com");
-        assert_eq!(config.pubnub_subscr_key, "");
-        assert_eq!(config.pubnub_publish_key, "");
         assert_eq!(config.mixpanel_token, "9ef939ea64cb6cd9ef939ea64cb6cd");
     }
 
@@ -351,17 +326,15 @@ mod tests {
     #[test]
     fn read_conf_ok2() {
         let config: BalenaConfig = serde_json::from_str(CONFIG2).unwrap();
-        assert_eq!(config.app_name, "test");
+        // assert_eq!(config.app_name, "test");
         assert_eq!(config.app_id, 13_454_711);
         assert_eq!(config.vpn_port, 443);
         assert_eq!(config.api_key.unwrap(), "abcabcabcabcabcabcabcabcabca");
-        assert_eq!(config.device_api_key, None);
     }
 
     #[test]
     fn read_conf_ok3() {
         let config: BalenaConfig = serde_json::from_str(CONFIG3).unwrap();
         assert_eq!(config.api_key, None);
-        assert_eq!(config.device_api_key.unwrap(), "aaaaaaaaaaaa");
     }
 }

@@ -1,15 +1,15 @@
 use log::{debug, error, info};
 use regex::Regex;
 
-use crate::common::path_info::PathInfo;
 use crate::{
     common::{
         boot_manager::BootManager,
         migrate_info::MigrateInfo,
+        path_info::PathInfo,
         stage2_config::{Stage2Config, Stage2ConfigBuilder},
         Config, MigError, MigErrorKind,
     },
-    defs::{BootType, DeviceType},
+    defs::{BootType, DeviceType, DEV_TYPE_RPI2, DEV_TYPE_RPI3, DEV_TYPE_RPI4_64},
     linux::{
         boot_manager_impl::{from_boot_type, RaspiBootManager},
         device_impl::Device,
@@ -20,6 +20,9 @@ use crate::{
 use std::path::PathBuf;
 
 const RPI_MODEL_REGEX: &str = r#"^Raspberry\s+Pi\s+(\S+)\s+Model\s+(.*)$"#;
+const RPI2_SLUGS: [&str; 1] = [DEV_TYPE_RPI2];
+const RPI3_SLUGS: [&str; 1] = [DEV_TYPE_RPI3];
+const RPI4_64_SLUGS: [&str; 1] = [DEV_TYPE_RPI4_64];
 
 pub(crate) fn is_rpi(
     mig_info: &MigrateInfo,
@@ -121,8 +124,8 @@ impl RaspberryPi2 {
 }
 
 impl Device for RaspberryPi2 {
-    fn get_device_slug(&self) -> &'static str {
-        "raspberry-pi2"
+    fn supports_device_type(&self, dev_type: &str) -> bool {
+        RPI2_SLUGS.contains(&dev_type)
     }
 
     fn get_device_type(&self) -> DeviceType {
@@ -208,8 +211,8 @@ impl RaspberryPi3 {
 }
 
 impl Device for RaspberryPi3 {
-    fn get_device_slug(&self) -> &'static str {
-        "raspberrypi3"
+    fn supports_device_type(&self, dev_type: &str) -> bool {
+        RPI3_SLUGS.contains(&dev_type)
     }
 
     fn get_device_type(&self) -> DeviceType {
@@ -295,8 +298,8 @@ impl RaspberryPi4_64 {
 }
 
 impl Device for RaspberryPi4_64 {
-    fn get_device_slug(&self) -> &'static str {
-        "raspberrypi4-64"
+    fn supports_device_type(&self, dev_type: &str) -> bool {
+        RPI4_64_SLUGS.contains(&dev_type)
     }
 
     fn get_device_type(&self) -> DeviceType {

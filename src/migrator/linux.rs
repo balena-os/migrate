@@ -177,11 +177,23 @@ impl<'a> LinuxMigrator {
             }
         };
 
-        if asset_ver.device != device.get_device_slug() {
+        if !device.supports_device_type(asset_ver.device.as_str()) {
             error!(
-                "Asset device mismatch, assets for '{}', device type: '{}' ",
+                "Asset device mismatch, assets for '{}', detected type: '{:?}' ",
                 asset_ver.device,
-                device.get_device_slug()
+                device.get_device_type()
+            );
+            return Err(MigError::displayed());
+        }
+
+        let device_type = mig_info.config_file.get_device_type();
+        info!("config.json is for device type {}", device_type);
+
+        if !device.supports_device_type(&device_type) {
+            error!(
+                "Target device mismatch, target type from config.json: '{}', detected type(s): '{:?}' ",
+                device_type,
+                device.get_device_type()
             );
             return Err(MigError::displayed());
         }
@@ -190,8 +202,7 @@ impl<'a> LinuxMigrator {
         match &os_image {
             ImageType::Flasher(flasher_img) => match flasher_img {
                 ImageSource::Version(img_ver) => {
-                    let img_file =
-                        download_image(&mut mig_info, device.get_device_slug(), &img_ver)?;
+                    let img_file = download_image(&mut mig_info, &device_type, &img_ver)?;
                     mig_info.set_os_image(&ImageType::Flasher(ImageSource::File(img_file)))?;
                 }
                 ImageSource::File(_) => {
@@ -199,11 +210,11 @@ impl<'a> LinuxMigrator {
                 }
             },
             ImageType::FileSystems(fs_dump) => {
-                if fs_dump.device_slug != device.get_device_slug() {
+                if !device.supports_device_type(&fs_dump.device_slug) {
                     error!(
-                        "The device-slug of the image dump configuration differs from the detect device slug '{}' != '{}'",
+                        "The device-slug of the image dump configuration differs from the detect device slug '{}' != '{:?}'",
                         fs_dump.device_slug,
-                        device.get_device_slug()
+                        device.get_device_type()
                     );
                     return Err(MigError::from(MigErrorKind::Displayed));
                 }
@@ -211,10 +222,7 @@ impl<'a> LinuxMigrator {
             }
         }
 
-        match mig_info
-            .config_file
-            .check(&config, device.get_device_slug())
-        {
+        match mig_info.config_file.check(&config) {
             Ok(_dummy) => info!(
                 "The sanity check on '{}' passed",
                 mig_info.config_file.get_rel_path().display()

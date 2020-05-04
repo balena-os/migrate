@@ -2,6 +2,7 @@ use log::{error, info, trace};
 
 use crate::common::path_info::PathInfo;
 
+use crate::defs::{DEV_TYPE_GEN_X86_64, DEV_TYPE_INTEL_NUC};
 use crate::{
     common::{
         boot_manager::BootManager,
@@ -17,6 +18,8 @@ use crate::{
         stage2::mounts::Mounts,
     },
 };
+
+const X86_SLUGS: [&str; 2] = [DEV_TYPE_INTEL_NUC, DEV_TYPE_GEN_X86_64];
 
 pub(crate) struct IntelNuc {
     boot_manager: Box<dyn BootManager>,
@@ -108,8 +111,8 @@ impl IntelNuc {
 }
 
 impl<'a> Device for IntelNuc {
-    fn get_device_slug(&self) -> &'static str {
-        "intel-nuc"
+    fn supports_device_type(&self, dev_type: &str) -> bool {
+        X86_SLUGS.contains(&dev_type)
     }
 
     fn get_device_type(&self) -> DeviceType {

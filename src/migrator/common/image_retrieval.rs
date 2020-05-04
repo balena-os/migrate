@@ -14,6 +14,7 @@ use crate::{
         migrate_info::MigrateInfo,
         path_append, MigErrCtx, MigError, MigErrorKind,
     },
+    defs::{DEV_TYPE_GEN_X86_64, DEV_TYPE_INTEL_NUC, DEV_TYPE_RPI3},
     linux::disk_util::{Disk, PartitionIterator, PartitionReader},
 };
 
@@ -23,8 +24,11 @@ use failure::ResultExt;
 use flate2::{Compression, GzBuilder};
 use nix::mount::{mount, umount, MsFlags};
 
-const FLASHER_DEVICES: [&str; 1] = ["intel-nuc"];
-const SUPPORTED_DEVICES: [&str; 2] = ["raspberrypi3", "intel-nuc"];
+const FLASHER_DEVICES: [&str; 2] = [DEV_TYPE_INTEL_NUC, DEV_TYPE_GEN_X86_64];
+const SUPPORTED_DEVICES: [&str; 3] = [DEV_TYPE_RPI3, DEV_TYPE_INTEL_NUC, DEV_TYPE_GEN_X86_64];
+
+const IMG_NAME_GEN_X86_64: &str = "resin-image-genericx86-64-ext.resinos-img";
+const IMG_NAME_INTEL_NUC: &str = "resin-image-genericx86-64.resinos-img";
 
 fn parse_versions(versions: &Versions) -> Vec<Version> {
     let mut sem_vers: Vec<Version> = versions
@@ -240,8 +244,11 @@ pub(crate) fn download_image(
                 ))?;
 
                 let img_path = match device_type {
-                    "intel-nuc" => {
-                        path_append(&mount_path, "opt/resin-image-genericx86-64.resinos-img")
+                    DEV_TYPE_INTEL_NUC => {
+                        path_append(path_append(&mount_path, "opt"), IMG_NAME_INTEL_NUC)
+                    }
+                    DEV_TYPE_GEN_X86_64 => {
+                        path_append(path_append(&mount_path, "opt"), IMG_NAME_GEN_X86_64)
                     }
                     _ => {
                         error!(

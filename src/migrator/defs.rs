@@ -82,6 +82,15 @@ pub const BALENA_API_PORT: u16 = 80;
 pub const BALENA_DATA_PART: &str = "resin-data";
 pub const BALENA_DATA_FSTYPE: &str = "ext4";
 
+pub const DEV_TYPE_INTEL_NUC: &str = "intel-nuc";
+pub const DEV_TYPE_GEN_X86_64: &str = "genericx86-64-ext";
+pub const DEV_TYPE_RPI3: &str = "raspberrypi3";
+pub const DEV_TYPE_RPI2: &str = "raspberry-pi2";
+pub const DEV_TYPE_RPI4_64: &str = "raspberrypi4-64";
+pub const DEV_TYPE_BBG: &str = "beaglebone-green";
+//pub const DEV_TYPE_BBB: &str = "beaglebone-black";
+pub const DEV_TYPE_BBXM: &str = "beagleboard-xm";
+
 #[allow(dead_code)]
 pub const PART_NAME: &[&str] = &[
     BALENA_BOOT_PART,

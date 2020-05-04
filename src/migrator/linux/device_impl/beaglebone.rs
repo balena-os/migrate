@@ -3,7 +3,7 @@ use regex::Regex;
 
 use crate::common::path_append;
 use crate::common::path_info::PathInfo;
-use crate::defs::{MIG_INITRD_NAME, MIG_KERNEL_NAME};
+use crate::defs::{DEV_TYPE_BBG, DEV_TYPE_BBXM, MIG_INITRD_NAME, MIG_KERNEL_NAME};
 use crate::{
     common::{
         boot_manager::BootManager,
@@ -50,6 +50,9 @@ const BB_MODEL_REGEX: &str = r#"^((\S+\s+)*(\S+))\s+Beagle(Bone|Board)\s+(\S+)$"
 
 const BBG_DTB_FILES: [&str; 2] = ["am335x-bonegreen.dtb", "am335x-bonegreen-wireless.dtb"];
 const BBXM_DTB_FILES: [&str; 2] = ["omap3-beagle-xm.dtb", "omap3-beagle-xm-ab.dtb"];
+
+const BBG_SLUGS: [&str; 1] = [DEV_TYPE_BBG];
+const BBXM_SLUGS: [&str; 1] = [DEV_TYPE_BBXM];
 
 // TODO: check location of uEnv.txt or other files files to improve reliability
 
@@ -244,8 +247,8 @@ impl Device for BeagleboneGreen {
         DeviceType::BeagleboneGreen
     }
 
-    fn get_device_slug(&self) -> &'static str {
-        "beaglebone-green"
+    fn supports_device_type(&self, dev_type: &str) -> bool {
+        BBG_SLUGS.contains(&dev_type)
     }
 
     fn get_boot_type(&self) -> BootType {
@@ -455,8 +458,8 @@ impl<'a> Device for BeagleboardXM {
         DeviceType::BeagleboardXM
     }
 
-    fn get_device_slug(&self) -> &'static str {
-        "beagleboard-xm"
+    fn supports_device_type(&self, dev_type: &str) -> bool {
+        BBXM_SLUGS.contains(&dev_type)
     }
 
     fn get_boot_type(&self) -> BootType {

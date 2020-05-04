@@ -10,7 +10,7 @@ use crate::{
 use crate::{common::stage2_config::Stage2Config, linux::stage2::mounts::Mounts};
 
 pub(crate) trait Device {
-    fn get_device_slug(&self) -> &'static str;
+    fn supports_device_type(&self, dev_type: &str) -> bool;
     fn get_device_type(&self) -> DeviceType;
     fn get_boot_type(&self) -> BootType;
     // TODO: make return reference

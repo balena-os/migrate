@@ -1,10 +1,10 @@
 use log::{debug, error, info};
 
+use crate::defs::DEV_TYPE_INTEL_NUC;
 use crate::{
     common::{
-        boot_manager::BootManager, config::Config, device::Device,
-        migrate_info::MigrateInfo, stage2_config::Stage2ConfigBuilder, MigError, MigErrorKind,
-        path_info::PathInfo,
+        boot_manager::BootManager, config::Config, device::Device, migrate_info::MigrateInfo,
+        path_info::PathInfo, stage2_config::Stage2ConfigBuilder, MigError, MigErrorKind,
     },
     defs::{BootType, DeviceType},
     mswin::{
@@ -95,7 +95,7 @@ impl IntelNuc {
 
 impl Device for IntelNuc {
     fn get_device_slug(&self) -> &'static str {
-        "intel-nuc"
+        DEV_TYPE_INTEL_NUC
     }
     fn get_device_type(&self) -> DeviceType {
         DeviceType::IntelNuc
