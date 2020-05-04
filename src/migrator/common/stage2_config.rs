@@ -151,7 +151,7 @@ impl BackupCfg {
         } else {
             Err(MigError::from_remark(
                 MigErrorKind::InvState,
-                &format!("BackupCFg::new source & backup   must be on same device"),
+                "BackupCfg::new source & backup   must be on same device",
             ))
         }
     }

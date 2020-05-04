@@ -26,7 +26,7 @@ impl Assets {
         let version: AssetVersion =
             serde_yaml::from_slice(self.version).context(MigErrCtx::from_remark(
                 MigErrorKind::Upstream,
-                &format!("Failed to deserialize version info for assets"),
+                "Failed to deserialize version info for assets",
             ))?;
 
         Ok(version)
