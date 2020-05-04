@@ -20,6 +20,100 @@ use crate::{
 const NO_NMGR_FILES: &[PathBuf] = &[];
 const NO_BACKUP_VOLUMES: &[VolumeConfig] = &[];
 
+const DEFAULT_CONFIG: &str = r##"
+## select the working directory
+# work_dir: ./
+
+## select the mode of operation either pretend or immediate 
+# mode: immediate
+
+## set the reboot delay in seconds, default is 0 / disabled
+# reboot: 0
+
+## try to create network manager configurations for all configured wifi's
+# all_wifis: true
+
+## Specify a list of SSID's to create wifi configurations for
+# wifis: 
+
+## Setup stage2 logging to external device
+# log
+## set the stage2 log level, one of trace, debug, info, warn, error
+#   level: info
+## specify an external drive to log to - default is not set
+#   drive: 
+## specify drive by uuid
+#      uuid: F088-D128 
+## specify drive by partuuid 
+#      partuuid: f4e91901-1892-44d2-b45f-6ae9f26227f4
+## specify drive by device path path
+#      dev_path: '/dev/sda1'
+## specify drive by device label
+#      label: 'LOG'
+
+## How to fail on error in stage2 in stage2, one of reboot, shell
+## choose reboot to reboot on failure, shell to display a rescue shell 
+# fail_mode: reboot
+
+## Specify a backup configuration, please see README.md for details 
+# backup: 
+
+## Supply a list of custom network manager files to be injected in balena-OS
+# nwmgr_files: 
+
+## Require a valid network manager configuration to be present
+# require_nwmgr_config: true
+
+## In stage2 delay migration by the specified amount of seconds
+# delay: 0
+
+## supply extra kernel options when booting into the migrate kernel 
+# kernel_opts:
+ 
+## Supply a file containing md5 sums of all provided files for consistency checking
+# md5_sums:
+
+## Use internal gzip instead of external gzip executable
+# gzip_internal: true
+
+## Use internal tar instead of external tar executable 
+# tar_internal: true
+
+## Supply the balena-OS image file, fs-dump or download version, default - nothing selected
+## Examles:
+## Select a balena OS image
+## image:
+##   dd:
+##     file: balena-cloud-intel-nuc-2.48.0+rev3.prod.img.gz
+## Select a specific balena OS version for download
+## image:
+##   dd:
+##     version: 2.48.0+rev3.prod
+
+## Supply the config.json file
+# config: 
+
+## check balena api connectivity to api endpoint specified in config.json
+# check_api: true
+
+## check balena vpn connectivity to vpn endpoint specified in config.json
+# check_vpn: true
+
+## specify check timeout in seconds for api and vpn checks
+# check_timeout: 20
+
+## configure a device that balena-OS will be flashed to
+## example:
+## force_flash_device: /dev/sda
+# force_flash_device: 
+
+## Do not flash balena-OS in stage 2
+# no_flash: false 
+
+## do not fail on untested OS 
+# no_os_check: false
+"##;
+
 #[derive(Debug, PartialEq, Deserialize, Clone)]
 pub(crate) enum MigMode {
     //    #[serde(rename = "agent")]
@@ -45,14 +139,6 @@ pub(crate) struct UBootCfg {
     pub strategy: Option<UEnvStrategy>,
     pub mmc_index: Option<u8>,
 }
-
-/*
-#[derive(Debug, Deserialize, Clone)]
-pub(crate) struct UBootEnv {
-    pub mlo: PathBuf,
-    pub image: PathBuf,
-}
-*/
 
 #[derive(Debug, Deserialize)]
 pub(crate) struct ItemConfig {
@@ -91,7 +177,6 @@ pub(crate) enum DeviceSpec {
 
 #[derive(Debug, Deserialize)]
 pub(crate) struct LogConfig {
-    pub console: Option<bool>,
     pub level: Option<String>,
     pub drive: Option<DeviceSpec>,
 }
@@ -157,7 +242,6 @@ pub(crate) struct Config {
     all_wifis: Option<bool>,
     wifis: Option<Vec<String>>,
     log: Option<LogConfig>,
-    // device_tree: Option<Vec<FileRef>>,
     // TODO: check fail mode processing
     fail_mode: Option<FailMode>,
     backup: Option<Vec<VolumeConfig>>,
@@ -254,12 +338,18 @@ impl<'a> Config {
                 Arg::with_name("verbose")
                     .short("v")
                     .multiple(true)
-                    .help("Set the level of verbosity"),
+                    .help("Increase the level of verbosity"),
             )
             .arg(
                 Arg::with_name("no-os-check")
                     .long("no-os-check")
                     .help("Do not fail on un-tested OS version"),
+            )
+            .arg(
+                Arg::with_name("default-config")
+                    .short("d")
+                    .long("def-config")
+                    .help("Print a default migrate config to stdout"),
             )
             .get_matches();
 
@@ -273,6 +363,11 @@ impl<'a> Config {
         Logger::set_log_dest(&LogDestination::BufferStderr, NO_STREAM).context(
             MigErrCtx::from_remark(MigErrorKind::Upstream, "failed to set up logging"),
         )?;
+
+        if arg_matches.is_present("default-config") {
+            println!("{}", DEFAULT_CONFIG);
+            return Err(MigError::displayed());
+        }
 
         // try to establish work_dir and config file
         // work_dir can be specified on command line, it defaults to ./ if not
@@ -661,15 +756,6 @@ impl<'a> Config {
         "warn"
     }
 
-    pub fn get_log_console(&self) -> bool {
-        if let Some(ref log_info) = self.log {
-            if let Some(console) = log_info.console {
-                return console;
-            }
-        }
-        false
-    }
-
     // The following functions can only be safely called after check has succeeded
 
     pub fn get_work_dir(&'a self) -> &'a Path {
@@ -830,7 +916,6 @@ mod tests {
             _ => panic!("unexpected result from get_wifis"),
         };
         assert_eq!(config.get_reboot(), &Some(10));
-        assert_eq!(config.get_log_console(), true);
         if let Some(dev_spec) = config.get_log_device() {
             if let DeviceSpec::DevicePath(path) = dev_spec {
                 assert_eq!(path, &PathBuf::from("/dev/sda1"));
@@ -954,7 +1039,6 @@ migrate:
     - 'bla'
   reboot: 10
   log:
-    console: true
     drive: "/dev/sda1"
     level: debug
   kernel: 

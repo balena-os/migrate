@@ -445,9 +445,6 @@ impl<'a> LinuxMigrator {
             .set_gzip_internal(self.config.is_gzip_internal());
 
         self.stage2_config
-            .set_log_console(self.config.get_log_console());
-
-        self.stage2_config
             .set_log_level(String::from(self.config.get_log_level()));
 
         if let Some(ref log_path) = self.mig_info.log_path {
