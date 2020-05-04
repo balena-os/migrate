@@ -190,14 +190,7 @@ impl<'a> Stage2 {
         };
 
         if let Some(ref log_path) = log_path {
-            // match Logger::set_log_file(&LogDestination::Stderr, &log_path, false) {
-            let log_dest = if stage2_cfg.is_log_console() {
-                LogDestination::StreamStderr
-            } else {
-                LogDestination::Stream
-            };
-
-            match Logger::set_log_file(&log_dest, &log_path, false) {
+            match Logger::set_log_file(&LogDestination::StreamStderr, &log_path, false) {
                 Ok(_) => {
                     info!("Set log file to '{}'", log_path.display());
                 }

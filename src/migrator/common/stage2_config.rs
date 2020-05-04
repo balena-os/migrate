@@ -195,8 +195,6 @@ pub(crate) struct Stage2Config {
     log_level: String,
     // stage 2 log destination
     log_to: Option<LogDevice>,
-    // log also to console
-    log_console: bool,
     // device type
     device_type: DeviceType,
     // boot type
@@ -236,11 +234,6 @@ impl<'a> Stage2Config {
         ))?;
 
         Stage2Config::from_str(&config_str)
-    }
-
-    #[allow(dead_code)]
-    pub fn is_log_console(&self) -> bool {
-        self.log_console
     }
 
     #[allow(dead_code)]
@@ -424,7 +417,6 @@ pub(crate) struct Stage2ConfigBuilder {
     gzip_internal: Required<bool>,
     log_level: Required<String>,
     log_to: Optional<LogDevice>,
-    log_console: Required<bool>,
     device_type: Required<DeviceType>,
     boot_type: Required<BootType>,
     migrate_delay: Optional<u64>,
@@ -446,7 +438,6 @@ impl<'a> Stage2ConfigBuilder {
             gzip_internal: Required::new("gzip_internal", Some(&true)),
             log_level: Required::new("log_level", Some(&String::from("warn"))),
             log_to: Optional::new(None),
-            log_console: Required::new("log_console", Some(&false)),
             device_type: Required::new("device_type", None),
             boot_type: Required::new("boot_type", None),
             migrate_delay: Optional::new(None),
@@ -468,7 +459,6 @@ impl<'a> Stage2ConfigBuilder {
             gzip_internal: *self.gzip_internal.get()?,
             log_level: self.log_level.get()?.clone(),
             log_to: self.log_to.get().clone(),
-            log_console: *self.log_console.get()?,
             device_type: *self.device_type.get()?,
             boot_type: *self.boot_type.get()?,
             migrate_delay: *self.migrate_delay.get(),
@@ -575,10 +565,6 @@ impl<'a> Stage2ConfigBuilder {
         self.log_to.set(val);
     }
 
-    pub fn set_log_console(&mut self, val: bool) {
-        self.log_console.set(val);
-    }
-
     pub fn set_boot_type(&mut self, val: BootType) {
         self.boot_type.set(val);
     }
@@ -618,7 +604,6 @@ log_level: debug
 log_to:
   device: /dev/sdb1
   fstype: vfat
-log_console: false
 device_type: IntelNuc
 boot_type: Grub
 migrate_delay: 0
