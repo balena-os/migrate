@@ -586,8 +586,6 @@ impl<'a> Config {
                     error!("A required parameter was not found: 'work_dir'");
                     return Err(MigError::displayed());
                 }
-
-                ()
             }
         }
 

@@ -44,6 +44,7 @@ fn parse_versions(versions: &Versions) -> Vec<Version> {
     sem_vers
 }
 
+#[allow(clippy::cognitive_complexity)]
 pub(crate) fn download_image(
     mig_info: &mut MigrateInfo,
     device_type: &str,
@@ -76,14 +77,12 @@ pub(crate) fn download_image(
                     debug!("Looking at version {}", cmp_ver);
                     if cmp_ver.is_prerelease() {
                         continue;
-                    } else {
-                        if cmp_ver
-                            .build
-                            .contains(&Identifier::AlphaNumeric("prod".to_string()))
-                        {
-                            found = Some(cmp_ver);
-                            break;
-                        }
+                    } else if cmp_ver
+                        .build
+                        .contains(&Identifier::AlphaNumeric("prod".to_string()))
+                    {
+                        found = Some(cmp_ver);
+                        break;
                     }
                 }
 
@@ -96,7 +95,7 @@ pub(crate) fn download_image(
                 }
             }
             _ => {
-                if version.starts_with("^") || version.starts_with("~") {
+                if version.starts_with('^') || version.starts_with('~') {
                     let ver_req = VersionReq::parse(version).context(MigErrCtx::from_remark(
                         MigErrorKind::Upstream,
                         &format!("Failed to parse version from '{}'", version),
@@ -223,6 +222,7 @@ pub(crate) fn download_image(
                 }
 
                 debug!("mount path is '{}'", mount_path.display());
+                #[allow(clippy::string_lit_as_bytes)]
                 mount(
                     Some(loop_dev.as_bytes()),
                     &mount_path,

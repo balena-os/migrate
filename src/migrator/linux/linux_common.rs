@@ -1,3 +1,4 @@
+#[warn(clippy::missing_safety_doc)]
 use failure::ResultExt;
 
 use lazy_static::lazy_static;
@@ -394,18 +395,16 @@ fn device_spec_to_path(
         ));
     };
 
-    if let Some(_) = mounted_on {
+    if mounted_on.is_some() {
         Ok(mounted_on)
+    } else if mount {
+        Ok(Some(tmp_mount(
+            dev_path,
+            &Some(String::from(fstype)),
+            mount_dir,
+        )?))
     } else {
-        if mount {
-            Ok(Some(tmp_mount(
-                dev_path,
-                &Some(String::from(fstype)),
-                mount_dir,
-            )?))
-        } else {
-            Ok(None)
-        }
+        Ok(None)
     }
 }
 

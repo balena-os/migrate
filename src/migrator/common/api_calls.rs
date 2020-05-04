@@ -39,7 +39,7 @@ pub(crate) fn get_os_versions(
         header::AUTHORIZATION,
         header::HeaderValue::from_str(api_key).context(MigErrCtx::from_remark(
             MigErrorKind::Upstream,
-            &format!("Failed to create auth header"),
+            "Failed to create auth header",
         ))?,
     );
 
@@ -91,7 +91,7 @@ pub(crate) fn get_os_image(
         header::AUTHORIZATION,
         header::HeaderValue::from_str(api_key).context(MigErrCtx::from_remark(
             MigErrorKind::Upstream,
-            &format!("Failed to create auth header"),
+            "Failed to create auth header",
         ))?,
     );
 
