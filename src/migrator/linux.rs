@@ -186,7 +186,15 @@ impl<'a> LinuxMigrator {
             return Err(MigError::displayed());
         }
 
-        let device_type = mig_info.config_file.get_device_type();
+        let device_type =
+            mig_info
+                .config_file
+                .get_device_type()
+                .context(MigErrCtx::from_remark(
+                    MigErrorKind::Upstream,
+                    "Failed to retrieve device-type from config.json",
+                ))?;
+
         info!("config.json is for device type {}", device_type);
 
         if !device.supports_device_type(&device_type) {

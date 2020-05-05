@@ -22,6 +22,7 @@ use crate::{
 // *************************************************************************************************
 
 pub(crate) mod balena_cfg_json;
+// pub(crate) mod balena_cfg_json;
 use crate::common::device_info::DeviceInfo;
 use crate::common::file_digest::{check_digest, HashInfo};
 use crate::common::{path_append, MigErrCtx};
@@ -352,11 +353,11 @@ impl MigrateInfo {
         }
     }
 
-    pub fn get_api_key(&self) -> Option<String> {
+    pub fn get_api_key(&self) -> Result<String, MigError> {
         self.config_file.get_api_key()
     }
 
-    pub fn get_api_endpoint(&self) -> String {
+    pub fn get_api_endpoint(&self) -> Result<String, MigError> {
         self.config_file.get_api_endpoint()
     }
 }
