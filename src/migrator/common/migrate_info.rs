@@ -22,7 +22,6 @@ use crate::{
 // *************************************************************************************************
 
 pub(crate) mod balena_cfg_json;
-// pub(crate) mod balena_cfg_json;
 use crate::common::device_info::DeviceInfo;
 use crate::common::file_digest::{check_digest, HashInfo};
 use crate::common::{path_append, MigErrCtx};

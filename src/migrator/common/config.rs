@@ -269,6 +269,7 @@ pub(crate) struct Config {
 
     gzip_internal: Option<bool>,
     no_os_check: Option<bool>,
+    migrate_hostname: Option<bool>,
 }
 
 impl<'a> Config {
@@ -350,6 +351,12 @@ impl<'a> Config {
                     .short("d")
                     .long("def-config")
                     .help("Print a default migrate config to stdout"),
+            )
+            .arg(
+                Arg::with_name("balena-hostname")
+                    .short("b")
+                    .long("balena-hostname")
+                    .help("Generate a balena hostname from device uuid rather than keeping the existing hostname"),
             )
             .get_matches();
 
@@ -476,6 +483,10 @@ impl<'a> Config {
             }
         }
 
+        if arg_matches.is_present("balena-hostname") {
+            config.set_migrate_hostname(false);
+        }
+
         if arg_matches.is_present("no-nwmgr-cfg") {
             config.set_require_nwmgr_configs(false);
         }
@@ -546,6 +557,7 @@ impl<'a> Config {
             hacks: None,
             gzip_internal: None,
             no_os_check: None,
+            migrate_hostname: None,
         }
     }
 
@@ -590,16 +602,6 @@ impl<'a> Config {
         }
 
         if let MigMode::Immediate = mode {
-            /*            if self.image.is_none() {
-                            // TODO: download & possibly process image
-
-
-                            return Err(MigError::from_remark(
-                                MigErrorKind::InvParam,
-                                "check: no balena OS image was specified in mode: IMMEDIATE",
-                            ));
-                        }
-            */
             if self.config.is_none() {
                 return Err(MigError::from_remark(
                     MigErrorKind::InvParam,
@@ -614,6 +616,17 @@ impl<'a> Config {
     /*****************************************
      * config migrate accessors
      *****************************************/
+    pub fn set_migrate_hostname(&mut self, flag: bool) {
+        self.migrate_hostname = Some(flag);
+    }
+
+    pub fn is_migrate_hostname(&self) -> bool {
+        if let Some(val) = self.migrate_hostname {
+            val
+        } else {
+            true
+        }
+    }
 
     pub fn is_tar_internal(&self) -> bool {
         if let Some(val) = self.tar_internal {
@@ -727,14 +740,6 @@ impl<'a> Config {
             false
         }
     }
-
-    /*pub fn get_dtb_refs(&'a self) -> Option<&'a Vec<FileRef>> {
-        if let Some(ref path) = self.device_tree {
-            Some(path)
-        } else {
-            None
-        }
-    }*/
 
     pub fn get_log_device(&'a self) -> Option<&'a DeviceSpec> {
         if let Some(ref log_info) = self.log {

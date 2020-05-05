@@ -1,7 +1,7 @@
 use failure::{Fail, ResultExt};
 use log::{debug, error, info, trace, warn};
 use nix::unistd::sync;
-use std::fs::{copy, create_dir, read_dir};
+use std::fs::{copy, create_dir, read_dir, read_to_string};
 use std::thread;
 use std::time::Duration;
 
@@ -292,15 +292,26 @@ impl<'a> LinuxMigrator {
     #[allow(clippy::cognitive_complexity)] //TODO refactor this function to fix the clippy warning
     fn do_migrate(&mut self) -> Result<(), MigError> {
         trace!("Entered do_migrate");
-        let work_dir = &self.mig_info.work_path.path;
+        let work_dir = self.mig_info.work_path.path.clone();
         let boot_device = self.device.get_boot_device();
 
-        //if &self.mig_info.work_path.device_info.device == &boot_device.device {
+        if self.config.is_migrate_hostname() {
+            let hostname = read_to_string("/proc/sys/kernel/hostname")
+                .context(MigErrCtx::from_remark(
+                    MigErrorKind::Upstream,
+                    "Failed to read file '/proc/sys/kernel/hostname' for reading",
+                ))?
+                .trim()
+                .to_string();
+
+            info!("Writing hostname to config.json: '{}'", hostname);
+            self.mig_info.config_file.set_host_name(&hostname);
+        }
+
         if self.mig_info.work_path.device_info.device == boot_device.device_info.device {
             self.stage2_config
                 .set_work_path(&PathType::Path(self.mig_info.work_path.path.clone()));
         } else {
-            //let (_lsblk_device, lsblk_part) = os_api.get_lsblk_info()?.get_path_devs(&work_dir)?;
             let work_device = &self.mig_info.work_path.device_info;
             self.stage2_config
                 .set_work_path(&PathType::Mount(MountConfig::new(
@@ -320,7 +331,7 @@ impl<'a> LinuxMigrator {
 
         trace!("backup");
 
-        let backup_path = path_append(work_dir, BACKUP_FILE);
+        let backup_path = path_append(&work_dir, BACKUP_FILE);
 
         let has_backup = self
             .stage2_config
@@ -333,7 +344,7 @@ impl<'a> LinuxMigrator {
         // TODO: this might not be a smart place to put things, everything in system-connections
         // will end up in /mnt/boot/system-connections
         trace!("nwmgr_files");
-        let nwmgr_path = path_append(work_dir, SYSTEM_CONNECTIONS_DIR);
+        let nwmgr_path = path_append(&work_dir, SYSTEM_CONNECTIONS_DIR);
 
         if (!self.mig_info.nwmgr_files.is_empty()
             || !self.mig_info.wifis.is_empty() && !dir_exists(&nwmgr_path)?)
@@ -452,8 +463,15 @@ impl<'a> LinuxMigrator {
         self.stage2_config
             .set_balena_image(self.mig_info.get_os_image());
 
-        self.stage2_config
-            .set_balena_config(self.mig_info.config_file.get_rel_path().clone());
+        if self.mig_info.config_file.is_modified() {
+            info!("Saving modified config.json");
+            let new_path = self.mig_info.config_file.write(&work_dir)?;
+            debug!("config.json saved to '{}", new_path.rel_path.display());
+            self.stage2_config.set_balena_config(new_path.rel_path);
+        } else {
+            self.stage2_config
+                .set_balena_config(self.mig_info.config_file.get_rel_path().clone());
+        }
 
         // TODO: setpath if on / mount else set mount
 

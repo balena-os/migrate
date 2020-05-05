@@ -44,10 +44,16 @@ impl BalenaCfgJson {
         })
     }
 
-    pub fn write(&mut self, work_dir: &Path) -> Result<PathBuf, MigError> {
-        let new_path = mktemp(false, Some("config.json"), Some(work_dir.to_path_buf())).context(
-            MigErrCtx::from_remark(MigErrorKind::Upstream, "Failed to create temporary file"),
-        )?;
+    pub fn write(&mut self, work_dir: &Path) -> Result<RelFileInfo, MigError> {
+        let new_path = mktemp(
+            false,
+            Some("config.json.XXXX"),
+            Some(work_dir.to_path_buf()),
+        )
+        .context(MigErrCtx::from_remark(
+            MigErrorKind::Upstream,
+            "Failed to create temporary file",
+        ))?;
 
         let out_file =
             OpenOptions::new()
@@ -68,7 +74,17 @@ impl BalenaCfgJson {
 
         self.modified = false;
 
-        Ok(new_path)
+        if let Some(file_info) = FileInfo::new(&new_path, work_dir)? {
+            Ok(file_info.to_rel_fileinfo()?)
+        } else {
+            Err(MigError::from_remark(
+                MigErrorKind::InvParam,
+                &format!(
+                    "Failed to create relative file info from '{}'",
+                    new_path.display()
+                ),
+            ))
+        }
     }
 
     pub fn check(&self, config: &Config) -> Result<(), MigError> {
@@ -165,13 +181,20 @@ impl BalenaCfgJson {
             if let Some(value) = value.as_u64() {
                 Ok(value)
             } else {
-                Err(MigError::from_remark(
-                    MigErrorKind::InvParam,
-                    &format!(
-                        "Invalid type encountered for '{}', expected uint, found {:?}",
-                        name, value
-                    ),
-                ))
+                if let Some(str_val) = value.as_str() {
+                    Ok(str_val.parse::<u64>().context(MigErrCtx::from_remark(
+                        MigErrorKind::Upstream,
+                        &format!("Failed to parse uint value for '{}' from config.json", name),
+                    ))?)
+                } else {
+                    Err(MigError::from_remark(
+                        MigErrorKind::InvParam,
+                        &format!(
+                            "Invalid type encountered for '{}', expected uint, found {:?}",
+                            name, value
+                        ),
+                    ))
+                }
             }
         } else {
             Err(MigError::from_remark(
@@ -181,9 +204,9 @@ impl BalenaCfgJson {
         }
     }
 
-    pub fn get_hostname(&self) -> Result<String, MigError> {
+    /*pub fn get_hostname(&self) -> Result<String, MigError> {
         self.get_str_val("hostname")
-    }
+    }*/
 
     pub fn set_host_name(&mut self, hostname: &str) -> Option<String> {
         self.modified = true;
