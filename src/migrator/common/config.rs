@@ -953,7 +953,7 @@ mod tests {
     }
 
     #[test]
-    fn read_conf_ok2() -> () {
+    fn read_conf_ok2() {
         let _config = Config::from_string(TEST_FS_CONFIG_OK).unwrap();
     }
 

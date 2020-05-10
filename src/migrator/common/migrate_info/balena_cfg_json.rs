@@ -334,10 +334,10 @@ mod tests {
         assert_eq!(config.device_type, "raspberrypi3");
         assert_eq!(config.api_key.unwrap(), "1xf6r2oNmJJt4M1xf6r2oNmJJt4M");
         assert_eq!(config.device_api_key, None);
-        assert_eq!(config.user_id, 120815);
+        assert_eq!(config.user_id, 120_815);
         assert_eq!(config.username, "g_user");
-        assert_eq!(config.app_poll_interval, 600000);
-        assert_eq!(config.listen_port, 48484);
+        assert_eq!(config.app_poll_interval, 600_000);
+        assert_eq!(config.listen_port, 48_484);
         assert_eq!(config.api_endpoint, "https://api.balena-cloud.com");
         assert_eq!(config.vpn_endpoint, "vpn.balena-cloud.com");
         assert_eq!(config.registry_endpoint, "registry2.balena-cloud.com");

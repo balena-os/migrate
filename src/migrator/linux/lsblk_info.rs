@@ -549,7 +549,7 @@ NAME="nvme0n1p8" KNAME="nvme0n1p8" MAJ:MIN="259:8" FSTYPE="ext4" MOUNTPOINT="/" 
 "##;
 
     #[test]
-    fn read_output_ok1() -> () {
+    fn read_output_ok1() {
         parse_lsblk_line(LSBLK_OUTPUT1).unwrap();
     }
     /*

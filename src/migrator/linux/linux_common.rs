@@ -1,15 +1,14 @@
-#[warn(clippy::missing_safety_doc)]
+#![allow(clippy::missing_safety_doc)]
 use failure::ResultExt;
 
 use lazy_static::lazy_static;
+use libc::getuid;
 use log::{debug, error, info, trace, warn};
 use regex::{Regex, RegexBuilder};
 use std::fs::{copy, read_link, read_to_string, OpenOptions};
 use std::mem::MaybeUninit;
-use std::path::{Path, PathBuf};
-
-use libc::getuid;
 use std::os::unix::io::AsRawFd;
+use std::path::{Path, PathBuf};
 
 use crate::{
     common::{call, file_exists, parse_file, path_append, MigErrCtx, MigError, MigErrorKind},
@@ -33,8 +32,6 @@ use nix::{ioc, ioctl_none};
 
 const BLK_IOC_MAGIC: u8 = 0x12;
 const BLK_RRPART: u8 = 95;
-
-ioctl_none!(blk_reread, BLK_IOC_MAGIC, BLK_RRPART);
 
 const MOKUTIL_ARGS_SB_STATE: [&str; 1] = ["--sb-state"];
 
@@ -65,7 +62,7 @@ const DTB_FTYPE_REGEX: &str = r#"^(Device Tree Blob|data).*$"#;
 
 const GZIP_TAR_FTYPE_REGEX: &str = r#"^(POSIX tar archive \(GNU\)).*\(gzip compressed data.*\)$"#;
 
-//const MTAB_PATH: &str = "/etc/mtab";
+ioctl_none!(blk_reread, BLK_IOC_MAGIC, BLK_RRPART);
 
 pub(crate) fn is_admin() -> Result<bool, MigError> {
     trace!("LinuxMigrator::is_admin: entered");
