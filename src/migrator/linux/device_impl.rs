@@ -24,10 +24,13 @@ pub(crate) fn from_config(
         DeviceType::BeagleboneGreen => Ok(Box::new(beaglebone::BeagleboneGreen::from_boot_type(
             boot_type,
         ))),
-        DeviceType::BeagleboneBlack => Ok(Box::new(beaglebone::BeagleboneBlack::from_boot_type(
+        /*        DeviceType::BeagleboneBlack => Ok(Box::new(beaglebone::BeagleboneBlack::from_boot_type(
+            boot_type,
+        ))), */
+        DeviceType::BeagleboardXM => Ok(Box::new(beaglebone::BeagleboardXM::from_boot_type(
             boot_type,
         ))),
-        DeviceType::BeagleboardXM => Ok(Box::new(beaglebone::BeagleboardXM::from_boot_type(
+        DeviceType::RaspberryPi2 => Ok(Box::new(raspberrypi::RaspberryPi2::from_boot_type(
             boot_type,
         ))),
         DeviceType::RaspberryPi3 => Ok(Box::new(raspberrypi::RaspberryPi3::from_boot_type(

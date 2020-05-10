@@ -4,36 +4,35 @@ use std::fs::create_dir_all;
 use std::path::{Path, PathBuf};
 use std::str;
 use std::thread;
-use std::time::Duration;
+use std::thread::sleep;
+use std::time::{Duration, Instant};
 
 use nix::{
     mount::{mount, umount, MsFlags},
     unistd::sync,
 };
 
+use crate::linux::linux_common::to_std_device_path;
 use crate::{
     common::{
         call, dir_exists, file_exists, path_append,
         stage2_config::{PathType, Stage2Config},
         MigErrCtx, MigError, MigErrorKind,
     },
-    defs::{
-        BALENA_BOOT_FSTYPE, BALENA_BOOT_PART, BALENA_DATA_FSTYPE, BALENA_DATA_PART,
-        BALENA_ROOTA_FSTYPE, BALENA_ROOTA_PART, BALENA_ROOTB_FSTYPE, BALENA_ROOTB_PART,
-        BALENA_STATE_FSTYPE, BALENA_STATE_PART, DISK_BY_LABEL_PATH, STAGE2_CFG_FILE,
-    },
+    defs::{DISK_BY_LABEL_PATH, STAGE2_CFG_FILE},
     linux::{
-        linux_common::{
-            drive_from_partition, drive_to_partition, get_kernel_root_info, to_std_device_path,
-            whereis,
-        },
+        linux_common::{drive_from_partition, drive_to_partition, get_kernel_root_info, whereis},
         linux_defs::NIX_NONE,
-        linux_defs::{FAT_CHK_CMD, UDEVADM_CMD},
-        lsblk_info::LsblkInfo,
+        linux_defs::{FAT_CHK_CMD, LS_CMD, UDEVADM_CMD},
+        stage2::{
+            BALENA_BOOT_FSTYPE, BALENA_BOOT_PART, BALENA_DATA_FSTYPE, BALENA_DATA_PART,
+            BALENA_ROOTA_FSTYPE, BALENA_ROOTA_PART, BALENA_ROOTB_FSTYPE, BALENA_ROOTB_PART,
+            BALENA_STATE_FSTYPE, BALENA_STATE_PART,
+        },
     },
 };
 
-const MOUNT_DIR: &str = "/tmp_mount";
+pub(crate) const MOUNT_DIR: &str = "/tmp_mount";
 const BOOTFS_DIR: &str = "boot";
 const WORKFS_DIR: &str = "work";
 const LOGFS_DIR: &str = "log";
@@ -93,182 +92,138 @@ impl<'a> Mounts {
 
     #[allow(clippy::cognitive_complexity)] //TODO refactor this function to fix the clippy warning
     pub fn new() -> Result<Mounts, MigError> {
-        trace!("new: entered");
-
+        debug!("new: entered");
+        thread::sleep(Duration::new(5, 0));
         // obtain boot device from kernel cmdline
-        let (kernel_root_device, kernel_root_fs_type) = match get_kernel_root_info() {
-            Ok((device, fstype)) => (Some(device), fstype),
+        match get_kernel_root_info() {
+            Ok((device, fstype)) => {
+                debug!(
+                    "Kernel cmd line points to root device '{}' with fs-type: '{:?}'",
+                    device.display(),
+                    fstype,
+                );
+
+                const WAIT_TIMEOUT: Duration = Duration::from_secs(60);
+                const SLEEP_TIME: Duration = Duration::from_secs(10);
+                let dev_wait_start = Instant::now();
+
+                info!("calling {} {:?}", UDEVADM_CMD, UDEVADM_PARAMS);
+                match call(UDEVADM_CMD, UDEVADM_PARAMS, true) {
+                    Ok(cmd_res) => {
+                        if !cmd_res.status.success() {
+                            warn!(
+                                "{} {:?} failed with '{}'",
+                                UDEVADM_CMD, UDEVADM_PARAMS, cmd_res.stderr
+                            );
+                        }
+                    }
+                    Err(why) => {
+                        warn!("{} {:?} failed with {:?}", UDEVADM_CMD, UDEVADM_PARAMS, why);
+                    }
+                }
+
+                while !device.exists() {
+                    warn!(
+                        "root device could not be found: '{}' waiting a little longer",
+                        device.display()
+                    );
+                    if Instant::now().duration_since(dev_wait_start) >= WAIT_TIMEOUT {
+                        let cmd_res = call(LS_CMD, &["/dev/disk/by-uuid"], true)?;
+                        if cmd_res.status.success() {
+                            warn!("Root device could not be found: '{}'", device.display());
+                            warn!("listing of /dev/disk/by-uuid: \n{}", cmd_res.stdout);
+                        }
+
+                        return Err(MigError::from_remark(
+                            MigErrorKind::NotFound,
+                            &format!("Failed to find device '{}'", device.display()),
+                        ));
+                    }
+                    sleep(SLEEP_TIME);
+                }
+
+                let mut fstypes: Vec<String> = Vec::new();
+                if let Some(ref fs_type) = fstype {
+                    fstypes.push(fs_type.clone());
+                } else {
+                    TRY_FS_TYPES
+                        .iter()
+                        .for_each(|s| fstypes.push(String::from(*s)));
+                }
+
+                for fstype in &fstypes {
+                    match Mounts::mount(BOOTFS_DIR, &device, fstype) {
+                        Ok(boot_mountpoint) => {
+                            debug!("device: '{}', boot fstype: '{}'", device.display(), fstype);
+
+                            let stage2_config = path_append(&boot_mountpoint, STAGE2_CFG_FILE);
+                            if file_exists(&stage2_config) {
+                                debug!("device: '{}', boot fstype: '{}'", device.display(), fstype);
+                                let init_device = match drive_from_partition(&device) {
+                                    Ok(flash_device) => flash_device,
+                                    Err(why) => {
+                                        error!(
+                                            "Failed to extract drive from partition: '{}', error: {:?}",
+                                            device.display(),
+                                            why
+                                        );
+                                        thread::sleep(Duration::new(5, 0));
+
+                                        return Err(MigError::displayed());
+                                    }
+                                };
+                                debug!(
+                                    "found '{}' on device: '{}',",
+                                    stage2_config.display(),
+                                    init_device.display()
+                                );
+                                thread::sleep(Duration::new(5, 0));
+
+                                return Ok(Mounts {
+                                    boot_device: init_device.clone(),
+                                    flash_device: init_device,
+                                    boot_part: device,
+                                    boot_mountpoint,
+                                    stage2_config,
+                                    work_no_copy: false,
+                                    work_path: None,
+                                    work_mountpoint: None,
+                                    log_path: None,
+                                    balena_boot_mp: None,
+                                    balena_root_a_mp: None,
+                                    balena_root_b_mp: None,
+                                    balena_state_mp: None,
+                                    balena_data_mp: None,
+                                });
+                            } else {
+                                let _res = umount(&boot_mountpoint);
+                            }
+                        }
+                        Err(why) => {
+                            error!(
+                                "Mount failed for {} on {} wth fstype: {}, error {:?}",
+                                device.display(),
+                                BOOTFS_DIR,
+                                fstype,
+                                why
+                            );
+                        }
+                    }
+                }
+                error!(
+                    "Failed to detect a boot device containing {}",
+                    STAGE2_CFG_FILE
+                );
+                Err(MigError::displayed())
+            }
             Err(why) => {
                 error!(
                     "Failed to retrieve root path from kernel command line, error {:?}",
                     why
                 );
-                (None, None)
-            }
-        };
-
-        debug!(
-            "Kernel cmd line points to root device '{:?}' with fs-type: '{:?}'",
-            kernel_root_device, kernel_root_fs_type,
-        );
-
-        // Not sure if this is needed but can't hurt to be patient
-        thread::sleep(Duration::from_secs(3));
-
-        info!("calling {} {:?}", UDEVADM_CMD, UDEVADM_PARAMS);
-        match call(UDEVADM_CMD, UDEVADM_PARAMS, true) {
-            Ok(cmd_res) => {
-                if !cmd_res.status.success() {
-                    warn!(
-                        "{} {:?} failed with '{}'",
-                        UDEVADM_CMD, UDEVADM_PARAMS, cmd_res.stderr
-                    );
-                }
-            }
-            Err(why) => {
-                warn!("{} {:?} failed with {:?}", UDEVADM_CMD, UDEVADM_PARAMS, why);
+                Err(MigError::displayed())
             }
         }
-
-        // try mount root from kernel cmd line
-
-        if let Some(kernel_root_device) = kernel_root_device {
-            let mut fstypes: Vec<String> = Vec::new();
-            if let Some(ref fstype) = kernel_root_fs_type {
-                fstypes.push(fstype.clone());
-            } else {
-                TRY_FS_TYPES
-                    .iter()
-                    .for_each(|s| fstypes.push(String::from(*s)));
-            }
-
-            for fstype in &fstypes {
-                match Mounts::mount(BOOTFS_DIR, &kernel_root_device, fstype) {
-                    Ok(boot_mountpoint) => {
-                        let stage2_config = path_append(&boot_mountpoint, STAGE2_CFG_FILE);
-                        if file_exists(&stage2_config) {
-                            let init_device = match drive_from_partition(&kernel_root_device) {
-                                Ok(flash_device) => flash_device,
-                                Err(why) => {
-                                    error!(
-                                        "Failed to extract drive from partition: '{}', error: {:?}",
-                                        kernel_root_device.display(),
-                                        why
-                                    );
-                                    return Err(MigError::displayed());
-                                }
-                            };
-
-                            return Ok(Mounts {
-                                boot_device: init_device.clone(),
-                                flash_device: init_device,
-                                boot_part: to_std_device_path(&kernel_root_device)?,
-                                boot_mountpoint,
-                                stage2_config,
-                                work_no_copy: false,
-                                work_path: None,
-                                work_mountpoint: None,
-                                log_path: None,
-                                balena_boot_mp: None,
-                                balena_root_a_mp: None,
-                                balena_root_b_mp: None,
-                                balena_state_mp: None,
-                                balena_data_mp: None,
-                            });
-                        } else {
-                            let _res = umount(&boot_mountpoint);
-                        }
-                    }
-                    Err(why) => {
-                        error!(
-                            "Mount failed for {} on {} wth fstype: {}, error {:?}",
-                            kernel_root_device.display(),
-                            BOOTFS_DIR,
-                            fstype,
-                            why
-                        );
-                    }
-                }
-            }
-        }
-
-        // if mount from kernel cmdline failed, try others
-
-        debug!("Looking for boot device in all block devices",);
-
-        match LsblkInfo::all() {
-            Ok(lsblk_info) => {
-                for blk_device in lsblk_info.get_blk_devices() {
-                    if let Some(ref children) = blk_device.children {
-                        for blk_part in children {
-                            debug!(
-                                "Looking for boot device in all '{}'",
-                                blk_part.get_path().display()
-                            );
-
-                            let mut fstypes: Vec<String> = Vec::new();
-                            if let Some(ref fstype) = blk_part.fstype {
-                                fstypes.push(fstype.clone());
-                            } else {
-                                TRY_FS_TYPES
-                                    .iter()
-                                    .for_each(|s| fstypes.push(String::from(*s)));
-                            }
-
-                            for fstype in fstypes {
-                                let device = blk_part.get_path();
-
-                                debug!(
-                                    "Attempting to mount '{}' with {}",
-                                    device.display(),
-                                    fstype
-                                );
-
-                                match Mounts::mount(BOOTFS_DIR, &device, &fstype) {
-                                    Ok(boot_mountpoint) => {
-                                        let stage2_config =
-                                            path_append(&boot_mountpoint, STAGE2_CFG_FILE);
-                                        if file_exists(&stage2_config) {
-                                            return Ok(Mounts {
-                                                boot_device: blk_device.get_path(),
-                                                flash_device: blk_device.get_path(),
-                                                boot_part: device,
-                                                boot_mountpoint,
-                                                stage2_config,
-                                                work_no_copy: false,
-                                                work_path: None,
-                                                work_mountpoint: None,
-                                                log_path: None,
-                                                balena_boot_mp: None,
-                                                balena_root_a_mp: None,
-                                                balena_root_b_mp: None,
-                                                balena_state_mp: None,
-                                                balena_data_mp: None,
-                                            });
-                                        } else {
-                                            let _res = umount(&boot_mountpoint);
-                                        }
-                                    }
-                                    Err(why) => {
-                                        error!("Mount failed: {:?}", why);
-                                    }
-                                }
-                            }
-                        }
-                    }
-                }
-            }
-            Err(why) => {
-                warn!("Failed to retrieve block device info: {:?}", why);
-                return Err(MigError::displayed());
-            }
-        }
-
-        error!(
-            "Failed to detect a boot device containing {}",
-            STAGE2_CFG_FILE
-        );
-        Err(MigError::displayed())
     }
 
     pub fn get_balena_boot_mountpoint(&'a self) -> Option<&'a Path> {
@@ -311,10 +266,10 @@ impl<'a> Mounts {
         }
     }
 
-    pub fn get_boot_mountpoint(&'a self) -> &'a Path {
-        &self.boot_mountpoint
-    }
-
+    /*    pub fn get_boot_mountpoint(&'a self) -> &'a Path {
+            &self.boot_mountpoint
+        }
+    */
     pub fn get_stage2_config(&'a self) -> &'a Path {
         &self.stage2_config
     }
@@ -352,13 +307,15 @@ impl<'a> Mounts {
 
         // TODO: ensure nothing is mounted twice, eg: work_mount == log_mount
 
-        if let Some((log_dev, log_fs)) = stage2_config.get_log_device() {
-            self.log_path = match Mounts::mount(LOGFS_DIR, log_dev, log_fs) {
+        if let Some(log_dev) = stage2_config.get_log_device() {
+            // TODO: establish fs_type ?
+            let log_device = to_std_device_path(&log_dev.device)?;
+            self.log_path = match Mounts::mount(LOGFS_DIR, &log_device, log_dev.fs_type.as_str()) {
                 Ok(mountpoint) => Some(mountpoint),
                 Err(why) => {
                     warn!(
                         "Failed to mount log device: '{}': error: {:?}",
-                        log_dev.display(),
+                        log_device.display(),
                         why
                     );
                     None
@@ -683,9 +640,10 @@ impl<'a> Mounts {
         fstype: &str,
     ) -> Result<PathBuf, MigError> {
         // TODO: retry with delay
-        let device = device.as_ref();
+        let device = device.as_ref().to_path_buf();
 
         let mountpoint = path_append(MOUNT_DIR, dir.as_ref());
+
         debug!(
             "Attempting to mount '{}' on '{}' with fstype {}",
             device.display(),
@@ -702,8 +660,6 @@ impl<'a> Mounts {
 
         for attempt in 1..3 {
             if file_exists(&device) {
-                let device = to_std_device_path(device)?;
-
                 debug!(
                     "Found device '{}' on attempt {} mounting on '{}' with fstype: {}",
                     device.display(),

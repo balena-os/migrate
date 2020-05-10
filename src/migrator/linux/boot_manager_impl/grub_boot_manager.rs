@@ -8,10 +8,7 @@ use std::path::Path;
 use crate::{
     common::{
         boot_manager::BootManager,
-        call, dir_exists,
-        disk_util::LabelType,
-        file_digest::check_digest,
-        file_exists, format_size_with_unit,
+        call, dir_exists, format_size_with_unit,
         migrate_info::MigrateInfo,
         path_append,
         path_info::PathInfo,
@@ -20,12 +17,12 @@ use crate::{
     },
     defs::{BootType, MIG_INITRD_NAME, MIG_KERNEL_NAME},
     linux::{
+        disk_util::LabelType,
         linux_defs::{
             BOOT_PATH, GRUB_CONFIG_DIR, GRUB_CONFIG_FILE, GRUB_MIN_VERSION, KERNEL_CMDLINE_PATH,
             ROOT_PATH,
         },
-        linux_defs::{CHMOD_CMD, GRUB_REBOOT_CMD, GRUB_UPDT_CMD},
-        lsblk_info::LsblkInfo,
+        linux_defs::{CHMOD_CMD, GRUB_INSTALL_CMD, GRUB_REBOOT_CMD, GRUB_UPDT_CMD},
         stage2::mounts::Mounts,
     },
 };
@@ -69,14 +66,15 @@ impl<'a> GrubBootManager {
     fn get_grub_version() -> Result<(String, String), MigError> {
         trace!("get_grub_version: entered");
 
-        let cmd_res =
-            call(GRUB_UPDT_CMD, &GRUB_UPDT_VERSION_ARGS, true).context(MigErrCtx::from_remark(
+        let cmd_res = call(GRUB_INSTALL_CMD, &GRUB_UPDT_VERSION_ARGS, true).context(
+            MigErrCtx::from_remark(
                 MigErrorKind::Upstream,
                 &format!(
                     "get_grub_version: call '{} {:?}'",
-                    GRUB_UPDT_CMD, GRUB_UPDT_VERSION_ARGS
+                    GRUB_INSTALL_CMD, GRUB_UPDT_VERSION_ARGS
                 ),
-            ))?;
+            ),
+        )?;
 
         if cmd_res.status.success() {
             let re = Regex::new(GRUB_UPDT_VERSION_RE).unwrap();
@@ -132,14 +130,7 @@ impl BootManager for GrubBootManager {
             return Ok(false);
         }
 
-        let lsblk_info = LsblkInfo::all()?;
-
-        let boot_path = if let Some(boot_path) = PathInfo::from_path(BOOT_PATH, &lsblk_info)? {
-            boot_path
-        } else {
-            error!("Could not find boot path '{}'", BOOT_PATH);
-            return Err(MigError::displayed());
-        };
+        let boot_path = PathInfo::from_path(BOOT_PATH)?;
 
         let grub_version = GrubBootManager::get_grub_version()?;
         info!(
@@ -147,7 +138,15 @@ impl BootManager for GrubBootManager {
             grub_version.0, grub_version.1
         );
 
-        if grub_version.0 < GRUB_MIN_VERSION.parse().unwrap() {
+        if grub_version
+            .0
+            .parse::<u8>()
+            .context(MigErrCtx::from_remark(
+                MigErrorKind::Upstream,
+                &format!("Failed to parse grub version string: {}", grub_version.0),
+            ))?
+            < GRUB_MIN_VERSION
+        {
             error!("Your version of grub-install ({}.{}) is not supported. balena-migrate requires grub version 2 or higher.", grub_version.0, grub_version.1);
             return Ok(false);
         }
@@ -163,17 +162,38 @@ impl BootManager for GrubBootManager {
         // TODO: this could be more reliable, taking into account the size of the existing files
         // vs the size of the files that will be copied
 
-        let mut boot_req_space = if !file_exists(path_append(&boot_path.path, MIG_KERNEL_NAME)) {
-            mig_info.kernel_file.size
-        } else {
-            0
-        };
+        let mut boot_req_space = mig_info.assets.get_version()?.asset_size;
+        let kernel_file = path_append(&boot_path.path, MIG_KERNEL_NAME);
+        if kernel_file.exists() {
+            boot_req_space -= kernel_file
+                .metadata()
+                .context(MigErrCtx::from_remark(
+                    MigErrorKind::Upstream,
+                    &format!(
+                        "unable to retrieve size for file '{}'",
+                        kernel_file.display()
+                    ),
+                ))?
+                .len();
+        }
+        let initrd_file = path_append(&boot_path.path, MIG_INITRD_NAME);
+        if initrd_file.exists() {
+            boot_req_space -= initrd_file
+                .metadata()
+                .context(MigErrCtx::from_remark(
+                    MigErrorKind::Upstream,
+                    &format!(
+                        "unable to retrieve size for file '{}'",
+                        initrd_file.display()
+                    ),
+                ))?
+                .len();
+        }
 
-        boot_req_space += if !file_exists(path_append(&boot_path.path, MIG_INITRD_NAME)) {
-            mig_info.initrd_file.size
-        } else {
-            0
-        };
+        debug!(
+            "Required space: {}, free space: {}",
+            boot_req_space, boot_path.fs_free
+        );
 
         if boot_path.fs_free < boot_req_space {
             error!("The boot directory '{}' does not have enough space to store the migrate kernel and initramfs. Required space is {}",
@@ -188,7 +208,8 @@ impl BootManager for GrubBootManager {
 
     fn setup(
         &mut self,
-        mig_info: &MigrateInfo,
+        _mig_info: &MigrateInfo,
+        _config: &Config,
         _s2_cfg: &mut Stage2ConfigBuilder,
         kernel_opts: &str,
     ) -> Result<(), MigError> {
@@ -219,7 +240,7 @@ impl BootManager for GrubBootManager {
                     MigErrorKind::InvParam,
                     &format!(
                         "Invalid partition type for '{}'",
-                        boot_path.device_info.drive.display()
+                        boot_path.device_info.drive
                     ),
                 ));
             }
@@ -229,19 +250,21 @@ impl BootManager for GrubBootManager {
 
         info!(
             "Boot partition type for '{}' is '{}'",
-            boot_path.device_info.drive.display(),
-            part_mod
+            boot_path.device_info.drive, part_mod
         );
 
         let root_cmd = if let Some(ref uuid) = boot_path.device_info.uuid {
-            // TODO: try partuuid too ?local setRootA="set root='${GRUB_BOOT_DEV},msdos${ROOT_PART_NO}'"
+            // TODO: try partuuid too ? local setRootA="set root='${GRUB_BOOT_DEV},msdos${ROOT_PART_NO}'"
             format!("search --no-floppy --fs-uuid --set=root {}", uuid)
+        } else if let Some(ref _partuuid) = boot_path.device_info.part_uuid {
+            return Err(MigError::from_remark(
+                MigErrorKind::FeatureMissing,
+                "Grub root string is not implemented for partuuid ",
+            ));
         } else {
             format!(
                 "search --no-floppy --fs-uuid --set=root {},{}{}",
-                boot_path.device_info.drive.to_string_lossy(),
-                part_type,
-                boot_path.device_info.index
+                boot_path.device_info.drive, part_type, boot_path.device_info.index
             )
         };
 
@@ -266,7 +289,7 @@ impl BootManager for GrubBootManager {
         } else if let Some(ref partuuid) = boot_path.device_info.part_uuid {
             format!("PARTUUID={}", partuuid)
         } else {
-            String::from(&*boot_path.device_info.device.to_string_lossy())
+            String::from(&boot_path.device_info.device)
         };
 
         let mut linux = String::from(path_append(&grub_boot, MIG_KERNEL_NAME).to_string_lossy());
@@ -356,62 +379,8 @@ impl BootManager for GrubBootManager {
         // **********************************************************************
         // ** copy new kernel & iniramfs
 
-        let kernel_path = path_append(&boot_path.path, MIG_KERNEL_NAME);
-
-        std::fs::copy(&mig_info.kernel_file.path, &kernel_path).context(MigErrCtx::from_remark(
-            MigErrorKind::Upstream,
-            &format!(
-                "failed to copy kernel file '{}' to '{}'",
-                mig_info.kernel_file.path.display(),
-                kernel_path.display()
-            ),
-        ))?;
-
-        if !check_digest(&kernel_path, &mig_info.kernel_file.hash_info)? {
-            return Err(MigError::from_remark(
-                MigErrorKind::Upstream,
-                &format!(
-                    "Failed to check digest on copied kernel file '{}' to {:?}",
-                    kernel_path.display(),
-                    mig_info.kernel_file.hash_info
-                ),
-            ));
-        }
-
-        info!(
-            "copied kernel: '{}' -> '{}'",
-            mig_info.kernel_file.path.display(),
-            kernel_path.display()
-        );
-
-        call(CHMOD_CMD, &["+x", &kernel_path.to_string_lossy()], false)?;
-
-        let initrd_path = path_append(&boot_path.path, MIG_INITRD_NAME);
-        std::fs::copy(&mig_info.initrd_file.path, &initrd_path).context(MigErrCtx::from_remark(
-            MigErrorKind::Upstream,
-            &format!(
-                "failed to copy initrd file '{}' to '{}'",
-                mig_info.initrd_file.path.display(),
-                initrd_path.display()
-            ),
-        ))?;
-
-        if !check_digest(&initrd_path, &mig_info.initrd_file.hash_info)? {
-            return Err(MigError::from_remark(
-                MigErrorKind::Upstream,
-                &format!(
-                    "Failed to check digest on copied initrd file '{}' to {:?}",
-                    initrd_path.display(),
-                    mig_info.initrd_file.hash_info
-                ),
-            ));
-        }
-
-        info!(
-            "initramfs kernel: '{}' -> '{}'",
-            mig_info.initrd_file.path.display(),
-            initrd_path.display()
-        );
+        info!("Writing migrate kernel & initramfs to '{}'", BOOT_PATH);
+        _mig_info.assets.write_to(&boot_path.path)?;
 
         info!("calling '{}'", GRUB_UPDT_CMD);
 

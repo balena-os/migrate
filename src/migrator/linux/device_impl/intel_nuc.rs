@@ -1,18 +1,19 @@
 use log::{error, info, trace};
 
+use crate::common::path_info::PathInfo;
+
 use crate::{
     common::{
         boot_manager::BootManager,
         device::Device,
         migrate_info::MigrateInfo,
-        path_info::PathInfo,
         stage2_config::{Stage2Config, Stage2ConfigBuilder},
         Config, MigError, MigErrorKind,
     },
-    defs::{BootType, DeviceType, FileType},
+    defs::{BootType, DeviceType},
     linux::{
         boot_manager_impl::{from_boot_type, GrubBootManager},
-        linux_common::{expect_type, is_secure_boot},
+        linux_common::is_secure_boot,
         stage2::mounts::Mounts,
     },
 };
@@ -35,13 +36,19 @@ impl IntelNuc {
             "Ubuntu 14.04.2 LTS",
             "Ubuntu 14.04.5 LTS",
             "Ubuntu 14.04.6 LTS",
+            "Manjaro Linux",
         ];
 
         let os_name = &mig_info.os_name;
 
-        expect_type(&mig_info.kernel_file.path, &FileType::KernelAMD64)?;
+        let os_supported = config.is_no_os_check()
+            || if let Some(_n) = SUPPORTED_OSSES.iter().position(|&r| r == os_name) {
+                true
+            } else {
+                false
+            };
 
-        if SUPPORTED_OSSES.iter().position(|&r| r == os_name).is_none() {
+        if !os_supported {
             let message = format!(
                 "The OS '{}' is not supported for device type IntelNuc",
                 os_name,
@@ -51,7 +58,7 @@ impl IntelNuc {
         }
 
         // **********************************************************************
-        // ** AMD64 specific initialisation/checks
+        // ** AMD64 specific initialisation/checksget_
         // **********************************************************************
 
         // TODO: determine boot device
@@ -121,13 +128,14 @@ impl<'a> Device for IntelNuc {
     ) -> Result<(), MigError> {
         trace!("setup: entered");
 
-        let kernel_opts = if let Some(ref kernel_opts) = config.migrate.get_kernel_opts() {
+        let kernel_opts = if let Some(ref kernel_opts) = config.get_kernel_opts() {
             kernel_opts.clone()
         } else {
             String::from("")
         };
 
-        self.boot_manager.setup(mig_info, s2_cfg, &kernel_opts)
+        self.boot_manager
+            .setup(mig_info, config, s2_cfg, &kernel_opts)
     }
 
     fn restore_boot(&self, mounts: &Mounts, config: &Stage2Config) -> bool {

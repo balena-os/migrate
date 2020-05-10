@@ -1,10 +1,10 @@
 //pub mod mig_error;
 use failure::ResultExt;
-use log::debug;
-use log::trace;
+use log::{debug, error, trace};
 use regex::Regex;
 use std::fs::{metadata, read_to_string, File};
 use std::io::{copy, BufRead, BufReader, Read};
+
 use std::path::{Path, PathBuf};
 use std::process::{Command, ExitStatus, Stdio};
 
@@ -12,21 +12,27 @@ use crate::defs::BALENA_FILE_TAG_REGEX;
 
 pub(crate) mod mig_error;
 
+pub mod assets;
+pub use assets::Assets;
+
 #[cfg(target_os = "windows")]
 pub(crate) mod os_release;
 
 pub(crate) mod os_api;
+
+pub(crate) mod api_calls;
+pub(crate) mod image_retrieval;
 
 pub(crate) mod boot_manager;
 pub(crate) mod device;
 
 pub(crate) mod device_info;
 pub(crate) mod path_info;
+pub(crate) mod stream_progress;
 
 pub(crate) mod file_digest;
 
-pub(crate) mod disk_util;
-
+#[cfg(target_os = "linux")]
 pub(crate) mod backup;
 
 pub(crate) mod migrate_info;
@@ -106,6 +112,7 @@ pub(crate) fn is_balena_file<P: AsRef<Path>>(file_name: P) -> Result<bool, MigEr
     }
 }
 
+#[allow(dead_code)]
 pub(crate) fn parse_file<P: AsRef<Path>>(
     fname: P,
     regex: &Regex,
@@ -159,6 +166,7 @@ pub fn file_exists<P: AsRef<Path>>(file: P) -> bool {
     file.as_ref().exists()
 }
 
+#[cfg(target_os = "linux")]
 pub(crate) fn call_with_stdin<R>(
     cmd: &str,
     args: &[&str],
@@ -226,25 +234,32 @@ where
 pub(crate) fn call(cmd: &str, args: &[&str], trim_stdout: bool) -> Result<CmdRes, MigError> {
     trace!("call: '{}' called with {:?}, {}", cmd, args, trim_stdout);
 
-    let output = Command::new(cmd)
+    match Command::new(cmd)
         .args(args)
         .stdout(Stdio::piped())
         .stderr(Stdio::piped())
         .output()
-        .context(MigErrCtx::from_remark(
-            MigErrorKind::Upstream,
-            &format!("call: failed to execute: command {} '{:?}'", cmd, args),
-        ))?;
-
-    Ok(CmdRes {
-        stdout: if trim_stdout {
-            String::from(String::from_utf8_lossy(&output.stdout).trim())
-        } else {
-            String::from(String::from_utf8_lossy(&output.stdout))
-        },
-        stderr: String::from(String::from_utf8_lossy(&output.stderr)),
-        status: output.status,
-    })
+    {
+        Ok(output) => {
+            trace!("call: output: {:?}", output);
+            Ok(CmdRes {
+                stdout: if trim_stdout {
+                    String::from(String::from_utf8_lossy(&output.stdout).trim())
+                } else {
+                    String::from(String::from_utf8_lossy(&output.stdout))
+                },
+                stderr: String::from(String::from_utf8_lossy(&output.stderr)),
+                status: output.status,
+            })
+        }
+        Err(why) => {
+            error!("call: output failed: {:?}", why);
+            Err(MigError::from_remark(
+                MigErrorKind::Upstream,
+                &format!("call: failed to execute: command {} '{:?}'", cmd, args),
+            ))
+        }
+    }
 }
 
 pub fn check_tcp_connect(host: &str, port: u16, timeout: u64) -> Result<(), MigError> {
@@ -260,15 +275,14 @@ pub fn check_tcp_connect(host: &str, port: u16, timeout: u64) -> Result<(), MigE
     ))?;
 
     if let Some(ref sock_addr) = addrs_iter.next() {
-        let tcp_stream = TcpStream::connect_timeout(sock_addr, Duration::new(timeout, 0)).context(
-            MigErrCtx::from_remark(
+        let tcp_stream = TcpStream::connect_timeout(sock_addr, Duration::from_secs(timeout))
+            .context(MigErrCtx::from_remark(
                 MigErrorKind::Upstream,
                 &format!(
                     "check_tcp_connect: failed to connect to: '{}' with timeout: {}",
                     url, timeout
                 ),
-            ),
-        )?;
+            ))?;
 
         let _res = tcp_stream.shutdown(Shutdown::Both);
         Ok(())
@@ -283,9 +297,9 @@ pub fn check_tcp_connect(host: &str, port: u16, timeout: u64) -> Result<(), MigE
     }
 }
 
-const GIB_SIZE: u64 = 1024 * 1024 * 1024;
-const MIB_SIZE: u64 = 1024 * 1024;
 const KIB_SIZE: u64 = 1024;
+const MIB_SIZE: u64 = 1024 * KIB_SIZE;
+const GIB_SIZE: u64 = 1024 * MIB_SIZE;
 
 pub fn format_size_with_unit(size: u64) -> String {
     if size > (10 * GIB_SIZE) {

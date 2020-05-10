@@ -1,4 +1,6 @@
+#[cfg(target_os = "linux")]
 use log::error;
+
 use std::path::PathBuf;
 
 use crate::{
@@ -7,17 +9,21 @@ use crate::{
 };
 
 #[cfg(target_os = "linux")]
-use crate::linux::lsblk_info::{LsblkDevice, LsblkPartition};
+use crate::linux::lsblk_info::{block_device::BlockDevice, partition::Partition};
+
+#[cfg(target_os = "windows")]
+use crate::mswin::drive_info::VolumeInfo;
 
 #[derive(Debug, Clone)]
 pub(crate) struct DeviceInfo {
     // the drive device path
-    pub drive: PathBuf,
+    pub drive: String,
     // the drive size
     pub drive_size: u64,
     // the partition device path
-    pub device: PathBuf,
+    pub device: String,
     // the partition index
+    // TODO: make optional
     pub index: u16,
     // the partition fs type
     pub fs_type: String,
@@ -29,33 +35,19 @@ pub(crate) struct DeviceInfo {
     pub part_label: Option<String>,
     // the partition size
     pub part_size: u64,
-    // the fs size
 }
 
 impl DeviceInfo {
     #[cfg(target_os = "linux")]
-    pub fn new(drive: &LsblkDevice, partition: &LsblkPartition) -> Result<DeviceInfo, MigError> {
+    pub fn from_lsblkinfo(
+        drive: &BlockDevice,
+        partition: &Partition,
+    ) -> Result<DeviceInfo, MigError> {
         Ok(DeviceInfo {
-            drive: drive.get_path(),
-            drive_size: if let Some(size) = drive.size {
-                size
-            } else {
-                error!(
-                    "The required parameter drive_size could not be found for '{}'",
-                    drive.get_path().display()
-                );
-                return Err(MigError::displayed());
-            },
-            device: partition.get_path(),
-            index: if let Some(index) = partition.index {
-                index
-            } else {
-                error!(
-                    "The required parameter index could not be found for '{}'",
-                    partition.get_path().display()
-                );
-                return Err(MigError::displayed());
-            },
+            drive: String::from(drive.get_path().to_string_lossy()),
+            drive_size: drive.size,
+            device: String::from(partition.get_path().to_string_lossy()),
+            index: partition.index,
             fs_type: if let Some(ref fstype) = partition.fstype {
                 fstype.clone()
             } else {
@@ -67,48 +59,74 @@ impl DeviceInfo {
             },
             uuid: partition.uuid.clone(),
             part_uuid: partition.partuuid.clone(),
-            part_label: partition.partlabel.clone(),
-            part_size: if let Some(size) = partition.size {
-                size
-            } else {
-                error!(
-                    "The required parameter size could not be found for '{}'",
-                    partition.get_path().display()
-                );
-                return Err(MigError::displayed());
-            },
+            part_label: partition.label.clone(),
+            part_size: partition.size,
         })
     }
 
-    pub fn get_uboot_kernel_cmd(&self) -> String {
-        if let Some(ref uuid) = self.part_uuid {
-            format!("uuid={}", uuid)
-        } else if let Some(ref partuuid) = self.part_uuid {
-            format!("partuuid={}", partuuid)
-        } else {
-            String::from(self.device.to_string_lossy())
-        }
+    #[cfg(target_os = "windows")]
+    pub fn from_volume_info(vol_info: &VolumeInfo) -> Result<DeviceInfo, MigError> {
+        Ok(DeviceInfo {
+            // the drive device path
+            drive: String::from(vol_info.physical_drive.get_device_id()),
+            // the drive size
+            drive_size: vol_info.physical_drive.get_size(),
+            // the partition device path
+            device: String::from(vol_info.volume.get_device_id()),
+            // TODO: the partition index - this value is not correct in windows as hidden partions are not counted
+            index: 0,
+            // the partition fs type
+            fs_type: String::from(vol_info.volume.get_file_system().to_linux_str()),
+            // the partition uuid
+            uuid: None,
+            // the partition partuuid
+            part_uuid: Some(vol_info.part_uuid.clone()),
+            // the partition label
+            part_label: if let Some(label) = vol_info.volume.get_label() {
+                Some(String::from(label))
+            } else {
+                None
+            },
+            // the partition size
+            part_size: vol_info.partition.get_size(),
+        })
     }
 
+    #[allow(dead_code)]
+    // TODO: used by RPI
     pub fn get_kernel_cmd(&self) -> String {
-        if let Some(ref partuuid) = self.part_uuid {
-            format!("PARTUUID={}", partuuid)
-        } else if let Some(ref uuid) = self.uuid {
+        if let Some(ref uuid) = self.uuid {
             format!("UUID={}", uuid)
+        } else if let Some(ref partuuid) = self.part_uuid {
+            format!("PARTUUID={}", partuuid)
         } else {
-            String::from(self.device.to_string_lossy())
+            self.device.clone()
         }
     }
 
+    // TODO: move this to OSApi
+    #[cfg(target_os = "linux")]
     pub fn get_alt_path(&self) -> PathBuf {
-        if let Some(ref partuuid) = self.part_uuid {
-            path_append(DISK_BY_PARTUUID_PATH, partuuid)
-        } else if let Some(ref uuid) = self.uuid {
+        if let Some(ref uuid) = self.uuid {
             path_append(DISK_BY_UUID_PATH, uuid)
+        } else if let Some(ref partuuid) = self.part_uuid {
+            path_append(DISK_BY_PARTUUID_PATH, partuuid)
         } else if let Some(ref label) = self.part_label {
             path_append(DISK_BY_LABEL_PATH, label)
         } else {
             path_append("/dev", &self.device)
+        }
+    }
+    #[cfg(target_os = "windows")]
+    pub fn get_alt_path(&self) -> PathBuf {
+        if let Some(ref uuid) = self.uuid {
+            PathBuf::from(&format!("{}/{}", DISK_BY_UUID_PATH, uuid))
+        } else if let Some(ref partuuid) = self.part_uuid {
+            PathBuf::from(&format!("{}/{}", DISK_BY_PARTUUID_PATH, partuuid))
+        } else if let Some(ref label) = self.part_label {
+            PathBuf::from(&format!("{}/{}", DISK_BY_LABEL_PATH, label))
+        } else {
+            PathBuf::from(&format!("/dev/{}", self.device))
         }
     }
 }

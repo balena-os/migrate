@@ -1,24 +1,37 @@
+#![allow(clippy::missing_safety_doc)]
 use failure::ResultExt;
 
 use lazy_static::lazy_static;
+use libc::getuid;
 use log::{debug, error, info, trace, warn};
 use regex::{Regex, RegexBuilder};
-use std::fs::{copy, read_link, read_to_string};
+use std::fs::{copy, read_link, read_to_string, OpenOptions};
+use std::mem::MaybeUninit;
+use std::os::unix::io::AsRawFd;
 use std::path::{Path, PathBuf};
-
-use libc::getuid;
 
 use crate::{
     common::{call, file_exists, parse_file, path_append, MigErrCtx, MigError, MigErrorKind},
     defs::FileType,
     defs::{OSArch, DISK_BY_LABEL_PATH, DISK_BY_PARTUUID_PATH, DISK_BY_UUID_PATH},
     linux::linux_defs::{
-        DF_CMD, FILE_CMD, KERNEL_CMDLINE_PATH, MKTEMP_CMD, MOKUTIL_CMD, SYS_UEFI_DIR, UNAME_CMD,
-        WHEREIS_CMD,
+        DF_CMD, FILE_CMD, KERNEL_CMDLINE_PATH, MKTEMP_CMD, MOKUTIL_CMD, NIX_NONE, SYS_UEFI_DIR,
+        UNAME_CMD, WHEREIS_CMD,
     },
 };
 
 use crate::common::dir_exists;
+use crate::common::stage2_config::BackupCfg;
+use crate::defs::DeviceSpec;
+use nix::{
+    mount::{mount, MsFlags},
+    sys::statvfs::statvfs,
+};
+
+use nix::{ioc, ioctl_none};
+
+const BLK_IOC_MAGIC: u8 = 0x12;
+const BLK_RRPART: u8 = 95;
 
 const MOKUTIL_ARGS_SB_STATE: [&str; 1] = ["--sb-state"];
 
@@ -48,6 +61,8 @@ const TEXT_FTYPE_REGEX: &str = r#"^ASCII text.*$"#;
 const DTB_FTYPE_REGEX: &str = r#"^(Device Tree Blob|data).*$"#;
 
 const GZIP_TAR_FTYPE_REGEX: &str = r#"^(POSIX tar archive \(GNU\)).*\(gzip compressed data.*\)$"#;
+
+ioctl_none!(blk_reread, BLK_IOC_MAGIC, BLK_RRPART);
 
 pub(crate) fn is_admin() -> Result<bool, MigError> {
     trace!("LinuxMigrator::is_admin: entered");
@@ -141,7 +156,6 @@ pub(crate) fn get_os_arch() -> Result<OSArch, MigError> {
 pub(crate) fn get_mem_info() -> Result<(u64, u64), MigError> {
     trace!("get_mem_info: entered");
     // TODO: could add loads, uptime if needed
-    use std::mem::MaybeUninit;
     let mut s_info: libc::sysinfo = unsafe { MaybeUninit::<libc::sysinfo>::zeroed().assume_init() };
     let res = unsafe { libc::sysinfo(&mut s_info) };
     if res == 0 {
@@ -167,16 +181,16 @@ pub(crate) fn is_efi_boot() -> Result<bool, MigError> {
 }
 */
 
-pub(crate) fn mktemp<P: AsRef<Path>>(
+pub(crate) fn mktemp(
     dir: bool,
     pattern: Option<&str>,
-    path: Option<P>,
+    path: Option<PathBuf>,
 ) -> Result<PathBuf, MigError> {
     let mut cmd_args: Vec<&str> = Vec::new();
 
     let mut _dir_path: Option<String> = None;
     if let Some(path) = path {
-        _dir_path = Some(String::from(path.as_ref().to_string_lossy()));
+        _dir_path = Some(String::from(path.to_string_lossy()));
         cmd_args.push("-p");
         cmd_args.push(_dir_path.as_ref().unwrap());
     }
@@ -202,6 +216,44 @@ pub(crate) fn mktemp<P: AsRef<Path>>(
             ),
         ))
     }
+}
+
+pub(crate) fn tmp_mount<P: AsRef<Path>>(
+    device: P,
+    fs_type: &Option<String>,
+    mount_dir: &Option<PathBuf>,
+) -> Result<PathBuf, MigError> {
+    // let no_path: Option<Path> = None;
+
+    let fs_type = if let Some(fs_type) = fs_type {
+        Some(fs_type.as_str().as_bytes())
+    } else {
+        None
+    };
+
+    let mount_dir = if let Some(mount_dir) = mount_dir {
+        mount_dir.clone()
+    } else {
+        mktemp(true, None, None::<PathBuf>)?
+    };
+
+    mount(
+        Some(device.as_ref()),
+        &mount_dir,
+        fs_type,
+        MsFlags::empty(),
+        NIX_NONE,
+    )
+    .context(MigErrCtx::from_remark(
+        MigErrorKind::Upstream,
+        &format!(
+            "Failed to mount '{}' on '{}'",
+            device.as_ref().display(),
+            mount_dir.display()
+        ),
+    ))?;
+
+    Ok(mount_dir)
 }
 
 /******************************************************************
@@ -286,25 +338,113 @@ pub(crate) fn is_secure_boot() -> Result<bool, MigError> {
 
 // TODO: allow restoring from work_dir to Boot
 
-pub(crate) fn restore_backups(root_path: &Path, backups: &[(String, String)]) -> bool {
+fn device_spec_to_path(
+    dev_spec: DeviceSpec,
+    fstype: &str,
+    mount: bool,
+    mount_dir: &Option<PathBuf>,
+) -> Result<Option<PathBuf>, MigError> {
+    trace!("device_spec_to_path: entered with {:?}", dev_spec);
+
+    let dev_path = to_std_device_path(
+        PathBuf::from(match dev_spec {
+            DeviceSpec::DevicePath(ref path) => String::from(&*path.to_string_lossy()),
+            DeviceSpec::Uuid(ref uuid) => format!("{}/{}", DISK_BY_UUID_PATH, uuid),
+            DeviceSpec::Label(ref label) => format!("{}/{}", DISK_BY_LABEL_PATH, label),
+            DeviceSpec::PartUuid(ref partuuid) => format!("{}/{}", DISK_BY_PARTUUID_PATH, partuuid),
+            _ => {
+                return Err(MigError::from_remark(
+                    MigErrorKind::NotImpl,
+                    &format!("device_spec_to_path is not implemented for {:?}", dev_spec),
+                ));
+            }
+        })
+        .as_path(),
+    )?;
+
+    trace!(
+        "device_spec_to_path: looking for mountpoint for: '{}'",
+        dev_path.display()
+    );
+
+    let cmd_res = call(DF_CMD, &[&*dev_path.to_string_lossy()], true)?;
+    let mounted_on = if cmd_res.status.success() {
+        if let Some(line) = cmd_res.stdout.lines().nth(1) {
+            trace!("device_spec_to_path: line 1: '{}'", line);
+            if let Some(mountpoint) = line.split_whitespace().collect::<Vec<&str>>().get(5) {
+                Some(PathBuf::from(mountpoint))
+            } else {
+                return Err(MigError::from_remark(
+                    MigErrorKind::InvState,
+                    &format!(
+                        "Invalid output from df, cannot parse for mountpoint: '{}'",
+                        cmd_res.stdout
+                    ),
+                ));
+            }
+        } else {
+            None
+        }
+    } else {
+        return Err(MigError::from_remark(
+            MigErrorKind::InvState,
+            &format!("Error from df: '{}'", cmd_res.stderr),
+        ));
+    };
+
+    if mounted_on.is_some() {
+        Ok(mounted_on)
+    } else if mount {
+        Ok(Some(tmp_mount(
+            dev_path,
+            &Some(String::from(fstype)),
+            mount_dir,
+        )?))
+    } else {
+        Ok(None)
+    }
+}
+
+pub(crate) fn restore_backups(backups: &[BackupCfg], mount_dir: Option<PathBuf>) -> bool {
     // restore boot config backups
+    debug!("restore_backups");
     let mut res = true;
     for backup in backups {
-        let src = path_append(root_path, &backup.1);
-        let tgt = path_append(root_path, &backup.0);
-        if let Err(why) = copy(&src, &tgt) {
+        if let Ok(mountpoint) =
+            device_spec_to_path(backup.device.clone(), &backup.fstype, true, &mount_dir)
+        {
+            if let Some(mountpoint) = mountpoint {
+                debug!(
+                    "restore_backups: backup: '{}', mountpoint for '{:?}' is '{}'",
+                    backup.backup.display(),
+                    backup.device,
+                    mountpoint.display()
+                );
+                let src = path_append(&mountpoint, &backup.backup);
+                let tgt = path_append(&mountpoint, &backup.source);
+                if let Err(why) = copy(&src, &tgt) {
+                    error!(
+                        "Failed to restore '{}' to '{}', error: {:?}",
+                        src.display(),
+                        tgt.display(),
+                        why
+                    );
+                    res = false
+                } else {
+                    info!("Restored '{}' to '{}'", src.display(), tgt.display())
+                }
+            } else {
+                error!("Failed to mount '{:?}'", backup.device,);
+                res = false;
+            }
+        } else {
             error!(
-                "Failed to restore '{}' to '{}', error: {:?}",
-                src.display(),
-                tgt.display(),
-                why
+                "Failed to retrieve mountpoint for backup: {:?}",
+                backup.device
             );
             res = false;
-        } else {
-            info!("Restored '{}' to '{}'", src.display(), tgt.display())
         }
     }
-
     res
 }
 
@@ -420,88 +560,20 @@ pub(crate) fn get_os_release() -> Result<OSRelease, MigError> {
 
 pub(crate) fn get_fs_space<P: AsRef<Path>>(path: P) -> Result<(u64, u64), MigError> {
     let path = path.as_ref();
-    trace!("get_fs_space: entered with '{}'", path.display());
+    let res = statvfs(path).context(MigErrCtx::from_remark(
+        MigErrorKind::Upstream,
+        &format!("Failed to retrieve stats for path: '{}'", path.display()),
+    ))?;
 
-    let path_str = path.to_string_lossy();
-    let args: Vec<&str> = vec!["--block-size=K", &path_str];
+    let blk_size = res.block_size() as u64;
+    trace!(
+        "statvfs('{}') returned size: {}, free: {}",
+        path.display(),
+        res.blocks() * blk_size,
+        res.blocks_free() * blk_size
+    );
 
-    let cmd_res = call(DF_CMD, &args, true)?;
-
-    if !cmd_res.status.success() || cmd_res.stdout.is_empty() {
-        return Err(MigError::from_remark(
-            MigErrorKind::InvParam,
-            &format!(
-                "get_fs_space: failed to get drive space for path '{}'",
-                path.display()
-            ),
-        ));
-    }
-
-    let output: Vec<&str> = cmd_res.stdout.lines().collect();
-    if output.len() != 2 {
-        return Err(MigError::from_remark(
-            MigErrorKind::InvParam,
-            &format!(
-                "get_fs_space: failed to parse df output attributes for '{}'",
-                path.display()
-            ),
-        ));
-    }
-
-    // debug!("PathInfo::new: '{}' df result: {:?}", path, &output[1]);
-
-    let hdrs: Vec<&str> = output[0].split_whitespace().collect();
-    let values: Vec<&str> = output[1].split_whitespace().collect();
-    let mut fs_size: Option<u64> = None;
-    let mut fs_used: Option<u64> = None;
-
-    for (index, header) in hdrs.iter().enumerate() {
-        if *header == "1K-blocks" {
-            fs_size = Some(
-                String::from(values[index])
-                    .trim_end_matches('K')
-                    .parse::<u64>()
-                    .context(MigErrCtx::from_remark(
-                        MigErrorKind::Upstream,
-                        &format!("get_fs_space: failed to parse size from {} ", values[index]),
-                    ))?
-                    * 1024,
-            );
-            if let Some(_dummy) = fs_used {
-                break;
-            }
-        } else if *header == "Used" {
-            fs_used = Some(
-                String::from(values[index])
-                    .trim_end_matches('K')
-                    .parse::<u64>()
-                    .context(MigErrCtx::from_remark(
-                        MigErrorKind::Upstream,
-                        &format!("get_fs_space: failed to parse size from {} ", values[index]),
-                    ))?
-                    * 1024,
-            );
-            if let Some(_dummy) = fs_size {
-                break;
-            }
-        }
-    }
-
-    if let Some(fs_size) = fs_size {
-        if let Some(fs_used) = fs_used {
-            debug!(
-                "get_fs_space: fs_size: {}, fs_free: {}",
-                fs_size,
-                fs_size - fs_used
-            );
-            return Ok((fs_size, fs_size - fs_used));
-        }
-    }
-
-    Err(MigError::from_remark(
-        MigErrorKind::InvParam,
-        "get_fs_space: failed to parse sizes ",
-    ))
+    Ok((res.blocks() * blk_size, res.blocks_free() * blk_size))
 }
 
 /******************************************************************
@@ -559,7 +631,7 @@ pub(crate) fn get_kernel_root_info() -> Result<(PathBuf, Option<String>), MigErr
             None
         } {
             debug!("trying device path: '{}'", uuid_part.display());
-            to_std_device_path(&uuid_part)?
+            uuid_part
         } else {
             debug!("Got plain root device '{}'", root_dev);
             PathBuf::from(root_dev)
@@ -578,15 +650,23 @@ pub(crate) fn get_kernel_root_info() -> Result<(PathBuf, Option<String>), MigErr
         ));
     };
 
+    let root_device = to_std_device_path(&root_device)?;
+
     debug!("Using root device: '{}'", root_device.display());
 
-    let root_fs_type =
-        if let Some(captures) = Regex::new(&ROOT_FSTYPE_REGEX).unwrap().captures(&cmd_line) {
-            Some(String::from(captures.get(1).unwrap().as_str()))
-        } else {
-            warn!("failed to parse {} for root fs type", cmd_line);
-            None
-        };
+    let root_fs_type = if let Some(captures) = RegexBuilder::new(&ROOT_FSTYPE_REGEX)
+        .case_insensitive(true)
+        .build()
+        .unwrap()
+        .captures(&cmd_line)
+    {
+        let fstype = captures.get(1).unwrap().as_str();
+        debug!("Got root fstype: '{}'", fstype);
+        Some(String::from(fstype))
+    } else {
+        warn!("failed to parse {} for root fs type", cmd_line);
+        None
+    };
 
     Ok((root_device, root_fs_type))
 }
@@ -605,47 +685,91 @@ pub(crate) fn expect_type<P: AsRef<Path>>(file: P, ftype: &FileType) -> Result<(
 }
 
 pub(crate) fn is_file_type<P: AsRef<Path>>(file: P, ftype: &FileType) -> Result<bool, MigError> {
-    let path_str = file.as_ref().to_string_lossy();
-    let args: Vec<&str> = vec!["-bz", &path_str];
+    if file.as_ref().exists() {
+        let path_str = file.as_ref().to_string_lossy();
+        let args: Vec<&str> = vec!["-bz", &path_str];
 
-    let cmd_res = call(FILE_CMD, &args, true)?;
-    if !cmd_res.status.success() || cmd_res.stdout.is_empty() {
-        return Err(MigError::from_remark(
-            MigErrorKind::InvParam,
-            &format!("new: failed determine type for file {}", path_str),
-        ));
+        let cmd_res = call(FILE_CMD, &args, true)?;
+        if !cmd_res.status.success() || cmd_res.stdout.is_empty() {
+            return Err(MigError::from_remark(
+                MigErrorKind::InvParam,
+                &format!("new: failed determine type for file {}", path_str),
+            ));
+        }
+
+        lazy_static! {
+            static ref OS_IMG_FTYPE_RE: Regex = Regex::new(OS_IMG_FTYPE_REGEX).unwrap();
+            static ref GZIP_OS_IMG_FTYPE_RE: Regex = Regex::new(GZIP_OS_IMG_FTYPE_REGEX).unwrap();
+            static ref INITRD_FTYPE_RE: Regex = Regex::new(INITRD_FTYPE_REGEX).unwrap();
+            static ref OS_CFG_FTYPE_RE: Regex = Regex::new(OS_CFG_FTYPE_REGEX).unwrap();
+            static ref TEXT_FTYPE_RE: Regex = Regex::new(TEXT_FTYPE_REGEX).unwrap();
+            static ref KERNEL_AMD64_FTYPE_RE: Regex = Regex::new(KERNEL_AMD64_FTYPE_REGEX).unwrap();
+            static ref KERNEL_ARMHF_FTYPE_RE: Regex = Regex::new(KERNEL_ARMHF_FTYPE_REGEX).unwrap();
+            static ref KERNEL_AARCH64_FTYPE_RE: Regex = Regex::new(KERNEL_AARCH64_FTYPE_REGEX).unwrap();
+            //static ref KERNEL_I386_FTYPE_RE: Regex = Regex::new(KERNEL_I386_FTYPE_REGEX).unwrap();
+            static ref DTB_FTYPE_RE: Regex = Regex::new(DTB_FTYPE_REGEX).unwrap();
+            static ref GZIP_TAR_FTYPE_RE: Regex = Regex::new(GZIP_TAR_FTYPE_REGEX).unwrap();
+        }
+
+        debug!(
+            "FileInfo::is_type: looking for: {}, found {}",
+            ftype.get_descr(),
+            cmd_res.stdout
+        );
+        match ftype {
+            FileType::GZipOSImage => Ok(GZIP_OS_IMG_FTYPE_RE.is_match(&cmd_res.stdout)),
+            FileType::OSImage => Ok(OS_IMG_FTYPE_RE.is_match(&cmd_res.stdout)),
+            FileType::InitRD => Ok(INITRD_FTYPE_RE.is_match(&cmd_res.stdout)),
+            FileType::KernelARMHF => Ok(KERNEL_ARMHF_FTYPE_RE.is_match(&cmd_res.stdout)),
+            //FileType::KernelAMD64 => Ok(KERNEL_AMD64_FTYPE_RE.is_match(&cmd_res.stdout)),
+            //FileType::KernelI386 => Ok(KERNEL_I386_FTYPE_RE.is_match(&cmd_res.stdout)),
+            //FileType::KernelAARCH64 => Ok(KERNEL_AARCH64_FTYPE_RE.is_match(&cmd_res.stdout)),
+            FileType::Json => Ok(OS_CFG_FTYPE_RE.is_match(&cmd_res.stdout)),
+            FileType::Text => Ok(TEXT_FTYPE_RE.is_match(&cmd_res.stdout)),
+            // FileType::DTB => Ok(DTB_FTYPE_RE.is_match(&cmd_res.stdout)),
+            FileType::GZipTar => Ok(GZIP_TAR_FTYPE_RE.is_match(&cmd_res.stdout)),
+        }
+    } else {
+        Err(MigError::from_remark(
+            MigErrorKind::NotFound,
+            &format!("File could not be found: '{}'", file.as_ref().display()),
+        ))
     }
+}
 
-    lazy_static! {
-        static ref OS_IMG_FTYPE_RE: Regex = Regex::new(OS_IMG_FTYPE_REGEX).unwrap();
-        static ref GZIP_OS_IMG_FTYPE_RE: Regex = Regex::new(GZIP_OS_IMG_FTYPE_REGEX).unwrap();
-        static ref INITRD_FTYPE_RE: Regex = Regex::new(INITRD_FTYPE_REGEX).unwrap();
-        static ref OS_CFG_FTYPE_RE: Regex = Regex::new(OS_CFG_FTYPE_REGEX).unwrap();
-        static ref TEXT_FTYPE_RE: Regex = Regex::new(TEXT_FTYPE_REGEX).unwrap();
-        static ref KERNEL_AMD64_FTYPE_RE: Regex = Regex::new(KERNEL_AMD64_FTYPE_REGEX).unwrap();
-        static ref KERNEL_ARMHF_FTYPE_RE: Regex = Regex::new(KERNEL_ARMHF_FTYPE_REGEX).unwrap();
-        static ref KERNEL_AARCH64_FTYPE_RE: Regex = Regex::new(KERNEL_AARCH64_FTYPE_REGEX).unwrap();
-        //static ref KERNEL_I386_FTYPE_RE: Regex = Regex::new(KERNEL_I386_FTYPE_REGEX).unwrap();
-        static ref DTB_FTYPE_RE: Regex = Regex::new(DTB_FTYPE_REGEX).unwrap();
-        static ref GZIP_TAR_FTYPE_RE: Regex = Regex::new(GZIP_TAR_FTYPE_REGEX).unwrap();
-    }
-
-    debug!(
-        "FileInfo::is_type: looking for: {}, found {}",
-        ftype.get_descr(),
-        cmd_res.stdout
-    );
-    match ftype {
-        FileType::GZipOSImage => Ok(GZIP_OS_IMG_FTYPE_RE.is_match(&cmd_res.stdout)),
-        FileType::OSImage => Ok(OS_IMG_FTYPE_RE.is_match(&cmd_res.stdout)),
-        FileType::InitRD => Ok(INITRD_FTYPE_RE.is_match(&cmd_res.stdout)),
-        FileType::KernelARMHF => Ok(KERNEL_ARMHF_FTYPE_RE.is_match(&cmd_res.stdout)),
-        FileType::KernelAMD64 => Ok(KERNEL_AMD64_FTYPE_RE.is_match(&cmd_res.stdout)),
-        //FileType::KernelI386 => Ok(KERNEL_I386_FTYPE_RE.is_match(&cmd_res.stdout)),
-        FileType::KernelAARCH64 => Ok(KERNEL_AARCH64_FTYPE_RE.is_match(&cmd_res.stdout)),
-        FileType::Json => Ok(OS_CFG_FTYPE_RE.is_match(&cmd_res.stdout)),
-        FileType::Text => Ok(TEXT_FTYPE_RE.is_match(&cmd_res.stdout)),
-        FileType::DTB => Ok(DTB_FTYPE_RE.is_match(&cmd_res.stdout)),
-        FileType::GZipTar => Ok(GZIP_TAR_FTYPE_RE.is_match(&cmd_res.stdout)),
+pub fn ioc_part_reread(device: &Path) -> Result<i32, MigError> {
+    // try ioctrl #define BLKRRPART  _IO(0x12,95)	/* re-read partition table */
+    match OpenOptions::new()
+        .read(true)
+        .write(true)
+        .create(false)
+        .open(device)
+    {
+        Ok(file) => match unsafe { blk_reread(file.as_raw_fd()) } {
+            Ok(res) => {
+                debug!(
+                    "Device BLKRRPART IOCTRL to '{}' returned {}",
+                    device.display(),
+                    res
+                );
+                Ok(res)
+            }
+            Err(why) => {
+                error!(
+                    "Device BLKRRPART IOCTRL to '{}' failed with error: {:?}",
+                    device.display(),
+                    why
+                );
+                Err(MigError::displayed())
+            }
+        },
+        Err(why) => {
+            error!(
+                "Failed to open device '{}', error: {:?}",
+                device.display(),
+                why
+            );
+            Err(MigError::displayed())
+        }
     }
 }

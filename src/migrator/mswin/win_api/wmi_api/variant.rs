@@ -19,6 +19,7 @@ pub enum Variant {
     BOOL(bool),
     NULL(),
     EMPTY(),
+    #[allow(dead_code)]
     UNSUPPORTED(),
     VECSTRING(Vec<String>),
     VECI32(Vec<i32>),

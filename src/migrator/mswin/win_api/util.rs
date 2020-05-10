@@ -32,6 +32,7 @@ pub fn to_string_list(os_str_buf: &[u16]) -> Result<Vec<String>, MigError> {
     Ok(str_list)
 }
 
+#[allow(dead_code)]
 pub fn clip<'a>(clip_str: &'a str, clip_start: Option<&str>, clip_end: Option<&str>) -> &'a str {
     let mut work_str = clip_str;
 
@@ -68,6 +69,7 @@ pub fn report_win_api_error(module: &str, func: &str, called: &str) -> MigError 
     )))
 }
 
+#[allow(dead_code)]
 pub fn report_win_api_error_with_deinit<T: Fn() -> ()>(
     module: &str,
     func: &str,

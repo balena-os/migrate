@@ -1,6 +1,8 @@
 use failure::ResultExt;
-#[cfg(target_os = "linux")]
+#[allow(unused_imports)]
 use log::{debug, error, trace};
+#[allow(unused_imports)]
+use regex::Regex;
 use serde::{Deserialize, Serialize};
 use std::path::{Path, PathBuf};
 
@@ -12,9 +14,9 @@ use std::path::{Path, PathBuf};
 // TODO: make hash_info optional again
 // creating a digest in stage1 for check in stage2 does not mae a lot of sense.
 
+use crate::common::os_api::{OSApi, OSApiImpl};
 use crate::common::{
-    config::balena_config::FileRef,
-    file_digest::{check_digest, get_default_digest, HashInfo},
+    file_digest::{get_default_digest, HashInfo},
     //file_digest::check_digest
     file_exists,
     MigErrCtx,
@@ -42,12 +44,14 @@ pub(crate) struct RelFileInfo {
 // TODO: make this detect file formats used by migrate, eg: kernel, initramfs, json file, disk image
 
 impl FileInfo {
-    pub fn new<P: AsRef<Path>>(
-        file_ref: &FileRef,
-        work_dir: P,
+    pub fn new<P1: AsRef<Path>, P2: AsRef<Path>>(
+        file: P1,
+        work_dir: P2,
     ) -> Result<Option<FileInfo>, MigError> {
-        let file_path = &file_ref.path;
-        let work_path = work_dir.as_ref();
+        let os_api = OSApiImpl::new()?;
+        let file_path = file.as_ref();
+        let work_path = os_api.canonicalize(work_dir.as_ref())?;
+
         trace!(
             "FileInfo::new: entered with file: '{}', work_dir: '{}'",
             file_path.display(),
@@ -71,36 +75,38 @@ impl FileInfo {
             return Ok(None);
         };
 
-        let abs_path = checked_path.canonicalize().context(MigErrCtx::from_remark(
-            MigErrorKind::Upstream,
-            &format!("Failed to canonicalize path '{}'", checked_path.display()),
-        ))?;
+        trace!("working with path: '{}'", checked_path.display());
+
+        let abs_path =
+            OSApiImpl::new()?
+                .canonicalize(&checked_path)
+                .context(MigErrCtx::from_remark(
+                    MigErrorKind::Upstream,
+                    &format!("Failed to canonicalize path '{}'", checked_path.display()),
+                ))?;
+
+        trace!("working with abs_path: '{}'", abs_path.display());
+
         let metadata = abs_path.metadata().context(MigErrCtx::from_remark(
             MigErrorKind::Upstream,
             &format!("failed to retrieve metadata for path {:?}", abs_path),
         ))?;
+
+        trace!("got metadata for: '{}'", abs_path.display());
 
         let rel_path = match abs_path.strip_prefix(work_path) {
             Ok(rel_path) => Some(PathBuf::from(rel_path)),
             Err(_why) => None,
         };
 
-        let hash_info = if let Some(ref hash_info) = file_ref.hash {
-            if !check_digest(&file_ref.path, hash_info)? {
-                error!(
-                    "Failed to check file digest for file '{}': {:?}",
-                    file_ref.path.display(),
-                    hash_info
-                );
-                return Err(MigError::displayed());
-            } else {
-                hash_info.clone()
-            }
-        } else {
-            debug!("Created digest for file: '{}'", file_ref.path.display());
-            get_default_digest(&file_ref.path)?
-        };
+        trace!(
+            "got relative path for: '{}': '{:?}'",
+            abs_path.display(),
+            rel_path.as_ref()
+        );
 
+        debug!("done creating FileInfo for '{}'", file_path.display());
+        let hash_info = get_default_digest(&abs_path)?;
         Ok(Some(FileInfo {
             path: abs_path,
             rel_path,

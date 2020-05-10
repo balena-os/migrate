@@ -2,6 +2,7 @@
 **/*.rs.bk
 /work
 /.idea
+/build_assets
 migrate-rs.iml
 migrate.iml
 screenlog.0

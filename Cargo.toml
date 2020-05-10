@@ -1,6 +1,6 @@
 [package]
 name = "balena_migrate"
-version = "0.1.0"
+version = "0.2.0"
 authors = ["Thomas <thomas@etnur.net>"]
 edition = "2018"
 
@@ -11,29 +11,8 @@ edition = "2018"
 [lib]
 path = "src/migrator/lib.rs"
 
-#[[bin]]
-#name = "balena-migrate"
-#path = "src/balena_migrate.rs"
-
-#[[bin]]
-# TODO: only on linux
-#name = "balena-stage2"#
-#path = "src/balena_stage2.rs"
-
-#[target.'cfg(target_os = "windows")']
-#[[bin]]
-# TODO: only on linux
-#name = "balena-extract"
-#path = "src/balena_extract.rs"
-
-# [profile.dev]
-# panic = "abort"
-# [profile.release]
-# panic = "abort"
-
-#[[bin]]
-#name = "test"
-#path = "src/test.rs"
+[features]
+extract_builtin_tar = []
 
 [dependencies]
 log = { version = "^0.4.5", features = ["std"] }
@@ -50,20 +29,21 @@ yaml-rust = "0.4"
 url = "*"
 mod_logger = { git = "https://github.com/samothx/ModuleLogger.git" }
 tar = "*"
-flate2 = "1.0"
 digest = "0.8"
 sha-1 = "0.8"
 md-5 = "0.8"
-
-# tempfile = "3"
+reqwest = { version = "0.10" , features = ["blocking", "json"] }
+semver = "*"
 
 [target.'cfg(unix)'.dependencies]
 libc = { git = "https://github.com/rust-lang/libc" }
 nix = "*"
-
+flate2 = "1.0"
 
 [target.'cfg(windows)'.dependencies]
 winapi = {  git = "https://github.com/retep998/winapi-rs.git", branch = "0.3", features = [
+        "winioctl",
+        "ioapiset",
         "handleapi",
         "fileapi",
         "winbase",

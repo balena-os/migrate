@@ -1,26 +1,41 @@
-use log::error;
-use std::path::Path;
+use failure::ResultExt;
+use std::path::{Path, PathBuf};
 
 use crate::{
-    common::{device_info::DeviceInfo, os_api::OSApi, path_info::PathInfo, MigError},
+    common::{
+        config::DeviceSpec, device_info::DeviceInfo, os_api::OSApi, path_info::PathInfo, MigErrCtx,
+        MigError, MigErrorKind,
+    },
     defs::{FileType, OSArch},
     linux::{
-        linux_common::{expect_type, get_os_arch, get_os_name},
+        linux_common::{expect_type, get_mem_info, get_os_arch, get_os_name},
         lsblk_info::LsblkInfo,
     },
 };
 
-pub(crate) struct LinuxAPI<'a> {
-    lsblk_info: &'a LsblkInfo,
+pub(crate) struct LinuxAPI {
+    lsblk_info: LsblkInfo,
 }
 
-impl LinuxAPI<'_> {
-    pub fn new(lsblk_info: &LsblkInfo) -> LinuxAPI {
-        LinuxAPI { lsblk_info }
+impl LinuxAPI {
+    pub fn new() -> Result<LinuxAPI, MigError> {
+        Ok(LinuxAPI {
+            lsblk_info: LsblkInfo::new()?,
+        })
     }
 }
 
-impl OSApi for LinuxAPI<'_> {
+impl OSApi for LinuxAPI {
+    fn canonicalize<P: AsRef<Path>>(&self, path: P) -> Result<PathBuf, MigError> {
+        Ok(path
+            .as_ref()
+            .canonicalize()
+            .context(MigErrCtx::from_remark(
+                MigErrorKind::Upstream,
+                &format!("Unable to canonicalize path: '{}'", path.as_ref().display()),
+            ))?)
+    }
+
     fn get_os_arch(&self) -> Result<OSArch, MigError> {
         get_os_arch()
     }
@@ -30,23 +45,39 @@ impl OSApi for LinuxAPI<'_> {
     }
 
     fn path_info_from_path<P: AsRef<Path>>(&self, path: P) -> Result<PathInfo, MigError> {
-        if let Some(path_info) = PathInfo::from_path(path.as_ref(), self.lsblk_info)? {
-            Ok(path_info)
-        } else {
-            error!(
-                "Unable to create path info from '{}'",
-                path.as_ref().display()
-            );
-            Err(MigError::displayed())
-        }
-    }
-
-    fn device_info_from_partition<P: AsRef<Path>>(&self, part: P) -> Result<DeviceInfo, MigError> {
-        let (drive, partition) = self.lsblk_info.get_devinfo_from_partition(part.as_ref())?;
-        Ok(DeviceInfo::new(drive, partition)?)
+        PathInfo::from_lsblk_info(path, &self.lsblk_info)
     }
 
     fn expect_type<P: AsRef<Path>>(&self, file: P, ftype: &FileType) -> Result<(), MigError> {
         expect_type(file.as_ref(), ftype)
+    }
+
+    fn device_info_from_devspec(&self, device: &DeviceSpec) -> Result<DeviceInfo, MigError> {
+        let (drive, partition) = match device {
+            DeviceSpec::DevicePath(dev_path) => self
+                .lsblk_info
+                .get_devices_for_partition(dev_path.as_path())?,
+            DeviceSpec::PartUuid(partuuid) => self.lsblk_info.get_devices_for_partuuid(partuuid)?,
+            DeviceSpec::Path(path) => self.lsblk_info.get_devices_for_path(path)?,
+            DeviceSpec::Uuid(uuid) => self.lsblk_info.get_devices_for_uuid(uuid)?,
+            DeviceSpec::Label(label) => self.lsblk_info.get_devices_for_label(label)?,
+        };
+
+        Ok(DeviceInfo::from_lsblkinfo(&drive, &partition)?)
+    }
+
+    fn get_mem_info(&self) -> Result<(u64, u64), MigError> {
+        get_mem_info()
+    }
+
+    fn path_info_for_efi(&self) -> Result<PathInfo, MigError> {
+        Err(MigError::from_remark(
+            MigErrorKind::InvState,
+            "path_info_for_efi is no implemented in linux_api",
+        ))
+    }
+
+    fn to_linux_path<P: AsRef<Path>>(&self, path: P) -> Result<PathBuf, MigError> {
+        Ok(PathBuf::from(path.as_ref()))
     }
 }

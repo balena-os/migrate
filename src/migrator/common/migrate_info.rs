@@ -1,33 +1,34 @@
-use log::{debug, error, info, trace, warn};
+use lazy_static::lazy_static;
+use log::{debug, error, info, warn};
+use std::path::Path;
 
 use crate::{
     common::{
-        config::{
-            balena_config::FileRef,
-            balena_config::{ImageType, PartDump},
-            MigrateWifis,
-        },
-        device_info::DeviceInfo,
+        config::{ImageSource, ImageType, MigrateWifis, PartDump},
         file_info::RelFileInfo,
-        os_api::OSApi,
+        os_api::{OSApi, OSApiImpl},
         path_info::PathInfo,
         stage2_config::{CheckedFSDump, CheckedImageType, CheckedPartDump},
         wifi_config::WifiConfig,
         Config, FileInfo, MigError, MigErrorKind,
     },
-    defs::FileType,
-    defs::OSArch,
+    defs::{FileType, OSArch},
+    Assets,
 };
 
 // *************************************************************************************************
-// * Digested / Checked device-type independent properties from config and information retrieved
-// * from device required for stage1 of migration
+// * migrate_info holds digested and checked device-type independent properties from config and
+// information retrieved from device required for stage1 of migration
 // *************************************************************************************************
 
 pub(crate) mod balena_cfg_json;
+use crate::common::device_info::DeviceInfo;
+use crate::common::file_digest::{check_digest, HashInfo};
+use crate::common::{path_append, MigErrCtx};
 pub(crate) use balena_cfg_json::BalenaCfgJson;
-
-//use crate::linux::migrate_info::lsblk_info::;
+use failure::ResultExt;
+use regex::Regex;
+use std::fs::read_to_string;
 
 #[derive(Debug)]
 pub(crate) struct MigrateInfo {
@@ -40,93 +41,92 @@ pub(crate) struct MigrateInfo {
     pub nwmgr_files: Vec<FileInfo>,
     pub wifis: Vec<WifiConfig>,
 
-    pub image_file: CheckedImageType,
+    image_file: Option<CheckedImageType>,
     pub config_file: BalenaCfgJson,
 
-    pub kernel_file: FileInfo,
-
-    pub initrd_file: FileInfo,
-
-    pub dtb_file: Vec<FileInfo>,
+    pub assets: Assets,
+    // pub digests: HashMap<PathBuf, HashInfo>,
 }
 
 // TODO: sort out error reporting with Displayed
 
 impl MigrateInfo {
-    #[allow(clippy::cognitive_complexity)] //TODO refactor this function to fix the clippy warning
-    pub(crate) fn new(config: &Config, os_api: &impl OSApi) -> Result<MigrateInfo, MigError> {
-        trace!("new: entered");
-        let os_arch = os_api.get_os_arch()?;
+    fn check_md5(base_path: &Path, md5_digests: &Path) -> Result<(), MigError> {
+        lazy_static! {
+            static ref LINE_SPIT_RE: Regex = Regex::new(r##"^(\S+)\s+(.*)$"##).unwrap();
+        }
 
-        let work_path = os_api.path_info_from_path(config.migrate.get_work_dir())?;
+        let md5_path = path_append(base_path, md5_digests);
+
+        for md5_line in read_to_string(&md5_path)
+            .context(MigErrCtx::from_remark(
+                MigErrorKind::Upstream,
+                &format!("Failed to read file '{}'", md5_path.display()),
+            ))?
+            .lines()
+        {
+            if let Some(captures) = LINE_SPIT_RE.captures(md5_line) {
+                let md5_sum = String::from(captures.get(1).unwrap().as_str());
+                let path = path_append(base_path, captures.get(2).unwrap().as_str());
+                let hash_info = HashInfo::Md5(md5_sum);
+                if !check_digest(path.as_path(), &hash_info)? {
+                    return Err(MigError::from_remark(
+                        MigErrorKind::InvParam,
+                        &format!("Failed to check digest on file: '{}'", path.display()),
+                    ));
+                }
+            } else {
+                return Err(MigError::from_remark(
+                    MigErrorKind::InvParam,
+                    &format!("Encountered invalid line in md5 sums: '{}'", md5_line),
+                ));
+            }
+        }
+
+        Ok(())
+    }
+
+    #[allow(clippy::cognitive_complexity)] //TODO refactor this function to fix the clippy warning
+    pub(crate) fn new(config: &Config, assets: Assets) -> Result<MigrateInfo, MigError> {
+        debug!("new: entered");
+        let os_api = OSApiImpl::new()?;
+        let os_arch = os_api.get_os_arch()?;
+        let work_path = os_api.path_info_from_path(config.get_work_dir())?;
         let work_dir = &work_path.path;
 
         info!(
             "Working directory is '{}' on drive '{}', partition: '{}'",
             work_dir.display(),
-            work_path.device_info.drive.display(),
-            work_path.device_info.device.display()
+            work_path.device_info.drive,
+            work_path.device_info.device
         );
 
-        let log_path = if let Some(log_dev) = config.migrate.get_log_device() {
-            if log_dev.exists() {
-                Some(os_api.device_info_from_partition(log_dev)?)
-            } else {
-                warn!(
-                    "Configured log drive '{}' could not be found",
-                    log_dev.display()
-                );
-                None
+        if let Some(md5_sums) = config.get_md5_sums() {
+            MigrateInfo::check_md5(&work_path.path, &md5_sums)?
+        }
+
+        let log_info = if let Some(log_dev) = config.get_log_device() {
+            debug!("Checking log device: '{:?}'", log_dev);
+            match os_api.device_info_from_devspec(log_dev) {
+                Ok(dev_info) => {
+                    info!("Using log path: '{}'", dev_info.get_alt_path().display());
+                    Some(dev_info)
+                }
+                Err(why) => {
+                    warn!(
+                        "Unable to determine log device: {:?}, error: {:?}",
+                        log_dev, why
+                    );
+                    None
+                }
             }
         } else {
             None
         };
 
-        let os_image = match config.balena.get_image_path() {
-            ImageType::Flasher(ref flasher_img) => {
-                let checked_ref = MigrateInfo::check_file(
-                    &flasher_img,
-                    &FileType::GZipOSImage,
-                    &work_path,
-                    os_api,
-                )?;
-
-                CheckedImageType::Flasher(checked_ref)
-            }
-            ImageType::FileSystems(ref fs_dump) => {
-                // make sure all files are present and in /workdir, generate total size and partitioning config in miginfo
-                CheckedImageType::FileSystems(CheckedFSDump {
-                    device_slug: fs_dump.device_slug.clone(),
-                    check: fs_dump.check.clone(),
-                    max_data: fs_dump.max_data,
-                    mkfs_direct: fs_dump.mkfs_direct,
-                    extended_blocks: fs_dump.extended_blocks,
-                    boot: CheckedPartDump {
-                        archive: MigrateInfo::check_dump(&fs_dump.boot, &work_path, os_api)?,
-                        blocks: fs_dump.boot.blocks,
-                    },
-                    root_a: CheckedPartDump {
-                        archive: MigrateInfo::check_dump(&fs_dump.root_a, &work_path, os_api)?,
-                        blocks: fs_dump.root_a.blocks,
-                    },
-                    root_b: CheckedPartDump {
-                        archive: MigrateInfo::check_dump(&fs_dump.root_b, &work_path, os_api)?,
-                        blocks: fs_dump.root_b.blocks,
-                    },
-                    state: CheckedPartDump {
-                        archive: MigrateInfo::check_dump(&fs_dump.state, &work_path, os_api)?,
-                        blocks: fs_dump.state.blocks,
-                    },
-                    data: CheckedPartDump {
-                        archive: MigrateInfo::check_dump(&fs_dump.data, &work_path, os_api)?,
-                        blocks: fs_dump.data.blocks,
-                    },
-                })
-            }
-        };
-
+        debug!("Checking config.json: '{:?}'", config.get_config_path());
         let config_file = if let Some(file_info) =
-            FileInfo::new(config.balena.get_config_path(), &work_dir)?
+            FileInfo::new(config.get_config_path(), &work_dir)?
         {
             if file_info.rel_path.is_none() {
                 error!("The balena OS config was found outside of the working directory. This setup is not supported");
@@ -151,77 +151,23 @@ impl MigrateInfo {
                 }
             }
 
-            // check config
+            // check config, balena_cfg_json::check is done later when device info is present
             let balena_cfg = BalenaCfgJson::new(file_info)?;
             info!(
                 "The balena config file looks ok: '{}'",
                 balena_cfg.get_rel_path().display()
             );
-            //balena_cfg.check()
+
             balena_cfg
         } else {
             error!("The balena config has not been specified or cannot be accessed. Automatic download is not yet implemented, so you need to specify and supply all required files");
             return Err(MigError::displayed());
         };
 
-        let kernel_info = config.migrate.get_kernel_path();
-
-        let kernel_file = if let Some(file_info) = FileInfo::new(&kernel_info, work_dir)? {
-            // TODO: check later, when target arch is known
-            info!(
-                "The balena migrate kernel looks ok: '{}'",
-                file_info.path.display()
-            );
-            file_info
-        } else {
-            error!("The migrate kernel has not been specified or cannot be accessed. Automatic download is not yet implemented, so you need to specify and supply all required files");
-            return Err(MigError::displayed());
-        };
-
-        let initrd_file = if let Some(file_info) =
-            FileInfo::new(config.migrate.get_initrd_path(), work_dir)?
-        {
-            os_api.expect_type(&file_info.path, &FileType::InitRD)?;
-            info!(
-                "The balena migrate initramfs looks ok: '{}'",
-                file_info.path.display()
-            );
-            file_info
-        } else {
-            error!("The migrate initramfs has not been specified or cannot be accessed. Automatic download is not yet implemented, so you need to specify and supply all required files");
-            return Err(MigError::displayed());
-        };
-
-        let dtb_files = if let Some(dtb_refs) = config.migrate.get_dtb_refs() {
-            let mut dtb_files: Vec<FileInfo> = Vec::new();
-            for dtb_ref in dtb_refs {
-                if let Some(file_info) = FileInfo::new(dtb_ref, work_dir)? {
-                    os_api.expect_type(&file_info.path, &FileType::DTB)?;
-                    info!(
-                        "The balena migrate device tree blob looks ok: '{}'",
-                        file_info.path.display()
-                    );
-                    dtb_files.push(file_info);
-                } else {
-                    error!("The migrate device tree blob '{}' cannot be accessed. Automatic download is not yet implemented, so you need to specify and supply all required files", dtb_ref.path.display());
-                    return Err(MigError::displayed());
-                }
-            }
-            dtb_files
-        } else {
-            Vec::new()
-        };
-
         let mut nwmgr_files: Vec<FileInfo> = Vec::new();
 
-        for file in config.migrate.get_nwmgr_files() {
-            if let Some(file_info) = FileInfo::new(
-                &FileRef {
-                    path: file.clone(),
-                    hash: None,
-                },
-                &work_dir,
-            )? {
+        for file in config.get_nwmgr_files() {
+            if let Some(file_info) = FileInfo::new(file.clone(), &work_dir)? {
                 os_api.expect_type(&file_info.path, &FileType::Text)?;
                 info!(
                     "Adding network manager config: '{}'",
@@ -237,7 +183,7 @@ impl MigrateInfo {
             }
         }
 
-        let wifi_cfg = config.migrate.get_wifis();
+        let wifi_cfg = config.get_wifis();
         let wifis: Vec<WifiConfig> = if MigrateWifis::None != wifi_cfg {
             // **********************************************************************
             // ** migrate wifi config
@@ -266,7 +212,7 @@ impl MigrateInfo {
             Vec::new()
         };
 
-        if nwmgr_files.is_empty() && wifis.is_empty() && config.migrate.require_nwmgr_configs() {
+        if nwmgr_files.is_empty() && wifis.is_empty() && config.require_nwmgr_configs() {
             error!(
                 "No Network manager files were found, the device might not be able to come online"
             );
@@ -277,14 +223,12 @@ impl MigrateInfo {
             os_name: os_api.get_os_name()?,
             os_arch,
             work_path,
-            log_path,
-            image_file: os_image,
-            kernel_file,
-            initrd_file,
-            dtb_file: dtb_files,
+            log_path: log_info,
+            image_file: None,
             nwmgr_files,
             config_file,
             wifis,
+            assets,
         };
 
         debug!("MigrateInfo: {:?}", result);
@@ -292,37 +236,92 @@ impl MigrateInfo {
         Ok(result)
     }
 
-    fn check_dump(
-        dump: &PartDump,
-        work_path: &PathInfo,
-        os_api: &impl OSApi,
-    ) -> Result<RelFileInfo, MigError> {
+    pub fn set_os_image(&mut self, img_path: &ImageType) -> Result<(), MigError> {
+        debug!("Checking image files: {:?}", img_path);
+
+        self.image_file = Some(match img_path {
+            ImageType::Flasher(ref flasher_img) => {
+                if let ImageSource::File(ref flasher_img) = flasher_img {
+                    let checked_ref = MigrateInfo::check_file(
+                        &flasher_img,
+                        &FileType::GZipOSImage,
+                        &self.work_path,
+                    )?;
+
+                    CheckedImageType::Flasher(checked_ref)
+                } else {
+                    error!("Invalid image type '{:?}' for set_os_image", img_path);
+                    return Err(MigError::displayed());
+                }
+            }
+            ImageType::FileSystems(ref fs_dump) => {
+                // make sure all files are present and in workdir
+                CheckedImageType::FileSystems(CheckedFSDump {
+                    device_slug: fs_dump.device_slug.clone(),
+                    check: fs_dump.check.clone(),
+                    max_data: fs_dump.max_data,
+                    mkfs_direct: fs_dump.mkfs_direct,
+                    extended_blocks: fs_dump.extended_blocks,
+                    boot: CheckedPartDump {
+                        archive: MigrateInfo::check_dump(&fs_dump.boot, &self.work_path)?,
+                        blocks: fs_dump.boot.blocks,
+                    },
+                    root_a: CheckedPartDump {
+                        archive: MigrateInfo::check_dump(&fs_dump.root_a, &self.work_path)?,
+                        blocks: fs_dump.root_a.blocks,
+                    },
+                    root_b: CheckedPartDump {
+                        archive: MigrateInfo::check_dump(&fs_dump.root_b, &self.work_path)?,
+                        blocks: fs_dump.root_b.blocks,
+                    },
+                    state: CheckedPartDump {
+                        archive: MigrateInfo::check_dump(&fs_dump.state, &self.work_path)?,
+                        blocks: fs_dump.state.blocks,
+                    },
+                    data: CheckedPartDump {
+                        archive: MigrateInfo::check_dump(&fs_dump.data, &self.work_path)?,
+                        blocks: fs_dump.data.blocks,
+                    },
+                })
+            }
+        });
+        Ok(())
+    }
+
+    pub fn get_os_image(&self) -> CheckedImageType {
+        if let Some(ref os_image) = self.image_file {
+            os_image.clone()
+        } else {
+            panic!("OS Image was not set");
+        }
+    }
+
+    fn check_dump(dump: &PartDump, work_path: &PathInfo) -> Result<RelFileInfo, MigError> {
         Ok(MigrateInfo::check_file(
             &dump.archive,
             &FileType::GZipTar,
             work_path,
-            os_api,
         )?)
     }
 
     fn check_file(
-        file_ref: &FileRef,
+        file: &Path,
         expected_type: &FileType,
         work_path: &PathInfo,
-        os_api: &impl OSApi,
     ) -> Result<RelFileInfo, MigError> {
-        if let Some(file_info) = FileInfo::new(&file_ref, &work_path.path)? {
+        if let Some(file_info) = FileInfo::new(&file, &work_path.path)? {
             // make sure files are present and in /workdir, generate total size and partitioning config in miginfo
             let rel_path = if let Some(ref rel_path) = file_info.rel_path {
                 rel_path.clone()
             } else {
-                error!("The file '{}' was found outside of the working directory. This setup is not supported", file_ref.path.display());
+                error!("The file '{}' was found outside of the working directory. This setup is not supported", file.display());
                 return Err(MigError::displayed());
             };
 
+            let os_api = OSApiImpl::new()?;
             let file_path_info = os_api.path_info_from_path(&file_info.path)?;
             if file_path_info.mountpoint != work_path.mountpoint {
-                error!("The file '{}' appears to reside on a different partition from the working directory. This setup is not supported", file_ref.path.display());
+                error!("The file '{}' appears to reside on a different partition from the working directory. This setup is not supported", file.display());
                 return Err(MigError::displayed());
             }
 
@@ -335,7 +334,7 @@ impl MigrateInfo {
                     // TODO: try gzip non compressed OS image
                     error!(
                         "The file '{}' does not match the expected type: '{:?}'",
-                        file_ref.path.display(),
+                        file.display(),
                         expected_type
                     );
                     return Err(MigError::displayed());
@@ -348,11 +347,16 @@ impl MigrateInfo {
                 hash_info: file_info.hash_info,
             })
         } else {
-            error!(
-                "The balena file: '{}' can not be accessed.",
-                file_ref.path.display()
-            );
+            error!("The balena file: '{}' can not be accessed.", file.display());
             Err(MigError::displayed())
         }
+    }
+
+    pub fn get_api_key(&self) -> Option<String> {
+        self.config_file.get_api_key()
+    }
+
+    pub fn get_api_endpoint(&self) -> String {
+        self.config_file.get_api_endpoint()
     }
 }
