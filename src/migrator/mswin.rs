@@ -371,7 +371,6 @@ impl<'a> MSWMigrator {
         self.stage2_config
             .set_migrate_delay(self.config.migrate.get_delay());
 
-
         if let Some(hacks) = self.config.debug.get_hacks() {
             self.stage2_config.set_hacks(hacks)
         }
@@ -395,9 +394,15 @@ impl<'a> MSWMigrator {
 
         if let Some(ref log_path) = self.mig_info.log_path {
             if log_path.drive != boot_device.device_info.drive {
-                info!("Set up log device as '{}'", log_path.get_alt_path().display());
+                info!(
+                    "Set up log device as '{}'",
+                    log_path.get_alt_path().display()
+                );
 
-                self.stage2_config.set_log_to(LogDevice{ device: log_path.get_alt_path(), fs_type: log_path.fs_type.clone() });
+                self.stage2_config.set_log_to(LogDevice {
+                    device: log_path.get_alt_path(),
+                    fs_type: log_path.fs_type.clone(),
+                });
             } else {
                 warn!("Log partition '{}' is not on a distinct drive from flash drive: '{}' - ignoring", log_path.drive, boot_device.device_info.drive);
             }
@@ -431,7 +436,6 @@ impl<'a> MSWMigrator {
                 "Migration stage 1 was successful, please reboot the system to finalize migration"
             );
             Logger::flush();
-
         }
 
         Ok(())

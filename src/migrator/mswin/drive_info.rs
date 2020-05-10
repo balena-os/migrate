@@ -31,19 +31,19 @@ pub(crate) struct VolumeInfo {
 }
 
 impl VolumeInfo {
-/*
-    pub fn get_linux_path(&self) -> PathBuf {
-        if self.partition.is_gpt_partition() {
-            PathBuf::from(&format!("{}/{}", DISK_BY_PARTUUID_PATH, &self.part_uuid))
-        } else {
-            if let Some(label) = self.volume.get_label() {
-                PathBuf::from(&format!("{}/{}", DISK_BY_LABEL_PATH, label))
-            } else {
+    /*
+        pub fn get_linux_path(&self) -> PathBuf {
+            if self.partition.is_gpt_partition() {
                 PathBuf::from(&format!("{}/{}", DISK_BY_PARTUUID_PATH, &self.part_uuid))
+            } else {
+                if let Some(label) = self.volume.get_label() {
+                    PathBuf::from(&format!("{}/{}", DISK_BY_LABEL_PATH, label))
+                } else {
+                    PathBuf::from(&format!("{}/{}", DISK_BY_PARTUUID_PATH, &self.part_uuid))
+                }
             }
         }
-    }
-*/
+    */
 }
 
 #[derive(Clone)]
@@ -125,19 +125,18 @@ impl DriveInfo {
                     debug!("new: got physical disk_for volume: {}", physical_disk);
                     debug!("new: got partition disk_for volume: {}", partition);
                     // try to extract a partuuid from volume_id
-                    let part_uuid = if let Some(captures) =
-                        part_uuid_re.captures(volume.get_device_id())
-                            {
-                                String::from(captures.get(1).unwrap().as_str())
-                            } else {
-                                return Err(MigError::from_remark(
+                    let part_uuid =
+                        if let Some(captures) = part_uuid_re.captures(volume.get_device_id()) {
+                            String::from(captures.get(1).unwrap().as_str())
+                        } else {
+                            return Err(MigError::from_remark(
                                 MigErrorKind::NoMatch,
                                 &format!(
                                     "Could not extract partuuid from volume id: '{}'",
                                     volume.get_device_id()
                                 ),
                             ));
-                    };
+                        };
 
                     debug!("new: found partuuid: {} for volume {}", part_uuid, volume);
 

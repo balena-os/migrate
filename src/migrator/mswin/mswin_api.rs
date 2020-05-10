@@ -77,7 +77,6 @@ impl OSApi for MSWinApi {
         )?)
     }
 
-
     fn device_info_from_devspec(&self, device: &DeviceSpec) -> Result<DeviceInfo, MigError> {
         // TODO: this does not work very well
         // partuuid
@@ -117,7 +116,7 @@ impl OSApi for MSWinApi {
         let vol_info = self.drive_info.for_efi_drive()?;
         Ok(PathInfo::from_volume_info(
             &PathBuf::from(vol_info.logical_drive.get_name()),
-            &vol_info
+            &vol_info,
         )?)
     }
 

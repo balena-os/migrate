@@ -1,10 +1,9 @@
 use std::path::{Path, PathBuf};
 
 use crate::common::{
-    MigErrorKind,
     device_info::DeviceInfo,
-    MigError,
     os_api::{OSApi, OSApiImpl},
+    MigError, MigErrorKind,
 };
 
 #[cfg(target_os = "linux")]
@@ -13,8 +12,8 @@ use failure::ResultExt;
 #[cfg(target_os = "linux")]
 use crate::{
     common::MigErrCtx,
-    linux::lsblk_info::{block_device::BlockDevice, partition::Partition, LsblkInfo},
     linux::linux_common::get_fs_space,
+    linux::lsblk_info::{block_device::BlockDevice, partition::Partition, LsblkInfo},
 };
 
 #[cfg(target_os = "windows")]
@@ -160,5 +159,4 @@ impl PathInfo {
             },
         })
     }
-
 }

@@ -12,9 +12,7 @@ use crate::{
 use crate::linux::lsblk_info::{block_device::BlockDevice, partition::Partition};
 
 #[cfg(target_os = "windows")]
-use crate::{
-    mswin::drive_info::VolumeInfo,
-};
+use crate::mswin::drive_info::VolumeInfo;
 
 #[derive(Debug, Clone)]
 pub(crate) struct DeviceInfo {
@@ -122,14 +120,13 @@ impl DeviceInfo {
     #[cfg(target_os = "windows")]
     pub fn get_alt_path(&self) -> PathBuf {
         if let Some(ref uuid) = self.uuid {
-            PathBuf::from(&format!("{}/{}",DISK_BY_UUID_PATH, uuid))
+            PathBuf::from(&format!("{}/{}", DISK_BY_UUID_PATH, uuid))
         } else if let Some(ref partuuid) = self.part_uuid {
-            PathBuf::from(&format!("{}/{}",DISK_BY_PARTUUID_PATH, partuuid))
+            PathBuf::from(&format!("{}/{}", DISK_BY_PARTUUID_PATH, partuuid))
         } else if let Some(ref label) = self.part_label {
-            PathBuf::from(&format!("{}/{}",DISK_BY_LABEL_PATH, label))
+            PathBuf::from(&format!("{}/{}", DISK_BY_LABEL_PATH, label))
         } else {
-            PathBuf::from(&format!("/dev/{}",self.device))
+            PathBuf::from(&format!("/dev/{}", self.device))
         }
     }
-
 }

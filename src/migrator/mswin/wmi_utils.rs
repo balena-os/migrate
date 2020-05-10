@@ -1,6 +1,6 @@
 // extern crate wmi;
 
-use log::{info, debug};
+use log::{debug, info};
 use std::collections::HashMap;
 // use std::rc::Rc;
 
@@ -12,8 +12,8 @@ use crate::{
     mswin::win_api::wmi_api::{Variant, WmiAPI},
 };
 
-pub(crate) mod volume;
 pub(crate) mod physical_disk;
+pub(crate) mod volume;
 pub(crate) use physical_disk::PhysicalDisk;
 pub(crate) mod logical_disk;
 pub(crate) use logical_disk::LogicalDisk;

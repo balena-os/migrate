@@ -2,9 +2,8 @@ use log::{debug, error, info};
 
 use crate::{
     common::{
-        boot_manager::BootManager, config::Config, device::Device,
-        migrate_info::MigrateInfo, stage2_config::Stage2ConfigBuilder, MigError, MigErrorKind,
-        path_info::PathInfo,
+        boot_manager::BootManager, config::Config, device::Device, migrate_info::MigrateInfo,
+        path_info::PathInfo, stage2_config::Stage2ConfigBuilder, MigError, MigErrorKind,
     },
     defs::{BootType, DeviceType},
     mswin::{

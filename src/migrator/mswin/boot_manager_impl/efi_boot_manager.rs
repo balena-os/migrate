@@ -400,9 +400,11 @@ impl BootManager for EfiBootManager {
             ))? {
                 bcd_id
             } else {
-              return Err(MigError::from_remark(MigErrorKind::InvState, "Received empty bcd_ifd from bcd_edit"))
+                return Err(MigError::from_remark(
+                    MigErrorKind::InvState,
+                    "Received empty bcd_ifd from bcd_edit",
+                ));
             };
-
 
             debug!("Created new BCD entry with ID: {}", bcd_id);
 
@@ -448,13 +450,13 @@ impl BootManager for EfiBootManager {
                     ))? {
                 bcd_id
             } else {
-                return Err(MigError::from_remark(MigErrorKind::InvState, "Received empty bcd_ifd from bcd_edit"))
+                return Err(MigError::from_remark(
+                    MigErrorKind::InvState,
+                    "Received empty bcd_ifd from bcd_edit",
+                ));
             };
 
-        debug!(
-                "Created copy of {{bootmgr}} BCD entry with ID: {}",
-                bcd_id
-            );
+            debug!("Created copy of {{bootmgr}} BCD entry with ID: {}", bcd_id);
 
             let efi_drive_letter = &*efi_device.mountpoint.to_string_lossy();
 
